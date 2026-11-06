@@ -102,6 +102,23 @@ test('a controlled toggle label changes its value once, and switch changes do no
   expect(onChange.mock.calls).toEqual([[false]]);
 });
 
+test('disabled controlled toggles ignore label presses', () => {
+  const onChange = jest.fn();
+  render(<SettingsDetailScreen titleKey="settings" sections={[{ rows: [{
+    id: 'privacy', labelKey: 'Share presence', type: 'toggle', value: true, onValueChange: onChange, disabled: true,
+  }] }]} />);
+  fireEvent.press(screen.getByText('Share presence'));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test('link labels keep their existing navigation behavior', () => {
+  const onPress = jest.fn();
+  render(<SettingsDetailScreen titleKey="settings" sections={[{ rows: [{
+    id: 'link', labelKey: 'Blacklist', onPress,
+  }] }]} />);
+  fireEvent.press(screen.getByText('Blacklist'));
+  expect(onPress).toHaveBeenCalledTimes(1);
+});
 
 test('pages can lock controls without changing the opacity of every row', () => {
   render(<SettingsDetailScreen titleKey="settings" testIDPrefix="privacy" dimDisabledRows={false} sections={[{ rows: [{

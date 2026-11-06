@@ -506,6 +506,7 @@ test('first native run requests permission and registers a persisted pending sec
 
 test('notification channels are prepared before the permission prompt, and a failure does not block registration', async () => {
   const order = [];
+  const channelError = new Error('channel api unavailable');
   const notifications = {
     IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
     getPermissionsAsync: async () => {
@@ -525,7 +526,7 @@ test('notification channels are prepared before the permission prompt, and a fai
     prepareNotifications: async (module) => {
       assert.equal(module, notifications);
       order.push('prepare');
-      throw new Error('channel api unavailable');
+      throw channelError;
     },
   });
 
@@ -534,9 +535,11 @@ test('notification channels are prepared before the permission prompt, and a fai
   assert.deepEqual(order, ['prepare', 'getPermissions', 'requestPermissions']);
   assert.equal(harness.registerCalls.length, 1);
   assert.deepEqual(
-    harness.diagnostics.map(([event]) => event),
+    harness.failures.map(([event]) => event),
     ['push_notification_channels_failed'],
   );
+  assert.equal(harness.failures[0][1], channelError);
+  assert.deepEqual({ ...harness.failures[0][2] }, { platform: 'android' });
 });
 
 test('permanently denied permission is not requested or registered', async () => {
@@ -574,7 +577,7 @@ test('completed denial prompts once per user, while a request exception may retr
   assert.equal(requestCalls, 2);
 });
 
-test('web never loads native registration and missing project id stops with a diagnostic', async () => {
+test('web never loads native registration and missing Expo project ID reports the blocked registration', async () => {
   const web = makeHarness({ platform: 'web' });
   web.orchestrator.flushPendingRevocations();
   await web.orchestrator.sync(enabled());
@@ -584,7 +587,10 @@ test('web never loads native registration and missing project id stops with a di
   const missing = makeHarness({ projectId: null });
   await missing.orchestrator.sync(enabled());
   assert.equal(missing.registerCalls.length, 0);
-  assert.equal(missing.diagnostics[0][0], 'push_token_project_id_missing');
+  assert.equal(missing.failures.length, 1);
+  assert.equal(missing.failures[0][0], 'push_token_project_id_missing');
+  assert.equal(missing.failures[0][1].message, 'Expo push project ID is missing');
+  assert.deepEqual({ ...missing.failures[0][2] }, { platform: 'ios' });
 });
 
 test('logout returns immediately during a hung PUT and persists a revocation tombstone', async () => {

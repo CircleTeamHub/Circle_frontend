@@ -38,6 +38,7 @@ function loadUploadApi() {
     setTimeout,
     clearTimeout,
     require: (request) => {
+      if (request === '@/observability/tracing') return { startOperationSpan: () => ({ end() {} }) };
       if (request === '@/services/api/client') {
         return {
           apiClient: (...args) => {

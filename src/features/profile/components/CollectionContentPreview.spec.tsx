@@ -37,10 +37,10 @@ const content = (value: Partial<CollectionContent>): CollectionContent => ({
   message: null, kind: 'text', text: '', ...value,
 });
 
-test('renders the actual text once with a readable five-line preview', () => {
+test('renders the actual text once with a readable three-line preview', () => {
   render(<CollectionContentPreview content={content({ text: 'A real saved message, with its original words.' })} />);
   expect(screen.getAllByText('A real saved message, with its original words.')).toHaveLength(1);
-  expect(screen.getByText('A real saved message, with its original words.').props.numberOfLines).toBe(5);
+  expect(screen.getByText('A real saved message, with its original words.').props.numberOfLines).toBe(3);
   expect(screen.getByTestId('collection-content-preview').props.pointerEvents).toBe('none');
 });
 
@@ -50,10 +50,10 @@ test('shows the saved image in a bounded contain preview', () => {
   })} />);
   const image = screen.getByTestId('collection-preview-image');
   expect(image.props.source).toEqual({ uri: 'https://cdn.example.com/image.jpg' });
-  expect(image.props.contentFit).toBe('contain');
+  expect(image.props.contentFit).toBe('cover');
   const stage = StyleSheet.flatten(screen.getByTestId('collection-preview-media').props.style);
-  expect(stage.maxWidth).toBeLessThanOrEqual(400);
-  expect(stage.height).toBeLessThanOrEqual(240);
+  expect(stage.width).toBe(60);
+  expect(stage.height).toBe(60);
 });
 
 test('shows a video poster and duration without creating a video player', () => {

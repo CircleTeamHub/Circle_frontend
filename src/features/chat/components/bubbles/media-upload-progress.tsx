@@ -1,6 +1,7 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useUploadProgressStore } from '@/stores/upload-progress-store';
+import { MediaProgressBar } from '@/components/ui/media-progress-bar';
 
 interface MediaUploadProgressProps {
   deliveryId: string;
@@ -37,30 +38,21 @@ export function MediaUploadProgress({ deliveryId, kind }: MediaUploadProgressPro
       accessibilityValue={percent === null ? { text: status } : { min: 0, max: 100, now: percent }}
     >
       <View style={styles.labelRow}>
-        {percent === null ? <ActivityIndicator size="small" color="#fff" /> : null}
         <Text style={styles.label} numberOfLines={1}>{label}</Text>
       </View>
-      {percent === null ? null : (
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${percent}%` }]} />
-        </View>
-      )}
+      <MediaProgressBar percent={percent} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    right: 6,
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   label: { color: '#fff', fontSize: 12, lineHeight: 16, flexShrink: 1 },
-  track: { height: 3, marginTop: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' },
-  fill: { height: '100%', backgroundColor: '#fff' },
 });

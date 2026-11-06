@@ -26,6 +26,7 @@ import { getChatDetailHref } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const PAGE_SIZE = 30;
 const MEDIA_GRID_COLUMNS = 3;
@@ -153,7 +154,7 @@ function MediaTile({
 
   useEffect(() => {
     setFailedCount(0);
-  }, [item.id]);
+  }, [item.id, thumbnailUris]);
 
   return (
     <Pressable
@@ -170,6 +171,8 @@ function MediaTile({
           }
           style={s.thumbnail}
           contentFit="cover"
+          cachePolicy={(item.burnDurationSec ?? 0) > 0 || item.burnExpiresAt ? 'memory' : 'memory-disk'}
+          transition={0}
           onError={handleImageError}
         />
       ) : (
@@ -189,6 +192,12 @@ function MediaTile({
 }
 
 export default function ChatHistoryMediaScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID } = useLocalSearchParams<{ conversationID?: string }>();
+  return sessionKey ? <ChatHistoryMediaContent key={`${sessionKey}:${conversationID ?? ''}`} /> : null;
+}
+
+function ChatHistoryMediaContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();

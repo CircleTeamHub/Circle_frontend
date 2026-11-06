@@ -43,11 +43,11 @@ test('note block renderer forwards image load failures to its caller', () => {
 
 test('note block renderer forwards video player errors to its caller', () => {
   const src = read('src/features/notes/components/NoteBlockRenderer.tsx');
-
-  assert.match(src, /import \{ useEventListener \} from 'expo'/);
+  const viewer = read('src/features/notes/components/NoteVideoViewer.tsx');
+  assert.match(src, /<NoteVideoViewer[\s\S]*onMediaError=\{onMediaError\}/);
   assert.match(
-    src,
-    /useEventListener\(player, 'statusChange',[\s\S]*status === 'error'[\s\S]*onMediaError\?\.\(\)/,
+    viewer,
+    /player.addListener\('statusChange',[\s\S]*status === 'error'[\s\S]*onMediaError\?\.\(\)/,
   );
   assert.match(
     src,

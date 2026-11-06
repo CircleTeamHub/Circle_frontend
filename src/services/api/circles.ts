@@ -9,6 +9,8 @@ import type {
   MyCircle,
 } from '@/types';
 import { collectCursorPages } from './collect-cursor-pages';
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
 
 let lastCircleMutationAt = 0;
 
@@ -17,9 +19,15 @@ let lastCircleMutationAt = 0;
  * 回到前台时据此判断能不能跳过重拉:拉过之后改过任何东西就必须重拉。宁可多拉,不显示旧数据。
  * 包的是 Promise 而不是 apiClient 本身:每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
  */
-async function markCircleWrite<T>(request: Promise<T>): Promise<T> {
+export async function markCircleWrite<T>(request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
   const result = await request;
   lastCircleMutationAt = Date.now();
+  if (user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+    clearPageSnapshots(user?.id, 'social:circle-detail');
+    clearPageSnapshots(user?.id, 'social:my-circles');
+    clearPageSnapshots(user?.id, 'social:group-info');
+  }
   return result;
 }
 

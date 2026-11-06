@@ -3,7 +3,8 @@ import { useUserMoments } from './use-user-moments';
 import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost, PaginatedResponse } from '@/types';
 
-jest.mock('@/services/api/moments', () => ({ fetchUserMoments: jest.fn() }));
+// 首页成功后按 momentsMutatedSince 决定能否写页面快照;本 spec 期间没有朋友圈写请求。
+jest.mock('@/services/api/moments', () => ({ fetchUserMoments: jest.fn(), momentsMutatedSince: () => false }));
 const mockAuth = { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 };
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: Object.assign((selector: (state: typeof mockAuth) => unknown) => selector(mockAuth), {
@@ -19,7 +20,11 @@ jest.mock('react-i18next', () => {
   // Deliberately return a fresh t function on every render. The hook must keep
   // that presentation detail out of the request effect dependencies, otherwise
   // an error state update would start the same feed request again indefinitely.
-  return { useTranslation: () => ({ t: (key: string) => key }) };
+  return {
+    useTranslation: () => ({ t: (key: string) => key }),
+    // 失败判别直接取自 @/services/api/client,它会把 @/i18n 带进来。
+    initReactI18next: { type: '3rdParty', init: () => {} },
+  };
 });
 
 const mockFetch = fetchUserMoments as jest.MockedFunction<typeof fetchUserMoments>;

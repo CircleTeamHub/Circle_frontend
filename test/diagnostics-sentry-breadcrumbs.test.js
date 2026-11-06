@@ -310,7 +310,7 @@ test('a throwing breadcrumb reader still lets the error itself be reported', () 
   sentry.reportError(new Error('boom'), { operation: 'test' }, client);
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].error.message, 'test error failure');
+  assert.equal(calls[0].error.message, 'test 失败｜运行时错误（原始文本已隐藏）');
   assert.doesNotMatch(calls[0].error.message, /boom/);
   assert.equal(calls[0].ctx.extra.operation, 'test');
   assert.equal(breadcrumbsFrom(calls[0]), undefined);

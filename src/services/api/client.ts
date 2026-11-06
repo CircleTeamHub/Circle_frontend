@@ -14,6 +14,7 @@ import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { recordSessionDiagnostic, type SessionDiagnosticContext } from '@/observability/session-diagnostics';
 import { ApiError } from './api-error';
 
@@ -510,6 +511,9 @@ async function executeRequest<T>(
       failureKind,
       ...(transportFailure ? { stage } : {}),
     };
+    recordMetric('api.request.duration', durationMs, {
+      method: diagnosticMethod, route: endpointPath, outcome: failureKind ?? 'success',
+    });
     logApiEvent('complete', details);
     try {
       if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch) {

@@ -249,6 +249,7 @@ export default function ForwardPickerScreen() {
   const setPendingBatch = useMessageForwardStore((state) => state.setPendingBatch);
   const clearPending = useMessageForwardStore((state) => state.clear);
   const conversations = useChatStore((state) => state.conversations);
+  const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
   const [query, setQuery] = useState('');
   const [targetType, setTargetType] = useState<'single' | 'group'>('single');
   const [sendingID, setSendingID] = useState<string | null>(null);
@@ -265,11 +266,11 @@ export default function ForwardPickerScreen() {
   }, []);
 
   useEffect(() => {
-    if (conversations.length > 0) return;
+    if (snapshotLoaded) return;
     loadChatConversations().catch((err) => {
       reportHandledFailure('forward', 'loadConversations', err);
     });
-  }, [conversations.length]);
+  }, [snapshotLoaded]);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();

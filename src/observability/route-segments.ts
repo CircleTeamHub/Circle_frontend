@@ -4,8 +4,8 @@
 // 后端 id 是**不透明**的。MyCirclesScreen 会 router.push(
 // `/(tabs)/discover/circle/${encodeURIComponent(id)}`)，一个纯字母的 circle id
 // （如 privatecircle）用任何字符类规则都无法与真正的静态段区分开 —— 只要靠猜，
-// 就一定会把某类 id 原样发给 Sentry。而 setSentryUserId 是刻意恒 setUser(null)
-// 的，从路由名把标识符漏回去等于绕过那个决定。
+// 就一定会把某类 id 原样发给 Sentry。账号只通过明确授权的 user.id 关联，
+// 其他资源或用户标识符仍不能从路由名泄漏出去。
 //
 // 所以判定翻转成白名单：**只有出现在真实路由模板里的段才保留**，其余一律 :id。
 // 新增路由后必须重新生成，否则那个屏幕的 transaction 会退化成 :id（只丢分组
@@ -62,8 +62,10 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'group-call',
   'group-entry',
   'group-expansion',
+  'group-abnormal-members',
   'group-log',
   'group-manage',
+  'group-review',
   'groups',
   'guide',
   'icons',

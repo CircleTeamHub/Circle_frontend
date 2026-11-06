@@ -164,18 +164,6 @@ test('the map picker reports a missing map runtime instead of going inert', () =
   }
 });
 
-// 后端只暴露 vipLevel，每日会员和月度白银是同一档 silver/level 1。按方案 id 比
-// 的话，客服开通一天会员后会把「月度」标成当前、「每日」反而没标。
-test('the membership badge marks the current tier, not one duration of it', () => {
-  const screen = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const plans = read('src/features/profile/membership-plans.ts');
-
-  assert.match(screen, /const isCurrentTier = plan\.tier === currentTier;/);
-  assert.doesNotMatch(screen, /const isCurrentTier = plan\.id === currentTier;/);
-  // 前提：daily 与 silver 共用一个 tier/level，无法从 vipLevel 区分。
-  assert.match(plans, /id: 'daily',[\s\S]{0,200}tier: 'silver',\s*\n\s*level: 1,/);
-});
-
 // 选点 store 是全局的，而 ChatDetailScreen 一获得焦点就消费它并直接把位置发出去。
 // 不绑会话的话，深链直接进选点页、或者确认之后被推送带去另一个会话，这条位置
 // 就会发给非预期的收件人。

@@ -309,6 +309,7 @@ test('client.ts threads errorCode onto ApiError', () => {
       return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/observability/http-diagnostics') return loadTsModule('src/observability/http-diagnostics.ts');
     if (spec === '@/utils/client-diagnostics') return { logClientDiagnostic() {} };
+    if (spec === '@/observability/metrics') return { recordMetric() {} };
     return require(spec);
   };
   const fn = new Function(
@@ -384,6 +385,7 @@ test('ApiError accepts an options object for optional fields', () => {
       return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/observability/http-diagnostics') return loadTsModule('src/observability/http-diagnostics.ts');
     if (spec === '@/utils/client-diagnostics') return { logClientDiagnostic() {} };
+    if (spec === '@/observability/metrics') return { recordMetric() {} };
     return require(spec);
   };
   const fn = new Function(

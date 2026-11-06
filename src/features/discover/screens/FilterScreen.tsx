@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 
@@ -101,6 +101,7 @@ const s = StyleSheet.create({
 });
 
 export default function FilterScreen() {
+  useHydrateCirclesSnapshot();
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();

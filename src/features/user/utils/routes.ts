@@ -405,6 +405,7 @@ export function getEditGroupNoticeHref(
     conversationID?: string;
     groupTitle?: string;
     notice?: string;
+    noticePinned?: boolean;
   },
 ): Href {
   const routeParams = {
@@ -412,6 +413,7 @@ export function getEditGroupNoticeHref(
     ...(params.conversationID ? { conversationID: params.conversationID } : {}),
     ...(params.groupTitle ? { groupTitle: params.groupTitle } : {}),
     ...(params.notice ? { notice: params.notice } : {}),
+    ...(params.noticePinned === undefined ? {} : { noticePinned: String(params.noticePinned) }),
   };
 
   switch (scope) {

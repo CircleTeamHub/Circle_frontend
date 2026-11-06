@@ -140,6 +140,8 @@ export default function CreateMomentScreen() {
   const canSubmit = content.trim().length > 0;
 
   const handlePickImages = useCallback(async () => {
+    const remaining = LIMITS.POST_MAX_MEDIA - images.length;
+    if (remaining <= 0) return;
     // review 修复：先开 picker、失败才引导（#109 的门禁反了）。iOS PHPicker /
     // Android 13+ 系统 photo picker 无需相册权限即可返回所选图片 —— 前置的
     // 相册权限请求会把「曾拒绝过广义相册权限」的用户挡在一个本不需要权限的
@@ -149,13 +151,13 @@ export default function CreateMomentScreen() {
         mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
         orderedSelection: true,
-        selectionLimit: 9 - images.length,
+        selectionLimit: remaining,
         quality: 0.8,
       });
       if (result.canceled) return;
       setImages((prev) => [
         ...prev,
-        ...result.assets.slice(0, 9 - prev.length),
+        ...result.assets.slice(0, LIMITS.POST_MAX_MEDIA - prev.length),
       ]);
     } catch {
       Alert.alert(
@@ -314,13 +316,16 @@ export default function CreateMomentScreen() {
                 </Pressable>
               </View>
             ))}
-            {images.length < 9 ? (
+            {images.length < LIMITS.POST_MAX_MEDIA ? (
               <Pressable style={[s.photoBtn, d.photoBtn]} onPress={handlePickImages} accessibilityLabel={t('moment.selectMedia', { defaultValue: '添加图片或视频' })}>
                 <Ionicons name="add" size={24} color={colors.textSecondary} />
-                <Text style={[s.photoCount, d.photoCount]}>{images.length}/9</Text>
+                <Text style={[s.photoCount, d.photoCount]}>{images.length}/{LIMITS.POST_MAX_MEDIA}</Text>
               </Pressable>
             ) : null}
           </View>
+          <Text style={[s.photoCount, d.photoCount]}>
+            {t('moment.mediaLimitHint', { max: LIMITS.POST_MAX_MEDIA, defaultValue: '图片和视频合计最多 {{max}} 个' })}
+          </Text>
         </View>
 
         {/* Visibility */}

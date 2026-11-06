@@ -6,6 +6,10 @@ import { NoteBlockRenderer, NoteImageViewportContext } from './NoteBlockRenderer
 import { createNoteImageViewport } from '@/features/notes/utils/note-image-viewport';
 
 jest.mock('expo', () => ({ useEventListener: jest.fn() }));
+jest.mock('./NoteVideoViewer', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { NoteVideoViewer: (props: object) => <View testID="note-fullscreen-video" {...props} /> };
+});
 jest.mock('expo-image', () => ({ Image: () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return <View testID="note-image" />;
@@ -168,7 +172,7 @@ test('server-provided inline content stops at the supported nesting depth', () =
   expect(tree).not.toContain('行内第11层');
 });
 
-test('one lazy video press creates and starts the player after its view attaches', () => {
+test('one lazy video press opens the fullscreen viewer and closing restores the preview', () => {
   const mockUseVideoPlayer = jest.mocked(useVideoPlayer);
   mockUseVideoPlayer.mockClear();
 
@@ -181,20 +185,19 @@ test('one lazy video press creates and starts the player after its view attaches
 
   expect(mockUseVideoPlayer).not.toHaveBeenCalled();
   fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
-  expect(mockUseVideoPlayer).toHaveBeenCalledTimes(1);
-  expect(mockUseVideoPlayer).toHaveBeenCalledWith(
-    'https://cdn.example/preview.mp4',
-    expect.any(Function),
-  );
-  expect(mockVideoPlayer.play).toHaveBeenCalledTimes(1);
-  view.rerender(<NoteBlockRenderer lazyMedia blocks={[{ type: 'video', props: { url: 'https://cdn.example/preview.mp4' } }]} />);
-  expect(mockVideoPlayer.play).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('note-fullscreen-video').props.uri).toBe('https://cdn.example/preview.mp4');
+  fireEvent(screen.getByTestId('note-fullscreen-video'), 'close');
+  expect(screen.queryByTestId('note-fullscreen-video')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Play video' })).toBeTruthy();
+  view.unmount();
 });
 
-test('normal video details attach controls without automatically playing', () => {
+test('normal video details also wait for a tap before opening fullscreen playback', () => {
   render(<NoteBlockRenderer blocks={[{ type: 'video', props: { url: 'https://cdn.example/detail.mp4' } }]} />);
-  expect(mockVideoPlayer.mounted).toBe(true);
-  expect(mockVideoPlayer.play).not.toHaveBeenCalled();
+  expect(useVideoPlayer).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('note-fullscreen-video')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
+  expect(screen.getByTestId('note-fullscreen-video').props.uri).toBe('https://cdn.example/detail.mp4');
 });
 
 test('one press starts a lazy audio player', () => {

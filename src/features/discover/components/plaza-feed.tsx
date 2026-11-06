@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -17,7 +17,7 @@ import { fetchMembershipProgramStatus } from '@/services/api/membership';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { useCircleShortcutOrderStore } from '@/features/discover/store/use-circle-shortcut-order-store';
 import { orderCircleShortcuts } from '@/features/discover/utils/circle-shortcut-order';
@@ -58,6 +58,9 @@ const s = StyleSheet.create({
 });
 
 export const PlazaFeed: React.FC = () => {
+  useHydrateCirclesSnapshot();
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const plazaLoaded = useDiscoverStore((state) => state.plazaLoaded);
   const { t } = useTranslation();
   const router = useRouter();
   const { colors } = useTheme();
@@ -103,6 +106,9 @@ export const PlazaFeed: React.FC = () => {
   );
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
   const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
+  useLayoutEffect(() => {
+    useDiscoverStore.getState().hydrate();
+  }, [filterCircleIds, filterCities, selectedCircleId, selectedCity, sessionEpoch]);
   const shortcutOrderIds = useCircleShortcutOrderStore((st) => st.orderIds);
   const setShortcutOrderIds = useCircleShortcutOrderStore((st) => st.setOrderIds);
   const resetShortcutOrder = useCircleShortcutOrderStore((st) => st.resetOrder);
@@ -306,7 +312,7 @@ export const PlazaFeed: React.FC = () => {
       </View>
     ) : null;
 
-  if (programEnabled === null) {
+  if (programEnabled === null && !plazaLoaded) {
     return (
       <View style={s.emptyContainer}>
         <ActivityIndicator color={colors.primary} />
@@ -334,6 +340,7 @@ export const PlazaFeed: React.FC = () => {
   return (
     <>
       <FlatList
+        pointerEvents={programEnabled === null ? 'none' : 'auto'}
         data={plazaPosts}
         renderItem={renderItem}
         keyExtractor={keyExtractor}

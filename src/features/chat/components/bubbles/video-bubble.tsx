@@ -1,10 +1,10 @@
 import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
+import { MediaProgressBar } from '@/components/ui/media-progress-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { cachedVideoSource } from '@/utils/video-source';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   StyleSheet,
@@ -132,7 +132,9 @@ function FullscreenVideo({ videoUrl, ephemeral }: { videoUrl: string; ephemeral:
     setLoading(true);
     setFailed(false);
     const subscription = player.addListener('statusChange', ({ status }) => {
-      if (!cancelled && status === 'error') {
+      if (cancelled) return;
+      setLoading(status === 'loading' || status === 'idle');
+      if (status === 'error') {
         setFailed(true);
         setLoading(false);
         reportHandledFailure('chatMedia', 'videoPlayback', new Error('Video playback failed'));
@@ -143,17 +145,16 @@ function FullscreenVideo({ videoUrl, ephemeral }: { videoUrl: string; ephemeral:
     }).catch(() => {
       if (!cancelled) {
         setFailed(true);
+        setLoading(false);
         reportHandledFailure('chatMedia', 'videoLoad', new Error('Video load failed'));
       }
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; subscription.remove(); };
   }, [attempt, ephemeral, player, videoUrl]);
   return (
     <>
       <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls contentFit="contain" surfaceType="textureView" />
-      {loading ? <View style={s.playbackStatus} pointerEvents="none"><ActivityIndicator color="#fff" /></View> : null}
+      {loading ? <View style={s.playbackStatus} pointerEvents="none" accessible accessibilityRole="progressbar" accessibilityLabel={t('common.loading')}><MediaProgressBar percent={null} /></View> : null}
       {failed ? (
         <View style={s.playbackStatus}>
           <Text style={s.playbackText}>{t('chat.detail.videoUnavailable')}</Text>
@@ -184,6 +185,7 @@ export function VideoBubble({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [posterLoading, setPosterLoading] = useState(false);
 
   const aspectRatio = useMemo(() => {
     const width = message.videoWidth ?? 0;
@@ -240,7 +242,7 @@ export function VideoBubble({
           {videoUrl ? (
             <View style={{ aspectRatio }}>
               {!posterUrl ? null : (
-                <Image
+                <MediaImage
                   testID="chat-video-poster"
                   source={
                     message.videoThumbKey
@@ -251,9 +253,11 @@ export function VideoBubble({
                   contentFit="cover"
                   cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
                   pointerEvents="none"
+                  onLoadStart={() => setPosterLoading(true)}
+                  onLoadEnd={() => setPosterLoading(false)}
                 />
               )}
-              <View
+              {posterUrl && posterLoading ? null : <View
                 style={[s.poster, posterUrl ? s.posterOverImage : null]}
                 pointerEvents="none"
               >
@@ -263,7 +267,7 @@ export function VideoBubble({
                 {durationLabel ? (
                   <Text style={s.duration}>{durationLabel}</Text>
                 ) : null}
-              </View>
+              </View>}
             </View>
           ) : (
             <View style={s.unavailable}>

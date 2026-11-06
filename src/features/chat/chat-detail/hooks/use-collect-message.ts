@@ -6,7 +6,7 @@ import {
   buildCollectionInputFromMessage,
   buildNoteCollectSource,
 } from '@/features/chat/utils/message-collection';
-import { collectNote, fetchNoteGroups } from '@/services/api/notes';
+import { collectNote, fetchNoteGroups, findCollectedNote } from '@/services/api/notes';
 import type { CollectNoteSource, NoteGroup } from '@/features/notes/types';
 import {
   AddNoteToNotesSheet,
@@ -212,6 +212,22 @@ export function useCollectMessage({
         // A sheet owns its original message until confirmation or cancellation.
         if (noteRequestRef.current) return 'pending';
 
+        let existing;
+        try {
+          existing = await findCollectedNote(message.noteCard.noteId, sessionEpoch);
+        } catch (error) {
+          reportHandledFailure('chatDetail', 'findCollectedNote', error);
+          if (!isCurrentContext(context)) return 'cancelled';
+          if (!options?.silent) Alert.alert(t('chat.messageActions.collectFailed'), getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')));
+          return 'failed';
+        }
+        if (!isCurrentContext(context)) return 'cancelled';
+        if (existing) {
+          if (!options?.silent) Alert.alert(t('chat.messageActions.noteAlreadyCollected', { defaultValue: '已在我的笔记中' }));
+          return 'collected';
+        }
+
+        if (noteRequestRef.current) return 'pending';
         const source = buildNoteCollectSource(message, {
           conversationID,
           conversationTitle,

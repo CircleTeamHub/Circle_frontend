@@ -52,6 +52,7 @@ import { useKeyboardVisible } from '@/features/chat/chat-detail/hooks/use-keyboa
 import { useChatBackground } from '@/features/chat/chat-detail/hooks/use-chat-background';
 import { useChatHeader } from '@/features/chat/chat-detail/hooks/use-chat-header';
 import { useBurnNotice } from '@/features/chat/chat-detail/hooks/use-burn-notice';
+import { GroupNoticeBanner } from '@/features/chat/components/GroupNoticeBanner';
 import { ChatDetailHeader } from '@/features/chat/chat-detail/components/ChatDetailHeader';
 import { ChatMessageArea } from '@/features/chat/chat-detail/components/ChatMessageArea';
 import { ChatConnectionBanner } from '@/features/chat/components/ChatConnectionBanner';
@@ -291,6 +292,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
     showUnreadJump,
+    showLatestJump,
+    handleJumpToLatest,
     unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
@@ -510,6 +513,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     keyExtractor,
     imageViewer,
   } = useMessageRenderer({
+    isAssistantConversation,
     messages,
     handleImageViewed,
     selectedMessageIds,
@@ -591,6 +595,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     handleAttachmentAction,
     handlePickFriend,
+    handlePickGroupCard,
     handlePickFavorite,
     handlePickQuickReply,
   } = useAttachmentActions({
@@ -640,6 +645,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     clearPersistedDraft,
     handlePickNoteBatch,
     handlePickFriend,
+    handlePickGroupCard,
     handlePickFavorite,
     handlePickQuickReply,
   });
@@ -651,7 +657,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       // The note-collection sheet is a separate full-screen modal. Keeping the
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.
-      enabled={!noteCollectVisible}
+      // Composer panels replace the keyboard and must not stack on its closing inset.
+      enabled={!noteCollectVisible && !attachmentOpen && !emojiOpen}
       // 共享容器统一处理键盘避让，两端都把输入栏顶到键盘上方。
     >
       <ChatDetailHeader
@@ -672,6 +679,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         d={d}
       />
       {isAssistantConversation ? null : <Divider />}
+      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} /> : null}
       {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
       {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
       {conversationBurnNoticeText ? (
@@ -707,6 +715,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             historyWindowFull={historyWindowFull}
             unreadCount={entryUnreadCount}
             showUnreadJump={showUnreadJump}
+            showLatestJump={showLatestJump}
+            handleJumpToLatest={handleJumpToLatest}
             unreadStartMessageID={unreadStartMessageID}
             messages={messages}
             displayMessages={displayMessages}

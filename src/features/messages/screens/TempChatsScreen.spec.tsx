@@ -102,6 +102,19 @@ jest.mock('@/services/api/errors', () => ({
 jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: jest.fn(),
 }));
+jest.mock('@/services/api/client', () => ({
+  isDefinitiveAuthFailure: () => false,
+}));
+// 页面按「账号:会话」挂载,没有登录用户时整页不渲染。
+jest.mock('@/stores/authStore', () => {
+  const state = { user: { id: 'me' }, sessionEpoch: 1 };
+  return {
+    useAuthStore: Object.assign(
+      (select: (value: typeof state) => unknown) => select(state),
+      { getState: () => state },
+    ),
+  };
+});
 
 const baseRoom: TempChatListItem = {
   id: 'tc-ended',

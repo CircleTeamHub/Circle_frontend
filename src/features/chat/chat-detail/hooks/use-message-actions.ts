@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { type ChatMessage } from '@/types';
 import { useChatStore, type StoredChatMessage } from '@/chat-core/store';
+import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
 import { Alert, Keyboard, Platform, type GestureResponderEvent } from 'react-native';
@@ -334,20 +335,22 @@ export function useMessageActions({
   );
 
   // Build the floating menu's items for the currently long-pressed message.
-  // G-02 撤回:自己已送达的消息,2 分钟窗口内可撤(圈主/管理员由服务端另行放行,
-  // 菜单端先只做本人入口,权限判定始终以服务端 ack 为准)。
+  // G-02 撤回:自己已送达的消息,2 分钟窗口内可撤;群聊里群主/管理员可撤任何人的
+  // 消息、不受窗口限制。系统提示没有作者,谁都撤不了。角色取会话 DTO 的快照,
+  // 权限判定始终以服务端 ack 为准(被撤权后点了会收到 CHAT_REVOKE_FORBIDDEN)。
   const canRevokeMessage = useCallback(
     (message: ChatMessage) => {
+      const state = useChatStore.getState();
+      const dto = state.messagesByConversation[conversationID]?.find(
+        (m) => m.id === message.id,
+      );
+      if (!dto || dto.height <= 0 || dto.revokedAt || !dto.sender) return false;
+      const myRole = state.conversations.find((c) => c.id === conversationID)?.myRole;
+      if (isGroupChat && isGroupManager(myRole)) return true;
       if (!message.outgoing || message.sendStatus !== 2) return false;
-      const dto = useChatStore
-        .getState()
-        .messagesByConversation[conversationID]?.find(
-          (m) => m.id === message.id,
-        );
-      if (!dto || dto.height <= 0 || dto.revokedAt) return false;
       return Date.now() - Date.parse(dto.createdAt) <= 2 * 60_000;
     },
-    [conversationID],
+    [conversationID, isGroupChat],
   );
 
   const handleRevokeMessage = useCallback(

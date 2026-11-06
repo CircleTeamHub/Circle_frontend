@@ -410,10 +410,17 @@ test('ProfileScreen 的宫格数据只随语言重建，不是每帧新数组', 
   assert.match(menuItems, /\[t\],/);
 });
 
-test('MemberCenterScreen renders the daily offer and four-tier catalog without legacy commerce APIs', () => {
+test('MemberCenterScreen only says membership is not open yet', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const catalog = read('src/features/profile/membership-plans.ts');
 
+  // 会员中心整页只剩标题栏和「会员功能暂未开放」;套餐、权益、客服入口一律不再出现。
+  assert.match(src, /profile\.membership\.marketing\.title/);
+  assert.doesNotMatch(
+    src,
+    /MEMBERSHIP_PLANS|MEMBERSHIP_BENEFITS|selectSupportAgents|member-rules|fetchMembershipProgramStatus/,
+  );
+  // 其它页面仍在用的会员目录保持原样。
   for (const [plan, price] of [
     ['daily', 19.9],
     ['silver', 298],
@@ -421,102 +428,8 @@ test('MemberCenterScreen renders the daily offer and four-tier catalog without l
     ['diamond', 1998],
     ['super', 3998],
   ]) {
-    assert.match(
-      catalog,
-      new RegExp(`id: '${plan}'[\\s\\S]*?amount: ${price}`),
-    );
+    assert.match(catalog, new RegExp(`id: '${plan}'[\\s\\S]*?amount: ${price}`));
   }
-
-  assert.match(src, /MEMBERSHIP_PLANS\.map/);
-  assert.match(src, /visibleBenefits\.map/);
-  assert.match(
-    src,
-    /FEATURE_FLAGS\.fancyNumbers\s*\|\|\s*benefit\.id\s*!==\s*'fancy-number'/,
-  );
-  // 允许 staged rollout 的 fetchMembershipProgramStatus（会员中心正文是否放开的灰度开关，
-  // 与 MemberCenterScreen.spec.tsx 的行为契约一致），但仍禁止旧的「积分兑换/直购升级」商业化 API。
-  assert.doesNotMatch(
-    src,
-    /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/,
-  );
-  assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
-});
-
-test('MemberCenterScreen provides a vertical five-offer selection with per-tier visuals, markers, and selected benefits', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const catalog = read('src/features/profile/membership-plans.ts');
-
-  // 五个方案纵向全展示（tierStack，不再横滑把钻石/超级截在屏外），权限档位复用贵金属视觉。
-  assert.match(src, /tierStack/);
-  assert.match(src, /TIER_VISUALS/);
-  assert.match(src, /accessibilityState=\{\{ selected \}\}/);
-  assert.match(src, /plan\.recommended/);
-  assert.match(src, /defaultValue: '推荐'/);
-  assert.match(src, /duration\.type === 'lifetime'/);
-  assert.match(src, /duration\.type === 'days'/);
-  assert.match(src, /defaultValue: '永久'/);
-  assert.match(src, /benefit\.values\[selectedPlan\.tier\]/);
-  assert.match(src, /defaultValue: '会员权益'/);
-  assert.match(src, /profile\/member-rules/);
-  assert.match(src, /flexWrap:\s*'wrap'/);
-  assert.match(src, /flexShrink:\s*1/);
-  assert.match(src, /numberOfLines=\{2\}/);
-  assert.doesNotMatch(
-    src,
-    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
-  );
-  assert.doesNotMatch(
-    catalog,
-    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
-  );
-});
-
-test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const env = read('.env.example');
-
-  // 会员客服来自后端下发的 membership 类,不再是编译期变量。
-  assert.doesNotMatch(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  // 首屏 config 为 null 时要等请求落定,否则一次正常往返会被误报成「暂未配置」。
-  assert.match(src, /supportConfig \?\? \(await fetchSupportConfigState/);
-  assert.match(src, /selectSupportAgents\(config, 'membership'\)/);
-  assert.match(
-    src,
-    /getUserProfileHref\([\s\S]*'profile',[\s\S]*agent\.userID/,
-  );
-  assert.match(src, /router\.navigate\(\s*getUserProfileHref/);
-  // 没配仍是优雅降级的 Alert,不回退到任何默认账号。
-  assert.match(src, /Alert\.alert/);
-  assert.match(src, /defaultValue: '客服账号暂未配置'/);
-  assert.match(src, /defaultValue: '请联系平台官方客服咨询会员开通或升级。'/);
-  // 这组构建期变量已作废,.env.example 不该再教人去配。
-  assert.doesNotMatch(env, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID=/);
-  assert.doesNotMatch(env, /EXPO_PUBLIC_SUPPORT_[A-Z_]*=/);
-  assert.doesNotMatch(src, /微信|WeChat|支付宝|Alipay/);
-});
-
-test('MemberCenterScreen refreshes the owning account on focus without stale overwrite', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-
-  assert.match(src, /useFocusEffect/);
-  assert.match(src, /fetchCurrentUser/);
-  assert.match(src, /sessionEpoch/);
-  assert.match(src, /useAuthStore\.getState\(\)/);
-  assert.match(src, /active = false/);
-});
-
-test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-tier contact states', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-
-  assert.match(src, /selectedPlan\.level > currentPlanLevel/);
-  assert.match(src, /selectedPlan\.id === currentTier/);
-  assert.match(src, /contactToActivate/);
-  assert.match(src, /defaultValue: '联系客服开通 {{plan}}'/);
-  assert.match(src, /contactToUpgrade/);
-  assert.match(src, /defaultValue: '联系客服升级至 {{plan}}'/);
-  assert.match(src, /defaultValue: '当前已是 {{plan}}，联系客服咨询'/);
-  assert.match(src, /defaultValue: '当前会员等级更高，联系客服咨询'/);
-  assert.match(src, /defaultValue: '已开通会员可联系客服补差价升级/);
 });
 
 test('ProfileScreen displays effective four-tier membership labels', () => {
@@ -737,8 +650,11 @@ test('CollectionsScreen shows collectible content types', () => {
   // Content-type labels and row copy are i18n'd (COLLECTION_TYPES holds labelKeys); the
   // Chinese display strings now live in the locale bundle rather than the component.
   const zh = read('src/i18n/locales/zh.json');
+  const toolbar = read('src/features/profile/components/CollectionListToolbar.tsx');
 
-  assert.match(src, /horizontal/);
+  // 类型页签拆进了 CollectionListToolbar:横向滚动,不换行。
+  assert.match(src, /<CollectionListToolbar/);
+  assert.match(toolbar, /<ScrollView horizontal/);
   assert.match(src, /fetchCollections/);
   assert.doesNotMatch(src, /createCollection/);
   assert.match(src, /deleteCollection/);
@@ -764,20 +680,17 @@ test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)'
   assert.doesNotMatch(src, /profile\.collections\.tabs\.note/);
   assert.doesNotMatch(src, /normalizeNoteCardPayload/);
   assert.doesNotMatch(src, /getNoteDetailHref/);
-  assert.match(src, /Exclude<CollectionType, 'NOTE'>/);
+  const toolbar = read('src/features/profile/components/CollectionListToolbar.tsx');
+  assert.match(toolbar, /export type CollectionTab = 'ALL' \| Exclude<CollectionType, 'NOTE'>;/);
+  assert.doesNotMatch(toolbar, /'NOTE'\]/);
   assert.match(src, /item\.type !== 'NOTE'/);
 });
 
-test('MemberCenterScreen bounds retries and exits the initial loading state on failure', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+test('membership program status fetch bounds retries and keeps the previous status', () => {
   const store = read('src/stores/membershipProgramStore.ts');
 
   assert.match(store, /retry\(\(\) => fetchMembershipProgramStatus\(\)\)/);
   assert.match(store, /return previousStatus/);
-  assert.match(
-    src,
-    /programStatus\?\.enabled \?\? \(programError \? false : null\)/,
-  );
 });
 
 test('GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle', () => {

@@ -1,7 +1,7 @@
 import { CircleAvatar } from "@/components/ui/circle-avatar";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { useCirclesStore } from "@/features/discover/store/use-circles-store";
+import { useCirclesStore, useHydrateCirclesSnapshot } from "@/features/discover/store/use-circles-store";
 import { useDiscoverFilterStore } from "@/features/discover/store/use-discover-filter-store";
 import { applyCircleFilter } from "@/features/discover/utils/circle-filter";
 import { useTranslation } from "react-i18next";
@@ -9,8 +9,8 @@ import { useShallow } from "zustand/react/shallow";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -76,6 +76,7 @@ const s = StyleSheet.create({
 });
 
 export const MyCirclesPanel: React.FC = () => {
+  useHydrateCirclesSnapshot();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
@@ -100,9 +101,9 @@ export const MyCirclesPanel: React.FC = () => {
     })),
   );
 
-  useEffect(() => {
-    fetchMyCircles();
-  }, [fetchMyCircles]);
+  useFocusEffect(useCallback(() => {
+    void fetchMyCircles();
+  }, [fetchMyCircles]));
 
   const tabKey = CIRCLE_TAB_KEYS[activeTab] ?? CIRCLE_TAB_KEYS[0];
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);

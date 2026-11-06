@@ -136,6 +136,7 @@ function loadApiClientHarness({ persistError = false, commitError = false, pause
         : response(false, 401, { code: 1, message: 'expired', data: null });
     },
     require: (request) => {
+      if (request === '@/observability/metrics') return { recordMetric() {} };
       if (request === '@/observability/http-diagnostics') {
         return loadTsModule('src/observability/http-diagnostics.ts');
       }

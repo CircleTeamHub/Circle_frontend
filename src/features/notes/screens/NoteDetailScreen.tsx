@@ -53,7 +53,7 @@ import {
   readNoteComposerOrder,
 } from '@/features/notes/utils/note-composer';
 import { shouldUseDirectVideoExportFallback } from '@/features/notes/utils/note-export';
-import { collectNote, createNoteExport, fetchNoteDetail, findCollectedNote, notesMutatedSince } from '@/services/api/notes';
+import { collectNote, createNoteExport, fetchNoteDetail, findCollectedNote, getCachedCollectedNote, getCachedNoteDetail, notesMutatedSince } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
@@ -84,6 +84,13 @@ function stripNoteCardBlocks(value: unknown): unknown {
 }
 
 export default function NoteDetailScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  return sessionKey ? <NoteDetailContent key={`${sessionKey}:${id ?? ''}`} /> : null;
+}
+
+function NoteDetailContent() {
   const router = useRouter();
   // 本页在哪个 tab 栈打开（profile/messages/...），决定聊天页往哪个栈推。
   const segments = useSegments();
@@ -109,22 +116,27 @@ export default function NoteDetailScreen() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const noteStatusVersion = useNoteStatusSignalStore((state) => state.version);
 
-  const [note, setNote] = useState<NoteDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [cached] = useState(() => getCachedNoteDetail(id));
+  const [cachedCollected] = useState(() => getCachedCollectedNote(id));
+  const [note, setNote] = useState<NoteDetail | null>(cached?.value ?? null);
+  const [loading, setLoading] = useState(!cached);
+  const [detailVerified, setDetailVerified] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<NoteExportFormat | null>(null);
   const [downloadMenuVisible, setDownloadMenuVisible] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
+  const collectionKey = `${sessionEpoch}:${id}`;
   const [collectionState, setCollectionState] = useState<{
     key: string;
     status: 'adding' | 'added';
     note?: NoteSummary;
-  } | null>(null);
-  const collectionKey = `${sessionEpoch}:${id}`;
+  } | null>(() => cachedCollected?.value ? { key: collectionKey, status: 'added', note: cachedCollected.value } : null);
   const currentCollectionKeyRef = useRef(collectionKey);
   currentCollectionKeyRef.current = collectionKey;
   const collectionRequestRef = useRef<string | null>(null);
+  const collectionLookupRef = useRef(0);
+  const noteLoadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -136,7 +148,7 @@ export default function NoteDetailScreen() {
   const imageViewport = useMemo(createNoteImageViewport, []);
   const sectionYRef = useRef<Partial<Record<NoteSectionKind, number>>>({});
   const scrolledSectionRef = useRef<string | null>(null);
-  const noteLoadedRef = useRef(false);
+  const noteLoadedRef = useRef(cached !== null);
   // 从编辑页/群名片回来:编辑会走笔记写请求(notesMutatedSince)必重拉;只是看了看就回来、
   // 30 秒内、来源状态没变,就不再重拉。窗口远小于媒体签名的有效期。
   const reloadGate = useFocusReloadGate({
@@ -152,23 +164,29 @@ export default function NoteDetailScreen() {
       return () => undefined;
     }
     let cancelled = false;
+    const sequence = ++noteLoadSequenceRef.current;
+    const isCurrent = () => !cancelled && mountedRef.current &&
+      sequence === noteLoadSequenceRef.current && useAuthStore.getState().sessionEpoch === sessionEpoch;
     const startedAt = Date.now();
     // 已经有内容时后台刷新,不整屏转圈(回到页面时那一下闪烁)。
     if (!noteLoadedRef.current) setLoading(true);
     setLoadError(null);
     withNoteSyncRetry(() => fetchNoteDetail(id))
       .then((data) => {
-        if (cancelled || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        if (!isCurrent()) return;
         setNote(data);
+        setDetailVerified(true);
         setLoading(false);
         noteLoadedRef.current = true;
         reloadGate.markLoaded(startedAt);
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (!isCurrent()) return;
         // 404 真的不存在；其它失败都是网络/服务异常，应当让用户重试。
-        if (error instanceof ApiError && error.status === 404) {
+        if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
           setNote(null);
+          setCollectionState(null);
+          setDetailVerified(false);
           setLoadError(null);
         } else {
           setLoadError(
@@ -230,19 +248,19 @@ export default function NoteDetailScreen() {
   const ownsNote = Boolean(note?.id === id && currentUserId &&
     (note?.canEdit === true || note?.ownerId === currentUserId));
   const privateCardNote = ownsNote ? note : addedNote ? collectionState?.note : null;
-  useEffect(() => {
-    if (!note || note.id !== id || ownsNote || addedNote || !currentUserId) return;
+  useFocusEffect(useCallback(() => {
+    if (!note || note.id !== id || ownsNote || !currentUserId || collectionRequestRef.current === collectionKey) return;
     let cancelled = false;
+    const lookup = ++collectionLookupRef.current;
     void findCollectedNote(note.id, sessionEpoch).then((copy) => {
-      if (cancelled || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-      if (copy) setCollectionState((current) => current?.key === collectionKey && current.status === 'added'
-        ? current
-        : { key: collectionKey, status: 'added', note: copy });
+      if (cancelled || lookup !== collectionLookupRef.current || collectionRequestRef.current === collectionKey ||
+          useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      setCollectionState(copy ? { key: collectionKey, status: 'added', note: copy } : null);
     }).catch((error) => {
       if (!cancelled) reportHandledFailure('notes', 'fetchCollectedCards', error);
     });
     return () => { cancelled = true; };
-  }, [addedNote, collectionKey, currentUserId, id, note, ownsNote, sessionEpoch]);
+  }, [collectionKey, currentUserId, id, note, ownsNote, sessionEpoch]));
   const cardSections = useMemo(() => privateCardNote ? buildNoteSectionsWithCards(privateCardNote) : null, [privateCardNote]);
   const { contact, group } = useMemo(() => resolveNoteCardButtons(privateCardNote ?? {}), [privateCardNote]);
   const sections = useMemo(() => (note ? buildNoteSections(note) : null), [note]);
@@ -429,7 +447,7 @@ export default function NoteDetailScreen() {
 
   const handleExport = useCallback(
     async (format: NoteExportFormat) => {
-      if (!note || exporting) return;
+      if (!note || !detailVerified || exporting) return;
       setExporting(format);
       try {
         try {
@@ -469,12 +487,12 @@ export default function NoteDetailScreen() {
         setExporting(null);
       }
     },
-    [exporting, note, saveLongImageExport, saveVideosDirectly, t],
+    [detailVerified, exporting, note, saveLongImageExport, saveVideosDirectly, t],
   );
 
   // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
   const [shareOpen, setShareOpen] = useState(false);
-  const handleShareNote = useCallback(() => setShareOpen(true), []);
+  const handleShareNote = useCallback(() => { if (detailVerified) setShareOpen(true); }, [detailVerified]);
   const sharePayloads = useMemo(
     () =>
       shareOpen && note
@@ -484,20 +502,21 @@ export default function NoteDetailScreen() {
   );
 
   const canEditNote = useMemo(() => {
-    if (!note) return false;
+    if (!note || !detailVerified) return false;
     if (typeof note.canEdit === 'boolean') return note.canEdit;
     const resolvedOwnerId = note.ownerId ?? ownerId;
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
-  }, [currentUserId, note, ownerId]);
+  }, [currentUserId, detailVerified, note, ownerId]);
 
   const hasChatSource = Boolean(sourceConversationId && sourceMessageId);
   const handleAddNote = useCallback(async () => {
-    if (!note || note.id !== id || !hasChatSource || canEditNote || addedNote ||
+    if (!note || !detailVerified || note.id !== id || !hasChatSource || canEditNote || addedNote ||
         collectionRequestRef.current === collectionKey) return;
     const isCurrentRequest = () => mountedRef.current &&
       currentCollectionKeyRef.current === collectionKey &&
       useAuthStore.getState().sessionEpoch === sessionEpoch;
     collectionRequestRef.current = collectionKey;
+    collectionLookupRef.current += 1;
     setCollectionState({ key: collectionKey, status: 'adding' });
     const startedAt = diagnosticNow();
     let phaseStartedAt = startedAt;
@@ -554,7 +573,7 @@ export default function NoteDetailScreen() {
           ? null : state);
       }
     }
-  }, [addedNote, canEditNote, collectionKey, hasChatSource, id, note, router, sessionEpoch,
+  }, [addedNote, canEditNote, collectionKey, detailVerified, hasChatSource, id, note, router, sessionEpoch,
     sourceConversationId, sourceMessageHeight, sourceMessageId, t]);
 
   const d = useMemo(
@@ -623,6 +642,8 @@ export default function NoteDetailScreen() {
           <Pressable
             style={[s.headerIconBtn, d.iconBtn]}
             onPress={handleShareNote}
+            disabled={!detailVerified}
+            accessibilityState={{ disabled: !detailVerified }}
             hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel={t('notes.actions.share', { defaultValue: '分享' })}
@@ -637,11 +658,11 @@ export default function NoteDetailScreen() {
             <Pressable
               style={[s.headerIconBtn, s.headerAddBtn, d.iconBtn]}
               onPress={() => void handleAddNote()}
-              disabled={addingNote || addedNote}
+              disabled={!detailVerified || addingNote || addedNote}
               hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel={t(addedNote ? 'notes.detail.added' : 'chat.messageActions.addToNotes')}
-              accessibilityState={{ disabled: addingNote || addedNote, busy: addingNote }}
+              accessibilityState={{ disabled: !detailVerified || addingNote || addedNote, busy: addingNote }}
             >
               {addingNote ? (
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -656,6 +677,12 @@ export default function NoteDetailScreen() {
         </View>
       </View>
 
+      {loadError ? <View style={{ paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm }}>
+        <Text style={d.meta}>{loadError}</Text>
+        <Pressable onPress={loadNote} accessibilityRole="button">
+          <Text style={{ color: colors.primary }}>{t('common.retry', { defaultValue: '重试' })}</Text>
+        </Pressable>
+      </View> : null}
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
@@ -729,7 +756,8 @@ export default function NoteDetailScreen() {
           <Pressable
             style={[s.floatingBtn, d.floatingBtn, exporting !== null && s.floatingBtnBusy]}
             onPress={() => setDownloadMenuVisible(true)}
-            disabled={exporting !== null}
+            disabled={!detailVerified || exporting !== null}
+            accessibilityState={{ disabled: !detailVerified || exporting !== null }}
             accessibilityRole="button"
             accessibilityLabel={t('notes.actions.download', {
               defaultValue: '下载',

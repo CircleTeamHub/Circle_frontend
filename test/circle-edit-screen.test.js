@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withNativeStorageStubs } = require('./helpers/native-storage-stubs');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -23,7 +24,7 @@ function loadCirclesApi(deps) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withNativeStorageStubs((request) => {
       if (request === '@/services/api/client') {
         return { apiClient: deps.apiClient };
       }
@@ -41,7 +42,7 @@ function loadCirclesApi(deps) {
       }
 
       throw new Error(`Unexpected import: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
 

@@ -1,6 +1,9 @@
 import { storage } from '@/storage';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import type {
   EditorNoteMediaDraft,
+  NoteDraftSummary,
   NoteSections,
 } from '@/features/notes/types';
 import type { NoteComposerBlock } from '@/features/notes/utils/note-composer';
@@ -232,7 +235,8 @@ function parseJson<T>(value: string | undefined): T | null {
   if (!value) return null;
   try {
     return JSON.parse(value) as T;
-  } catch {
+  } catch (error) {
+    reportHandledFailure('noteDrafts', 'parse', error);
     return null;
   }
 }
@@ -308,7 +312,10 @@ export async function restoreLocalNoteDraftRecordings(
 ): Promise<NoteEditorDraftRecord> {
   return { ...record, audioItems: await Promise.all(record.audioItems.map(async (item) => {
     if (!item.localRecordingId) return item;
-    const uri = await restoreNoteRecording(userId, item.localRecordingId).catch(() => undefined);
+    const uri = await restoreNoteRecording(userId, item.localRecordingId).catch((error) => {
+      reportHandledFailure('noteDrafts', 'recordingRestore', error);
+      return undefined;
+    });
     return { ...item, previewUri: uri };
   })) };
 }
@@ -347,7 +354,9 @@ export function removeUnreferencedLocalNoteRecordings(userId: string | null | un
     for (const id of recordingIds(loadLocalNoteDraft(userId, item.id))) candidates.delete(id);
     if (!candidates.size) return;
   }
-  for (const id of candidates) void removeNoteRecording(userId, id).catch(() => undefined);
+  for (const id of candidates) void removeNoteRecording(userId, id).catch((error) => {
+    reportHandledFailure('noteDrafts', 'recordingCleanup', error);
+  });
 }
 
 function cleanRecordings(userId: string | null | undefined, record: NoteEditorDraftRecord | null, retained: ReadonlySet<string> = new Set()): void {
@@ -403,6 +412,10 @@ export function removeLocalNoteDraft(
     version: INDEX_VERSION,
     items: index.items.filter((item) => item.id !== draftId),
   });
+  // Publication consumes this ID; a retained remote list must not resurrect it.
+  deletedDrafts.add(draftKey(userId, draftId));
+  const cached = readPageSnapshot<NoteDraftSummary[]>(userId, 'drafts:summaries');
+  if (cached) writePageSnapshot(userId, 'drafts:summaries', cached.value.filter((item) => item.id !== draftId), cached.at);
   cleanRecordings(userId, record);
 }
 

@@ -41,6 +41,7 @@ export async function uploadChatImageThumbnail(
   originalWidth: number | undefined,
   filename: string,
   beforeUpload?: () => void,
+  progressKey?: string,
 ): Promise<{ key: string; width: number; height: number } | null> {
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
@@ -58,6 +59,8 @@ export async function uploadChatImageThumbnail(
       'image/jpeg',
       thumbnail.uri,
       presign.requiredHeaders,
+      undefined,
+      progressKey ? { progressKey } : undefined,
     );
     return {
       // chat/ 是私有目录：消息体只存 object key，读时由服务端签 URL，不用 fileUrl。

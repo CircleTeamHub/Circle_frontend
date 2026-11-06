@@ -1,4 +1,8 @@
-import { apiClient } from '@/services/api/client';
+import { apiClient, isDefinitiveAuthFailure } from '@/services/api/client';
+import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
+
+let tempChatMutationVersion = 0;
 
 export type TempChatStatus = 'ACTIVE' | 'ENDED' | 'EXPIRED';
 
@@ -68,8 +72,20 @@ export function isTempChatOpenable(
 }
 
 export async function fetchMyTempChats(): Promise<TempChatListItem[]> {
-  const rows = await apiClient<TempChatListRow[]>('/temp-chat/mine');
-  return rows.map(normalizeTempChat);
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const revision = getPageSnapshotRevision();
+  const mutationVersion = tempChatMutationVersion;
+  const startedAt = Date.now();
+  const rows = await apiClient<TempChatListRow[]>('/temp-chat/mine').catch((error) => {
+    if (isDefinitiveAuthFailure(error)) removePageSnapshot(user?.id, 'temp-chats');
+    throw error;
+  });
+  const rooms = rows.map(normalizeTempChat);
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision() &&
+    mutationVersion === tempChatMutationVersion) {
+    writePageSnapshot(user?.id, 'temp-chats', rooms.map((room) => ({ ...room, shareUrl: null })), startedAt);
+  }
+  return rooms;
 }
 
 export class TempChatUnavailableError extends Error {
@@ -99,10 +115,14 @@ export async function assertMyTempChatConversationOpen(
 export async function createTempChat(
   input: CreateTempChatInput = {},
 ): Promise<CreateTempChatResult> {
-  return apiClient<CreateTempChatResult>('/temp-chat', {
+  const ownerId = useAuthStore.getState().user?.id;
+  const result = await apiClient<CreateTempChatResult>('/temp-chat', {
     method: 'POST',
     body: input,
   });
+  tempChatMutationVersion += 1;
+  removePageSnapshot(ownerId, 'temp-chats');
+  return result;
 }
 
 /**
@@ -110,13 +130,20 @@ export async function createTempChat(
  * 也一并移除;已经删过的再删照样成功(204)。
  */
 export async function deleteTempChat(id: string): Promise<void> {
+  const ownerId = useAuthStore.getState().user?.id;
   await apiClient<void>(`/temp-chat/${id}`, { method: 'DELETE' });
+  tempChatMutationVersion += 1;
+  removePageSnapshot(ownerId, 'temp-chats');
 }
 
 export async function endTempChat(
   id: string,
 ): Promise<{ status: TempChatStatus }> {
-  return apiClient<{ status: TempChatStatus }>(`/temp-chat/${id}/end`, {
+  const ownerId = useAuthStore.getState().user?.id;
+  const result = await apiClient<{ status: TempChatStatus }>(`/temp-chat/${id}/end`, {
     method: 'POST',
   });
+  tempChatMutationVersion += 1;
+  removePageSnapshot(ownerId, 'temp-chats');
+  return result;
 }

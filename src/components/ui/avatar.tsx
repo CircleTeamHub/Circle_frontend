@@ -140,6 +140,8 @@ export const Avatar: React.FC<AvatarProps> = ({
             recyclingKey={identityKey ?? uri}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
             onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
             onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
           />
@@ -165,7 +167,7 @@ export const Avatar: React.FC<AvatarProps> = ({
           height: frameSize,
         }}
       >
-        <Image source={frameSource} style={{ width: '100%', height: '100%' }} />
+        <Image source={frameSource} style={{ width: '100%', height: '100%' }} cachePolicy="memory-disk" transition={0} />
       </View>
     </View>
   );

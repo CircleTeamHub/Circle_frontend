@@ -24,10 +24,17 @@ const alice: FriendProfile = {
   remark: null,
 };
 
-jest.mock('expo-router', () => ({
-  useRouter: () => mockRouter,
-  useLocalSearchParams: () => ({ id: 'tag-1', name: '同事' }),
-}));
+jest.mock('expo-router', () => {
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+  return {
+    useRouter: () => mockRouter,
+    useLocalSearchParams: () => ({ id: 'tag-1', name: '同事' }),
+    // 页面改成聚焦时拉成员;测试里挂载即聚焦一次。
+    useFocusEffect: (callback: () => void | (() => void)) => {
+      ReactModule.useEffect(() => callback(), [callback]);
+    },
+  };
+});
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockTranslate }),
@@ -53,6 +60,7 @@ jest.mock('@/services/api/friends', () => ({
   assignFriendTag: jest.fn(),
   fetchFriends: jest.fn(),
   fetchFriendsByTag: jest.fn(),
+  friendsMutatedSince: () => false,
 }));
 
 jest.mock('@/services/api/errors', () => ({

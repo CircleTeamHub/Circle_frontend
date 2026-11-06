@@ -1,13 +1,20 @@
-import { apiClient } from '@/services/api/client';
+import { apiClient } from './client';
 import { createNote, updateNote, fetchNotes, findCollectedNote, togglePinNote } from './notes';
 import type { CreateNoteInput, NoteSummary } from '@/features/notes/types';
 
-jest.mock('@/services/api/client', () => ({ apiClient: jest.fn(), ApiError: class extends Error {} }));
+jest.mock('./client', () => ({ apiClient: jest.fn(), ApiError: class extends Error {} }));
 jest.mock('@/services/api/utils', () => ({ allowPeerMediaUrl: (url: string) => url }));
+// findCollectedNote answers only for the session that is still current; the epoch
+// the caller passes must match the store, and moving it simulates an account switch.
+let mockSessionEpoch = 1;
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: { getState: () => ({ user: null, sessionEpoch: mockSessionEpoch }) },
+}));
 
 const copy = { id: 'copy', title: 'Saved', cover: null, collectedFrom: { sourceNoteId: 'source' } } as NoteSummary;
 
 beforeEach(async () => {
+  mockSessionEpoch = 1;
   jest.mocked(apiClient).mockReset().mockResolvedValue(undefined);
   // A successful mutation invalidates the previous test's lookup snapshot.
   await togglePinNote('reset', false);
@@ -48,6 +55,7 @@ test('account changes, successful writes and expiry invalidate saved-copy lookup
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
   try {
     await findCollectedNote('source', 1);
+    mockSessionEpoch = 2;
     jest.mocked(apiClient).mockResolvedValue([]);
     expect(await findCollectedNote('source', 2)).toBeNull();
     await togglePinNote('copy', true);
@@ -90,6 +98,7 @@ test('a late lookup from the previous account does not replace the current accou
   let finishPrevious!: (value: NoteSummary[]) => void;
   jest.mocked(apiClient).mockReturnValueOnce(new Promise((resolve) => { finishPrevious = resolve; })).mockResolvedValue([]);
   const previous = findCollectedNote('source', 1);
+  mockSessionEpoch = 2;
   expect(await findCollectedNote('source', 2)).toBeNull();
   finishPrevious([copy]);
   await previous;

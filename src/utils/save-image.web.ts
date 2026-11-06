@@ -12,6 +12,9 @@
  * 点击同帧先开一个占位窗口再回填 —— 那要把长按菜单的交互链整个改掉，
  * 收益不抵改动面，留档。
  */
+import { reportHandledFailure } from '@/observability/report-failure';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
+
 export type SaveImageResult = 'saved' | 'denied' | 'failed';
 
 export type CachedMedia = {
@@ -41,6 +44,7 @@ export async function downloadMediaToCache(
       cleanup: () => URL.revokeObjectURL(objectUrl),
     };
   } catch {
+    logClientDiagnostic('mediaSave.download.fallback');
     return null;
   }
 }
@@ -70,14 +74,18 @@ export async function saveMediaToLibrary(
     // 用户看到一条假的保存失败提示。改成拿句柄后手动切断 opener，
     // 反向 tabnabbing 的防护等价。
     const opened = window.open(url, '_blank');
-    if (!opened) return 'failed';
+    if (!opened) {
+      logClientDiagnostic('mediaSave.browserFallback.blocked');
+      return 'failed';
+    }
     try {
       opened.opener = null;
     } catch {
       // 跨源窗口不允许写 opener，忽略（新标签已经打开，这才是重点）。
     }
     return 'saved';
-  } catch {
+  } catch (error) {
+    reportHandledFailure('mediaSave', 'browserFallback', error);
     return 'failed';
   }
 }

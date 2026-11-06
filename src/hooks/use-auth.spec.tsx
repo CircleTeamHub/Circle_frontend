@@ -11,6 +11,7 @@ import {
   register as registerRequest,
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockSetSession = jest.fn();
 const mockUpsertAccount = jest.fn();
@@ -78,6 +79,7 @@ jest.mock('@/services/api/auth', () => ({
 }));
 
 jest.mock('@/services/auth/session', () => ({ clearLocalSession: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/services/api/client', () => ({
   isDefinitiveAuthFailure: jest.fn(() => false),
 }));
@@ -157,6 +159,28 @@ test('login clears partial credentials and reports failure', async () => {
   expect(mockSetSession).not.toHaveBeenCalled();
   expect(result.current.error).toBe('auth.errors.loginFailed');
 });
+
+test.each(['login', 'register', 'completeVerifiedLogin'] as const)(
+  '%s reports native session completion failure once without auth data',
+  async (flow) => {
+    const error = new Error('native session activation failed');
+    jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens });
+    jest.mocked(registerRequest).mockResolvedValue(tokens as never);
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(user as never);
+    mockSetSession.mockImplementationOnce(() => { throw error; });
+    const { result } = renderHook(() => useAuth());
+
+    await act(async () => {
+      if (flow === 'login') await result.current.login('user_123', 'password1');
+      else if (flow === 'register') await result.current.register('new@test.dev', 'password1', 'password1', 'New');
+      else await expect(result.current.completeVerifiedLogin(tokens)).rejects.toBe(error);
+    });
+
+    expect(reportHandledFailure).toHaveBeenCalledTimes(1);
+    expect(reportHandledFailure).toHaveBeenCalledWith('auth', flow, error, ...(flow === 'register' ? [{ stage: 'session' }] : []));
+    expect(clearLocalSession).toHaveBeenCalledTimes(1);
+  },
+);
 
 test('an unknown device goes to verification without creating a session', async () => {
   jest.mocked(loginRequest).mockResolvedValue({

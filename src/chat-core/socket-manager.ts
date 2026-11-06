@@ -198,13 +198,13 @@ function classifyDisconnectReason(reason: unknown): ChatDisconnectReason {
   return 'unknown';
 }
 
-function readViewerSelfDestructSec(userId: string): number {
+function readViewerSelfDestructSec(userId: string): number | undefined {
   try {
     const storageKey = viewerSelfDestructSecStorageKey(userId);
     const cached = storage.getString(storageKey);
     if (cached !== undefined) {
       const value = Number(cached);
-      return Number.isFinite(value) ? value : 0;
+      return Number.isFinite(value) ? value : undefined;
     }
 
     // #224 把缓存从天改成秒并换了 key。升级后的第一次离线启动仍要沿用旧策略，
@@ -215,7 +215,7 @@ function readViewerSelfDestructSec(userId: string): number {
     // 白名单里）连新键都不写，下次冷启动又走同一条死路。
     const legacyKey = `chat.viewerSelfDestructDays.${userId}`;
     const legacy = storage.getString(legacyKey);
-    if (legacy === undefined) return 0;
+    if (legacy === undefined) return undefined;
     const days = Number(legacy);
     const seconds = LEGACY_SELF_DESTRUCT_DAY_CHOICES.has(days)
       ? days * SECONDS_PER_DAY
@@ -224,7 +224,7 @@ function readViewerSelfDestructSec(userId: string): number {
     storage.remove(legacyKey);
     return seconds;
   } catch {
-    return 0;
+    return undefined;
   }
 }
 
@@ -256,14 +256,18 @@ async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
 async function hydrateWithResolvedViewerPolicy(
   userId: string,
   generation: number,
+  hasCachedPolicy: boolean,
 ): Promise<void> {
-  // 先摘掉上一账号的句柄并开始开新库；隐私策略只阻塞快照发布，不能让旧库在
-  // 慢 REST 请求期间继续服务新账号的 local-first 读写。
+  // 先摘掉上一账号的句柄并开始开新库，不能让旧库在慢 REST 请求期间
+  // 继续服务新账号的 local-first 读写。
   const localDbReady = initChatLocalDb(userId);
   // 已读队列只依赖本地库，不依赖隐私策略。先把它恢复进内存，避免会话快照
   // 抢在水位恢复之前落地，把上一轮已经看过的消息重新显示成未读。
-  void restorePendingReadsBeforeSnapshot(userId, generation, localDbReady);
-  await refreshViewerSelfDestructSec(userId);
+  const readsReady = restorePendingReadsBeforeSnapshot(userId, generation, localDbReady);
+  const policyReady = refreshViewerSelfDestructSec(userId);
+  // 已有本机策略时按缓存规则恢复列表，策略刷新在后台进行。首次没有策略缓存
+  // 才等待服务端，避免把未知策略当成「未开启阅后即焚」。
+  if (!hasCachedPolicy) await policyReady;
   if (
     generation !== sessionGen ||
     useChatStore.getState().currentUserId !== userId
@@ -278,6 +282,7 @@ async function hydrateWithResolvedViewerPolicy(
   ) {
     return;
   }
+  await readsReady;
   await hydrateFromLocalDb(userId, generation, true);
 }
 
@@ -460,12 +465,13 @@ export function connectChat(token: string, userId: string): void {
   const connectionTraceId = createConnectionTraceId();
   store.setConnecting(true);
   store.setCurrentUserId(userId);
-  store.setViewerSelfDestructSec(readViewerSelfDestructSec(userId));
+  const cachedViewerPolicy = readViewerSelfDestructSec(userId);
+  if (cachedViewerPolicy !== undefined) store.setViewerSelfDestructSec(cachedViewerPolicy);
   store.setViewerTypingPolicy(readViewerTypingPolicy(userId));
   initChatAppBadgeSync();
   store.setAppForeground(appState === 'foreground');
-  // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
-  void hydrateWithResolvedViewerPolicy(userId, gen);
+  // 已登录过的账号先恢复本地会话，联网刷新不阻塞列表；没有策略缓存才等服务端。
+  void hydrateWithResolvedViewerPolicy(userId, gen, cachedViewerPolicy !== undefined);
 
   // 拿着已经过期的 token 握手只会被拒;服务端拒绝的握手 socket.io 不会自己重连,
   // 于是一直断着直到某次 REST 请求碰巧刷新。先刷新,token 一变 session-bootstrap

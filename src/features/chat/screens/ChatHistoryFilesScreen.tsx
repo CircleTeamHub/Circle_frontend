@@ -22,6 +22,7 @@ import { getChatDetailHref } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const PAGE_SIZE = 20;
 
@@ -47,6 +48,12 @@ const s = StyleSheet.create({
 });
 
 export default function ChatHistoryFilesScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID } = useLocalSearchParams<{ conversationID?: string }>();
+  return sessionKey ? <ChatHistoryFilesContent key={`${sessionKey}:${conversationID ?? ''}`} /> : null;
+}
+
+function ChatHistoryFilesContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();

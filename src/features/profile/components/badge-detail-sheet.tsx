@@ -11,6 +11,7 @@ interface BadgeDetailSheetProps {
   badge: BadgeView | null;
   /** 该徽章当前是否在资料展示位（仅已拥有可能为 true）。 */
   selected: boolean;
+  disabled?: boolean;
   onToggleDisplay: (badge: BadgeView) => void;
   onClose: () => void;
 }
@@ -102,6 +103,7 @@ const s = StyleSheet.create({
 export function BadgeDetailSheet({
   badge,
   selected,
+  disabled = false,
   onToggleDisplay,
   onClose,
 }: BadgeDetailSheetProps) {
@@ -171,9 +173,12 @@ export function BadgeDetailSheet({
                   backgroundColor: selected ? colors.surface : colors.primary,
                   borderWidth: selected ? 1 : 0,
                   borderColor: colors.surfaceBorder,
+                  opacity: disabled ? 0.4 : 1,
                 },
               ]}
               onPress={() => onToggleDisplay(badge)}
+              disabled={disabled}
+              accessibilityState={{ disabled }}
             >
               <Ionicons
                 name={selected ? 'remove-circle-outline' : 'add-circle-outline'}

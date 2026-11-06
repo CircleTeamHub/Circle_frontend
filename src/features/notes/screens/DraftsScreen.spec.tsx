@@ -5,6 +5,7 @@ import DraftsScreen from './DraftsScreen';
 import { fetchNoteDrafts, deleteNoteDraft } from '@/services/api/notes';
 import { loadLocalNoteDraft, loadPendingNoteDraftDeletions, saveLocalNoteDraft, type NoteEditorDraftRecord } from '@/features/notes/utils/note-editor-drafts';
 import { storage } from '@/storage';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockAuth = { user: { id: 'a' }, sessionEpoch: 0 };
 const mockRouter = { push: jest.fn(), back: jest.fn() };
@@ -39,6 +40,7 @@ jest.mock('@/theme', () => ({
 }));
 jest.mock('@/features/notes/utils/note-format', () => ({ formatNoteDate: () => 'date' }));
 jest.mock('@/services/api/notes', () => ({ fetchNoteDrafts: jest.fn(), deleteNoteDraft: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
 function draft(id: string) {
   return { id, title: id, contentPreview: '', mediaCount: 0, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-06T00:00:00Z' };
@@ -72,9 +74,10 @@ test('a prior account response cannot populate the next account draft list', asy
 });
 
 test('offline server deletion removes private local content immediately and retries after reopening', async () => {
+  const loadError = new Error('offline load'); const deleteError = new Error('offline delete');
   saveLocalNoteDraft('a', localDraft('offline-delete'));
-  jest.mocked(fetchNoteDrafts).mockRejectedValueOnce(new Error('offline')).mockResolvedValue([draft('offline-delete')]);
-  jest.mocked(deleteNoteDraft).mockRejectedValueOnce(new Error('offline'));
+  jest.mocked(fetchNoteDrafts).mockRejectedValueOnce(loadError).mockResolvedValue([draft('offline-delete')]);
+  jest.mocked(deleteNoteDraft).mockRejectedValueOnce(deleteError);
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
   try {
     await screen.findByText('offline-delete'); confirmDelete(alert);
@@ -82,6 +85,8 @@ test('offline server deletion removes private local content immediately and retr
     expect([...mockValues.values()].join('')).not.toContain('Private body');
     await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('offline-delete'));
     await screen.findByText('notes.drafts.deletePending'); expect(loadPendingNoteDraftDeletions('a')).toEqual(['offline-delete']);
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteDrafts', 'load', loadError);
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteDrafts', 'deleteRetry', deleteError);
     view.unmount(); const reopened = render(<DraftsScreen />);
     await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText('notes.drafts.deletePending')).toBeNull());
@@ -225,6 +230,7 @@ test('partial local content cleanup reports failure and retries before sending D
     await screen.findByText('partial-storage-delete'); confirmDelete(alert);
     expect(screen.queryByText('partial-storage-delete')).toBeNull(); expect(deleteNoteDraft).not.toHaveBeenCalled();
     expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.deleteFailed');
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteDrafts', 'delete', expect.any(Error));
     expect([...mockValues.values()].join('')).toContain('Private body');
     remove.mockRestore(); fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
     await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('partial-storage-delete'));

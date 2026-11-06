@@ -1,5 +1,5 @@
-import { useRouter, useSegments } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -24,7 +24,11 @@ import {
 import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
-import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useAuthStore } from '@/stores/authStore';
+import { readPageSnapshot } from '@/storage/page-snapshots';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Conversation } from '@/types';
@@ -100,10 +104,27 @@ export default function SearchScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [friends, setFriends] = useState<FriendProfile[]>([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
+  const [initialFriends] = useState(() => readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, 'social:friends'));
+  const [friends, setFriends] = useState<FriendProfile[]>(() => initialFriends?.value ?? []);
+  const hasLoadedRef = useRef(Boolean(initialFriends));
+  const [friendsLoading, setFriendsLoading] = useState(!initialFriends);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [messageMatches, setMessageMatches] = useState<ChatMessageDto[]>([]);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const unreadFriendActivityCount = useFriendActivityUnreadStore((state) => state.count);
+  const friendsReloadGate = useFocusReloadGate({
+    key: unreadFriendActivityCount,
+    mutatedSince: friendsMutatedSince,
+  });
+
+  useLayoutEffect(() => {
+    const saved = readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, 'social:friends');
+    hasLoadedRef.current = Boolean(saved);
+    setFriends(saved?.value ?? []);
+    setFriendsLoading(!saved);
+    setMessageMatches([]);
+    setLoadError(null);
+  }, [sessionEpoch]);
 
   const rawConversations = useChatStore((state) => state.conversations);
   const conversations = useMemo(
@@ -145,15 +166,20 @@ export default function SearchScreen() {
 
   const loadFriends = useCallback(
     (signal?: { cancelled: boolean }) => {
-      setFriendsLoading(true);
+      const startedAt = Date.now();
+      const isCurrent = () => !signal?.cancelled &&
+        useAuthStore.getState().sessionEpoch === sessionEpoch;
+      if (!hasLoadedRef.current) setFriendsLoading(true);
       setLoadError(null);
       fetchFriends()
         .then((list) => {
-          if (!signal?.cancelled) setFriends(list);
+          if (!isCurrent()) return;
+          setFriends(list);
+          hasLoadedRef.current = true;
+          friendsReloadGate.markLoaded(startedAt);
         })
         .catch((error) => {
-          if (signal?.cancelled) return;
-          setFriends([]);
+          if (!isCurrent()) return;
           setLoadError(
             t('search.loadFriendsFailed', {
               defaultValue: '好友列表加载失败，请稍后重试',
@@ -162,19 +188,20 @@ export default function SearchScreen() {
           reportHandledFailure('search', 'fetchFriends', error);
         })
         .finally(() => {
-          if (!signal?.cancelled) setFriendsLoading(false);
+          if (isCurrent()) setFriendsLoading(false);
         });
     },
-    [t],
+    [friendsReloadGate, sessionEpoch, t],
   );
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    if (friendsReloadGate.shouldSkip()) return;
     const signal = { cancelled: false };
     loadFriends(signal);
     return () => {
       signal.cancelled = true;
     };
-  }, [loadFriends]);
+  }, [friendsReloadGate, loadFriends]));
 
   const trimmedQuery = query.trim().toLowerCase();
   const keyword = query.trim();
@@ -187,17 +214,18 @@ export default function SearchScreen() {
       return;
     }
     let cancelled = false;
+    const isCurrent = () => !cancelled && useAuthStore.getState().sessionEpoch === sessionEpoch;
     const timer = setTimeout(() => {
       // 本地(SQLite FTS)命中先上屏 —— 离线时服务端那趟要跑满 15 秒超时,
       // 干等的话用户看到的一直是「无结果」,而结果其实早就在手上了。
       searchAllChatMessagesLocalFirst(keyword, 50, (local) => {
-        if (!cancelled) setMessageMatches(local);
+        if (isCurrent()) setMessageMatches(local);
       })
         .then((items) => {
-          if (!cancelled) setMessageMatches(items);
+          if (isCurrent()) setMessageMatches(items);
         })
         .catch((error) => {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           // 本地那批已经上屏了,不要在这里清空 —— 否则离线搜索的结果会先出现
           // 再消失。searchAllChatMessagesLocalFirst 自身已经把服务端失败
           // 收敛成「返回本地结果」,能走到这里的只有本地检索也失败的情况。
@@ -209,7 +237,7 @@ export default function SearchScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [keyword]);
+  }, [keyword, sessionEpoch]);
 
   const sections = useMemo<SearchSection[]>(() => {
     if (!trimmedQuery) {

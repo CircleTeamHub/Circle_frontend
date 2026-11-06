@@ -1,10 +1,12 @@
-import { apiClient } from '@/services/api/client';
+import { ApiError, apiClient, isDefinitiveAuthFailure } from '@/services/api/client';
 import {
   fetchCountEndpoint,
   normalizeAvatarFrameAppearance,
   allowPeerMediaUrl,
 } from '@/services/api/utils';
 import type { AvatarFrameAppearance } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots, getPageSnapshotRevision, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 
 export type FriendProfile = {
   id: string;
@@ -237,9 +239,30 @@ let lastFriendMutationAt = 0;
  * 每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
  */
 async function markFriendWrite<T>(request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
   const result = await request;
   lastFriendMutationAt = Date.now();
+  if (user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+    clearPageSnapshots(user?.id, 'social:friend');
+    clearPageSnapshots(user?.id, 'social:profiles');
+  }
   return result;
+}
+
+async function cacheFriendRead<T>(key: string, request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const at = Date.now();
+  const revision = getPageSnapshotRevision();
+  try {
+    const value = await request;
+    if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision() && !friendsMutatedSince(at)) writePageSnapshot(user?.id, key, value, at);
+    return value;
+  } catch (error) {
+    if (isDefinitiveAuthFailure(error)) {
+      if (user?.id) clearPageSnapshots(user.id, 'social:friend');
+    } else if (error instanceof ApiError && error.status === 404) removePageSnapshot(user?.id, key);
+    throw error;
+  }
 }
 
 /** since 之后有没有成功的好友写请求。 */
@@ -248,12 +271,11 @@ export function friendsMutatedSince(since: number): boolean {
 }
 
 export async function fetchFriends() {
-  const friends = await apiClient<unknown[]>('/friend');
-  return normalizeFriendProfiles(friends);
+  return cacheFriendRead('social:friends', apiClient<unknown[]>('/friend').then(normalizeFriendProfiles));
 }
 
 export async function fetchFriendTags() {
-  return apiClient<FriendTag[]>('/friend/tags');
+  return cacheFriendRead('social:friend-tags', apiClient<FriendTag[]>('/friend/tags'));
 }
 
 export async function createFriendTag(name: string, color?: string | null) {
@@ -267,8 +289,7 @@ export async function createFriendTag(name: string, color?: string | null) {
 }
 
 export async function fetchFriendsByTag(tagId: string) {
-  const friends = await apiClient<unknown[]>(`/friend/tags/${tagId}/friends`);
-  return normalizeFriendProfiles(friends);
+  return cacheFriendRead(`social:friend-tag:${tagId}`, apiClient<unknown[]>(`/friend/tags/${tagId}/friends`).then(normalizeFriendProfiles));
 }
 
 export async function fetchFriendStatus(targetId: string) {

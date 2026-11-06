@@ -1,13 +1,14 @@
 import { reportError } from '@/observability/sentry';
 import { ApiError } from '@/services/api/client';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { redactSensitiveFields } from '@/utils/redact';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 /**
  * 通知链路里「会静默吞掉」的失败事件统一走这里。
  *
- * dev：logClientDiagnostic（可聚合事件名 + 非 PII 上下文）+ 原始 error 打控制台。
+ * dev：logClientDiagnostic（可聚合事件名 + 非 PII 上下文）+ 脱敏元数据打控制台。
  * 这两条在生产一律无声——底层都是 console.warn，production 构建会被
  * transform-remove-console 剥掉。生产的可观测性只由下面的 reportError 提供。
  *
@@ -36,9 +37,12 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
  *   push_token_register_failed 是整个 sync() 的兜底 catch，上面那四类根因全挤在这一
  *   个名字下，只按名字去重的话，开机时一次弱网超时就把预算烧了，同会话里稍后那条
  *   「推送 100% 死」永远发不出去。所以 key 带上 error 的 name + message。
+ *   每事件每 60 秒最多 3 个根因签名；窗口结束后持续或再次发生的故障仍可上报。
  */
 export type NotificationFailureEvent =
   | 'push_token_register_failed'
+  | 'push_token_project_id_missing'
+  | 'push_notification_channels_failed'
   | 'push_token_unregister_failed'
   | 'push_token_revoke_failed'
   | 'notification_mark_read_failed'
@@ -57,10 +61,11 @@ export type NotificationFailureEvent =
 // 那正是上限本身制造的饿死，比不设上限更糟。每事件独立 → 吵的事件永远饿不死安静的。
 const MAX_SIGNATURES_PER_EVENT = 3;
 const MAX_SIGNATURE_MESSAGE_LENGTH = 200;
+const REPORT_WINDOW_MS = 60_000;
 
-const reportedFailureSignatures = new Map<NotificationFailureEvent, Set<string>>();
+const reportedFailureSignatures = new Map<NotificationFailureEvent, { startedAt: number; signatures: Set<string> }>();
 
-/** 测试隔离用：清掉「本生命周期已上报」的记账。 */
+/** 会话结束及测试隔离时重置限流记录。 */
 export function resetNotificationFailureTelemetry() {
   reportedFailureSignatures.clear();
 }
@@ -94,20 +99,37 @@ export function reportNotificationFailure(
   error: unknown,
   context: Record<string, string | number | boolean | null | undefined> = {},
 ) {
-  logClientDiagnostic(event, context);
-  if (isDev) {
-    console.warn(`[notifications] ${event}`, error, context);
+  try {
+    logClientDiagnostic(event, context);
+    if (isDev) {
+      const name = error && typeof error === 'object' ? (error as { name?: unknown }).name : typeof error;
+      console.warn(`[notifications] ${event}`, redactSensitiveFields({
+        ...context,
+        errorName: typeof name === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) ? name : 'Error',
+      }));
+    }
+  } catch {
+    // 可选的本地诊断失败不能阻断真正的异常上报。
   }
 
   // API 失败归 client.ts 管——它已按 shouldReportHttpFailure 决定过报或不报。
-  if (error instanceof ApiError) return;
+  if (
+    error instanceof ApiError ||
+    (error && typeof error === 'object' && (error as { name?: unknown }).name === 'ResponseShapeError')
+  ) return;
 
-  const seen = reportedFailureSignatures.get(event) ?? new Set<string>();
+  const now = Date.now();
+  for (const [entry, value] of reportedFailureSignatures) {
+    if (now - value.startedAt >= REPORT_WINDOW_MS) reportedFailureSignatures.delete(entry);
+  }
+  const window = reportedFailureSignatures.get(event) ?? { startedAt: now, signatures: new Set<string>() };
+  const seen = window.signatures;
   if (seen.size >= MAX_SIGNATURES_PER_EVENT) return;
 
   const signature = failureSignature(event, error);
   if (seen.has(signature)) return;
-  reportedFailureSignatures.set(event, new Set([...seen, signature]));
+  seen.add(signature);
+  reportedFailureSignatures.set(event, window);
 
   // operation + kind 必须排在 context 之后：sentry.ts 靠这两个 tag 组稳定
   // fingerprint，被调用方 context 覆盖掉就会退回按 message 分组。

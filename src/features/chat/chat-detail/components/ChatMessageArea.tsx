@@ -39,6 +39,8 @@ export interface ChatMessageAreaProps {
   historyWindowFull: boolean;
   unreadCount: number;
   showUnreadJump: boolean;
+  showLatestJump: boolean;
+  handleJumpToLatest: () => void;
   unreadStartMessageID: string | null;
   messages: ChatMessage[];
   displayMessages: ChatMessage[];
@@ -69,6 +71,8 @@ export function ChatMessageArea({
   historyWindowFull,
   unreadCount,
   showUnreadJump,
+  showLatestJump,
+  handleJumpToLatest,
   unreadStartMessageID,
   messages,
   displayMessages,
@@ -213,6 +217,24 @@ export function ChatMessageArea({
           }, 250);
         }}
       />
+      {showLatestJump ? (
+        <Pressable
+          testID="chat-jump-to-latest"
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.jumpToLatest', { defaultValue: '回到最新消息' })}
+          onPress={handleJumpToLatest}
+          style={[s.unreadJumpButton, d.unreadJumpButton, {
+            bottom: composerInset + Spacing.md,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            paddingHorizontal: 0,
+            justifyContent: 'center',
+          }]}
+        >
+          <Ionicons name="arrow-down" size={24} color={d.unreadJumpText.color} />
+        </Pressable>
+      ) : null}
       {showUnreadJump && unreadCount > 0 ? (
         <Pressable
           testID={E2E_TEST_IDS.chatUnreadJump}
@@ -222,7 +244,7 @@ export function ChatMessageArea({
             defaultValue: `跳转到未读消息起点，共 ${unreadCount} 条`,
           })}
           onPress={handleJumpToUnread}
-          style={[s.unreadJumpButton, d.unreadJumpButton, { bottom: composerInset + Spacing.md }]}
+          style={[s.unreadJumpButton, d.unreadJumpButton, { bottom: composerInset + Spacing.md + (showLatestJump ? 56 : 0) }]}
         >
           <Ionicons name="chevron-up" size={18} color={d.unreadJumpText.color} />
           <Text

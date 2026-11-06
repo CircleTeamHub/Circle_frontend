@@ -11,9 +11,15 @@ const mockForwardBatch = jest.fn();
 const mockRemoveMessage = jest.fn();
 jest.mock('@/utils/save-image', () => ({ saveMediaToLibrary: (...args: unknown[]) => mockSaveMedia(...args) }));
 jest.mock('@/features/chat/utils/sticker-error', () => ({ getStickerErrorMessage: (_error: unknown, _t: unknown, fallback: string) => fallback }));
-const mockChat = {
+const mockChat: {
+  activeConversationId: string;
+  messagesByConversation: Record<string, Record<string, unknown>[]>;
+  conversations: { id: string; myRole?: string | null }[];
+  removeMessage: jest.Mock;
+} = {
   activeConversationId: 'c1',
   messagesByConversation: { c1: [{ id: 'local-1', d: 'd-1', height: 0, failed: true }] },
+  conversations: [],
   removeMessage: mockRemoveMessage,
 };
 const mockAuth = { sessionEpoch: 1 };
@@ -41,6 +47,7 @@ beforeEach(() => {
   mockAuth.sessionEpoch = 1;
   mockChat.activeConversationId = 'c1';
   mockChat.messagesByConversation.c1[0] = { id: 'local-1', d: 'd-1', height: 0, failed: true };
+  mockChat.conversations = [];
   buttons = [];
   jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, actions) => { buttons = actions ?? []; });
   params = {
@@ -319,4 +326,40 @@ test('save-as-sticker errors or account changes cannot claim success', async () 
   mockAuth.sessionEpoch++;
   await act(async () => { finish(); });
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+describe('revoke entry', () => {
+  const hourAgo = () => new Date(Date.now() - 60 * 60_000).toISOString();
+  const others: ChatMessage = { id: 'm-others', type: 'received', text: 'hi', sendStatus: 2 };
+  const arrange = (myRole: string | null, dto: Record<string, unknown> = {}) => {
+    mockChat.conversations = [{ id: 'c1', myRole }];
+    mockChat.messagesByConversation.c1 = [
+      { id: 'm-others', height: 9, createdAt: hourAgo(), sender: { id: 'u2' }, ...dto },
+    ];
+  };
+  const hasRevoke = () => {
+    const { result } = renderHook(() => useMessageActions({ ...params, isGroupChat: true }));
+    act(() => result.current.setActionMenu({ message: others, x: 0, y: 0 }));
+    return result.current.messageActions.some((action) => action.key === 'revoke');
+  };
+
+  test.each(['OWNER', 'ADMIN'])('a group %s can revoke anyone else\'s message past the window', (role) => {
+    arrange(role);
+    expect(hasRevoke()).toBe(true);
+  });
+
+  test('a plain member cannot revoke other people\'s messages', () => {
+    arrange('MEMBER');
+    expect(hasRevoke()).toBe(false);
+  });
+
+  test('system notices have no author and stay unrevokable for managers too', () => {
+    arrange('OWNER', { sender: null });
+    expect(hasRevoke()).toBe(false);
+  });
+
+  test('already revoked messages offer no second revoke', () => {
+    arrange('OWNER', { revokedAt: hourAgo() });
+    expect(hasRevoke()).toBe(false);
+  });
 });

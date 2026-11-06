@@ -10,7 +10,7 @@ const { loadTsModule } = require('./helpers/load-ts-module');
 //      调用方传进来的同名字段不能把它们覆盖掉；
 //   4. 观测层自身抛错不能改变业务行为。
 
-function loadReportFailure({ dev = false, breakDiagnostics = false } = {}) {
+function loadReportFailure({ dev = false, breakDiagnostics = false, now = () => Date.now() } = {}) {
   const reports = [];
   const diagnostics = [];
   const warnCalls = [];
@@ -38,6 +38,7 @@ function loadReportFailure({ dev = false, breakDiagnostics = false } = {}) {
     },
     context: {
       __DEV__: dev,
+      Date: class extends Date { static now() { return now(); } },
       console: { warn: (...args) => warnCalls.push(args) },
     },
   });
@@ -89,14 +90,16 @@ test('expected failures (ApiError & friends) leave a breadcrumb but never reach 
   abort.name = 'AbortError';
   const userFacing = new Error('资料已提交');
   userFacing.name = 'UserFacingError';
+  const responseShape = new Error('data invalid');
+  responseShape.name = 'ResponseShapeError';
 
-  for (const error of [apiError(500), apiError(404), chatSendError, abort, userFacing]) {
+  for (const error of [apiError(500), apiError(404), chatSendError, abort, userFacing, responseShape]) {
     assert.equal(isExpectedFailure(error), true);
     reportHandledFailure('messages', 'refresh', error);
   }
 
   assert.equal(reports.length, 0);
-  assert.equal(diagnostics.length, 5);
+  assert.equal(diagnostics.length, 6);
   assert.equal(isExpectedFailure(new Error('boom')), false);
   assert.equal(isExpectedFailure('string'), false);
 });
@@ -177,9 +180,22 @@ test('dev console output is redacted and silent in production', () => {
 });
 
 test('never throws even when the diagnostics layer explodes', () => {
-  const { reportHandledFailure } = loadReportFailure({ breakDiagnostics: true });
+  const { reportHandledFailure, reports } = loadReportFailure({ breakDiagnostics: true });
 
   assert.doesNotThrow(() =>
     reportHandledFailure('storage', 'anything', new Error('x')),
   );
+  assert.equal(reports.length, 1, 'optional breadcrumbs must not swallow the failure');
+});
+
+test('recurring failures become visible again after the rate-limit window', () => {
+  let now = 1000;
+  const { reportHandledFailure, reports } = loadReportFailure({ now: () => now });
+  reportHandledFailure('storage', 'save', new Error('disk full'));
+  now += 59_999;
+  reportHandledFailure('storage', 'save', new Error('disk full'));
+  assert.equal(reports.length, 1);
+  now += 1;
+  reportHandledFailure('storage', 'save', new Error('disk full'));
+  assert.equal(reports.length, 2);
 });

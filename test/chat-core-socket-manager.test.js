@@ -558,12 +558,12 @@ test('the new key wins outright; a stale legacy key is never consulted', async (
   assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
 });
 
-test('cold hydration waits for the authoritative self-destruct policy', async () => {
+test('cold hydration without a cached policy waits for the authoritative policy', async () => {
   let resolvePolicy;
   const policy = new Promise((resolve) => {
     resolvePolicy = resolve;
   });
-  const { manager, socket, store, apiCalls } = loadManager(
+  const { manager, socket, store, apiCalls, mmkvStore } = loadManager(
     {
       initChatLocalDb: async () => true,
       readLocalConversations: async () => [{ id: 'c1' }],
@@ -577,6 +577,7 @@ test('cold hydration waits for the authoritative self-destruct policy', async ()
 
   assert.equal(apiCalls.privacyFetches, 1);
   assert.equal(store.hydrated.length, 0);
+  assert.equal(mmkvStore.has('chat.viewerSelfDestructSec.u1'), false);
 
   resolvePolicy({ messageSelfDestructSec: 2 * 24 * 60 * 60 });
   await flush();
@@ -584,6 +585,36 @@ test('cold hydration waits for the authoritative self-destruct policy', async ()
 
   assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
   assert.ok(store.hydrated.length > 0);
+});
+
+test('a cached account restores its local conversations before the privacy request finishes', async () => {
+  let resolvePolicy;
+  const policy = new Promise(resolve => { resolvePolicy = resolve; });
+  const expired = { id: 'expired', burnExpiresAt: new Date(Date.now() - 60_000).toISOString() };
+  const recent = { id: 'recent', type: 'text', content: { text: 'cached preview' } };
+  const { manager, store, mmkvStore, apiCalls } = loadManager(
+    {
+      initChatLocalDb: async () => true,
+      pendingReadsList: async () => [{ conversationId: 'c1', height: 7 }],
+      readLocalConversations: async () => [{ id: 'c1', lastMessage: expired, unreadCount: 1 }, { id: 'c2', lastMessage: recent }],
+    },
+    { privacyFetch: () => policy },
+  );
+  mmkvStore.set('chat.viewerSelfDestructSec.u1', '0');
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  await flush();
+
+  assert.equal(apiCalls.privacyFetches, 1);
+  assert.equal(store.conversations[0]?.id, 'c1');
+  assert.equal(store.hydrated[0].conversations[0].lastMessage, null);
+  assert.equal(store.hydrated[0].conversations[0].unreadCount, 0);
+  assert.equal(store.conversations[1].lastMessage.content.text, 'cached preview');
+  assert.deepEqual(store.readCalls, [{ conversationId: 'c1', height: 7 }]);
+
+  resolvePolicy({ messageSelfDestructSec: 2 * 24 * 60 * 60 });
+  await flush();
+  assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
 });
 
 test('account switch starts the local database switch before privacy resolves', async () => {

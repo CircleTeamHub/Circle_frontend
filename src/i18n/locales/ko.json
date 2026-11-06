@@ -94,11 +94,11 @@
       "switchAccount": "계정 전환",
       "logout": "로그아웃",
       "cancelAccount": "계정 삭제",
+      "singleDeviceStatusFailed": "단일 기기 로그인 상태를 불러오지 못했습니다. 다시 시도하세요.",
+      "singleDeviceUpdateFailed": "단일 기기 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
       "securityQuestions": "보안 질문",
       "securityQuestionsSet": "설정됨",
-      "securityQuestionsNotSet": "설정 안 됨",
-      "singleDeviceStatusFailed": "단일 기기 로그인 상태를 불러오지 못했습니다. 다시 시도하세요.",
-      "singleDeviceUpdateFailed": "단일 기기 로그인 설정을 저장하지 못했습니다. 다시 시도하세요."
+      "securityQuestionsNotSet": "설정 안 됨"
     },
     "notifications": {
       "title": "알림",
@@ -239,13 +239,13 @@
         "byGroup": "그룹·서클로",
         "shareCard": "내 개인 카드 공유"
       },
+      "unavailable": "사용 불가",
+      "unsupportedHint": "현재 서비스에서 지원하지 않는 설정입니다. 업데이트 후 다시 시도하세요.",
       "chatSection": "채팅 및 모멘트",
       "presenceSection": "온라인 및 입력 상태",
       "profileVisibilitySection": "프로필 공개",
       "contactSection": "추가 및 초대",
-      "blacklistBlockedAt": "{{date}}에 차단함",
-      "unavailable": "사용 불가",
-      "unsupportedHint": "현재 서비스에서 지원하지 않는 설정입니다. 업데이트 후 다시 시도하세요."
+      "blacklistBlockedAt": "{{date}}에 차단함"
     },
     "permissions": {
       "title": "시스템 권한",
@@ -377,6 +377,7 @@
       "previewNotice": "연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
       "historyWindowFull": "이전 메시지는 채팅 기록에서 검색해 확인하세요.",
       "jumpToUnread": "읽지 않은 메시지 {{count}}개의 시작으로 이동",
+      "jumpToLatest": "최신 메시지로 이동",
       "unreadMessages": "읽지 않은 메시지 {{count}}개",
       "recordingSeconds": "녹음 중 {{seconds}}초",
       "voiceReleaseCancel": "손을 떼면 취소",
@@ -531,6 +532,8 @@
     "searchGroupMembersNoMatches": "일치하는 그룹 멤버가 없습니다",
     "groupName": "그룹 이름",
     "groupNotice": "그룹 공지",
+    "noticePinned": "공지 배너 고정",
+    "noticePinnedHint": "그룹 채팅 상단에 공지를 스크롤하여 표시합니다",
     "noGroupNotice": "그룹 공지가 없습니다",
     "moreGroupMembers": "그룹 멤버 더 보기",
     "addGroupMember": "그룹 멤버 추가",
@@ -701,7 +704,38 @@
       "noteUnbindTitle": "원본 그룹 연결을 해제할까요?",
       "noteUnbindHint": "이 노트는 이 그룹의 노트 관리에서 더 이상 표시되지 않습니다.",
       "noteUnbindAction": "제거 (그룹과 연결 해제)",
-      "noteUnbind": "연결 해제"
+      "noteUnbind": "연결 해제",
+      "memberSection": "멤버 관리",
+      "silenceSection": "채팅 금지 관리",
+      "removeBatchConfirm": "선택한 멤버 {{n}}명을 그룹에서 내보낼까요?",
+      "removeBatchDone": "멤버 {{n}}명을 내보냈습니다",
+      "overview": {
+        "members": "멤버",
+        "admins": "관리자",
+        "silenced": "채팅 금지 중"
+      },
+      "abnormal": {
+        "entry": "주의 멤버",
+        "entryHint": "장기간 미접속 또는 신용 점수가 낮은 멤버",
+        "title": "주의 멤버",
+        "rules": "{{days}}일 넘게 로그인하지 않았거나 신용 점수가 {{threshold}}점 미만인 멤버가 표시됩니다. 내가 내보낼 수 있는 멤버만 보입니다. 접속 상태를 숨긴 멤버는 미접속 판정에서 제외됩니다.",
+        "inactiveFor": "미접속 기간",
+        "days": "{{n}}일",
+        "filterAll": "전체 {{n}}",
+        "filterInactive": "장기 미접속 {{n}}",
+        "filterLowCredit": "신용 낮음 {{n}}",
+        "tagInactiveDays": "{{n}}일 미접속",
+        "tagInactiveOver": "{{n}}일 이상 미접속",
+        "tagLowCredit": "신용 {{score}}점",
+        "adminBadge": "관리자",
+        "empty": "주의 멤버가 없습니다",
+        "emptyHint": "모든 멤버가 활발하고 신용 상태도 좋습니다",
+        "selectAll": "전체 선택",
+        "clearAll": "선택 해제",
+        "batchLimit": "한 번에 최대 {{n}}명",
+        "removeSelected": "내보내기 ({{n}})",
+        "loadFailed": "주의 멤버를 불러오지 못했습니다"
+      }
     },
     "groupEvent": {
       "system": "시스템",
@@ -798,7 +832,7 @@
       "voiceCall": "음성/영상 통화",
       "location": "위치",
       "notes": "노트",
-      "friendCard": "연락처 카드",
+      "friendCard": "명함",
       "favorites": "즐겨찾기",
       "quickReply": "빠른 답장",
       "transfer": "송금"
@@ -1489,6 +1523,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "사진과 동영상은 합쳐서 최대 {{max}}개",
     "selectMedia": "사진 또는 동영상 추가",
     "removeMedia": "사진 또는 동영상 제거",
     "playVideo": "동영상 재생",
@@ -2536,7 +2571,8 @@
         "voice": "음성",
         "message": "메시지"
       },
-      "menuLabel": "보관함"
+      "menuLabel": "보관함",
+      "today": "오늘"
     },
     "viewCollections": "보기",
     "notes": "노트",
@@ -2878,7 +2914,7 @@
   "share": {
     "title": {
       "favorite": "즐겨찾기 선택",
-      "friend": "친구 카드 선택",
+      "friend": "명함 보내기",
       "note": "노트 선택",
       "quickReply": "빠른 답장"
     },
@@ -2902,6 +2938,16 @@
       "optionLocation": "위치",
       "optionMedia": "사진·영상",
       "optionShowcase": "쇼케이스"
+    },
+    "favoriteConfirm": {
+      "sendTo": "받는 사람",
+      "messageLabel": "추가 메시지",
+      "messagePlaceholder": "메시지 추가(선택 사항)",
+      "missingRecipient": "채팅으로 돌아가 다시 시도해 주세요."
+    },
+    "cardKind": {
+      "friend": "친구 명함",
+      "group": "그룹 명함"
     }
   },
   "accountSwitcher": {
@@ -3275,7 +3321,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "그룹 채팅에서 내보내졌습니다"
+      "removedFromGroup": "그룹 채팅에서 내보내졌습니다",
+      "removedFromNamedGroup": "'{{name}}' 그룹에서 내보내졌습니다"
     },
     "time": {
       "yesterday": "어제"
@@ -3899,6 +3946,78 @@
       "CANCELLED": "신청이 취소되었습니다"
     },
     "sentInvitation": "상대방을 그룹에 초대했어요"
+  },
+  "groupReview": {
+    "entry": "신청 관리",
+    "title": "그룹 심사",
+    "log": "로그",
+    "searchPlaceholder": "이름 또는 계정 번호",
+    "selectAll": "전체 선택",
+    "selectApplicant": "{{name}} 선택",
+    "selectionLimit": "한 번에 최대 50개를 선택할 수 있습니다",
+    "approve": "승인",
+    "reject": "거절",
+    "blacklist": "그룹 차단",
+    "confirmBody": "신청 {{count}}개를 처리합니다.",
+    "blacklistBody": "신청 {{count}}개를 거절하고 해당 계정의 재신청 및 초대 가입을 차단합니다.",
+    "partialResult": "완료 {{succeeded}}개, 실패 {{failed}}개. 새로고침하여 상태를 확인하세요.",
+    "completed": "{{count}}개 완료",
+    "empty": "신청이나 초대가 없습니다",
+    "noResults": "검색 결과가 없습니다",
+    "loadFailed": "신청을 불러오지 못했습니다. 다시 시도하세요.",
+    "actionUncertain": "결과를 확인할 수 없습니다. 다시 처리하기 전에 목록을 새로고침하세요.",
+    "invitedBy": "{{name}}님의 초대",
+    "sourcePrefix": "경로: {{source}}",
+    "unknownMember": "알 수 없는 멤버",
+    "processing": "처리 중…",
+    "confirm": {
+      "approve": "신청을 승인할까요?",
+      "reject": "신청을 거절할까요?",
+      "blacklist": "이 계정들을 차단할까요?"
+    },
+    "source": {
+      "INVITE": "멤버 초대",
+      "QR": "QR 코드",
+      "APPLICATION": "가입 신청",
+      "UNKNOWN": "알 수 없는 경로"
+    },
+    "status": {
+      "PENDING": "심사 대기",
+      "INVITED": "수락 대기",
+      "JOINED": "승인됨",
+      "REJECTED": "거절됨",
+      "BLACKLISTED": "차단됨",
+      "EXPIRED": "만료됨",
+      "LEFT": "탈퇴함",
+      "DECLINED": "초대 거절",
+      "CANCELLED": "취소됨"
+    }
+  },
+  "groupLog": {
+    "searchRole": "검색 대상",
+    "target": "대상 멤버",
+    "actor": "처리자",
+    "date": "날짜",
+    "status": "상태",
+    "source": "경로",
+    "inviter": "초대자",
+    "operator": "처리자",
+    "detail": "상세",
+    "events": {
+      "created": "그룹 생성",
+      "joined": "그룹 가입",
+      "left": "그룹 탈퇴",
+      "removed": "멤버 내보내기",
+      "roleChanged": "멤버 권한 변경",
+      "silenced": "멤버 음소거",
+      "unsilenced": "음소거 해제",
+      "ownerTransferred": "그룹장 양도",
+      "historyCleared": "기록 삭제",
+      "muteAll": "전체 음소거 설정",
+      "policy": "그룹 권한 변경",
+      "application": "가입 신청",
+      "blacklist": "그룹 차단"
+    }
   },
   "securityQuestions": {
     "title": "보안 질문",

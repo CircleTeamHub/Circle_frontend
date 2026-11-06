@@ -450,6 +450,7 @@
       "previewNotice": "连接尚未完成，请稍后重试",
       "historyWindowFull": "更早的消息请在聊天记录里搜索查看",
       "jumpToUnread": "跳转到未读消息起点，共 {{count}} 条",
+      "jumpToLatest": "回到最新消息",
       "unreadMessages": "未读 {{count}} 条消息",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
@@ -604,6 +605,8 @@
     "searchGroupMembersNoMatches": "没有匹配的群成员",
     "groupName": "群聊名称",
     "groupNotice": "群公告",
+    "noticePinned": "置顶播报",
+    "noticePinnedHint": "在群聊顶部滚动显示公告",
     "noGroupNotice": "暂无群公告",
     "moreGroupMembers": "更多群成员",
     "addGroupMember": "添加群成员",
@@ -774,7 +777,38 @@
       "noteUnbindTitle": "解除来源群关联？",
       "noteUnbindHint": "解除后，这条笔记不会再出现在本群的笔记管理里。",
       "noteUnbindAction": "移除（与本群解绑）",
-      "noteUnbind": "解除关联"
+      "noteUnbind": "解除关联",
+      "memberSection": "成员管理",
+      "silenceSection": "禁言管理",
+      "removeBatchConfirm": "确定将选中的 {{n}} 位成员移出群聊？",
+      "removeBatchDone": "已移出 {{n}} 位成员",
+      "overview": {
+        "members": "群成员",
+        "admins": "管理员",
+        "silenced": "禁言中"
+      },
+      "abnormal": {
+        "entry": "异常成员",
+        "entryHint": "长期未登录或信誉值低的成员",
+        "title": "异常成员",
+        "rules": "超过 {{days}} 天未登录，或信誉值低于 {{threshold}} 分的成员会列在这里；只显示你有权移出的成员。关闭了在线状态的成员不参与未登录判断。",
+        "inactiveFor": "未登录时长",
+        "days": "{{n}} 天",
+        "filterAll": "全部 {{n}}",
+        "filterInactive": "长期未登录 {{n}}",
+        "filterLowCredit": "信誉值低 {{n}}",
+        "tagInactiveDays": "{{n}} 天未登录",
+        "tagInactiveOver": "超过 {{n}} 天未登录",
+        "tagLowCredit": "信誉值 {{score}}",
+        "adminBadge": "管理员",
+        "empty": "暂无异常成员",
+        "emptyHint": "成员都在正常活跃，信誉良好",
+        "selectAll": "全选",
+        "clearAll": "取消全选",
+        "batchLimit": "一次最多移出 {{n}} 人",
+        "removeSelected": "移出 ({{n}})",
+        "loadFailed": "异常成员加载失败"
+      }
     },
     "groupEvent": {
       "system": "系统",
@@ -871,7 +905,7 @@
       "voiceCall": "语/视频通话",
       "location": "位置",
       "notes": "笔记",
-      "friendCard": "好友名片",
+      "friendCard": "名片",
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
@@ -1522,6 +1556,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "图片和视频合计最多 {{max}} 个",
     "selectMedia": "添加图片或视频",
     "removeMedia": "移除图片或视频",
     "playVideo": "播放视频",
@@ -1878,7 +1913,8 @@
         "voice": "语音",
         "message": "信息"
       },
-      "menuLabel": "我的收藏"
+      "menuLabel": "我的收藏",
+      "today": "今天"
     },
     "viewCollections": "查看收藏",
     "notes": "我的笔记",
@@ -2374,11 +2410,11 @@
       "switchAccount": "切换账号",
       "logout": "退出登录",
       "cancelAccount": "注销账号",
+      "singleDeviceStatusFailed": "无法读取单设备登录状态，请重试",
+      "singleDeviceUpdateFailed": "单设备登录设置保存失败，请重试",
       "securityQuestions": "密保问题",
       "securityQuestionsSet": "已设置",
-      "securityQuestionsNotSet": "未设置",
-      "singleDeviceStatusFailed": "无法读取单设备登录状态，请重试",
-      "singleDeviceUpdateFailed": "单设备登录设置保存失败，请重试"
+      "securityQuestionsNotSet": "未设置"
     },
     "notifications": {
       "title": "消息通知",
@@ -2519,13 +2555,13 @@
         "byGroup": "通过群聊/圈子",
         "shareCard": "分享个人名片"
       },
+      "unavailable": "不可用",
+      "unsupportedHint": "当前服务暂不支持此设置，请更新后重试",
       "chatSection": "聊天与动态",
       "presenceSection": "在线与输入状态",
       "profileVisibilitySection": "资料展示",
       "contactSection": "添加与邀请",
-      "blacklistBlockedAt": "{{date}} 加入黑名单",
-      "unavailable": "不可用",
-      "unsupportedHint": "当前服务暂不支持此设置，请更新后重试"
+      "blacklistBlockedAt": "{{date}} 加入黑名单"
     },
     "permissions": {
       "title": "系统权限管理",
@@ -3125,7 +3161,7 @@
   "share": {
     "title": {
       "favorite": "选择收藏",
-      "friend": "选择好友名片",
+      "friend": "发送名片",
       "note": "选择笔记",
       "quickReply": "快捷语"
     },
@@ -3149,6 +3185,16 @@
       "optionLocation": "地址",
       "optionMedia": "图片视频",
       "optionShowcase": "展示"
+    },
+    "favoriteConfirm": {
+      "sendTo": "发送给",
+      "messageLabel": "附加消息",
+      "messagePlaceholder": "输入附加消息（可选）",
+      "missingRecipient": "当前聊天不可用，请返回后重试"
+    },
+    "cardKind": {
+      "friend": "好友名片",
+      "group": "群名片"
     }
   },
   "profileDisplay": {
@@ -3240,7 +3286,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "你已被移出该群聊"
+      "removedFromGroup": "你已被移出该群聊",
+      "removedFromNamedGroup": "你已被移出群聊「{{name}}」"
     },
     "time": {
       "yesterday": "昨天"
@@ -3899,6 +3946,78 @@
       "CANCELLED": "申请已取消"
     },
     "sentInvitation": "你邀请对方加入群聊"
+  },
+  "groupReview": {
+    "entry": "申请管理",
+    "title": "群审核列表",
+    "log": "日志",
+    "searchPlaceholder": "昵称、靓号、账号",
+    "selectAll": "全选",
+    "selectApplicant": "选择 {{name}}",
+    "selectionLimit": "每次最多选择 50 条申请",
+    "approve": "通过",
+    "reject": "拒绝",
+    "blacklist": "加入群黑名单",
+    "confirmBody": "将处理 {{count}} 条申请。",
+    "blacklistBody": "将拒绝 {{count}} 条申请，并禁止这些账号再次申请或受邀加入此群。",
+    "partialResult": "已完成 {{succeeded}} 条，{{failed}} 条未完成，请刷新后查看最新状态。",
+    "completed": "已完成 {{count}} 条",
+    "empty": "暂无入群申请或邀请",
+    "noResults": "未找到相关申请",
+    "loadFailed": "申请列表加载失败，请重试",
+    "actionUncertain": "暂时无法确认处理结果，请刷新列表查看最新状态后再操作。",
+    "invitedBy": "{{name}} 的邀请",
+    "sourcePrefix": "来源：{{source}}",
+    "unknownMember": "未知成员",
+    "processing": "处理中…",
+    "confirm": {
+      "approve": "确认通过申请",
+      "reject": "确认拒绝申请",
+      "blacklist": "确认加入群黑名单"
+    },
+    "source": {
+      "INVITE": "成员邀请",
+      "QR": "扫码申请",
+      "APPLICATION": "主动申请",
+      "UNKNOWN": "未知来源"
+    },
+    "status": {
+      "PENDING": "待审核",
+      "INVITED": "待接受",
+      "JOINED": "已通过",
+      "REJECTED": "已拒绝",
+      "BLACKLISTED": "已加入黑名单",
+      "EXPIRED": "已过期",
+      "LEFT": "已退群",
+      "DECLINED": "已谢绝",
+      "CANCELLED": "已取消"
+    }
+  },
+  "groupLog": {
+    "searchRole": "查询对象",
+    "target": "被操作人",
+    "actor": "操作人",
+    "date": "日期",
+    "status": "状态",
+    "source": "来源",
+    "inviter": "邀请人",
+    "operator": "操作人",
+    "detail": "详情",
+    "events": {
+      "created": "创建群聊",
+      "joined": "加入群聊",
+      "left": "退出群聊",
+      "removed": "踢出群聊",
+      "roleChanged": "成员权限变更",
+      "silenced": "成员禁言",
+      "unsilenced": "解除禁言",
+      "ownerTransferred": "转让群主",
+      "historyCleared": "清空群记录",
+      "muteAll": "全员禁言设置",
+      "policy": "群权限变更",
+      "application": "入群申请",
+      "blacklist": "加入群黑名单"
+    }
   },
   "securityQuestions": {
     "title": "密保问题",

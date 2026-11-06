@@ -19,6 +19,7 @@ jest.mock('@/features/chat/components/chat-bubble', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     ImageBubble: jest.requireActual<typeof import('../../components/bubbles/image-bubble')>('../../components/bubbles/image-bubble').ImageBubble,
+    SentBubble: ({ hideStatus }: { hideStatus: boolean }) => <Text>{hideStatus ? 'status-hidden' : 'status-visible'}</Text>,
     SystemNoticePill: ({ text }: { text: string }) => <Text>{text}</Text>,
     NoteCardBubble: ({ onPress, onSectionPress }: { onPress: (note: { noteId: string; ownerId: string }) => void; onSectionPress: (note: { noteId: string; ownerId: string }, section: string) => void }) => {
       const { Pressable, View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -213,3 +214,5 @@ test('acknowledging the tapped anchor preserves its gallery and the currently vi
   expect(galleryImages()).toEqual([older.imageUrl, acknowledged.imageUrl, newer.imageUrl]);
   expect(activePhoto().props.uri).toBe(newer.imageUrl);
 });
+
+test('assistant messages suppress receipts', () => { function Assistant() { const item: ChatMessage = { id: 'assistant-send', type: 'sent', outgoing: true, text: 'Hello' }; const { renderItem } = useMessageRenderer({ ...params, messages: [item], isAssistantConversation: true }); return renderItem({ item }); } render(<Assistant />); expect(screen.getByText('status-hidden')).toBeTruthy(); });

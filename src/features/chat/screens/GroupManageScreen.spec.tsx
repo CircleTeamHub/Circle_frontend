@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator } from 'react-native';
-import { act, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import GroupManageScreen from './GroupManageScreen';
 import { fetchChatMembers, refreshConversationOrList } from '@/chat-core/api';
 import { fetchCircleDetail } from '@/services/api/circles';
@@ -8,12 +9,14 @@ import {
   readGroupInfoCache,
   writeGroupInfoCache,
 } from '@/features/chat/group-info-cache';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
 
 jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
 
-const mockAuth = { sessionEpoch: 0 };
-const mockParams: { conversationID?: string; groupID?: string } = {};
+const mockAuth = { user: { id: 'me' }, isAuthenticated: true, sessionEpoch: 0 };
+const mockParams: { conversationID?: string; groupID?: string; originScope?: string } = {};
+let mockScope = 'messages';
 const mockChatState: {
   currentUserId: string;
   conversations: Record<string, unknown>[];
@@ -87,8 +90,17 @@ jest.mock('@/chat-core/store', () => ({
   ),
 }));
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: unknown) => unknown) => selector(mockAuth),
+  // 页面按选择器订阅;成员缓存按 getState() 核对当前账号与会话代次。
+  useAuthStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector(mockAuth),
+    { getState: () => mockAuth },
+  ),
 }));
+// 群缓存在原生端只在加密库就绪后才工作(并按账号落盘);给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('@/features/chat/hooks/use-group-admin-actions', () => ({
   isSilencedMember: (member: { silenced?: boolean }) => Boolean(member.silenced),
   useGroupAdminActions: (params: typeof mockAdminParams) => {
@@ -116,7 +128,8 @@ jest.mock('@/services/api/errors', () => ({
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/features/user/utils/routes', () => ({
-  getUserProfileScopeFromSegments: () => 'messages',
+  ...jest.requireActual('@/features/user/utils/routes'),
+  getUserProfileScopeFromSegments: () => mockScope,
 }));
 jest.mock('@/features/groups/routes', () => ({ getGroupEntryHref: () => ({}) }));
 
@@ -151,9 +164,13 @@ beforeEach(() => {
   jest.clearAllMocks();
   // 每个用例换一个「账号」:成员缓存按 sessionEpoch 整份作废,用例之间互不串。
   mockAuth.sessionEpoch += 1;
+  // 同一 user.id 的名单还落了盘,换代次后会被读回来;像登出那样一并清掉。
+  clearPageSnapshots();
   mockAdminParams = null;
   delete mockParams.conversationID;
   delete mockParams.groupID;
+  delete mockParams.originScope;
+  mockScope = 'messages';
   mockChatState.conversations = [];
   jest.mocked(refreshConversationOrList).mockResolvedValue(null as never);
 });
@@ -179,6 +196,18 @@ describe('standalone group', () => {
     });
     expect(await screen.findByText('张三', {}, SETTLE)).toBeTruthy();
     expect(cachedIDs('standalone:conv-1')).toEqual(['me', 'u2']);
+  });
+
+  test.each(['messages', 'contacts', 'discover', 'explore', 'profile'])('opens application management and logs in the originating %s stack', async (scope) => {
+    mockScope = scope;
+    jest.mocked(fetchChatMembers).mockResolvedValue([member('me', '我', 'OWNER')] as never);
+    render(<GroupManageScreen />);
+    fireEvent.press(await screen.findByTestId('group-manage-applications'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-review`, params: { conversationID: 'conv-1', title: undefined } });
+    fireEvent.press(screen.getByTestId('group-manage-log'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-log`, params: { conversationID: 'conv-1' } });
+    fireEvent.press(screen.getByTestId('group-manage-abnormal'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-abnormal-members`, params: { conversationID: 'conv-1' } });
   });
 
   test('a cached standalone roster stays hidden until the seat check succeeds', async () => {
@@ -243,6 +272,30 @@ describe('circle group', () => {
       members: [member('me', '我', 'OWNER'), member('u2', '张三', 'ADMIN')] as never,
     });
   });
+
+  test.each(['messages', 'contacts', 'discover', 'explore', 'profile'])(
+    'opens expansion in the current %s stack so native back retains its source',
+    async (scope) => {
+      mockScope = scope;
+      mockParams.originScope = 'profile';
+      jest.mocked(fetchCircleDetail).mockResolvedValueOnce({ myStatus: 'ACTIVE', myRole: 'OWNER' } as never);
+      jest.mocked(fetchChatMembers).mockResolvedValueOnce([member('me', '我', 'OWNER')] as never);
+
+      render(<GroupManageScreen />);
+      fireEvent.press(await screen.findByTestId('group-manage-raise-limit', {}, SETTLE));
+
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: `/(tabs)/${scope}/group-expansion`,
+        params: { circleId: 'circle-1' },
+      });
+      // 异常成员页要按圈子角色鉴权,圈子 id 一起带过去。
+      fireEvent.press(screen.getByTestId('group-manage-abnormal'));
+      expect(router.push).toHaveBeenLastCalledWith({
+        pathname: `/(tabs)/${scope}/group-abnormal-members`,
+        params: { conversationID: 'conv-c', groupID: 'circle-1' },
+      });
+    },
+  );
 
   test('keeps cached circle management data hidden until the live role answers', async () => {
     mockChatState.conversations = [

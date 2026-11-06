@@ -20,6 +20,7 @@ function loadApiClient({
   now = () => Date.now(),
   wallNow = now,
   sessionState = {},
+  metrics = [],
 }) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -103,6 +104,9 @@ function loadApiClient({
       }
       if (request === '@/utils/client-diagnostics') {
         return diagnostics ?? { logClientDiagnostic: () => {} };
+      }
+      if (request === '@/observability/metrics') {
+        return { recordMetric: (...args) => metrics.push(args) };
       }
       if (request === '@/utils/redact') {
         // 真模块，不是 stub：脱敏就是这几个断言要验的东西，换成假的等于不测。
@@ -439,6 +443,43 @@ test('report throttling uses monotonic time when the wall clock moves backward',
   await assert.rejects(() => apiClient('/circle/third-private-id'));
   assert.equal(reports.length, 2);
   assert.equal(breadcrumbs.length, 3);
+});
+
+test('every HTTP attempt records bounded route/result/duration including expected rejections', async () => {
+  const metrics = [];
+  let now = 10;
+  const { apiClient } = loadApiClient({
+    metrics, now: () => now,
+    responses: [
+      { ok: true, status: 200, responseText: '{"code":0,"message":"ok","data":{}}' },
+      { ok: false, status: 403, responseText: '{}' },
+      { ok: true, status: 200, responseText: '{"code":42,"message":"private text","data":null}' },
+    ],
+  });
+  await apiClient('/collections/private-id?token=secret');
+  now += 100;
+  await assert.rejects(() => apiClient('/collections/another-private-id', { retryOnAuthError: false }));
+  await assert.rejects(() => apiClient('/collections/third-private-id'));
+  assert.equal(metrics.length, 3);
+  assert.deepEqual(metrics.map(([name, value, attributes]) => [name, value, { ...attributes }]), [
+    ['api.request.duration', 0, { method: 'GET', route: '/collections/:id', outcome: 'success' }],
+    ['api.request.duration', 0, { method: 'GET', route: '/collections/:id', outcome: 'http' }],
+    ['api.request.duration', 0, { method: 'GET', route: '/collections/:id', outcome: 'api-code' }],
+  ]);
+  assert.doesNotMatch(JSON.stringify(metrics), /private-id|token|secret|private text/);
+});
+
+test('transport failures remain visible in request metrics', async () => {
+  const metrics = [];
+  let now = 1;
+  const { apiClient } = loadApiClient({ metrics, now: () => now,
+    onFetch: () => { now = 81; throw new Error('native failure with private data'); },
+  });
+  await assert.rejects(() => apiClient('/collections'));
+  // A GET that fails on the network is retried once; each attempt is its own metric.
+  assert.equal(metrics.length, 2);
+  assert.equal(metrics[0][1], 80);
+  assert.deepEqual(metrics.map(([, , attributes]) => attributes.outcome), ['network', 'network']);
 });
 
 test('diagnostic sink failures do not replace the original API error', async () => {

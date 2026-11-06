@@ -15,10 +15,12 @@ import {
   type FriendTag,
 } from '@/services/api/friends';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -111,8 +113,11 @@ export default function FriendTagsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [tags, setTags] = useState<FriendTagSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const [initialTags] = useState(() => readPageSnapshot<FriendTagSummary[]>(useAuthStore.getState().user?.id, 'social:friend-tag-summaries'));
+  const [tags, setTags] = useState<FriendTagSummary[]>(() => initialTags?.value ?? []);
+  const hasLoadedRef = useRef(Boolean(initialTags));
+  const [loading, setLoading] = useState(!initialTags);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [createTagVisible, setCreateTagVisible] = useState(false);
@@ -123,6 +128,13 @@ export default function FriendTagsScreen() {
   const createInFlightRef = useRef(false);
   const newTagInputRef = useRef<TextInput>(null);
   useModalInputAutoFocus(newTagInputRef, createTagVisible);
+  useLayoutEffect(() => {
+    const saved = readPageSnapshot<FriendTagSummary[]>(useAuthStore.getState().user?.id, 'social:friend-tag-summaries');
+    hasLoadedRef.current = Boolean(saved);
+    setTags(saved?.value ?? []);
+    setLoading(!saved);
+    setError(null);
+  }, [sessionEpoch]);
 
   // 每个标签都要整表拉一次好友只为数人数(1+N 个请求)。从标签详情回来时,
   // 30 秒内、之后没有好友/标签写请求、好友动态也没变,就不重拉(与通讯录同一口径)。
@@ -135,9 +147,10 @@ export default function FriendTagsScreen() {
   });
 
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
-    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
+    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch;
     const startedAt = Date.now();
-    setLoading(true);
+    const requestRevision = getPageSnapshotRevision();
+    if (!hasLoadedRef.current) setLoading(true);
 
     try {
       const nextTags = sortFriendTags(await fetchFriendTags());
@@ -150,6 +163,8 @@ export default function FriendTagsScreen() {
 
       if (isCancelled()) return;
       setTags(counts);
+      hasLoadedRef.current = true;
+      if (requestRevision === getPageSnapshotRevision() && !friendsMutatedSince(startedAt)) writePageSnapshot(useAuthStore.getState().user?.id, 'social:friend-tag-summaries', counts, startedAt);
       setError(null);
       tagsReloadGate.markLoaded(startedAt);
     } catch {
@@ -160,7 +175,7 @@ export default function FriendTagsScreen() {
         setLoading(false);
       }
     }
-  }, [t, tagsReloadGate]);
+  }, [sessionEpoch, t, tagsReloadGate]);
 
   useFocusEffect(
     useCallback(() => {

@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchNoteDrafts, deleteNoteDraft } from '@/services/api/notes';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { fetchNoteDrafts, deleteNoteDraft, getCachedNoteDrafts } from '@/services/api/notes';
 import type { NoteDraftSummary } from '@/features/notes/types';
 import {
   loadLocalNoteDraftSummaries,
@@ -64,6 +65,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function DraftsScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <DraftsContent key={sessionKey} /> : null;
+}
+
+function DraftsContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -71,15 +77,20 @@ export default function DraftsScreen() {
   const userId = useAuthStore((state) => state.user?.id);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const sessionKey = `${userId ?? 'anonymous'}:${sessionEpoch}`;
-  const loadedSessionRef = useRef('');
+  const [cached] = useState(getCachedNoteDrafts);
+  const loadedSessionRef = useRef(sessionKey);
+  const remoteDraftsRef = useRef<NoteDraftSummary[]>(cached?.value ?? []);
   const loadGenerationRef = useRef(0);
   const deletionRunRef = useRef(new Set<string>());
   const isCurrentSession = useCallback(() => {
     const auth = useAuthStore.getState();
     return auth.user?.id === userId && auth.sessionEpoch === sessionEpoch;
   }, [userId, sessionEpoch]);
-  const [items, setItems] = useState<DraftListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<DraftListItem[]>(() => mergeDrafts(
+    userId ? loadLocalNoteDraftSummaries(userId) : [],
+    remoteDraftsRef.current.filter((item) => !isLocalNoteDraftDeleted(userId, item.id)),
+  ));
+  const [loading, setLoading] = useState(!cached && items.length === 0);
   const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   const mountedRef = useRef(true);
 
@@ -99,7 +110,8 @@ export default function DraftsScreen() {
         await deleteNoteDraft(id);
         if (!isCurrentSession()) return;
         confirmNoteDraftDeletion(userId, id, cleanedRecordings);
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteDrafts', 'deleteRetry', error);
         // Content is already hidden; the durable queue retains cleanup and DELETE for retry.
       } finally {
         if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
@@ -115,10 +127,13 @@ export default function DraftsScreen() {
   const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     // 换了账号/会话：上一个会话的待删提示立即清掉，新会话的计数等 retryDeletions 落定。
-    if (loadedSessionRef.current !== sessionKey) setPendingDeleteCount(0);
+    if (loadedSessionRef.current !== sessionKey) {
+      setPendingDeleteCount(0);
+      remoteDraftsRef.current = [];
+    }
     loadedSessionRef.current = sessionKey;
     const local = userId ? loadLocalNoteDraftSummaries(userId) : [];
-    setItems(mergeDrafts(local, []));
+    setItems(mergeDrafts(local, remoteDraftsRef.current.filter((item) => !isLocalNoteDraftDeleted(userId, item.id))));
     // 待删队列的提示同样等本次重试的结果再显示（见 retryDeletions），避免进页面先闪一下。
     setLoading(false);
     if (!userId || !isCurrentSession()) return;
@@ -126,9 +141,11 @@ export default function DraftsScreen() {
     try {
       const remote = await fetchNoteDrafts();
       if (mountedRef.current && generation === loadGenerationRef.current && isCurrentSession()) {
+        remoteDraftsRef.current = remote;
         setItems(mergeDrafts(loadLocalNoteDraftSummaries(userId), remote.filter((item) => !isLocalNoteDraftDeleted(userId, item.id))));
       }
-    } catch {
+    } catch (error) {
+      reportHandledFailure('noteDrafts', 'load', error);
       // Local drafts remain available while offline; the next focus retries sync.
     }
   }, [userId, sessionKey, isCurrentSession, retryDeletions]);
@@ -175,7 +192,8 @@ export default function DraftsScreen() {
         // 「同步未完成」提示只在服务端删除真的失败后由 retryDeletions 显示；这里不提前置位，
         // 否则每删一个都会闪出提示条、把列表往下推一下，删除成功后又立刻消失。
         void retryDeletions();
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteDrafts', 'delete', error);
         if (isLocalNoteDraftDeleted(userId, item.id)) setItems((current) => current.filter((draft) => draft.id !== item.id));
         setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
         Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type JPushNotification = {
   notificationEventType?: 'notificationArrived' | 'notificationOpened';
@@ -41,8 +42,11 @@ function getModule(): JPushModule | null {
   try {
     if (typeof require !== 'function') return (moduleInstance = null);
     moduleInstance = require('jpush-react-native') as JPushModule;
-  } catch {
+  } catch (error) {
     moduleInstance = null;
+    if (Platform.OS !== 'web' && Constants.expoConfig?.extra?.pushProvider === 'jpush') {
+      reportHandledFailure('notifications', 'jpushModuleUnavailable', error);
+    }
   }
   return moduleInstance;
 }

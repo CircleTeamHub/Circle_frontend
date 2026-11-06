@@ -55,6 +55,8 @@ const s = StyleSheet.create({
     position: 'absolute',
     top: COVER_HEIGHT - AVATAR_SIZE / 2,
     right: Spacing.lg,
+    left: Spacing.lg,
+    justifyContent: 'flex-end',
     flexDirection: 'row',
     // 顶对齐让昵称落在封面图之上，而不是下沿的白色区域
     alignItems: 'flex-start',
@@ -62,6 +64,8 @@ const s = StyleSheet.create({
   },
   nickname: {
     ...Typography.h3,
+    flexShrink: 1,
+    paddingVertical: 2,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },
@@ -125,6 +129,7 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
       source={{ uri: coverUrl }}
       style={[s.cover, s.coverImage]}
       contentFit="cover"
+      cachePolicy="memory-disk"
     />
   ) : (
     <View style={[s.cover, s.coverImage]}>

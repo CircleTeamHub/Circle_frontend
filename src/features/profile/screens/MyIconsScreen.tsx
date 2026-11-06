@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -17,6 +17,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import {
   fetchIconOptions,
   updateDisplayIcons,
+  type IconOptionsResponse,
   type UpdateDisplayIconInput,
 } from '@/services/api/icons';
 import {
@@ -30,10 +31,17 @@ import {
 import { BadgeGridItem } from '@/features/profile/components/badge-grid-item';
 import { BadgeDetailSheet } from '@/features/profile/components/badge-detail-sheet';
 import { useAuthStore } from '@/stores/authStore';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
+import { getPageSnapshotRevision, readPageSnapshot, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
+import {
+  captureAuthSessionIdentity,
+  isAuthSessionIdentityCurrent,
+} from '@/stores/auth-session-identity';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon, IconOption, SystemIconKey } from '@/types';
 
 const MAX_DISPLAY_ICONS = 5;
+let displayIconMutationVersion = 0;
 
 type DraftDisplayIcon = {
   id: string;
@@ -212,23 +220,42 @@ function buildLockedBadges(
 }
 
 export default function MyIconsScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <MyIconsContent key={sessionKey} /> : null;
+}
+
+function MyIconsContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
-  const [loading, setLoading] = useState(true);
+  const [snapshot] = useState(() => readPageSnapshot<IconOptionsResponse>(user?.id, 'settings:icons'));
+  const hasOptions = useRef(Boolean(snapshot));
+  const [loading, setLoading] = useState(!snapshot);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [systemIcons, setSystemIcons] = useState<IconOption[]>([]);
-  const [circleIcons, setCircleIcons] = useState<IconOption[]>([]);
-  const [selectedIcons, setSelectedIcons] = useState<DraftDisplayIcon[]>([]);
+  const [systemIcons, setSystemIcons] = useState<IconOption[]>(() => snapshot?.value.systemIcons ?? []);
+  const [circleIcons, setCircleIcons] = useState<IconOption[]>(() => snapshot?.value.circleIcons ?? []);
+  const [selectedIcons, setSelectedIcons] = useState<DraftDisplayIcon[]>(() => snapshot?.value.displayIcons.slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder).map((icon) => ({ ...icon, id: getDisplayIconIdentity(icon) })) ?? []);
   const [detailBadge, setDetailBadge] = useState<BadgeView | null>(null);
 
   const loadOptions = useCallback(async () => {
-    setLoading(true);
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
+    const revision = getPageSnapshotRevision();
+    const mutationVersion = displayIconMutationVersion;
+    const startedAt = Date.now();
+    setLoading(!hasOptions.current);
+    setLoaded(false);
     try {
       const response = await fetchIconOptions();
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (getPageSnapshotRevision() === revision && mutationVersion === displayIconMutationVersion) {
+        writePageSnapshot(owner.userId, 'settings:icons', response, startedAt);
+      }
+      hasOptions.current = true;
       setSystemIcons(response.systemIcons);
       setCircleIcons(response.circleIcons);
       setSelectedIcons(
@@ -240,7 +267,17 @@ export default function MyIconsScreen() {
             id: getDisplayIconIdentity(icon),
           })),
       );
+      setLoaded(true);
     } catch (error) {
+      if (isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) && isDefinitiveAuthFailure(error)) {
+        removePageSnapshot(owner.userId, 'settings:icons');
+        hasOptions.current = false;
+        setSystemIcons([]);
+        setCircleIcons([]);
+        setSelectedIcons([]);
+        setDetailBadge(null);
+      }
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
         t('myIcons.loadFailedTitle', { defaultValue: '徽章加载失败' }),
         getApiErrorMessage(
@@ -249,7 +286,7 @@ export default function MyIconsScreen() {
         ),
       );
     } finally {
-      setLoading(false);
+      if (isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) setLoading(false);
     }
   }, [t]);
 
@@ -292,6 +329,7 @@ export default function MyIconsScreen() {
 
   const toggleDisplay = useCallback(
     (badge: BadgeView) => {
+      if (!loaded || loading || saving) return;
       const option = badge.option;
       if (!option) return;
       const optionId = getOptionIdentity(option);
@@ -317,14 +355,19 @@ export default function MyIconsScreen() {
         return [...current, optionToDraft(option, current.length)];
       });
     },
-    [t],
+    [loaded, loading, saving, t],
   );
 
   const handleSave = useCallback(async () => {
+    if (!loaded || loading || saving) return;
     if (!user) {
       router.back();
       return;
     }
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner || owner.userId !== user.id) return;
+    const revision = getPageSnapshotRevision();
+    const startedAt = Date.now();
 
     setSaving(true);
     try {
@@ -338,13 +381,36 @@ export default function MyIconsScreen() {
         }),
       );
       const nextDisplayIcons = await updateDisplayIcons(payload);
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      displayIconMutationVersion += 1;
+      if (getPageSnapshotRevision() === revision) {
+        const selected = new Set(nextDisplayIcons.map(getDisplayIconIdentity));
+        writePageSnapshot<IconOptionsResponse>(owner.userId, 'settings:icons', {
+          systemIcons: systemIcons.map(option => ({ ...option, selected: selected.has(getOptionIdentity(option)) })),
+          circleIcons: circleIcons.map(option => ({ ...option, selected: selected.has(getOptionIdentity(option)) })),
+          displayIcons: nextDisplayIcons,
+        }, startedAt);
+      }
       const refreshedUser = await fetchCurrentUser().catch(() => null);
-      setUser({
-        ...(refreshedUser ?? user),
+      const current = useAuthStore.getState();
+      if (!isAuthSessionIdentityCurrent(owner, current) || !current.user ||
+        (refreshedUser && refreshedUser.id !== owner.userId)) return;
+      current.setUser({
+        ...(refreshedUser ?? current.user),
         displayIcons: nextDisplayIcons,
       });
       router.back();
     } catch (error) {
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (isDefinitiveAuthFailure(error)) {
+        removePageSnapshot(owner.userId, 'settings:icons');
+        hasOptions.current = false;
+        setSystemIcons([]);
+        setCircleIcons([]);
+        setSelectedIcons([]);
+        setDetailBadge(null);
+        setLoaded(false);
+      }
       Alert.alert(
         t('myIcons.saveFailedTitle', { defaultValue: '保存失败' }),
         getApiErrorMessage(
@@ -355,7 +421,7 @@ export default function MyIconsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [router, selectedIcons, setUser, user, t]);
+  }, [circleIcons, loaded, loading, router, saving, selectedIcons, systemIcons, user, t]);
 
   const d = useMemo(
     () => ({
@@ -369,15 +435,15 @@ export default function MyIconsScreen() {
       subtitle: { color: colors.textSecondary },
       hint: { color: colors.textSecondary },
       saveButton: {
-        backgroundColor: saving ? colors.surfaceBorder : colors.primary,
+        backgroundColor: !loaded || saving ? colors.surfaceBorder : colors.primary,
       },
       saveButtonText: {
-        color: saving ? colors.textSecondary : colors.white,
+        color: !loaded || saving ? colors.textSecondary : colors.white,
         ...Typography.body,
         fontWeight: '700' as const,
       },
     }),
-    [colors, saving],
+    [colors, loaded, saving],
   );
 
   const displayingLabel = t('myIcons.displaying', { defaultValue: '展示中' });
@@ -455,7 +521,7 @@ export default function MyIconsScreen() {
         <Pressable
           style={[s.footerButton, d.saveButton]}
           onPress={handleSave}
-          disabled={saving}
+          disabled={!loaded || loading || saving}
         >
           <Text style={d.saveButtonText}>
             {saving
@@ -468,6 +534,7 @@ export default function MyIconsScreen() {
       <BadgeDetailSheet
         badge={detailBadge}
         selected={detailSelected}
+        disabled={!loaded || loading || saving}
         onToggleDisplay={toggleDisplay}
         onClose={() => setDetailBadge(null)}
       />

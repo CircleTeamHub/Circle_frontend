@@ -7,8 +7,10 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
+import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
-import { reportHandledFailure } from '@/observability/report-failure';
+import { reportHandledFailure, resetHandledFailureTelemetry } from '@/observability/report-failure';
 import { reportError } from '@/observability/sentry';
 import { recordSessionDiagnostic, type SessionDiagnosticContext, type SessionDiagnosticReason } from '@/observability/session-diagnostics';
 
@@ -262,6 +264,7 @@ async function performClearLocalSession(
       kind: 'forcedLogout',
     });
   }
+  if (auth.user?.id) clearPageSnapshots(auth.user.id);
   auth.clearSession({
     preserveLoading: options.preserveLoading,
   });
@@ -272,6 +275,7 @@ async function performClearLocalSession(
   useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();
+  usePostFormStore.getState().reset();
   // 发现页 feed 含 plazaMembershipRequired 升级墙标记：不随登出重置的话，切到会员账号
   // 后仍可能停在上一个非会员账号的升级墙，直到手动刷新或重启 app。
   useDiscoverStore.getState().reset();
@@ -286,6 +290,7 @@ async function performClearLocalSession(
   // 诊断面包屑是进程级内存缓冲，而切换账号不重启 app。不清的话，上一个账号的
   // circleId / conversationID 会搭下一个账号的错误上报离开设备。
   resetDiagnosticBreadcrumbs();
+  resetHandledFailureTelemetry();
 
   // 账号级持久化 store（#97）：内存重置 + 删除 MMKV key，防止上一账号的
   // conversationID / 圈子引用渗进下一个会话的 UI。

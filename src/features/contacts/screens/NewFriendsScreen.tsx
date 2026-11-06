@@ -26,6 +26,7 @@ import {
 } from '@/services/api/friends';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -114,13 +115,14 @@ export default function NewFriendsScreen() {
 
   const loadActivities = useCallback(async () => {
     const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     // 清掉上次的错误:没有列表时重试期间转圈,有列表时错误本来也不展示。
     setError(null);
 
     try {
       const nextActivities = await fetchFriendActivities();
       // 页面已经退出也照样记下:下次进来就不用再转圈。
-      writeFriendActivitiesCache(sessionEpoch, nextActivities, startedAt);
+      writeFriendActivitiesCache(sessionEpoch, nextActivities, startedAt, requestRevision);
       if (!mountedRef.current) return;
       setActivities(nextActivities);
       reloadGate.markLoaded(startedAt);
@@ -130,12 +132,10 @@ export default function NewFriendsScreen() {
     }
   }, [reloadGate, sessionEpoch, t]);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

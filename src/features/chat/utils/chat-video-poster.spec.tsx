@@ -55,7 +55,7 @@ describe('uploadChatVideoPoster', () => {
     const player = mockPlayer([frame]);
 
     await expect(
-      uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov'),
+      uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov', 'chat', undefined, 'video-delivery'),
     ).resolves.toEqual({ key: 'chat/me/poster.jpg' });
 
     expect(mockCreateVideoPlayer).toHaveBeenCalledWith('file:///picked/trip.mov');
@@ -73,6 +73,8 @@ describe('uploadChatVideoPoster', () => {
       'image/jpeg',
       'file:///cache/poster.jpg',
       { 'If-None-Match': '*' },
+      undefined,
+      { progressKey: 'video-delivery' },
     );
     // 播放器不跟组件走,用完必须手动释放,否则原生解码器一直占着。
     expect(player.release).toHaveBeenCalled();

@@ -423,6 +423,8 @@ export function UserIconBadge({
                       recyclingKey={circleImageUri}
                       style={s.image}
                       contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={0}
                       onError={() => {
                         if (currentCircleIdentity.current === circleImageIdentity) setFailedCircleIdentity(circleImageIdentity);
                       }}

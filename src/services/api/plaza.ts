@@ -5,6 +5,8 @@ import {
   allowPeerMediaUrl,
 } from '@/services/api/utils';
 import { normalizeImageMedia } from './image-media';
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
 import type {
   CirclePlazaPost,
   CreatePlazaPostInput,
@@ -26,6 +28,23 @@ type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author'> & {
     avatarFrameAppearance?: AvatarFrameAppearance | null;
   };
 };
+
+let lastPlazaMutationAt = 0;
+export function plazaMutatedSince(since: number): boolean {
+  return lastPlazaMutationAt >= since;
+}
+
+async function markPlazaWrite<T>(request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const result = await request;
+  lastPlazaMutationAt = Date.now();
+  if (user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+    clearPageSnapshots(user.id, 'social:plaza-feed:');
+    clearPageSnapshots(user.id, 'social:plaza-post:');
+    clearPageSnapshots(user.id, 'social:circle-posts:');
+  }
+  return result;
+}
 
 function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
   if (!Array.isArray(icons)) return [];
@@ -102,15 +121,15 @@ export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
 export async function createPlazaPost(
   input: CreatePlazaPostInput,
 ): Promise<CirclePlazaPost> {
-  const post = await apiClient<BackendCirclePlazaPost>('/circle-plaza/posts', {
+  const post = await markPlazaWrite(apiClient<BackendCirclePlazaPost>('/circle-plaza/posts', {
     method: 'POST',
     body: input,
-  });
+  }));
   return normalizePlazaPost(post);
 }
 
 export async function deletePlazaPost(id: string): Promise<void> {
-  await apiClient<void>(`/circle-plaza/posts/${id}`, { method: 'DELETE' });
+  await markPlazaWrite(apiClient<void>(`/circle-plaza/posts/${id}`, { method: 'DELETE' }));
 }
 
 export async function reportPlazaPost(
@@ -126,19 +145,19 @@ export async function reportPlazaPost(
 export async function signupForPost(
   id: string,
 ): Promise<{ signed: boolean; signupCount: number }> {
-  return apiClient<{ signed: boolean; signupCount: number }>(
+  return markPlazaWrite(apiClient<{ signed: boolean; signupCount: number }>(
     `/circle-plaza/posts/${id}/signup`,
     { method: 'POST' },
-  );
+  ));
 }
 
 export async function cancelSignup(
   id: string,
 ): Promise<{ signed: boolean; signupCount: number }> {
-  return apiClient<{ signed: boolean; signupCount: number }>(
+  return markPlazaWrite(apiClient<{ signed: boolean; signupCount: number }>(
     `/circle-plaza/posts/${id}/signup`,
     { method: 'DELETE' },
-  );
+  ));
 }
 
 // ── Signup management (报名管理) ──────────────────────────────────────────────

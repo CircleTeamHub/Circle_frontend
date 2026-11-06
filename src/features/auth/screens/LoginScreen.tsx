@@ -17,7 +17,7 @@ import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
@@ -26,6 +26,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -123,6 +124,7 @@ const s = StyleSheet.create({
 });
 
 export default function LoginScreen() {
+  const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { colors } = useTheme();
@@ -262,8 +264,18 @@ export default function LoginScreen() {
       style={[s.flex, { backgroundColor: colors.background }]}
     >
       <ScrollView
+        ref={scrollRef}
         testID={E2E_TEST_IDS.authLoginScreen}
         style={s.flex}
+        onLayout={() => {
+          if (Platform.OS === 'web') return;
+          // Keyboard padding shrinks the viewport after focus, especially with Android edge-to-edge.
+          // Reveal the focused field again in that smaller viewport, keeping the hero layout intact.
+          const input = TextInput.State.currentlyFocusedInput();
+          if (input) {
+            scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(input, Spacing.md, true);
+          }
+        }}
         contentContainerStyle={
           isDesktopWeb
             ? {

@@ -2,7 +2,7 @@ import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
@@ -181,7 +181,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
           delayLongPress={350}
         >
           {displayUri ? (
-            <Image
+            <MediaImage
               source={
                 displayCacheKey
                   ? { uri: displayUri, cacheKey: displayCacheKey }
@@ -189,7 +189,6 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
               }
               style={[sImage.image, dimensions]}
               contentFit="cover"
-              transition={150}
               cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
               // 图片尺寸由对端决定，本地无从预判。Android 走 Glide 会读图片头、按目标
               // 尺寸挑 inSampleSize，超大图只是多下载一些字节；iOS 不会——不开这个开关

@@ -65,17 +65,17 @@ export default function AccountSecuritySettingsScreen() {
     securityQuestionsRequestRef.current = requestId;
     try {
       const keys = await fetchSecurityQuestions();
-      if (securityQuestionsRequestRef.current === requestId) {
+      if (securityQuestionsRequestRef.current === requestId && useAuthStore.getState().sessionEpoch === sessionEpoch) {
         setSecurityQuestionsSet(keys.length > 0);
       }
     } catch (requestError) {
       // 刷新失败就不再显示上一次的结论（可能已经过时），回到「不知道」。
-      if (securityQuestionsRequestRef.current === requestId) {
+      if (securityQuestionsRequestRef.current === requestId && useAuthStore.getState().sessionEpoch === sessionEpoch) {
         setSecurityQuestionsSet(null);
+        reportHandledFailure("securityQuestions", "statusCheck", requestError);
       }
-      reportHandledFailure("securityQuestions", "statusCheck", requestError);
     }
-  }, []);
+  }, [sessionEpoch]);
 
   // 每次回到本页都重新拉取：从设置/修改/关闭子页返回后开关状态保持同步。
   useFocusEffect(

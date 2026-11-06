@@ -1114,7 +1114,8 @@ export default function EditNoteScreen() {
       .then((groups) => {
         if (!cancelled) setAvailableGroups(groups);
       })
-      .catch(() => {
+      .catch((error) => {
+        reportHandledFailure('noteEditor', 'groupsLoad', error);
         if (!cancelled) setAvailableGroups([]);
       });
 
@@ -1404,7 +1405,8 @@ export default function EditNoteScreen() {
             record = refreshLocalNoteDraftMedia(record, remoteRecord);
           }
         }
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftLoad', error);
         // Keep the local snapshot available while offline.
       }
       if (isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) record = null;
@@ -1507,7 +1509,8 @@ export default function EditNoteScreen() {
     if (record.pendingSubmission) {
       // The server may already have consumed this draft. Keep the recovery
       // snapshot locally; never overwrite it with a subsequent draft PUT.
-      try { saveLocalNoteDraft(currentUser.id, record); return true; } catch { return false; }
+      try { saveLocalNoteDraft(currentUser.id, record); return true; }
+      catch (error) { reportHandledFailure('noteEditor', 'draftLocalSave', error); return false; }
     }
     const initialFingerprint = draftFingerprint(record);
     if (!hasUndurableRecording && baselineFingerprintRef.current === initialFingerprint && draftPersistedFingerprintRef.current === initialFingerprint) return true;
@@ -1526,12 +1529,16 @@ export default function EditNoteScreen() {
     const prepareAndSaveLocal = async () => {
       if (!isCurrentSession() || navigationRequestedRef.current) return false;
       const restored = new Map<string, EditorNoteMediaDraft>();
+      let recordingPersistenceFailed = false;
       for (const item of record.audioItems) {
         if (item.uploadStatus === 'UPLOADED' || !item.clientId.startsWith('recording:') || item.localRecordingId || !item.previewUri) continue;
         try {
           const stored = await persistNoteRecording(currentUser.id, item.previewUri);
           restored.set(item.clientId, { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri });
-        } catch { /* A failed upload can only be saved after its recording is durable. */ }
+        } catch (error) {
+          recordingPersistenceFailed = true;
+          reportHandledFailure('noteEditor', 'audioLocalStorage', error);
+        }
       }
       const latest = buildCurrentDraftRecordRef.current();
       const retained = new Set(latest.audioItems.map((item) => item.clientId));
@@ -1557,7 +1564,11 @@ export default function EditNoteScreen() {
         saveLocalNoteDraft(currentUser.id, record);
         markPersisted(recordFingerprint);
         return true;
-      } catch { return false; }
+      } catch (error) {
+        // A missing durable recording was already reported at the failed copy.
+        if (!recordingPersistenceFailed) reportHandledFailure('noteEditor', 'draftLocalSave', error);
+        return false;
+      }
     };
     // Local snapshots remain fast; remote writes keep only the latest queued
     // snapshot. Deferred copies are fenced by account and route.
@@ -1571,7 +1582,8 @@ export default function EditNoteScreen() {
         if (!isCurrentSession() || navigationRequestedRef.current) return false;
         if (!hasLocalRecording) markPersisted(draftFingerprint(record));
         return !hasLocalRecording;
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftRemoteSave', error);
         return false;
       }
     });
@@ -1685,7 +1697,7 @@ export default function EditNoteScreen() {
               if (!isCurrentEditor()) return;
               if (currentUser?.id) {
                 try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-                catch { Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+                catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
               } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
               draftRemoteQueue.cancel();
               completeNavigation(action);
@@ -1697,7 +1709,7 @@ export default function EditNoteScreen() {
                   if (!isCurrentEditor()) return;
                   await deleteNoteDraft(editorDraftId);
                   if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
-                } catch { /* DraftsScreen retains and retries both cleanup and server deletion. */ }
+                } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
               });
             },
           },
@@ -2265,10 +2277,10 @@ export default function EditNoteScreen() {
         try {
           const stored = await persistNoteRecording(ownerId, localUri);
           item = { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri };
-        } catch {
+        } catch (error) {
           // Keep the cache recording playable. Saving cannot succeed until a
           // later durable copy or the upload succeeds.
-          reportHandledFailure('noteEditor', 'audioLocalStorage', new Error('Recording storage failed'));
+          reportHandledFailure('noteEditor', 'audioLocalStorage', error);
         }
       }
       if (!isCurrentStop()) {
@@ -2906,7 +2918,7 @@ export default function EditNoteScreen() {
           saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });
           pendingSubmissionRef.current = null;
           setPendingSubmission(null);
-        } catch { /* Retain the recovery marker until it can be cleared durably. */ }
+        } catch (storageError) { reportHandledFailure('noteEditor', 'draftRecoveryClear', storageError); }
       }
       saveInFlightRef.current = false;
       navigationRequestedRef.current = false;
@@ -3569,7 +3581,7 @@ export default function EditNoteScreen() {
               return (
                 <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
                   {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   ) : (
                     <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                       <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
@@ -3612,7 +3624,7 @@ export default function EditNoteScreen() {
               return (
                 <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
                   {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   ) : (
                     <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                       <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
@@ -3663,7 +3675,8 @@ export default function EditNoteScreen() {
                         source={tile.url}
                         style={[s.locationMapTile, { left: tile.left, top: tile.top }]}
                         contentFit="cover"
-                        transition={150}
+                        cachePolicy="memory-disk"
+                        transition={0}
                       />
                     ))}
                     <View pointerEvents="none" style={s.locationMapMarker}>
@@ -4300,7 +4313,7 @@ export default function EditNoteScreen() {
                         accessibilityState={{ checked: selected }}
                       >
                         {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                         ) : (
                           <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                             <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
@@ -4336,7 +4349,7 @@ export default function EditNoteScreen() {
                         accessibilityState={{ checked: selected }}
                       >
                         {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                         ) : (
                           <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                             <Ionicons name="people-outline" size={19} color={colors.iconAccent} />

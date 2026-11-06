@@ -177,12 +177,15 @@ test('MyIconsScreen distinguishes VIP badge variants with the same system key', 
 test('MyIconsScreen preserves saved icon selections when refreshed user data is stale', () => {
   const src = read('src/features/profile/screens/MyIconsScreen.tsx');
   const saveBlock = src.match(
-    /const handleSave = useCallback\([\s\S]*?\}, \[router, selectedIcons, setUser, user, t\]\);/,
+    /const handleSave = useCallback\(async \(\) => \{[\s\S]*?\n {2}\}, \[[^\]]*\]\);/,
   )?.[0] ?? '';
 
   assert.match(saveBlock, /const nextDisplayIcons = await updateDisplayIcons\(payload\)/);
-  assert.match(saveBlock, /const refreshedUser = await fetchCurrentUser\(\)/);
-  assert.match(saveBlock, /displayIcons:\s*nextDisplayIcons/);
+  // 保存已经成功:刷新用户资料失败不算保存失败,仍用保存结果更新本地用户。
+  assert.match(saveBlock, /const refreshedUser = await fetchCurrentUser\(\)\.catch\(\(\) => null\)/);
+  assert.match(saveBlock, /\.\.\.\(refreshedUser \?\? current\.user\),\s*\n\s*displayIcons:\s*nextDisplayIcons/);
+  // 保存期间切了号就丢弃结果,不把 A 的图标写到 B 身上。
+  assert.match(saveBlock, /if \(!isAuthSessionIdentityCurrent\(owner, useAuthStore\.getState\(\)\)\) return;/);
   assert.doesNotMatch(saveBlock, /displayIcons:\s*refreshedUser\?\.displayIcons\s*\?\?\s*nextDisplayIcons/);
 });
 

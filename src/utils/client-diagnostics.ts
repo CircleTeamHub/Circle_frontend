@@ -49,6 +49,7 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
   'clientRequestId',
   'durationMs',
   'failureKind',
+  'errorName',
 ]);
 
 /** 只保留最近 N 条：面包屑是给「错误发生前发生了什么」提供线索，不是日志留存。 */
@@ -101,8 +102,8 @@ export function diagnosticErrorMessage(error: unknown): string {
  *   白名单管的是「上传给第三方」这道闸门，不是本地调试那道。
  *
  * 关于面包屑：这里只往内存缓冲区里写，**不发送任何东西**。本模块对 Sentry 一无所知
- * （没有 import，也没有能力发送）；面包屑是 observability/sentry 的 reportError 在
- * 真的上报错误时主动来「拉」的。没有错误上报 → 缓冲区原地待着，一个字节都不出去。
+ * （没有 import，也没有能力发送）；observability/sentry 在手动或自动上报错误时
+ * 主动来「拉」。没有错误上报 → 缓冲区原地待着，一个字节都不出去。
  * 这个方向性是有意的：「新开一条上传通道」这件事在本模块里做不到。
  */
 export function logClientDiagnostic(
@@ -115,7 +116,7 @@ export function logClientDiagnostic(
 
   breadcrumbs = [
     ...breadcrumbs,
-    { timestamp: Date.now(), event, details: toBreadcrumbDetails(sanitized) },
+    { event, timestamp: Date.now(), details: toBreadcrumbDetails(sanitized) },
   ].slice(-MAX_BREADCRUMBS);
 
   if (!isDev) {
@@ -127,7 +128,7 @@ export function logClientDiagnostic(
 
 /**
  * 供 observability/sentry 在上报错误时读取。返回当前缓冲区快照（不可变）。
- * 这是面包屑离开本模块的唯一出口，且只被 reportError 调用。
+ * 这是面包屑离开本模块的唯一出口，由 Sentry 错误上报边界读取。
  */
 export function readDiagnosticBreadcrumbs(): readonly DiagnosticBreadcrumb[] {
   return breadcrumbs;

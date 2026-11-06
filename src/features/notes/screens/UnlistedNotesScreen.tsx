@@ -20,20 +20,29 @@ import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
 } from '@/features/notes/utils/note-sync';
-import { deleteNote, fetchNotes, notesMutatedSince, relistNote } from '@/services/api/notes';
+import { deleteNote, fetchNotes, getCachedNotes, notesMutatedSince, relistNote } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { reuseUnchanged } from '@/utils/structural-sharing';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
 
 export default function UnlistedNotesScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <UnlistedNotesContent key={sessionKey} /> : null;
+}
+
+function UnlistedNotesContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cached] = useState(() => getCachedNotes('UNLISTED'));
+  const [notes, setNotes] = useState<NoteSummary[]>(cached?.value ?? []);
+  const [loading, setLoading] = useState(!cached);
+  const loadedRef = useRef(cached !== null);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
@@ -65,18 +74,21 @@ export default function UnlistedNotesScreen() {
 
   // 返回这次结果是否真的落到了界面上(被更新的一次加载顶掉时为 false)。
   const load = useCallback(async (): Promise<boolean> => {
+    if (!mountedRef.current) return false;
+    const epoch = useAuthStore.getState().sessionEpoch;
     const sequence = ++loadSequenceRef.current;
     try {
       const notesData = await withNoteSyncRetry(() =>
         fetchNotes({ status: 'UNLISTED' }),
       );
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current || useAuthStore.getState().sessionEpoch !== epoch) return false;
       setNotes((current) => reuseUnchanged(current, notesData));
       setLoadError(false);
       setLoading(false);
+      loadedRef.current = true;
       return true;
     } catch (error) {
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current || useAuthStore.getState().sessionEpoch !== epoch) return false;
       throw error;
     }
   }, []);
@@ -87,12 +99,13 @@ export default function UnlistedNotesScreen() {
       void noteStatusVersion;
       if (reloadGate.shouldSkip()) return;
       const startedAt = Date.now();
-      setLoading(true);
+      setLoading(!loadedRef.current);
       void load()
         .then((applied) => {
           if (applied) reloadGate.markLoaded(startedAt);
         })
-        .catch(() => {
+        .catch((error) => {
+          reportHandledFailure('unlistedNotes', 'load', error);
           if (mountedRef.current) {
             setLoadError(true);
             setLoading(false);
@@ -137,7 +150,8 @@ export default function UnlistedNotesScreen() {
     (noteId: string) => {
       if (!mountedRef.current) return;
       setNotes((current) => current.filter((item) => item.id !== noteId));
-      void load().catch(() => {
+      void load().catch((error) => {
+        reportHandledFailure('unlistedNotes', 'refreshAfterMutation', error);
         // 列表下次 focus / 下拉时自然重试
       });
     },
@@ -152,7 +166,8 @@ export default function UnlistedNotesScreen() {
     pendingIdsRef.current.add(note.id);
     try {
       await relistNote(note.id);
-    } catch {
+    } catch (error) {
+      reportHandledFailure('unlistedNotes', 'relist', error);
       if (mountedRef.current) {
         Alert.alert(
           t('notes.alerts.relistFailedTitle', { defaultValue: '上架失败' }),
@@ -182,11 +197,13 @@ export default function UnlistedNotesScreen() {
           text: t('notes.actions.delete', { defaultValue: '删除' }),
           style: 'destructive',
           onPress: async () => {
+            if (!mountedRef.current) return;
             if (pendingIdsRef.current.has(note.id)) return;
             pendingIdsRef.current.add(note.id);
             try {
               await deleteNote(note.id);
-            } catch {
+            } catch (error) {
+              reportHandledFailure('unlistedNotes', 'delete', error);
               if (mountedRef.current) {
                 Alert.alert(
                   t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),

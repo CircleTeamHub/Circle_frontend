@@ -80,6 +80,11 @@ export function useChatTimeline({
 }: ChatTimelineParams) {
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const isNearLatestMessageRef = useRef(true);
+  const [showLatestJump, setShowLatestJump] = useState(false);
+  useEffect(() => {
+    isNearLatestMessageRef.current = true;
+    setShowLatestJump(false);
+  }, [conversationID]);
   const latestMessageIdentityRef = useRef<{
     conversationID: string;
     messageID: string;
@@ -322,14 +327,13 @@ export function useChatTimeline({
     () => findUnreadStart(conversationMessages ?? [])?.id ?? null,
     [conversationMessages, findUnreadStart],
   );
-  const [unreadStartVisible, setUnreadStartVisible] = useState(false);
   const [unreadJumpDismissed, setUnreadJumpDismissed] = useState(false);
   useEffect(() => {
-    setUnreadStartVisible(false);
     setUnreadJumpDismissed(false);
   }, [conversationID, entryReadHeight, entryUnreadCount]);
   const handleUnreadStartVisibilityChange = useCallback((visible: boolean) => {
-    setUnreadStartVisible(visible);
+    // 看过后立即消除提示，键盘或滚动让消息移出视口时不能恢复旧未读。
+    if (visible) setUnreadJumpDismissed(true);
   }, []);
 
   const handleJumpToUnread = useCallback(() => {
@@ -409,6 +413,7 @@ export function useChatTimeline({
         event.nativeEvent.contentOffset.y <= LATEST_MESSAGE_SCROLL_THRESHOLD;
       const wasNearLatest = isNearLatestMessageRef.current;
       isNearLatestMessageRef.current = nearLatest;
+      setShowLatestJump(!nearLatest);
       // 翻完历史滚回最新:刚才没报的已读现在补上。
       if (
         nearLatest &&
@@ -449,6 +454,7 @@ export function useChatTimeline({
       if (!mountedRef.current) return;
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       isNearLatestMessageRef.current = true;
+      setShowLatestJump(false);
     });
   }, [conversationID, isFocused, messages, mountedRef]);
 
@@ -600,6 +606,15 @@ export function useChatTimeline({
     messages,
     displayMessages,
     handleMessageListScroll,
+    showLatestJump,
+    handleJumpToLatest: () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      isNearLatestMessageRef.current = true;
+      setShowLatestJump(false);
+      if (conversationID && useChatStore.getState().appForeground) {
+        markConversationAsRead(conversationID);
+      }
+    },
     handleImageViewed,
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
@@ -609,7 +624,6 @@ export function useChatTimeline({
     showUnreadJump:
       entryUnreadCount > 0 &&
       unreadStartMessageID !== null &&
-      !unreadStartVisible &&
       !unreadJumpDismissed,
     unreadStartMessageID,
     highlightedMessageID,

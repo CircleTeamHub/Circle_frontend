@@ -63,7 +63,7 @@ test('chat page disables its keyboard padding while the collect sheet is open', 
   // The sheet is a separate full-screen modal. Leaving the chat composer KAV
   // enabled while it is mounted lifts the sheet by the composer height on iOS.
   assert.match(hook, /noteCollectVisible: noteCollectTarget !== null \|\| noteCollectOpening/);
-  assert.match(screen, /enabled=\{!noteCollectVisible\}/);
+  assert.match(screen, /enabled=\{!noteCollectVisible && !attachmentOpen && !emojiOpen\}/);
 });
 
 test('collect waits for the chat keyboard window to settle before presenting the sheet', () => {

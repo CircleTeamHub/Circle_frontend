@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Modal } from 'react-native';
+import { ActivityIndicator, Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
 import { ImageBubble } from './image-bubble';
@@ -22,7 +22,7 @@ jest.mock('expo-image', () => {
         source?: { uri?: string; cacheKey?: string };
       }) => {
         posterProps.push(props);
-        return <View testID={props.testID} />;
+        return <View {...props} />;
       },
       {
         clearDiskCache: jest.fn(() => Promise.resolve()),
@@ -43,7 +43,8 @@ jest.mock('@/storage', () => ({
     set: (key: string, value: string) => mockStorageValues().set(key, value),
   },
 }));
-const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })), loop: false };
+let mockStatusListener: ((event: { status: string }) => void) | undefined;
+const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn((_event: string, listener: typeof mockStatusListener) => { mockStatusListener = listener; return { remove: jest.fn() }; }), loop: false };
 const mockRelease = jest.fn();
 let mockRegistered = false;
 let mockNativeIdle: (() => void) | undefined;
@@ -70,7 +71,10 @@ jest.mock('@/components/app/UploadProgressHost', () => {
 });
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return <Text>{name}</Text>;
+} }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -119,6 +123,24 @@ test('a tap opens full-screen playback and closing releases the active player', 
   expect(mockRelease).toHaveBeenCalledTimes(1);
 });
 
+test('shows only a central loading bar until playback is ready and while rebuffering', async () => {
+  let resolve!: () => void;
+  mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>(done => { resolve = done; }));
+  render(<VideoBubble message={video} outgoing={false} />);
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  await act(async () => resolve());
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  act(() => mockStatusListener?.({ status: 'loading' }));
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  act(() => mockStatusListener?.({ status: 'error' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.getByLabelText('common.retry')).toBeTruthy();
+});
+
 test('failed video loading exposes retry in full screen and retries without another inline player', async () => {
   mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('network'));
   render(<VideoBubble message={video} outgoing={false} />);
@@ -155,6 +177,16 @@ describe('VideoBubble poster', () => {
     fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
     await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
     expect(mockPlayer.replaceAsync).toHaveBeenCalledWith({ uri: video.videoUrl, useCaching: false });
+  });
+
+  it('keeps the play badge from covering the central poster download progress', () => {
+    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} />);
+    fireEvent(screen.getByTestId('chat-video-poster'), 'loadStart');
+    expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+    expect(screen.queryByText('play')).toBeNull();
+    fireEvent(screen.getByTestId('chat-video-poster'), 'loadEnd');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByText('play')).toBeTruthy();
   });
 
   it('shows the poster frame, cached by its object key, before the video is played', () => {

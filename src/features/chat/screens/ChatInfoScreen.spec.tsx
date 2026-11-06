@@ -10,6 +10,7 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { readGroupInfoCache, writeGroupInfoCache } from '@/features/chat/group-info-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { ApiError } from '@/services/api/client';
 
 const mockParams: Record<string, string> = {};
 const mockAuth = { sessionEpoch: 0 };
@@ -33,7 +34,11 @@ jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+  // 本页直接从 @/services/api/client 取失败判别,它会把 @/i18n 带进来。
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/theme', () => ({
   Radius: {}, Spacing: {}, Typography: {},
@@ -72,6 +77,11 @@ jest.mock('@/stores/authStore', () => ({
     { getState: () => mockAuth },
   ),
 }));
+// 群缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('@/features/discover/store/use-circles-store', () => ({ useCirclesStore: {} }));
 jest.mock('@/features/chat/hooks/use-group-member-view-access', () => ({
   useGroupMemberViewAccess: (params: unknown) => mockUseGroupMemberViewAccess(params),
@@ -182,7 +192,8 @@ test('an uncached standalone group keeps the roster hidden if its seat check fai
   render(<ChatInfoScreen />);
   expect(fetchChatMembers).toHaveBeenCalledWith('group-conversation');
   expect(screen.queryByText('Cached member')).toBeNull();
-  await act(async () => directory.reject(new Error('403')));
+  // 只有服务端明确拒绝(401/403/404)才算失座;断网等瞬时失败保留只读快照。
+  await act(async () => directory.reject(new ApiError('forbidden', { status: 403 })));
   expect(screen.queryByText('Cached member')).toBeNull();
   expect(readGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation')).toBeUndefined();
 });
@@ -285,4 +296,21 @@ test.each(['unmount', 'session change'])('a cold metadata response is discarded 
   await act(async () => metadata.resolve());
   expect(useChatStore.getState().conversations).toEqual([]);
   expect(reportHandledFailure).not.toHaveBeenCalled();
+});
+
+test('known standalone membership paints warmed members before revalidation', () => {
+  useChatStore.setState({ conversations: [standaloneConversation] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  expect(screen.getByText('Live member')).toBeTruthy();
+  expect(fetchChatMembers).toHaveBeenCalledWith('group-conversation');
+});
+
+test('warmed members remain hidden when the current roster policy forbids them', () => {
+  useChatStore.setState({ conversations: [{ ...standaloneConversation,
+    policies: { ...standaloneConversation.policies!, membersCanViewRoster: false },
+  }] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  expect(screen.queryByText('Live member')).toBeNull();
 });

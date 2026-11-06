@@ -5,6 +5,8 @@ import type { MomentPost, PaginatedResponse } from '@/types';
 
 jest.mock('@/services/api/moments', () => ({
   fetchMomentsFeed: jest.fn(),
+  // 成功页按它决定能否写页面快照;本 spec 期间没有朋友圈写请求。
+  momentsMutatedSince: () => false,
 }));
 jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: jest.fn(),

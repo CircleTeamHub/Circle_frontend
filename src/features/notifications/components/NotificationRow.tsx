@@ -79,7 +79,7 @@ export const NotificationRow = memo(function NotificationRow({
         </View>
       </View>
       {data.previewImage ? (
-        <Image source={{ uri: data.previewImage }} recyclingKey={data.previewImage} style={s.preview} contentFit="cover" />
+        <Image source={{ uri: data.previewImage }} recyclingKey={data.previewImage} style={s.preview} contentFit="cover" cachePolicy="memory-disk" transition={0} />
       ) : null}
       {onMarkRead || onDelete ? (
         <View style={s.actions}>
