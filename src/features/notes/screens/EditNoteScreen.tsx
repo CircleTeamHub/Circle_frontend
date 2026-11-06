@@ -76,7 +76,6 @@ import {
   type NoteTextStats,
 } from '@/features/notes/utils/note-text-stats';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
-import { buildNoteSectionsWithCards } from '@/features/notes/utils/note-card-peers';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
   createPickerPreviewDisposer,
@@ -1202,7 +1201,9 @@ export default function EditNoteScreen() {
         setTitle(note.title);
         existingSectionsRef.current = note.sections ?? null;
 
-        const normalizedSections = buildNoteSectionsWithCards(note);
+        // 只编辑库里真实存着的名片：旧收藏补出来的来源发送方/群未必是本人好友或
+        // 仍在的群，带上就会被服务端名片校验整单拒绝（列表/浏览页照旧展示来源兜底）。
+        const normalizedSections = buildNoteSections(note);
         const rawBlocks = note.sections?.text?.contentJson ?? note.contentJson ?? [];
         const savedComposerBlocks = readNoteComposerBlocks(rawBlocks);
         // Keep authored instances and order; recover typed media regions for
@@ -1212,7 +1213,7 @@ export default function EditNoteScreen() {
           normalizedSections as unknown as Partial<NoteSections>,
           true,
         )).filter((block) => block.kind !== 'title'), normalizedSections);
-        // 收藏时补入的默认名片可能没有对应的旧编辑区块。
+        // 收藏时服务端写入的默认名片可能没有对应的旧编辑区块。
         for (const kind of ['contact', 'group'] as const) {
           const items = kind === 'contact' ? normalizedSections.contacts.items : normalizedSections.groups.items;
           if (items.length && !normalizedComposerBlocks.some((block) => block.kind === kind)) {

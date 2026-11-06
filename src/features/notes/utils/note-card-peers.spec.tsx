@@ -41,8 +41,10 @@ test('a standalone group keeps its server conversation ID and a note with no car
   expect(sections.groups.items).toEqual([]);
 });
 
-test('a legacy group card uses the canonical circle ID in its section and list button', () => {
+test('a legacy group card keeps its stored ID in the section and routes the list button by circle ID', () => {
+  // 服务端按库里的 id 放行名片/判断绑定是否变化；改成圈子 id 会被当成新绑定而 403。
   const legacy = { id: 'old-group-id', circleId: 'canonical-circle', name: 'Legacy group' };
   const note = { sections: { groups: { items: [legacy] } } };
-  expect(buildNoteSectionsWithCards(note).groups.items[0].id).toBe(resolveNoteCardButtons(note).group?.id);
+  expect(buildNoteSectionsWithCards(note).groups.items[0]).toMatchObject(legacy);
+  expect(resolveNoteCardButtons(note).group?.id).toBe('canonical-circle');
 });
