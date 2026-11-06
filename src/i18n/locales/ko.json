@@ -90,7 +90,10 @@
       "logout": "로그아웃",
       "cancelAccount": "계정 삭제",
       "singleDeviceStatusFailed": "단일 기기 로그인 상태를 불러오지 못했습니다. 다시 시도하세요.",
-      "singleDeviceUpdateFailed": "단일 기기 로그인 설정을 저장하지 못했습니다. 다시 시도하세요."
+      "singleDeviceUpdateFailed": "단일 기기 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
+      "securityQuestions": "보안 질문",
+      "securityQuestionsSet": "설정됨",
+      "securityQuestionsNotSet": "설정 안 됨"
     },
     "notifications": {
       "title": "알림",
@@ -175,7 +178,10 @@
       "showCollapsedPinned": "고정 대화 {{count}}개 더 보기",
       "unlimited": "무제한",
       "batteryOptimization": "배터리 최적화 안내",
-      "batteryOptimizationHint": "Android에서만 적용됩니다. 끄면 백그라운드 권한 안내가 더 이상 표시되지 않습니다"
+      "batteryOptimizationHint": "Android에서만 적용됩니다. 끄면 백그라운드 권한 안내가 더 이상 표시되지 않습니다",
+      "displaySection": "표시",
+      "chatSection": "채팅",
+      "conversationListSection": "대화 목록"
     },
     "privacy": {
       "title": "개인정보 보호",
@@ -229,7 +235,12 @@
         "shareCard": "내 개인 카드 공유"
       },
       "unavailable": "사용 불가",
-      "unsupportedHint": "현재 서비스에서 지원하지 않는 설정입니다. 업데이트 후 다시 시도하세요."
+      "unsupportedHint": "현재 서비스에서 지원하지 않는 설정입니다. 업데이트 후 다시 시도하세요.",
+      "chatSection": "채팅 및 모멘트",
+      "presenceSection": "온라인 및 입력 상태",
+      "profileVisibilitySection": "프로필 공개",
+      "contactSection": "추가 및 초대",
+      "blacklistBlockedAt": "{{date}}에 차단함"
     },
     "permissions": {
       "title": "시스템 권한",
@@ -242,13 +253,13 @@
       "bluetooth": "블루투스",
       "authorized": "허용됨",
       "unauthorized": "허용 안 됨",
-      "onlyVisibleAuthorized": "조회할 수 있는 권한만 표시합니다",
+      "onlyVisibleAuthorized": "항목을 누르면 권한을 요청합니다. 이미 거부한 권한은 시스템 설정에서 켜야 합니다.",
       "openSystemSettings": "시스템 설정 열기",
       "browserSettingsHint": "브라우저 주소 표시줄의 사이트 설정에서 알림, 카메라, 마이크 권한을 변경하세요.",
       "openSettingsFailed": "시스템 설정을 열 수 없습니다. 기기 설정에서 이 앱의 권한을 직접 여세요."
     },
     "storage": {
-      "title": "설정",
+      "title": "저장공간 및 캐시",
       "storageSpace": "저장공간",
       "clearCache": "캐시 삭제",
       "cacheSize": "계산 중...",
@@ -261,15 +272,16 @@
       "clearCacheFailedMessage": "지금은 캐시를 삭제할 수 없습니다. 나중에 다시 시도하세요.",
       "clearAllChats": "모든 채팅 기록 삭제",
       "clearAllChatsAction": "삭제",
-      "clearAllChatsWarning": "이 기기의 로컬 채팅 기록만 삭제합니다. 서버 기록은 삭제되지 않으며 동기화 후 일부 기록이 복원될 수 있습니다.",
+      "clearAllChatsWarning": "이 계정의 모든 기기에서 채팅 기록을 삭제하며 되돌릴 수 없습니다. 다른 참여자의 기록에는 영향을 주지 않습니다.",
       "clearAllChatsDone": "채팅 기록 삭제됨",
-      "clearAllChatsDoneMessage": "이 기기의 로컬 채팅 기록을 삭제했습니다.",
+      "clearAllChatsDoneMessage": "이 계정의 모든 기기에서 채팅 기록을 삭제했습니다.",
       "clearAllChatsPartialTitle": "일부 대화를 지우지 못했습니다",
       "clearAllChatsPartialMessage": "{{count}}개의 대화를 지우지 못했습니다(네트워크 문제일 수 있음). '모든 대화 지우기'를 다시 실행해 주세요.",
       "clearAllChatsFailed": "삭제 실패",
-      "clearAllChatsFailedMessage": "지금은 이 기기의 로컬 채팅 기록을 삭제할 수 없습니다. 나중에 다시 시도하세요.",
+      "clearAllChatsFailedMessage": "지금은 채팅 기록을 삭제할 수 없습니다. 나중에 다시 시도하세요.",
       "switchAccount": "계정 전환",
-      "logout": "로그아웃"
+      "logout": "로그아웃",
+      "clearSectionHint": "캐시를 지워도 채팅 기록은 유지됩니다. 채팅 기록 삭제는 이 계정의 모든 기기에 반영됩니다."
     },
     "storageUsage": {
       "title": "저장공간",
@@ -2581,7 +2593,7 @@
     "tags": "태그",
     "description": "설명",
     "permission": "친구 권한",
-    "moreInfo": "더 보기",
+    "moreInfo": "친구 설정",
     "editProfile": "프로필 편집",
     "fieldNotEditable": "이 항목은 편집할 수 없습니다",
     "returnToSettings": "설정으로 돌아가세요.",
@@ -2805,7 +2817,7 @@
         "label": "시스템 권한"
       },
       "clearCache": {
-        "label": "캐시 지우기"
+        "label": "저장공간 및 캐시"
       },
       "about": {
         "label": "회사 소개"
@@ -3010,7 +3022,10 @@
       "recoveryWaiting": "복구를 신청했습니다. {{time}} 이후 이 기기에서 다시 로그인하면 계정에 들어갈 수 있습니다. 그동안 신뢰할 수 있는 기기에 알림이 가며 거부할 수 있습니다.",
       "recoveryReady": "대기 기간이 끝났습니다. 로그인 화면으로 돌아가 이 기기에서 비밀번호로 다시 로그인하면 복구가 완료됩니다.",
       "recoveryGoLogin": "로그인하기",
-      "recoveryUnderstood": "알겠습니다"
+      "recoveryUnderstood": "알겠습니다",
+      "useSecurityQuestions": "신뢰할 수 있는 기기가 곁에 없나요? 보안 질문으로 인증",
+      "securityQuestionsIntro": "설정한 보안 질문 2개에 답해 인증을 완료하세요.",
+      "securityQuestionsRetry": "보안 질문을 불러오지 못했습니다. 눌러서 다시 시도하세요."
     }
   },
   "media": {
@@ -3737,7 +3752,10 @@
     "CHAT_GROUP_INVITATION_INVALID": "초대가 만료되었거나 유효하지 않습니다",
     "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다",
     "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요",
-    "CHAT_GROUP_JOIN_BLOCKED": "이 계정은 이 그룹에 가입할 수 없습니다"
+    "CHAT_GROUP_JOIN_BLOCKED": "이 계정은 이 그룹에 가입할 수 없습니다",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "서로 다른 질문 2개를 선택하고 답을 입력하세요",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "설정된 보안 질문이 없습니다. 신뢰할 수 있는 기기에서 로그인을 확인하세요",
+    "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
@@ -3953,6 +3971,27 @@
       "policy": "그룹 권한 변경",
       "application": "가입 신청",
       "blacklist": "그룹 차단"
+    }
+  },
+  "securityQuestions": {
+    "title": "보안 질문",
+    "intro": "나만 답을 아는 질문 2개를 설정하세요. 신뢰할 수 있는 기기를 모두 쓸 수 없을 때(앱 재설치, 휴대폰 분실 등) 새 기기 로그인 인증 화면에서 답하면 인증할 수 있습니다.",
+    "introReplace": "이미 보안 질문을 설정했습니다. 다시 저장하면 이전 질문과 답이 바뀝니다.",
+    "slotLabel": "질문 {{number}}",
+    "pickQuestion": "질문 선택",
+    "answerPlaceholder": "답 입력",
+    "answerHint": "답은 대소문자와 공백을 구분하지 않습니다. 나만 알고 다른 사람이 찾아볼 수 없는 답을 고르세요.",
+    "incomplete": "질문 2개를 선택하고 답을 입력하세요",
+    "saveFailed": "저장하지 못했습니다. 다시 시도해 주세요",
+    "questions": {
+      "bestFriendName": "가장 친한 친구의 이름은?",
+      "primarySchool": "다녔던 초등학교 이름은?",
+      "firstTeacher": "초등학교 담임 선생님의 이름은?",
+      "childhoodNickname": "어릴 적 별명은?",
+      "birthCity": "태어난 도시는?",
+      "firstPetName": "처음 키운 반려동물의 이름은?",
+      "motherName": "어머니의 이름은?",
+      "fatherName": "아버지의 이름은?"
     }
   }
 }

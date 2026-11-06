@@ -306,6 +306,7 @@ function PrivacySettingsContent() {
         }
         sections={[
           {
+            titleKey: 'settingsDetails.privacy.chatSection',
             rows: [
               {
                 id: 'self-destruct',
@@ -345,6 +346,7 @@ function PrivacySettingsContent() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.presenceSection',
             rows: [
               {
                 id: 'online-time',
@@ -382,6 +384,7 @@ function PrivacySettingsContent() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.profileVisibilitySection',
             rows: [
               {
                 id: 'show-phone',
@@ -420,6 +423,7 @@ function PrivacySettingsContent() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.contactSection',
             rows: [
               {
                 id: 'add-me-methods',

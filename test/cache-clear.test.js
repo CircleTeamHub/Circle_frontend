@@ -37,8 +37,15 @@ function loadCacheModule(rnfsMock) {
         };
       }
 
-      if (request === 'expo-sqlite') {
-        return { defaultDatabaseDirectory: '/app/documents/SQLite' };
+      if (request === '@/chat-core/local-db') {
+        return { CHAT_DATABASE_DIRECTORY: '/app/documents/SQLite' };
+      }
+
+      if (request === '@/storage/page-snapshots') {
+        return {
+          clearPageSnapshots() {},
+          getPageSnapshotStorageUsage: () => ({ entries: 0, bytes: 0 }),
+        };
       }
 
       if (request === 'react-native') {
@@ -66,6 +73,12 @@ function loadCacheModule(rnfsMock) {
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return context.module.exports;
 }
+
+test('storage statistics keep SQLite out of the shared web dependency graph', () => {
+  const source = fs.readFileSync('src/services/cache/clear-app-cache.ts', 'utf8');
+  // Metro resolves dynamic imports even when a native-only runtime guard skips them.
+  assert.doesNotMatch(source, /['"]expo-sqlite['"]/);
+});
 
 test('clearAppCache removes cache directory contents without clearing persistent storage', async () => {
   const calls = [];

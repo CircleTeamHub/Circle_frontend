@@ -12,6 +12,8 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
+import { Divider } from "@/components/ui/divider";
 import { NavHeader } from "@/components/ui/nav-header";
 import {
   type AuthSession,
@@ -23,45 +25,67 @@ import { getApiErrorMessage } from "@/services/api/errors";
 import { clearLocalSession } from "@/services/auth/session";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 
+const ICON_BOX_SIZE = 32;
+
 const s = StyleSheet.create({
   container: {
     flex: 1,
   },
   content: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+    gap: Spacing.lg,
   },
+  // 所有设备放进同一张卡片，行内分隔线，和其他设置页一致。
   card: {
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    gap: Spacing.sm,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.md,
+    overflow: "hidden",
   },
-  titleRow: {
+  row: {
+    minHeight: 64,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.md,
+    gap: 12,
+  },
+  iconBox: {
+    width: ICON_BOX_SIZE,
+    height: ICON_BOX_SIZE,
+    borderRadius: Radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dividerInset: {
+    marginLeft: ICON_BOX_SIZE + 12,
   },
   titleBlock: {
     flex: 1,
-    gap: 4,
+    gap: Spacing.xs,
+  },
+  titleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  titleText: {
+    flexShrink: 1,
   },
   badge: {
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: Spacing.md,
+    borderRadius: Radius.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   button: {
-    minHeight: 40,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
+    minHeight: 32,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  pressed: {
+    opacity: 0.6,
   },
   footerButton: {
     minHeight: 48,
@@ -85,6 +109,16 @@ function formatDate(value: string, fallback: string) {
 
 function getDeviceTitle(session: AuthSession, fallback: string) {
   return session.deviceName?.trim() || session.userAgent?.trim() || fallback;
+}
+
+// 只看设备名 / UA 里的平台字样选个图标，认不出就用通用图标。
+function getDeviceIcon(session: AuthSession): keyof typeof Ionicons.glyphMap {
+  const text = `${session.deviceName ?? ""} ${session.userAgent ?? ""}`;
+  if (/iphone|ipad|ios|android/i.test(text)) return "phone-portrait-outline";
+  if (/mac|windows|linux|mozilla|chrome|safari|firefox|edge|web/i.test(text)) {
+    return "laptop-outline";
+  }
+  return "hardware-chip-outline";
 }
 
 export default function LoginDeviceManagementScreen() {
@@ -112,28 +146,27 @@ export default function LoginDeviceManagementScreen() {
       title: {
         color: colors.text,
         ...Typography.body,
-        fontWeight: "700" as const,
       },
       caption: {
         color: colors.textSecondary,
-        ...Typography.caption,
+        ...Typography.small,
+      },
+      iconBox: {
+        backgroundColor: colors.primaryLight,
       },
       badge: {
         backgroundColor: colors.primary,
       },
       badgeText: {
         color: colors.white,
-        ...Typography.caption,
-        fontWeight: "700" as const,
+        ...Typography.tiny,
       },
       button: {
-        borderWidth: 1,
         borderColor: colors.error,
       },
       buttonText: {
         color: colors.error,
         ...Typography.caption,
-        fontWeight: "700" as const,
       },
       footerButton: {
         backgroundColor: colors.error,
@@ -182,6 +215,12 @@ export default function LoginDeviceManagementScreen() {
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  // 本机排第一，其余按服务端顺序。
+  const orderedSessions = useMemo(
+    () => [...sessions].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+    [sessions],
+  );
 
   async function revokeSession(session: AuthSession) {
     setSubmittingId(session.id);
@@ -281,56 +320,76 @@ export default function LoginDeviceManagementScreen() {
             </Text>
           </View>
         ) : (
-          sessions.map((session) => (
-            <View key={session.id} style={[s.card, d.card]}>
-              <View style={s.titleRow}>
-                <View style={s.titleBlock}>
-                  <Text style={d.title}>
-                    {getDeviceTitle(
-                      session,
-                      t(
-                        "settingsDetails.accountSecurity.deviceManagement.unknownDevice",
-                      ),
-                    )}
-                  </Text>
-                  <Text style={d.caption}>
-                    {formatDate(
-                      session.lastUsedAt,
-                      t(
-                        "settingsDetails.accountSecurity.deviceManagement.unknownTime",
-                      ),
-                    )}
-                  </Text>
-                </View>
-                {session.isCurrent ? (
-                  <View style={[s.badge, d.badge]}>
-                    <Text style={d.badgeText}>
-                      {t(
-                        "settingsDetails.accountSecurity.deviceManagement.current",
+          <View style={[s.card, d.card]}>
+            {orderedSessions.map((session, index) => (
+              <View key={session.id}>
+                <View style={s.row}>
+                  <View style={[s.iconBox, d.iconBox]}>
+                    <Ionicons name={getDeviceIcon(session)} size={18} color={colors.iconAccent} />
+                  </View>
+                  <View style={s.titleBlock}>
+                    <View style={s.titleLine}>
+                      <Text style={[s.titleText, d.title]} numberOfLines={1}>
+                        {getDeviceTitle(
+                          session,
+                          t(
+                            "settingsDetails.accountSecurity.deviceManagement.unknownDevice",
+                          ),
+                        )}
+                      </Text>
+                      {session.isCurrent ? (
+                        <View style={[s.badge, d.badge]}>
+                          <Text style={d.badgeText}>
+                            {t(
+                              "settingsDetails.accountSecurity.deviceManagement.current",
+                            )}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={d.caption}>
+                      {formatDate(
+                        session.lastUsedAt,
+                        t(
+                          "settingsDetails.accountSecurity.deviceManagement.unknownTime",
+                        ),
                       )}
                     </Text>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      session.isCurrent
+                        ? t("settingsDetails.accountSecurity.deviceManagement.logoutCurrent")
+                        : t("settingsDetails.accountSecurity.deviceManagement.remove")
+                    }
+                    style={({ pressed }) => [s.button, d.button, pressed ? s.pressed : null]}
+                    disabled={submittingId !== null}
+                    onPress={() => confirmRevokeSession(session)}
+                  >
+                    {submittingId === session.id ? (
+                      <ActivityIndicator size="small" color={colors.error} />
+                    ) : (
+                      <Text style={d.buttonText}>
+                        {session.isCurrent
+                          ? t(
+                              "settingsDetails.accountSecurity.deviceManagement.logoutCurrent",
+                            )
+                          : t(
+                              "settingsDetails.accountSecurity.deviceManagement.remove",
+                            )}
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+                {index < orderedSessions.length - 1 ? (
+                  <View style={s.dividerInset}>
+                    <Divider />
+                  </View>
                 ) : null}
               </View>
-              <View style={s.actions}>
-                <Pressable
-                  style={[s.button, d.button]}
-                  disabled={submittingId !== null}
-                  onPress={() => confirmRevokeSession(session)}
-                >
-                  <Text style={d.buttonText}>
-                    {session.isCurrent
-                      ? t(
-                          "settingsDetails.accountSecurity.deviceManagement.logoutCurrent",
-                        )
-                      : t(
-                          "settingsDetails.accountSecurity.deviceManagement.remove",
-                        )}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
         {error ? <Text style={d.error}>{error}</Text> : null}
         <Pressable

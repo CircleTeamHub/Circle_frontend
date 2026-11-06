@@ -76,6 +76,11 @@ test('an avatar PATCH response cannot replace the newly logged-in account', asyn
   expect(mockSetUser).not.toHaveBeenCalled();
 });
 
+test('the profile row accessible name includes its current field value', () => {
+  render(<SettingsScreen />);
+  expect(screen.getByRole('button', { name: 'profileFields.nickname, Ada' })).toBeTruthy();
+});
+
 test('email opens the password and mailbox verification screen', () => {
   render(<SettingsScreen />);
   fireEvent.press(screen.getByText('profileFields.email'));

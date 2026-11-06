@@ -42,8 +42,11 @@ import { PushNotificationRouteHandler } from '@/features/notifications/component
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
-import { registerDeviceIdProvider } from '@/services/api/client';
-import { getDeviceId } from '@/services/auth/device-id';
+import {
+  registerDeviceIdProvider,
+  registerStableDeviceIdProvider,
+} from '@/services/api/client';
+import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
@@ -85,6 +88,7 @@ silenceDomBridgeRejection();
 
 // 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
 registerDeviceIdProvider(getDeviceId);
+registerStableDeviceIdProvider(getStableDeviceId);
 
 async function registerLiveKitGlobals() {
   if (!NativeModules.WebRTCModule) {

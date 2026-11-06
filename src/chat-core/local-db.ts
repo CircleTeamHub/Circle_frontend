@@ -4,6 +4,8 @@ import { getRandomBytesAsync } from 'expo-crypto';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
 import { reportHandledFailure } from '@/observability/report-failure';
 
+export const CHAT_DATABASE_DIRECTORY = SQLite.defaultDatabaseDirectory;
+
 /**
  * G-01 本地持久化:把 OpenIM SDK 当年内置的本地消息库补回来。
  *

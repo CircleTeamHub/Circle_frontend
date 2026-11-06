@@ -259,6 +259,30 @@ export function registerDeviceIdProvider(provider: DeviceIdProvider | null) {
   deviceIdProvider = provider;
 }
 
+// 续签时另报安卓的稳定设备 ID：老安装（随机 ID）借此在服务端登记重装后会用的 ID。
+let stableDeviceIdProvider: DeviceIdProvider | null = null;
+
+export function registerStableDeviceIdProvider(provider: DeviceIdProvider | null) {
+  stableDeviceIdProvider = provider;
+}
+
+// 稳定 ID 只是顺带上报（这次没报，下次续签再报），绝不能为它拖住续签：
+// 续签是单例，它卡住所有等着 401 重试的请求都跟着挂住。
+const STABLE_DEVICE_ID_WAIT_MS = 1_000;
+
+async function readStableDeviceId(): Promise<string | null> {
+  if (!stableDeviceIdProvider) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const giveUp = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), STABLE_DEVICE_ID_WAIT_MS);
+  });
+  try {
+    return await Promise.race([stableDeviceIdProvider().catch(() => null), giveUp]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
@@ -478,6 +502,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
+    const stableDeviceId = await readStableDeviceId();
     const { res, payload, requestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
@@ -487,6 +512,9 @@ async function refreshAccessToken(sessionEpoch: number) {
         method: 'POST',
         body: { refreshToken },
         auth: false,
+        ...(stableDeviceId
+          ? { headers: { 'X-Stable-Device-Id': stableDeviceId } }
+          : {}),
       }
     );
     const tokens = unwrapResponse(res, payload, {

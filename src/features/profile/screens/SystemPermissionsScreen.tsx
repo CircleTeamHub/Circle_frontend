@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
@@ -10,7 +10,7 @@ import {
   requestRecordingPermissionsAsync,
 } from 'expo-audio';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { openSystemSettings } from '@/utils/open-system-settings';
 
@@ -46,14 +46,14 @@ const INITIAL_PERMISSIONS = Object.fromEntries(
 ) as PermissionState;
 
 const s = StyleSheet.create({
-  footer: {
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
   settingsButton: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
+    minHeight: 48,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsButtonPressed: {
+    opacity: 0.7,
   },
 });
 
@@ -196,35 +196,35 @@ export default function SystemPermissionsScreen() {
           icon: permissionIcon(id),
           iconColor: colors.iconAccent,
           iconBackgroundColor: colors.primaryLight,
-          statusColor: colors.iconAccent,
+          // 已授权绿、未授权灰，一眼分得出哪项还没开。
+          statusColor: granted ? colors.success : colors.textSecondary,
           onPress: async () => {
             await requestPermission(id);
             await refreshPermissions();
           },
         };
       }),
-    [colors.iconAccent, colors.primaryLight, permissions, refreshPermissions],
+    [colors.iconAccent, colors.primaryLight, colors.success, colors.textSecondary, permissions, refreshPermissions],
   );
 
   return (
     <SettingsDetailScreen
       titleKey="settingsDetails.permissions.title"
-      sections={[{ rows }]}
+      sections={[{ footerKey: 'settingsDetails.permissions.onlyVisibleAuthorized', rows }]}
       footer={
-        <View style={s.footer}>
-          <Text style={{ color: colors.primary, ...Typography.body }}>
-            {t('settingsDetails.permissions.onlyVisibleAuthorized')}
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            s.settingsButton,
+            { backgroundColor: colors.primary },
+            pressed ? s.settingsButtonPressed : null,
+          ]}
+          onPress={() => void openSystemSettings()}
+        >
+          <Text style={{ color: colors.white, ...Typography.body, fontWeight: '600' }}>
+            {t('settingsDetails.permissions.openSystemSettings')}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            style={[s.settingsButton, { backgroundColor: colors.primary }]}
-            onPress={() => void openSystemSettings()}
-          >
-            <Text style={{ color: colors.white, ...Typography.h3 }}>
-              {t('settingsDetails.permissions.openSystemSettings')}
-            </Text>
-          </Pressable>
-        </View>
+        </Pressable>
       }
     />
   );

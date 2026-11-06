@@ -93,6 +93,7 @@ export default function AppearanceSettingsScreen() {
         titleKey="settingsDetails.appearance.title"
         sections={[
           {
+            titleKey: 'settingsDetails.appearance.displaySection',
             rows: [
               {
                 id: 'theme-mode',
@@ -106,6 +107,11 @@ export default function AppearanceSettingsScreen() {
                 valueText: t(`appSettings.languageSheet.${languagePreference}`),
                 onPress: () => setLanguageSheetVisible(true),
               },
+            ],
+          },
+          {
+            titleKey: 'settingsDetails.appearance.chatSection',
+            rows: [
               {
                 id: 'global-chat-background',
                 labelKey: 'settingsDetails.appearance.globalChatBackground',
@@ -131,6 +137,11 @@ export default function AppearanceSettingsScreen() {
                 value: mergeAvatar,
                 onValueChange: (value) => setSetting('mergeAvatar', value),
               },
+            ],
+          },
+          {
+            titleKey: 'settingsDetails.appearance.conversationListSection',
+            rows: [
               {
                 id: 'pinned-fold-count',
                 labelKey: 'settingsDetails.appearance.pinnedFoldCount',

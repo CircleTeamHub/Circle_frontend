@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
+const { loadTsModule } = require("./helpers/load-ts-module");
 
 function loadAuthApi(apiClientMock) {
   const filePath = path.join(process.cwd(), "src/services/api/auth.ts");
@@ -66,6 +67,10 @@ function loadAuthApi(apiClientMock) {
             }
           },
         };
+      }
+
+      if (request === "@/features/auth/security-questions") {
+        return loadTsModule("src/features/auth/security-questions.ts");
       }
 
       throw new Error(`Unexpected import: ${request}`);

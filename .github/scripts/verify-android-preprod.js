@@ -6,9 +6,21 @@ const BASE_APP_CONFIG = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../app.json'), 'utf8'),
 ).expo;
 
+// 预发包每次推 main 都会发一版。versionCode 必须逐版变大：一样的话，已装的手机点新包
+// 只会「打开」、装不上去，只能卸载重装 —— 登录态和设备 ID 也跟着没了。取「基数 + 这次
+// 构建的提交在 main 上的提交数」：main 只往前走，新版本号必然更大；同一提交重建得到同一个号。
+// 基数让它高过 app.json 原来的 1000001（已经装着那一版的手机也能直接覆盖）。
+const PREPROD_VERSION_CODE_BASE = 100_000_000;
+
+function preprodVersionCode(commitCount) {
+  if (!Number.isSafeInteger(commitCount) || commitCount < 1) {
+    throw new Error(`commit count must be a positive integer, got ${commitCount}`);
+  }
+  return PREPROD_VERSION_CODE_BASE + commitCount;
+}
+
 const EXPECTED = Object.freeze({
   version: BASE_APP_CONFIG.version,
-  versionCode: BASE_APP_CONFIG.android?.versionCode,
   packageName: 'com.yiboding.circleim.preprod',
   appName: '风信测试版',
   appVariant: 'preprod',
@@ -59,8 +71,16 @@ function validateMetadata({ app, env }) {
   if (app?.version !== EXPECTED.version) {
     errors.push(`App version must be ${EXPECTED.version}.`);
   }
-  if (app?.android?.versionCode !== EXPECTED.versionCode) {
-    errors.push(`Android versionCode must be ${EXPECTED.versionCode}.`);
+  const derivedVersionCode = Number(env.ANDROID_PREPROD_VERSION_CODE);
+  if (
+    !Number.isSafeInteger(derivedVersionCode) ||
+    derivedVersionCode <= PREPROD_VERSION_CODE_BASE
+  ) {
+    errors.push(
+      'ANDROID_PREPROD_VERSION_CODE must be derived from main history (verify-android-preprod.js version-code).',
+    );
+  } else if (app?.android?.versionCode !== derivedVersionCode) {
+    errors.push(`Android versionCode must be ${derivedVersionCode}.`);
   }
   if (app?.android?.package !== EXPECTED.packageName) {
     errors.push(`Android package must be ${EXPECTED.packageName}.`);
@@ -175,13 +195,28 @@ function main(argv = process.argv.slice(2)) {
     verifyApk(argument);
     return;
   }
+  if (command === 'version-code') {
+    const git = (...args) => {
+      const result = spawnSync('git', args, { encoding: 'utf8' });
+      if (result.status !== 0) {
+        throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+      }
+      return result.stdout.trim();
+    };
+    // 浅克隆只数得到 1 个提交，版本号会倒退成装不上去的旧号：必须是完整历史。
+    if (git('rev-parse', '--is-shallow-repository') !== 'false') {
+      throw new Error('version-code needs full history (actions/checkout fetch-depth: 0).');
+    }
+    process.stdout.write(`${preprodVersionCode(Number(git('rev-list', '--count', 'HEAD')))}\n`);
+    return;
+  }
   if (command === 'manifest') {
     const contents = fs.readFileSync(argument, 'utf8');
     failOnErrors(validateAndroidManifest(contents));
     return;
   }
   throw new Error(
-    'Usage: verify-android-preprod.js <metadata|manifest|apk> [file-path]',
+    'Usage: verify-android-preprod.js <metadata|manifest|apk|version-code> [file-path]',
   );
 }
 
@@ -196,7 +231,9 @@ if (require.main === module) {
 
 module.exports = {
   EXPECTED,
+  PREPROD_VERSION_CODE_BASE,
   main,
+  preprodVersionCode,
   validateApkContents,
   validateAndroidManifest,
   validateMetadata,

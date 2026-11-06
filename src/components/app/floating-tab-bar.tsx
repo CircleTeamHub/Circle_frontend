@@ -145,6 +145,7 @@ type TabBarStyles = {
   featuredGlow: ViewStyle;
   featuredSurface: ViewStyle;
   featuredFill: ViewStyle;
+  featuredRim: ViewStyle;
   featuredBadge: ViewStyle;
   badge: ViewStyle;
   badgeText: TextStyle;
@@ -395,8 +396,7 @@ const FeaturedTabButton = memo(function FeaturedTabButton({
           styles={styles}
           surfaceStyle={styles.featuredSurface}
         >
-          {/* 用百分比画圆:玻璃面带 1pt 描边,里面能画的只有 58×58。按 60 写死圆心/半径,
-              右边和下边会被裁掉一截,看着像被压扁。百分比让它总是内切在可画区域里。 */}
+          {/* 用百分比画圆,总是内切在圆面里;圆面本身不带描边(见 featuredSurface)。 */}
           <Svg
             style={styles.featuredFill}
             width="100%"
@@ -414,6 +414,7 @@ const FeaturedTabButton = memo(function FeaturedTabButton({
           </Svg>
           {/* 选中与否都保持紫色;选中时纸飞机填实,提示当前在圈子。 */}
           <PlaneLogoIcon size={TAB_FEATURED_LOGO_SIZE} color={colors.white} filled={focused} />
+          <View pointerEvents="none" style={styles.featuredRim} />
         </TabBarSurface>
         {badgeCount > 0 ? (
           <View style={[styles.badge, styles.featuredBadge]}>
@@ -810,9 +811,10 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
         }
       : {},
     // 复用 bar 的玻璃材质,只把外形换成等高的正圆(圆角 = bar 的圆角)。
+    // 圆面不带布局描边:描边会把内容挤进 58×58,玻璃里的渐变圆就被裁掉右下一截(深色实机)。
     featuredSurface: {
       flex: 0,
-      borderWidth: resolvedMode === 'light' ? 0 : 1,
+      borderWidth: 0,
       width: TAB_FEATURED_SIZE,
       height: TAB_FEATURED_SIZE,
       borderRadius: TAB_FEATURED_SIZE / 2,
@@ -822,6 +824,13 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
     },
     featuredFill: {
       ...StyleSheet.absoluteFillObject,
+    },
+    // 深色模式的亮边:盖在渐变之上的覆盖圈,不占布局;浅色不画。
+    featuredRim: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: TAB_FEATURED_SIZE / 2,
+      borderWidth: resolvedMode === 'light' ? 0 : 1,
+      borderColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.34)' : colors.surfaceBorder,
     },
     featuredBadge: {
       top: 0,

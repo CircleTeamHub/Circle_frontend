@@ -90,7 +90,10 @@
       "logout": "ログアウト",
       "cancelAccount": "アカウントを削除",
       "singleDeviceStatusFailed": "単一端末ログインの状態を取得できません。再試行してください。",
-      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。"
+      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。",
+      "securityQuestions": "秘密の質問",
+      "securityQuestionsSet": "設定済み",
+      "securityQuestionsNotSet": "未設定"
     },
     "notifications": {
       "title": "通知",
@@ -175,7 +178,10 @@
       "showCollapsedPinned": "残り{{count}}件のピン留めを表示",
       "unlimited": "無制限",
       "batteryOptimization": "バッテリー最適化の案内",
-      "batteryOptimizationHint": "Androidのみ有効。オフにするとバックグラウンド権限の案内は表示されません"
+      "batteryOptimizationHint": "Androidのみ有効。オフにするとバックグラウンド権限の案内は表示されません",
+      "displaySection": "表示",
+      "chatSection": "チャット",
+      "conversationListSection": "トーク一覧"
     },
     "privacy": {
       "title": "プライバシー",
@@ -229,7 +235,12 @@
         "shareCard": "個人カードを共有"
       },
       "unavailable": "利用不可",
-      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。"
+      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。",
+      "chatSection": "チャットとモーメンツ",
+      "presenceSection": "オンライン・入力中の表示",
+      "profileVisibilitySection": "プロフィールの公開",
+      "contactSection": "追加と招待",
+      "blacklistBlockedAt": "{{date}} にブロック"
     },
     "permissions": {
       "title": "システム権限",
@@ -242,13 +253,13 @@
       "bluetooth": "Bluetooth",
       "authorized": "許可済み",
       "unauthorized": "未許可",
-      "onlyVisibleAuthorized": "確認できる権限のみ表示します",
+      "onlyVisibleAuthorized": "項目をタップすると許可をリクエストします。一度拒否した権限はシステム設定でオンにしてください。",
       "openSystemSettings": "システム設定を開く",
       "browserSettingsHint": "ブラウザーのアドレスバーにあるサイト設定から、通知・カメラ・マイクなどの権限を変更してください。",
       "openSettingsFailed": "システム設定を開けません。端末の設定からこのアプリの権限を開いてください。"
     },
     "storage": {
-      "title": "設定",
+      "title": "ストレージとキャッシュ",
       "storageSpace": "ストレージ容量",
       "clearCache": "キャッシュを削除",
       "cacheSize": "計算中...",
@@ -261,15 +272,16 @@
       "clearCacheFailedMessage": "現在キャッシュを削除できません。後でもう一度お試しください。",
       "clearAllChats": "すべてのチャット履歴を削除",
       "clearAllChatsAction": "削除",
-      "clearAllChatsWarning": "この端末のローカルなチャット履歴のみを削除します。サーバーの履歴は削除されず、同期後に一部の履歴が戻る場合があります。",
+      "clearAllChatsWarning": "このアカウントのすべての端末のトーク履歴を削除します。元に戻せません。他の参加者の履歴には影響しません。",
       "clearAllChatsDone": "チャット履歴を削除しました",
-      "clearAllChatsDoneMessage": "この端末のローカルなチャット履歴を削除しました。",
+      "clearAllChatsDoneMessage": "このアカウントのすべての端末のトーク履歴を削除しました。",
       "clearAllChatsPartialTitle": "一部のチャットを消去できませんでした",
       "clearAllChatsPartialMessage": "{{count}} 件のチャットを消去できませんでした（通信の問題の可能性があります）。もう一度「すべてのチャットを消去」を実行してください。",
       "clearAllChatsFailed": "削除に失敗しました",
-      "clearAllChatsFailedMessage": "現在この端末のローカルなチャット履歴を削除できません。後でもう一度お試しください。",
+      "clearAllChatsFailedMessage": "現在トーク履歴を削除できません。後でもう一度お試しください。",
       "switchAccount": "アカウントを切り替え",
-      "logout": "ログアウト"
+      "logout": "ログアウト",
+      "clearSectionHint": "キャッシュを削除してもトーク履歴は残ります。トーク履歴の削除は、このアカウントのすべての端末に反映されます。"
     },
     "storageUsage": {
       "title": "ストレージ容量",
@@ -2581,7 +2593,7 @@
     "tags": "タグ",
     "description": "説明",
     "permission": "友だちの権限",
-    "moreInfo": "詳細情報",
+    "moreInfo": "友だち設定",
     "editProfile": "プロフィールを編集",
     "fieldNotEditable": "この項目は編集できません",
     "returnToSettings": "設定に戻ってください。",
@@ -2805,7 +2817,7 @@
         "label": "システム権限"
       },
       "clearCache": {
-        "label": "キャッシュを削除"
+        "label": "ストレージとキャッシュ"
       },
       "about": {
         "label": "私たちについて"
@@ -3010,7 +3022,10 @@
       "recoveryWaiting": "復旧を申請しました。{{time}} 以降にこのデバイスで再度ログインするとアカウントに入れます。その間、信頼済みデバイスに通知が届き、拒否することができます。",
       "recoveryReady": "待機期間が終わりました。ログイン画面に戻り、このデバイスでパスワードを入力して復旧を完了してください。",
       "recoveryGoLogin": "ログインへ",
-      "recoveryUnderstood": "了解"
+      "recoveryUnderstood": "了解",
+      "useSecurityQuestions": "信頼済みデバイスが手元にない場合は秘密の質問で認証",
+      "securityQuestionsIntro": "設定した 2 つの秘密の質問に答えて認証を完了してください。",
+      "securityQuestionsRetry": "秘密の質問を読み込めませんでした。タップして再試行してください。"
     }
   },
   "media": {
@@ -3737,7 +3752,10 @@
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
     "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません",
     "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください",
-    "CHAT_GROUP_JOIN_BLOCKED": "このアカウントはこのグループに参加できません"
+    "CHAT_GROUP_JOIN_BLOCKED": "このアカウントはこのグループに参加できません",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "異なる質問を 2 つ選び、答えを入力してください",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "秘密の質問が設定されていません。信頼済みデバイスでログインを確認してください",
+    "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3953,6 +3971,27 @@
       "policy": "権限変更",
       "application": "参加申請",
       "blacklist": "参加禁止"
+    }
+  },
+  "securityQuestions": {
+    "title": "秘密の質問",
+    "intro": "自分だけが答えを知っている質問を 2 つ設定します。信頼済みデバイスがすべて使えないとき（アプリの再インストールや端末の紛失など）、新しいデバイスのログイン認証画面で答えると認証できます。",
+    "introReplace": "秘密の質問は設定済みです。保存し直すと、以前の質問と答えは置き換えられます。",
+    "slotLabel": "質問 {{number}}",
+    "pickQuestion": "質問を選択",
+    "answerPlaceholder": "答えを入力",
+    "answerHint": "答えは大文字・小文字とスペースを区別しません。自分しか知らず、他人が調べられない答えを選んでください。",
+    "incomplete": "質問を 2 つ選び、答えを入力してください",
+    "saveFailed": "保存できませんでした。もう一度お試しください",
+    "questions": {
+      "bestFriendName": "親友の名前は？",
+      "primarySchool": "通っていた小学校の名前は？",
+      "firstTeacher": "小学校の担任の先生の名前は？",
+      "childhoodNickname": "子どもの頃のあだ名は？",
+      "birthCity": "生まれた都市は？",
+      "firstPetName": "最初に飼ったペットの名前は？",
+      "motherName": "母親の名前は？",
+      "fatherName": "父親の名前は？"
     }
   }
 }

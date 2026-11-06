@@ -40,7 +40,7 @@ import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { fetchFriends, friendsMutatedSince } from '@/services/api/friends';
-import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
+import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
@@ -1735,15 +1735,15 @@ export default function MessagesScreen() {
             <Text style={[s.selectionActionLabel, { color: colors.white }]}>{t('messages.swipeMarkRead')}</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [s.selectionActionButton, { backgroundColor: withAlpha(colors.dangerFill, 0.1), opacity: pressed ? 0.7 : 1 }, selectedConversations.length === 0 && s.selectionActionDisabled]}
+            style={({ pressed }) => [s.selectionActionButton, { backgroundColor: colors.dangerFill, opacity: pressed ? 0.8 : 1 }, selectedConversations.length === 0 && s.selectionActionDisabled]}
             accessibilityRole="button"
             accessibilityLabel={t('messages.swipeDelete')}
             accessibilityState={{ busy: batchDeleting }}
             disabled={batchDeleting || selectedConversations.length === 0}
             onPress={handleDeleteSelected}
           >
-            {batchDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : <Ionicons name="trash-outline" size={20} color={colors.danger} />}
-            <Text style={[s.selectionActionLabel, { color: colors.danger }]}>{t('messages.swipeDelete')}</Text>
+            {batchDeleting ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="trash-outline" size={20} color={colors.white} />}
+            <Text style={[s.selectionActionLabel, { color: colors.white }]}>{t('messages.swipeDelete')}</Text>
           </Pressable>
         </View>
       </View> : null}

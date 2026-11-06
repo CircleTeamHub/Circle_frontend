@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCheck, Search } from 'lucide-react-native';
-import { Alert, BackHandler, Modal } from 'react-native';
+import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
 import { markConversationRead } from '@/chat-core/socket-manager';
@@ -183,6 +183,14 @@ test('selection hides tab navigation and restores it on cancel and unmount', () 
   startSelection();
   view.unmount();
   expect(mockSetTabOptions).toHaveBeenLastCalledWith({ tabBarStyle: undefined });
+});
+
+test('the selection footer delete button is a solid red fill, not a faint tint', () => {
+  render(<MessagesScreen />);
+  startSelection();
+  selectRow('first');
+  const style = StyleSheet.flatten(screen.getByRole('button', { name: 'messages.swipeDelete' }).props.style);
+  expect(style.backgroundColor).toBe(mockColors.dangerFill);
 });
 
 test('switching accounts exits selection and restores tab navigation', () => {

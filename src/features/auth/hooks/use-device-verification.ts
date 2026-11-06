@@ -16,6 +16,7 @@ import {
   resendLoginChallenge,
   verifyLoginChallengeCode,
   verifyLoginChallengeSecurityCode,
+  verifyLoginChallengeSecurityQuestions,
   type AuthTokens,
   type LoginChallengeStatus,
 } from '@/services/api/auth';
@@ -211,6 +212,17 @@ export function useDeviceVerification({
     [challengeId, run],
   );
 
+  const submitSecurityAnswers = useCallback(
+    (answers: string[]) =>
+      run(() =>
+        verifyLoginChallengeSecurityQuestions(
+          challengeId,
+          answers.map((answer) => answer.trim()),
+        ),
+      ),
+    [challengeId, run],
+  );
+
   const resend = useCallback(async () => {
     if (inFlightRef.current || verifiedTokensRef.current) return;
     inFlightRef.current = true;
@@ -266,6 +278,8 @@ export function useDeviceVerification({
         : expiresAt - now;
 
   return {
+    /** 当前验证单：重新发起后会换成新单。 */
+    challengeId,
     phase,
     remainingSeconds: Math.max(0, Math.ceil(remainingMs / 1000)),
     submitting,
@@ -273,6 +287,7 @@ export function useDeviceVerification({
     submitCode,
     completionPending,
     submitSecurityCode,
+    submitSecurityAnswers,
     resend,
     requestRecovery,
     /** 找回可完成的时间（毫秒时间戳）；没申请为 null。 */
