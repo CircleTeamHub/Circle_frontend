@@ -66,12 +66,12 @@ export async function ensureCircleConversation(
 }
 
 /** 创建独立群聊并写入会话缓存(建群页提交入口)。群名必填。 */
-export async function createGroupConversation(input: {
-  name: string;
-  memberIds: string[];
-}): Promise<EnsuredConversation> {
+export async function createGroupConversation(
+  input: { name: string; memberIds: string[] },
+  options: { idempotencyKey: string },
+): Promise<EnsuredConversation> {
   const epoch = useAuthStore.getState().sessionEpoch;
-  const dto = await createGroupChatConversation(input);
+  const dto = await createGroupChatConversation(input, options);
   if (useAuthStore.getState().sessionEpoch === epoch) {
     useChatStore.getState().upsertConversation(dto);
   }

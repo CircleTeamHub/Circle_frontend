@@ -555,6 +555,22 @@ test('empty moment comments use the backend error contract in every locale', () 
   }
 });
 
+// 建群/建圈/发动态/评论/发帖带 Idempotency-Key:服务端的三个幂等错误码要能本地化,
+// 尤其「还在处理」不能落回「请重试」这类泛化文案 —— 那正是在催用户重复提交。
+test('idempotency error codes are whitelisted and localized in every locale', () => {
+  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
+  const CODES = ['IDEMPOTENCY_IN_PROGRESS', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_KEY_INVALID'];
+  for (const code of CODES) {
+    assert.ok(SERVER_ERROR_CODES.includes(code), `SERVER_ERROR_CODES must include ${code}`);
+  }
+  for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(readLocale(lng));
+    for (const code of CODES) {
+      assert.equal(typeof bundle.serverErrors[code], 'string', `${lng}.json serverErrors.${code}`);
+    }
+  }
+});
+
 // 回归：会员分支曾误删这几个与 VIP 无关的既有 code（及其全部译文），导致 temp-chat / note /
 // upload / collection 流收到这些响应时 getApiErrorMessage 落回泛化 fallback、丢掉可操作的
 // 本地化原因。这些必须始终留在白名单且五语齐全（#131 review）。

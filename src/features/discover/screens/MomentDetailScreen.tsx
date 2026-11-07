@@ -32,7 +32,6 @@ import {
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import {
-  toggleMomentLike,
   addMomentComment,
   fetchMomentById,
   deleteMoment,
@@ -47,6 +46,9 @@ import { markMatchingTargetNotificationsRead } from '@/features/notifications/ut
 import type { MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { readPageSnapshot } from '@/storage/page-snapshots';
+import { toggleMomentLikeOnce } from '@/features/discover/utils/moment-like';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 
 // Unified icon scale for the post action row so like / comment read as one
 // system instead of 26 / 24.
@@ -191,6 +193,8 @@ function MomentDetailContent() {
   const mountedRef = useRef(true);
   const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
+  // 同一条评论(同内容、同回复对象、同图)重试沿用同一个幂等键。
+  const [commentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
   const listRef = useRef<FlatListType<MomentCommentRow>>(null);
   const scrolledToTargetCommentRef = useRef<string | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(
@@ -299,25 +303,17 @@ function MomentDetailContent() {
     [colors],
   );
 
-  const handleLike = useCallback(async () => {
+  const handleLike = useCallback(() => {
     if (!post) return;
-    const optimisticLiked = !post.isLikedByMe;
-    const optimisticCount = post.likeCount + (optimisticLiked ? 1 : -1);
-
-    setPost((p) => p ? { ...p, isLikedByMe: optimisticLiked, likeCount: optimisticCount } : p);
-    storeToggleLike(post.id, optimisticLiked, optimisticCount);
-
-    try {
-      const result = await toggleMomentLike(post.id);
-      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-      setPost((p) => p ? { ...p, isLikedByMe: result.liked, likeCount: result.likeCount } : p);
-      storeToggleLike(post.id, result.liked, result.likeCount);
-    } catch (error) {
-      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-      setPost((p) => p ? { ...p, isLikedByMe: post.isLikedByMe, likeCount: post.likeCount } : p);
-      storeToggleLike(post.id, post.isLikedByMe, post.likeCount);
-      reportHandledFailure('moments', 'toggleLike', error);
-    }
+    void toggleMomentLikeOnce(
+      post.id,
+      { liked: post.isLikedByMe, likeCount: post.likeCount },
+      (state) => {
+        if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        setPost((p) => p ? { ...p, isLikedByMe: state.liked, likeCount: state.likeCount } : p);
+        storeToggleLike(post.id, state.liked, state.likeCount);
+      },
+    ).catch((error) => reportHandledFailure('moments', 'toggleLike', error));
   }, [post, sessionEpoch, storeToggleLike]);
 
   const handleSubmitComment = useCallback(
@@ -328,13 +324,12 @@ function MomentDetailContent() {
       mentionedUserIds?: string[],
     ) => {
       if (!post) return;
+      const input = { content, replyToId, images, mentionedUserIds };
       try {
-        const comment = await addMomentComment(post.id, {
-          content,
-          replyToId,
-          images,
-          mentionedUserIds,
-        });
+        const comment = await commentKeys.run(
+          JSON.stringify([post.id, input]),
+          (idempotencyKey) => addMomentComment(post.id, input, { idempotencyKey }),
+        );
         if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         setPost((p) =>
           p
@@ -366,7 +361,7 @@ function MomentDetailContent() {
         throw error;
       }
     },
-    [post, sessionEpoch, storeAddComment, t],
+    [commentKeys, post, sessionEpoch, storeAddComment, t],
   );
 
   const timeLabel = useMemo(

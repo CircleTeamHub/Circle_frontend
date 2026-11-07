@@ -41,3 +41,31 @@ test('every circle write goes through the marker with a static apiClient path', 
   assert.ok(writes.length > 0);
   assert.equal(marked.length, writes.length, 'wrap every circle write in markCircleWrite');
 });
+
+test('createCircle sends the caller\'s Idempotency-Key', async () => {
+  const calls = [];
+  const circles = loadTsModule('src/services/api/circles.ts', {
+    requireShim: (request) => {
+      if (request === '@/services/api/client') {
+        return {
+          apiClient: async (endpoint, options) => {
+            calls.push({ endpoint, options });
+            return { id: 'c1', myRole: 'OWNER', myStatus: 'ACTIVE' };
+          },
+        };
+      }
+      if (request === '@/services/api/utils') {
+        return { allowPeerMediaUrl: (value) => value, buildQuery: () => '' };
+      }
+      if (request === './collect-cursor-pages') {
+        return { collectCursorPages: async () => [] };
+      }
+      return require(request);
+    },
+  });
+
+  await circles.createCircle({ name: 'Hikers', description: 'weekend hikes' }, { idempotencyKey: 'circle-key' });
+
+  assert.equal(calls[0].endpoint, '/circle');
+  assert.deepEqual({ ...calls[0].options.headers }, { 'Idempotency-Key': 'circle-key' });
+});

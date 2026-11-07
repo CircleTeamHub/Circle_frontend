@@ -1,12 +1,20 @@
 import { ensureChatConversations } from '@/chat-core/api';
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 import { GroupAdmissionsList } from './GroupAdmissionsList';
 import { InboxTabsHeader } from '@/features/contacts/components/InboxTabsHeader';
 import { fetchGroupAdmissions, markGroupAdmissionSeen } from '@/services/api/group-admissions';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { fetchMyApplications } from '@/services/api/circles';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { readGroupAdmissionsSnapshot, writeGroupAdmissionsSnapshot } from './group-admissions-cache';
+
+jest.mock('./group-admissions-cache', () => ({
+  readGroupAdmissionsSnapshot: jest.fn(() => null),
+  writeGroupAdmissionsSnapshot: jest.fn(),
+}));
+jest.mock('@/storage/page-snapshots', () => ({ getPageSnapshotRevision: () => 7 }));
 
 const mockAuth = { sessionEpoch: 1, user: { id: 'actor' } };
 const mockPush = jest.fn();
@@ -262,4 +270,61 @@ test('pull-to-refresh retries joined conversations after the initial request fai
   fireEvent(ui.UNSAFE_getByType(FlatList), 'refresh');
   expect(await ui.findByText('恢复的群聊')).toBeTruthy();
   expect(ensureChatConversations).toHaveBeenCalledTimes(2);
+});
+
+const invite = (id: string, name: string) => ({ id, kind: 'INVITE', status: 'INVITED', group: { name, avatarUrl: null } });
+const pending = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+};
+
+// 国内连新加坡时接口常要等好几秒：再进这页先画上次的第一页，后台重拉不转圈，到了再整体替换。
+test('the last first page shows right away from the snapshot and is quietly replaced when the reload lands', async () => {
+  jest.mocked(readGroupAdmissionsSnapshot).mockReturnValueOnce({ items: [invite('old', '旧的群')] as any, circleInvitations: [], nextCursor: null });
+  const reload = pending<any>();
+  jest.mocked(fetchGroupAdmissions).mockReturnValue(reload.promise);
+  const ui = render(<GroupAdmissionsList query="" />);
+
+  expect(ui.getByText(/旧的群/)).toBeTruthy();
+  expect(ui.UNSAFE_getByType(FlatList).props.refreshing).toBe(false);
+  await act(async () => reload.resolve({ items: [invite('new', '新的群')], nextCursor: null }));
+
+  await ui.findByText(/新的群/);
+  expect(ui.queryByText(/旧的群/)).toBeNull();
+  await waitFor(() => expect(writeGroupAdmissionsSnapshot).toHaveBeenCalledWith(
+    1, undefined, { items: [expect.objectContaining({ id: 'new' })], circleInvitations: [], nextCursor: null }, expect.any(Number), 7,
+  ));
+});
+
+test('admissions show as soon as they arrive without waiting for the circle history', async () => {
+  jest.mocked(fetchMyApplications).mockReturnValue(new Promise(() => {}));
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('a', '先到的群')], nextCursor: null } as any);
+  const ui = render(<GroupAdmissionsList query="" />);
+
+  await ui.findByText(/先到的群/);
+  expect(writeGroupAdmissionsSnapshot).not.toHaveBeenCalled();
+});
+
+test('a failed source leaves the previous snapshot untouched', async () => {
+  jest.mocked(fetchMyApplications).mockRejectedValue(new Error('down'));
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('a', '群')], nextCursor: null } as any);
+  render(<GroupAdmissionsList query="" />);
+
+  await waitFor(() => expect(reportHandledFailure).toHaveBeenCalled());
+  expect(writeGroupAdmissionsSnapshot).not.toHaveBeenCalled();
+});
+
+test('only a pull-to-refresh shows the top spinner, and only while it runs', async () => {
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('a', '下拉群')], nextCursor: null } as any);
+  const ui = render(<GroupAdmissionsList query="" />);
+  await ui.findByText('下拉群');
+  const reload = pending<any>();
+  jest.mocked(fetchGroupAdmissions).mockReturnValue(reload.promise);
+
+  act(() => ui.UNSAFE_getByType(FlatList).props.onRefresh());
+  expect(ui.UNSAFE_getByType(FlatList).props.refreshing).toBe(true);
+  await act(async () => reload.resolve({ items: [invite('a', '下拉群')], nextCursor: null }));
+
+  await waitFor(() => expect(ui.UNSAFE_getByType(FlatList).props.refreshing).toBe(false));
 });

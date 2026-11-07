@@ -10,7 +10,7 @@ const { loadTsModule } = require('./helpers/load-ts-module');
 
 // 真模块，不是手抄件：判别逻辑一改，这里跟着变。
 const { ApiError } = loadTsModule('src/services/api/api-error.ts');
-const { isAmbiguousMutationFailure } = loadTsModule(
+const { isAmbiguousMutationFailure, isUnsettledMutationFailure } = loadTsModule(
   'src/services/api/mutation-outcome.ts',
   { requireShim: (request) => (request === './api-error' ? { ApiError } : require(request)) },
 );
@@ -59,4 +59,37 @@ test('不是 ApiError 的抛出值 → 来路不明，保守视为结果不确�
   assert.equal(isAmbiguousMutationFailure(new Error('boom')), true);
   // 形状像但不是 ApiError（比如响应体解析成功后我们自己抛的业务错误）。
   assert.equal(isAmbiguousMutationFailure({ status: 400 }), true);
+});
+
+test('幂等键的第一次请求还在处理（IDEMPOTENCY_IN_PROGRESS）→ 未定，要留着键', () => {
+  assert.equal(
+    isUnsettledMutationFailure(
+      apiError({ status: 409, errorCode: 'IDEMPOTENCY_IN_PROGRESS' }),
+    ),
+    true,
+  );
+  assert.equal(
+    isUnsettledMutationFailure(apiError({ status: 0, failureKind: 'timeout' })),
+    true,
+  );
+  assert.equal(isUnsettledMutationFailure(apiError({ status: 502 })), true);
+});
+
+test('服务端明确拒绝（含同键不同内容、键格式错）→ 已定，键可以作废', () => {
+  assert.equal(
+    isUnsettledMutationFailure(
+      apiError({ status: 409, errorCode: 'IDEMPOTENCY_KEY_REUSED' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUnsettledMutationFailure(
+      apiError({ status: 400, errorCode: 'IDEMPOTENCY_KEY_INVALID' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUnsettledMutationFailure(apiError({ status: 400, errorCode: 'COIN_INSUFFICIENT' })),
+    false,
+  );
 });

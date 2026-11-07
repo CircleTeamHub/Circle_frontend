@@ -513,12 +513,13 @@ export function createCircleChatConversation(
 }
 
 /** 创建独立群聊(好友多选;不挂圈子)。群名必填,服务端也会再拒一次空名。 */
-export function createGroupChatConversation(input: {
-  name: string;
-  memberIds: string[];
-}): Promise<ChatConversationDto> {
+export function createGroupChatConversation(
+  input: { name: string; memberIds: string[] },
+  { idempotencyKey }: { idempotencyKey: string },
+): Promise<ChatConversationDto> {
   return markGroupWrite(apiClient<ChatConversationDto>('/chat/conversations/group', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: { name: input.name.trim(), memberIds: input.memberIds },
   }));
 }

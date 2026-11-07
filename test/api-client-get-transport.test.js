@@ -2,9 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-// 2026-11 「选择笔记」转圈：服务器 30ms 内回了、回包也到了手机，请求却在客户端卡住。
-// 这里钉住三件事：卡住的 GET 换新请求重试一次；读 body 不认中止信号时也要按时失败；
-// 失败上报带上「卡在哪一步」。
+// 2026-11 国内测试机连新加坡：服务器几十毫秒就回了，请求却在客户端卡住（整条连接被丢包冻住）。
+// 这里钉住：卡住的 GET 并行发备份、谁先回来用谁；读 body 不认中止信号时也要按时失败；
+// 失败上报带上「卡在哪一步」；同一时刻的相同 GET 只发一次。
 
 // 可控定时器：记下每个定时器的时长，测试自己决定哪个先到点。
 function makeTimers() {
@@ -22,7 +22,7 @@ function makeTimers() {
     clearTimeout: (id) => {
       pending.delete(id);
     },
-    // 让到点最早的那个先触发（卡顿检查 8s 早于整段预算 15s）。
+    // 让到点最早的那个先触发（备份时刻 2.5s 早于整段预算 15s）。
     fireSoonest: () => {
       let soonest;
       for (const [id, entry] of pending) {
@@ -144,7 +144,19 @@ async function settlesWithin(promise, ms = 200) {
   return Promise.race([promise, timeout]);
 }
 
-test('a GET with no sign of a response at the stall check is retried once on a fresh request', async () => {
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify({ code: 0, message: 'ok', data }), { status });
+}
+
+test('a GET with no sign of a response at 2.5s gets a parallel backup request, and the first answer wins', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, calls } = loadClient({
     timers,
@@ -154,18 +166,41 @@ test('a GET with no sign of a response at the stall check is retried once on a f
 
   const pending = apiClient('/note');
   await tick();
-  timers.fireSoonest(); // 8s 卡顿检查
+  timers.fireSoonest(); // 2.5s：还没动静 → 并行发备份
 
   assert.equal((await pending).id, 7);
   assert.equal(calls.length, 2);
-  // 重试是一个新请求：新的 X-Request-Id，服务端日志里两次能分开对账。
+  // 备份是一个新请求：新的 X-Request-Id，服务端日志里两次能分开对账。
   assert.notEqual(calls[0].options.headers['X-Request-Id'], calls[1].options.headers['X-Request-Id']);
-  // 第一次：整段预算 + 卡顿检查；重试只用剩下的预算，总耗时不超过原来的 15s。
-  assert.deepEqual(timers.delays, [15000, 8000, 7000]);
+  // 第一次：整段预算 + 备份时刻；备份只用剩下的预算，总耗时不超过原来的 15s。
+  assert.deepEqual(timers.delays, [15000, 2500, 12500]);
+  // 备份赢了：卡住的那次被取消，不再占着连接。
+  assert.equal(calls[0].options.signal.aborted, true);
+});
+
+test('the backup does not cancel the original: if the original answers first it wins and the backup is cancelled', async () => {
+  const timers = makeTimers();
+  const original = deferred();
+  const { apiClient, registerRequestTraceHooks, calls, reports } = loadClient({
+    timers,
+    fetchImpl: (options, n) => (n === 1 ? original.promise : stalledFetch(options)),
+  });
+  registerRequestTraceHooks(traceHooks());
+
+  const pending = apiClient('/note');
+  await tick();
+  timers.fireSoonest();
+  await tick();
+  assert.equal(calls.length, 2);
+  original.resolve(okResponse({ id: 1 }));
+
+  assert.equal((await pending).id, 1);
+  assert.equal(calls[1].options.signal.aborted, true);
+  assert.equal(reports.length, 0);
 });
 
 // whatwg-fetch 在 XHR 完成时摘掉中止监听；之后若 resolve 前出错，fetch 本身永远不结束。
-test('a GET whose fetch ignores the abort signal is still cut at the stall check and retried', async () => {
+test('a GET whose fetch ignores the abort signal is still rescued by the backup', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, calls } = loadClient({
     timers,
@@ -181,7 +216,7 @@ test('a GET whose fetch ignores the abort signal is still cut at the stall check
   assert.equal(calls.length, 2);
 });
 
-test('a slow GET that is still receiving its body is not cut at the stall check', async () => {
+test('a slow GET that is still receiving its body gets no backup', async () => {
   const timers = makeTimers();
   let finishBody;
   const { apiClient, registerRequestTraceHooks, calls } = loadClient({
@@ -195,8 +230,8 @@ test('a slow GET that is still receiving its body is not cut at the stall check'
 
   const pending = apiClient('/note');
   await tick();
-  timers.fireSoonest(); // 8s：响应头已到、还在下载 —— 不算卡住
-  finishBody(); // 10s 才下完
+  timers.fireSoonest(); // 2.5s：响应头已到、还在下载 —— 不算卡住
+  finishBody(); // 过一会儿才下完
 
   assert.equal((await pending).id, 10);
   assert.equal(calls.length, 1);
@@ -211,7 +246,7 @@ test('without trace hooks a GET keeps the single 15s budget (web)', async () => 
 
   const pending = apiClient('/note');
   await tick();
-  timers.fireSoonest(); // 卡顿检查：看不到进度，不叫停
+  timers.fireSoonest(); // 备份时刻：看不到进度，不发备份
   await tick();
   assert.equal(calls.length, 1);
   timers.fireSoonest(); // 15s 预算到
@@ -220,7 +255,7 @@ test('without trace hooks a GET keeps the single 15s budget (web)', async () => 
   assert.equal(calls.length, 1);
 });
 
-test('a recovered stall is reported once, tagged recovered, with the stuck attempt\'s stage', async () => {
+test('a stall rescued by the backup is reported once, tagged recovered, with the stuck attempt\'s stage', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports } = loadClient({
     timers,
@@ -243,7 +278,7 @@ test('a recovered stall is reported once, tagged recovered, with the stuck attem
   assert.equal(context.attempts, 1);
 });
 
-test('when the retry also stalls, the stuck first attempt is reported once as failed', async () => {
+test('when the backup also gets no response, the stuck first attempt is reported once as failed', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports, calls } = loadClient({
     timers,
@@ -253,11 +288,13 @@ test('when the retry also stalls, the stuck first attempt is reported once as fa
 
   const pending = apiClient('/note');
   await tick();
-  timers.fireSoonest(); // 第一次卡顿检查
+  timers.fireSoonest(); // 2.5s 发备份
   await tick();
-  timers.fireSoonest(); // 重试的 7s 预算
+  timers.fireSoonest(); // 备份的 12.5s 预算到
+  await tick();
+  timers.fireSoonest(); // 第一次的 15s 预算到
 
-  // 用户看到的是重试的超时。
+  // 用户看到的是备份的超时。
   await assert.rejects(pending, (error) => error.name === 'ApiError' && error.failureKind === 'timeout');
   assert.equal(calls.length, 2);
   assert.equal(reports.length, 1);
@@ -266,7 +303,7 @@ test('when the retry also stalls, the stuck first attempt is reported once as fa
   assert.equal(reports[0].context.retry, 'failed');
 });
 
-test('a retry that gets a 5xx counts as a recovered stall plus an ordinary server error', async () => {
+test('a backup that gets a 5xx counts as a recovered stall plus an ordinary server error', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports } = loadClient({
     timers,
@@ -296,7 +333,7 @@ test('a retry that gets a 5xx counts as a recovered stall plus an ordinary serve
   );
 });
 
-test('a stall is not retried or reported once the session changed', async () => {
+test('no backup is sent and nothing is reported once the session changed', async () => {
   const timers = makeTimers();
   const session = { epoch: 1 };
   const { apiClient, registerRequestTraceHooks, reports, calls } = loadClient({
@@ -311,14 +348,16 @@ test('a stall is not retried or reported once the session changed', async () => 
 
   const pending = apiClient('/note');
   await tick();
-  timers.fireSoonest();
+  timers.fireSoonest(); // 备份时刻：会话已变，不发
+  await tick();
+  timers.fireSoonest(); // 15s 预算到
 
   await assert.rejects(pending);
   assert.equal(calls.length, 1);
   assert.equal(reports.length, 0);
 });
 
-test('a non-GET request is never cut early or retried', async () => {
+test('a non-GET request never gets a backup or a retry', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, calls } = loadClient({
     timers,
@@ -353,7 +392,7 @@ test('a body read that ignores the abort signal still fails when the budget runs
   assert.equal(reports[0].context.stage, 'reading-body');
 });
 
-test('a GET whose body read hangs after the XHR finished is cut and retried', async () => {
+test('a GET whose body read hangs after the XHR finished is rescued by the backup', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, calls } = loadClient({
     timers,
@@ -435,9 +474,8 @@ test('a throwing trace hook never changes the request outcome', async () => {
   assert.equal((await apiClient('/note')).id, 9);
 });
 
-// 安卓 OkHttp 心跳判死连接时，挂在上面的请求直接以网络错误失败；连接已被移出池子，
-// GET 换新请求会走新连接。
-test('a GET that fails with a network error is retried once with the rest of the budget', async () => {
+// 安卓 OkHttp 心跳判死连接时，挂在上面的请求直接以网络错误失败；GET 立刻换新连接再试。
+test('a GET that fails with a network error before the backup point is retried once with the rest of the budget', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports, calls } = loadClient({
     timers,
@@ -466,4 +504,179 @@ test('a non-GET request that fails with a network error is not retried', async (
     (error) => error.failureKind === 'network',
   );
   assert.equal(calls.length, 1);
+});
+
+// 安卓：备份走独立连接池（新连接），原来那条冻住的连接和上面的其他请求都不受影响。
+test('with a fresh-connection transport registered the backup goes through it, not through fetch', async () => {
+  const timers = makeTimers();
+  const sent = [];
+  const { apiClient, registerRequestTraceHooks, registerFreshConnectionTransport, calls } = loadClient({
+    timers,
+    fetchImpl: (options) => stalledFetch(options),
+  });
+  registerRequestTraceHooks(traceHooks());
+  registerFreshConnectionTransport((url, init) => {
+    sent.push({ url, init });
+    return Promise.resolve(jsonResponse({ id: 21 }));
+  });
+
+  const pending = apiClient('/note');
+  await tick();
+  timers.fireSoonest();
+
+  assert.equal((await pending).id, 21);
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, 'https://api.example.test/api/v1/note');
+  assert.equal(sent[0].init.headers.Authorization, 'Bearer access-token');
+  assert.notEqual(sent[0].init.headers['X-Request-Id'], calls[0].options.headers['X-Request-Id']);
+  assert.equal(sent[0].init.timeoutMs, 12500);
+});
+
+test('a fresh-connection backup that fails leaves the original free to answer', async () => {
+  const timers = makeTimers();
+  const original = deferred();
+  const { apiClient, registerRequestTraceHooks, registerFreshConnectionTransport, reports } = loadClient({
+    timers,
+    fetchImpl: () => original.promise,
+  });
+  registerRequestTraceHooks(traceHooks());
+  registerFreshConnectionTransport(() => Promise.reject(new Error('ERR_FRESH_CONNECTION')));
+
+  const pending = apiClient('/note');
+  await tick();
+  timers.fireSoonest();
+  await tick();
+  original.resolve(okResponse({ id: 22 }));
+
+  assert.equal((await pending).id, 22);
+  assert.equal(reports.length, 0);
+});
+
+test('the network-failure retry also goes through the fresh-connection transport', async () => {
+  const timers = makeTimers();
+  const sent = [];
+  const { apiClient, registerRequestTraceHooks, registerFreshConnectionTransport, calls } = loadClient({
+    timers,
+    fetchImpl: () => Promise.reject(new TypeError('Network request failed')),
+  });
+  registerRequestTraceHooks(traceHooks());
+  registerFreshConnectionTransport((url) => {
+    sent.push(url);
+    return Promise.resolve(jsonResponse({ id: 23 }));
+  });
+
+  assert.equal((await apiClient('/note')).id, 23);
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 1);
+});
+
+test('a POST never goes through the fresh-connection transport', async () => {
+  const timers = makeTimers();
+  const sent = [];
+  const { apiClient, registerFreshConnectionTransport, calls } = loadClient({
+    timers,
+    fetchImpl: () => Promise.resolve(okResponse({ ok: true })),
+  });
+  registerFreshConnectionTransport(() => {
+    sent.push(1);
+    return Promise.resolve(jsonResponse({}));
+  });
+
+  await apiClient('/note', { method: 'POST', body: {} });
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 0);
+});
+
+// 「新的朋友」页一打开，同一个未读数 2 秒内被不同组件各拉 4～5 次。
+test('identical GETs issued at the same time share one request, and every caller gets its own copy', async () => {
+  const timers = makeTimers();
+  const { apiClient, calls } = loadClient({
+    timers,
+    fetchImpl: () => Promise.resolve(okResponse({ count: 3, items: [{ id: 'a' }] })),
+  });
+
+  const [first, second, third] = await Promise.all([
+    apiClient('/friend/activities/unread-count'),
+    apiClient('/friend/activities/unread-count'),
+    apiClient('/friend/activities/unread-count'),
+  ]);
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(first, second);
+  assert.deepEqual(second, third);
+  first.items.push({ id: 'mutated' });
+  first.count = 99;
+  assert.equal(second.count, 3);
+  assert.equal(third.items.length, 1);
+});
+
+test('a GET issued after the previous one landed is sent again (in-flight sharing, not a cache)', async () => {
+  const timers = makeTimers();
+  let n = 0;
+  const { apiClient, calls } = loadClient({
+    timers,
+    fetchImpl: () => Promise.resolve(okResponse({ n: ++n })),
+  });
+
+  assert.equal((await apiClient('/friend')).n, 1);
+  assert.equal((await apiClient('/friend')).n, 2);
+  assert.equal(calls.length, 2);
+});
+
+test('different endpoints, extra headers and writes are never shared', async () => {
+  const timers = makeTimers();
+  const { apiClient, calls } = loadClient({
+    timers,
+    fetchImpl: () => Promise.resolve(okResponse({})),
+  });
+
+  await Promise.all([
+    apiClient('/friend'),
+    apiClient('/friend/activities'),
+    apiClient('/friend', { headers: { 'X-Scope': 'b' } }),
+    apiClient('/friend', { method: 'POST', body: {} }),
+    apiClient('/friend', { method: 'POST', body: {} }),
+  ]);
+
+  assert.equal(calls.length, 5);
+});
+
+test('a shared GET that fails rejects every caller', async () => {
+  const timers = makeTimers();
+  const { apiClient, calls } = loadClient({
+    timers,
+    fetchImpl: () =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        headers: { get: () => null },
+        text: async () => JSON.stringify({ code: 500, message: 'boom', data: null }),
+      }),
+  });
+
+  const results = await Promise.allSettled([apiClient('/friend'), apiClient('/friend')]);
+  assert.deepEqual(results.map((r) => r.status), ['rejected', 'rejected']);
+  assert.equal(results[1].reason.status, 500);
+  assert.equal(calls.length, 1);
+});
+
+test('GETs from different sessions are never shared', async () => {
+  const timers = makeTimers();
+  const session = { epoch: 1 };
+  const answers = [deferred(), deferred()];
+  const { apiClient, calls } = loadClient({
+    timers,
+    session,
+    fetchImpl: (_options, n) => answers[n - 1].promise,
+  });
+
+  const before = apiClient('/friend');
+  session.epoch = 2; // 换了账号
+  const after = apiClient('/friend');
+  assert.equal(calls.length, 2);
+  answers[0].resolve(okResponse({ who: 'old' }));
+  answers[1].resolve(okResponse({ who: 'new' }));
+  assert.equal((await after).who, 'new');
+  await before.catch(() => {});
 });

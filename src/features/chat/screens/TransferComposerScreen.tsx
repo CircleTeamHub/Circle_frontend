@@ -15,8 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import {
-  resolveTransferIdempotency,
-  type TransferIdempotency,
+  resolveTransferIdempotencyKey,
+  settleTransferIdempotencyKey,
 } from '@/features/chat/utils/transfer-idempotency';
 import { normalizeUserIdAlias } from '@/utils/user-id-alias';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
@@ -25,6 +25,8 @@ import {
   getLocalLowCreditDecision,
 } from '@/services/api/credit-policy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { isUnsettledMutationFailure } from '@/services/api/mutation-outcome';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -49,7 +51,7 @@ export default function TransferComposerScreen() {
     typeof params.recipientAvatar === 'string'
       ? params.recipientAvatar
       : undefined;
-
+  const userId = useAuthStore((state) => state.user?.id);
 
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
@@ -59,7 +61,6 @@ export default function TransferComposerScreen() {
   const [submitting, setSubmitting] = useState(false);
   // Pattern D 第二道：state 在 fast double-tap 下可能晚一帧，用 ref 在 handler 入口兜底。
   const inFlightRef = useRef(false);
-  const idempotencyRef = useRef<TransferIdempotency | null>(null);
 
   // 余额加载逻辑抽出函数 —— 失败后用户能从 UI 重试，不必退出页面重进。
   const loadBalance = useCallback(() => {
@@ -91,7 +92,7 @@ export default function TransferComposerScreen() {
   }, [loadBalance]);
 
   const handleSubmit = useCallback(async () => {
-    if (submitting || inFlightRef.current) return;
+    if (submitting || inFlightRef.current || !userId) return;
     const value = Number(amount.trim());
     if (!Number.isInteger(value) || value <= 0) {
       Alert.alert(t('chat.transfer.invalidAmount', { defaultValue: '请输入正整数积分' }));
@@ -131,17 +132,17 @@ export default function TransferComposerScreen() {
       return;
     }
 
+    const normalizedRecipientId = normalizeUserIdAlias(recipientId);
+    const normalizedMessage = message.trim() || null;
+    // 键在请求发出前就落盘:超时之后退出重进、重启 App 再发同一笔,都还是这个键。
+    const idempotencyKey = resolveTransferIdempotencyKey(userId, {
+      recipientId: normalizedRecipientId,
+      amount: value,
+      message: normalizedMessage,
+    });
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const normalizedRecipientId = normalizeUserIdAlias(recipientId);
-      const normalizedMessage = message.trim() || null;
-      const idempotency = resolveTransferIdempotency(idempotencyRef.current, {
-        recipientId: normalizedRecipientId,
-        amount: value,
-        message: normalizedMessage,
-      });
-      idempotencyRef.current = idempotency;
       await sendCoinGift(
         {
           // 后端期望业务侧 UUID（带连字符）；如果 sourceID 是从消息列表来的 IM 形式，
@@ -150,27 +151,38 @@ export default function TransferComposerScreen() {
           amount: value,
           message: normalizedMessage || undefined,
         },
-        { idempotencyKey: idempotency.key },
+        { idempotencyKey },
       );
       // 卡片不用这边发:transfer-card 断言的是「钱已经划走」这个服务端事实,
       // 由后端在结算提交后就地签发,经 chat:msg 广播回来。以前是转账成功后把
       // payload 挂到 store、让 ChatDetailScreen 重新聚焦时补发一条 —— 而那条
       // 发送被服务端 100% 拒收(transfer-card 是服务端专属类型)。
-      idempotencyRef.current = null;
+      settleTransferIdempotencyKey(userId, idempotencyKey);
       router.back();
     } catch (error) {
-      Alert.alert(
-        t('chat.transfer.failedTitle', { defaultValue: '转账失败' }),
-        getApiErrorMessage(
-          error,
-          t('common.retryLater', { defaultValue: '请稍后重试' }),
-        ),
-      );
+      if (isUnsettledMutationFailure(error)) {
+        // 超时/5xx/还在处理:钱可能已经划走。不能报「转账失败」催人重发 —— 键留着,
+        // 同一笔再发会被服务端认出来;重新拉余额,让用户自己核对有没有扣。
+        Alert.alert(
+          t('chat.transfer.outcomeUnknownTitle'),
+          t('chat.transfer.outcomeUnknownMessage'),
+        );
+        loadBalance();
+      } else {
+        settleTransferIdempotencyKey(userId, idempotencyKey);
+        Alert.alert(
+          t('chat.transfer.failedTitle', { defaultValue: '转账失败' }),
+          getApiErrorMessage(
+            error,
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          ),
+        );
+      }
     } finally {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [amount, balance, message, recipientId, router, submitting, t]);
+  }, [amount, balance, loadBalance, message, recipientId, router, submitting, t, userId]);
 
   const value = Number(amount.trim());
   const submitDisabled =

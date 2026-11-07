@@ -176,6 +176,8 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   useModalInputAutoFocus(inputRef, true);
   const selectionRef = useRef<MomentTextSelection>({ start: 0, end: 0 });
   const submitInFlightRef = useRef(false);
+  // 发送失败后重试不重传同一张图:每次重传 URL 都不同,评论的幂等键就对不上了。
+  const uploadedImageRef = useRef<{ uri: string; url: string } | null>(null);
 
   useEffect(() => {
     const showEvent =
@@ -301,7 +303,9 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
     setSubmitting(true);
     try {
       let images: string[] | undefined;
-      if (imageUri) {
+      if (imageUri && uploadedImageRef.current?.uri === imageUri) {
+        images = [uploadedImageRef.current.url];
+      } else if (imageUri) {
         try {
           const fileName = imageUri.split('/').pop() ?? 'photo.jpg';
           const contentType =
@@ -324,6 +328,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             presign.requiredHeaders,
           );
           images = [presign.fileUrl];
+          uploadedImageRef.current = { uri: imageUri, url: presign.fileUrl };
         } catch (error) {
           // 上传阶段失败：onSubmit 还没发生，父组件不会提示，这里兜底。
           Alert.alert(

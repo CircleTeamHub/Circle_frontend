@@ -19,10 +19,12 @@ import { useMomentsStore, useHydrateMomentsSnapshot } from '@/features/discover/
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import {
   addMomentComment,
-  toggleMomentLike,
   fetchNewMomentsCount,
 } from '@/services/api/moments';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { toggleMomentLikeOnce } from '@/features/discover/utils/moment-like';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import { MomentCard } from './moment-card';
 import { MomentCommentInput } from './moment-comment-input';
 import { MomentMentionNotice } from './moment-mention-notice';
@@ -111,6 +113,8 @@ export const MomentsFeed: React.FC = () => {
     replyTo: { id: string; nickname: string } | null;
   } | null>(null);
   const lastFocusFetchRef = useRef(0);
+  // 同一条评论(同动态、同内容、同回复对象、同图)重试沿用同一个幂等键。
+  const [commentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
 
   // Auto refresh on focus (silent, no spinner), throttled to 30s so rapid
   // re-focus doesn't refetch the whole feed.
@@ -200,21 +204,14 @@ export const MomentsFeed: React.FC = () => {
   }, [fetchError, loading, hasMore, fetchMoments]);
 
   const handleLike = useCallback(
-    async (postId: string) => {
+    (postId: string) => {
       const post = moments.find((m) => m.id === postId);
       if (!post) return;
-
-      const optimisticLiked = !post.isLikedByMe;
-      const optimisticCount = post.likeCount + (optimisticLiked ? 1 : -1);
-      storeToggleLike(postId, optimisticLiked, optimisticCount);
-
-      try {
-        const result = await toggleMomentLike(postId);
-        storeToggleLike(postId, result.liked, result.likeCount);
-      } catch (error) {
-        storeToggleLike(postId, post.isLikedByMe, post.likeCount);
-        reportHandledFailure('moments', 'toggleLike', error);
-      }
+      void toggleMomentLikeOnce(
+        postId,
+        { liked: post.isLikedByMe, likeCount: post.likeCount },
+        (state) => storeToggleLike(postId, state.liked, state.likeCount),
+      ).catch((error) => reportHandledFailure('moments', 'toggleLike', error));
     },
     [moments, storeToggleLike],
   );
@@ -246,13 +243,12 @@ export const MomentsFeed: React.FC = () => {
     ) => {
       const target = commentTarget;
       if (!target) return;
+      const input = { content, replyToId, images, mentionedUserIds };
       try {
-        const comment = await addMomentComment(target.momentId, {
-          content,
-          replyToId,
-          images,
-          mentionedUserIds,
-        });
+        const comment = await commentKeys.run(
+          JSON.stringify([target.momentId, input]),
+          (idempotencyKey) => addMomentComment(target.momentId, input, { idempotencyKey }),
+        );
         storeAddComment(target.momentId, comment);
         setCommentTarget(null);
         if (comment.ignoredMentionCount > 0) {
@@ -277,7 +273,7 @@ export const MomentsFeed: React.FC = () => {
         throw error;
       }
     },
-    [commentTarget, storeAddComment, t],
+    [commentKeys, commentTarget, storeAddComment, t],
   );
 
   const renderItem = useCallback(

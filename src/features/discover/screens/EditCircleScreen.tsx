@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -66,6 +66,8 @@ export default function EditCircleScreen() {
   const form = useCircleForm();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // state 要等下一次渲染才生效,连点两下会传两次头像、发两次 PATCH:ref 在入口同步拦。
+  const inFlightRef = useRef(false);
   const [circle, setCircle] = useState<CircleDetail | null>(null);
 
   useEffect(() => () => resetCreateCircleForm(), [resetCreateCircleForm]);
@@ -136,8 +138,9 @@ export default function EditCircleScreen() {
     form.description.trim().length >= 10;
 
   const handleSubmit = useCallback(async () => {
-    if (!id || !circle || !canSubmit || submitting) return;
+    if (!id || !circle || !canSubmit || submitting || inFlightRef.current) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       let uploadedAvatarUrl = form.avatarUri ?? undefined;
@@ -194,6 +197,7 @@ export default function EditCircleScreen() {
         getApiErrorMessage(error, t('common.errorOccurred')),
       );
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [

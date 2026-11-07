@@ -82,10 +82,12 @@ export async function fetchCircleDetail(id: string): Promise<CircleDetail> {
 
 export async function createCircle(
   input: CreateCircleInput,
+  { idempotencyKey }: { idempotencyKey: string },
 ): Promise<CircleDetail> {
   const detail = await markCircleWrite(apiClient<CircleDetail>('/circle', {
     method: 'POST',
-    body: (input),
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: input,
   }));
   return {
     ...normalizeCircle(detail),
