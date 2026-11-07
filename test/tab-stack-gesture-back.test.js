@@ -46,6 +46,33 @@ test('tab child stacks keep swipe-back gestures enabled for pushed pages', () =>
   }
 });
 
+// 布局里一写 Stack.Screen,写出来的页面就排到最前,第一个就是进 tab 时的首屏
+// (unstable_settings.initialRouteName 管不到)。只写一个选位置页的话,点 tab 打开的就是选位置页。
+test('stacks that declare screens declare index first', () => {
+  const root = path.join(__dirname, '..', 'app');
+  const layouts = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name === '_layout.tsx') layouts.push(full);
+    }
+  };
+  walk(root);
+  const checked = layouts.filter((layout) => {
+    const dir = path.dirname(layout);
+    // 根布局的首屏是 (tabs) 分组,不是 index。
+    return dir !== root && fs.existsSync(path.join(dir, 'index.tsx'));
+  });
+  assert.ok(checked.length >= 6, 'expected the tab stacks and notes stack to be scanned');
+  for (const layout of checked) {
+    const first = fs.readFileSync(layout, 'utf8').match(/<Stack\.Screen\s+name="([^"]+)"/);
+    if (!first) continue;
+    const rel = path.relative(path.join(__dirname, '..'), layout);
+    assert.equal(first[1], 'index', `${rel} must list index first, or the stack opens on "${first[1]}"`);
+  }
+});
+
 test('other backable stacks keep swipe-back gestures enabled', () => {
   for (const layoutPath of otherBackableStackLayouts) {
     const src = read(layoutPath);

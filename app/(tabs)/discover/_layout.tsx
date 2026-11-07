@@ -25,6 +25,8 @@ export default function DiscoverLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
+        {/* 写了任何一个 Stack.Screen,写出来的就排在最前、第一个就是进 tab 时的首屏:index 必须写在第一个。 */}
+        <Stack.Screen name="index" />
         {/* 编辑笔记里的选位置页:往右拖地图不能被当成全屏右滑返回。 */}
         <Stack.Screen
           name="notes/location-picker"
