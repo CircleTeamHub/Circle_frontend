@@ -44,8 +44,17 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
+  // 切到一个还没缓存的圈子:转圈只出现在内容区,上面的圈子 tag 不动。
+  contentLoading: {
+    alignItems: 'center',
+    paddingTop: 80,
+  },
+  container: {
+    flex: 1,
+  },
   headerSection: {
     gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   filterErrorBanner: {
     flexDirection: 'row',
@@ -67,6 +76,10 @@ export const PlazaFeed: React.FC = () => {
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
   const [isOrderSheetVisible, setIsOrderSheetVisible] = useState(false);
+  // 下拉刷新控件只跟「人真的往下拉了」走。切圈子、回前台的后台刷新也会把 plazaRefreshing
+  // 置成 true,要是直接交给 RefreshControl,iOS 会把整个列表(连同圈子 tag)往下推一截转圈。
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const listRef = useRef<FlatList<CirclePlazaPost>>(null);
   const {
     plazaPosts,
     plazaLoading,
@@ -218,8 +231,18 @@ export const PlazaFeed: React.FC = () => {
   }, [programEnabled, plazaMembershipRequired, fetchPlazaPosts]);
 
   const handleRefresh = useCallback(() => {
+    setPullRefreshing(true);
     fetchPlazaPosts(true);
   }, [fetchPlazaPosts]);
+
+  useEffect(() => {
+    if (!plazaRefreshing) setPullRefreshing(false);
+  }, [plazaRefreshing]);
+
+  // 换了圈子:内容从头看起(tag 在列表外,不跟着滚)。
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [selectedCircleId, selectedCity]);
 
   const handleEndReached = useCallback(() => {
     if (
@@ -305,6 +328,12 @@ export const PlazaFeed: React.FC = () => {
     </View>
   ) : null;
 
+  const ContentLoading = (
+    <View style={s.contentLoading} testID="plaza-content-loading">
+      <ActivityIndicator color={colors.primary} />
+    </View>
+  );
+
   const ListFooter =
     plazaLoading && plazaPosts.length > 0 ? (
       <View style={s.footerLoader}>
@@ -338,19 +367,20 @@ export const PlazaFeed: React.FC = () => {
   }
 
   return (
-    <>
+    <View style={s.container}>
+      {visibleCircles.length > 0 || myCirclesError ? ListHeader : null}
       <FlatList
+        ref={listRef}
         pointerEvents={programEnabled === null ? 'none' : 'auto'}
         data={plazaPosts}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={ListEmpty}
+        ListEmptyComponent={ListEmpty ?? ContentLoading}
         ListFooterComponent={ListFooter}
         contentContainerStyle={s.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={plazaRefreshing}
+            refreshing={pullRefreshing}
             onRefresh={handleRefresh}
             tintColor={colors.primary}
           />
@@ -372,6 +402,6 @@ export const PlazaFeed: React.FC = () => {
         onReset={resetShortcutOrder}
         onClose={handleCloseOrderSheet}
       />
-    </>
+    </View>
   );
 };
