@@ -182,6 +182,14 @@ const privateCards = {
 };
 const savedCopy = { ...note, id: 'saved-copy', ownerId: 'me', canEdit: true, collectedFrom: privateCards, cardPreview: null };
 
+// 从聊天里的笔记点编辑:编辑页压进「消息」这一栈(与详情同栈),返回才能正常移走编辑页。
+test('editing a note opened from chat stays in the messages stack', async () => {
+  jest.mocked(fetchNoteDetail).mockResolvedValue({ ...note, ownerId: 'me', canEdit: true } as any);
+  render(<NoteDetailScreen />);
+  fireEvent.press(await screen.findByTestId('note-detail-edit'));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notes/edit', params: { id: 'note' } });
+});
+
 test('the group avatar opens a group the viewer already belongs to straight into the chat', async () => {
   const owned = { ...note, ownerId: 'me', canEdit: true,
     sections: { contacts: { items: [privateCards.sender] }, groups: { items: [{ ...privateCards.group, conversationID: 'group-chat' }] } } };

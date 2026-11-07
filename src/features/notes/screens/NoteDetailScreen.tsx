@@ -37,6 +37,7 @@ import {
 import type { NoteDetail, NoteExportFormat, NoteSummary } from '@/features/notes/types';
 import {
   getChatDetailHref,
+  getNoteEditHref,
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
@@ -245,8 +246,8 @@ function NoteDetailContent() {
 
   const handleEdit = useCallback(() => {
     if (!note) return;
-    router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never);
-  }, [router, note]);
+    router.push(getNoteEditHref(scope, { id: note.id }));
+  }, [router, note, scope]);
 
   // 名片只来自当前账号自己的笔记/已收藏副本，路由里的 ownerId 不授予可见性。
   const ownsNote = Boolean(note?.id === id && currentUserId &&
@@ -655,7 +656,7 @@ function NoteDetailContent() {
             <Ionicons name="share-outline" size={18} color={colors.text} />
           </Pressable>
           {canEditNote ? (
-            <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
+            <Pressable testID="note-detail-edit" style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
               <Ionicons name="pencil-outline" size={17} color={colors.text} />
             </Pressable>
           ) : hasChatSource ? (

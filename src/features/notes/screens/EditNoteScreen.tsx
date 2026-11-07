@@ -7,7 +7,12 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import {
+  getNoteDetailHref,
+  getNoteLocationPickerHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -471,6 +476,8 @@ function useKeyboardVisible() {
 
 export default function EditNoteScreen() {
   const router = useRouter();
+  // 编辑页挂在进入它的那个 tab 栈里(见 getNoteEditHref),往下跳的页面也压进同一栈。
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const { colors, resolvedMode } = useTheme();
@@ -2530,19 +2537,17 @@ export default function EditNoteScreen() {
 
   const handleOpenLocationPicker = useCallback(() => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
-    router.push({
-      pathname: '/(tabs)/profile/notes/location-picker',
-      params: {
-        title: locationDraft.title,
-        address: locationDraft.address,
-        latitude: locationDraft.latitude != null ? String(locationDraft.latitude) : '',
-        longitude: locationDraft.longitude != null ? String(locationDraft.longitude) : '',
-      },
-    } as never);
+    router.push(getNoteLocationPickerHref(scope, {
+      title: locationDraft.title,
+      address: locationDraft.address,
+      latitude: locationDraft.latitude != null ? String(locationDraft.latitude) : '',
+      longitude: locationDraft.longitude != null ? String(locationDraft.longitude) : '',
+    }));
   }, [
     locationDraft,
     isRouteDataReady,
     router,
+    scope,
   ]);
 
   const handleClearLocation = useCallback(() => {
@@ -3943,9 +3948,9 @@ export default function EditNoteScreen() {
     }
     const auth = useAuthStore.getState();
     if (draftRouteKeyRef.current === draftRouteKey && auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch) {
-      router.push({ pathname: '/(tabs)/profile/notes/[id]', params: { id: noteId } } as never);
+      router.push(getNoteDetailHref(scope, noteId));
     }
-  }, [currentUser?.id, draftRouteKey, persistDraft, router, sessionEpoch, t]);
+  }, [currentUser?.id, draftRouteKey, persistDraft, router, scope, sessionEpoch, t]);
 
   const editorVideoItem = editorVideoViewer?.routeKey === draftRouteKey
     ? [...mediaItems, ...showcaseItems].find((item) => item.type === 'VIDEO' && item.clientId === editorVideoViewer.clientId)

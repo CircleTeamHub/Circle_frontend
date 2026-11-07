@@ -384,10 +384,12 @@ const mockDarkThemeColors = {
 let mockThemeMode: 'light' | 'dark' = 'light';
 let mockThemeColors = mockLightThemeColors;
 
+let mockSegments: string[] = ['(tabs)', 'profile', 'notes', 'edit'];
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
+    useSegments: () => mockSegments,
     useLocalSearchParams: () => ({ id: mockRouteId, draftId: mockRouteDraftId, draftMode: mockDraftMode }),
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => {
@@ -3304,7 +3306,7 @@ test.each(['conflict', 'different-replay'] as const)('%s keeps the pending draft
     expect(alert).toHaveBeenCalledWith('notes.edit.saveFailedTitle', 'notes.edit.pendingSubmitMessage');
     if (failure === 'different-replay') {
       fireEvent.press(screen.getByRole('button', { name: 'notes.edit.openCommittedNote' }));
-      await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/[id]', params: { id: 'saved-note' } }));
+      await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/[id]', params: { id: 'saved-note', ownerId: '' } }));
       expect(storedReviewDraft(values)?.pendingSubmission).toBeTruthy();
     }
   } finally { rendered.unmount(); alert.mockRestore(); }
