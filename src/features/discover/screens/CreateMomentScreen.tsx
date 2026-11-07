@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createMoment } from '@/services/api/moments';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -39,6 +41,8 @@ import type { MomentAttachmentInput } from '@/types';
 
 // /upload/presign currently caps videos at 100 MiB.
 const MOMENT_VIDEO_MAX_SIZE_MB = 100;
+
+type UploadedMomentMedia = { attachment: MomentAttachmentInput; url: string };
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -121,6 +125,12 @@ export default function CreateMomentScreen() {
   const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [visibility, setVisibility] = useState<'FRIENDS_ONLY' | 'PRIVATE'>('FRIENDS_ONLY');
   const [submitting, setSubmitting] = useState(false);
+  // state 要等下一次渲染才生效,连点两下都会以 submitting=false 进来:ref 在入口同步拦。
+  const inFlightRef = useRef(false);
+  // 重试同一条动态沿用同一个幂等键(超时那次可能已经发出去了)。已传好的媒体按所选
+  // 条目记住、重试不再上传:每次重传 key 都不同,请求体一变就成了「另一条动态」。
+  const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
+  const uploadedMediaRef = useRef(new Map<ImagePicker.ImagePickerAsset, UploadedMomentMedia>());
 
   const d = useMemo(
     () => ({
@@ -172,7 +182,8 @@ export default function CreateMomentScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || submitting) return;
+    if (!canSubmit || submitting || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       const hasOversizedImage = images.some(
@@ -197,7 +208,9 @@ export default function CreateMomentScreen() {
 
       // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
       // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
-      const outcomes = await mapWithConcurrency(images, 3, async (asset): Promise<{ attachment: MomentAttachmentInput; url: string } | null> => {
+      const outcomes = await mapWithConcurrency(images, 3, async (asset): Promise<UploadedMomentMedia | null> => {
+        const uploaded = uploadedMediaRef.current.get(asset);
+        if (uploaded) return uploaded;
         try {
           const isVideo = asset.type === 'video';
           const fileName = asset.fileName ?? (asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg'));
@@ -229,7 +242,7 @@ export default function CreateMomentScreen() {
           );
           const duration = typeof asset.duration === 'number' ? asset.duration / 1000 : undefined;
           const poster = isVideo ? await uploadChatVideoPoster(asset.uri, duration, fileName, 'posts') : null;
-          return {
+          const result: UploadedMomentMedia = {
             url: presign.fileUrl,
             attachment: {
               type: isVideo ? 'video' : 'image',
@@ -240,6 +253,8 @@ export default function CreateMomentScreen() {
               ...(isVideo && duration !== undefined ? { duration } : {}),
             },
           };
+          uploadedMediaRef.current.set(asset, result);
+          return result;
         } catch (error) {
           reportHandledFailure('moments', 'mediaUpload', error);
           return null;
@@ -259,12 +274,15 @@ export default function CreateMomentScreen() {
         return;
       }
 
-      const moment = await createMoment({
+      const input = {
         content: content.trim(),
         images: uploaded.filter((item) => item.attachment.type === 'image').map((item) => item.url),
         attachments: uploaded.map((item) => item.attachment),
         visibility,
-      });
+      };
+      const moment = await intentKeys.run(JSON.stringify(input), (idempotencyKey) =>
+        createMoment(input, { idempotencyKey }),
+      );
 
       prependMoment(moment);
       router.back();
@@ -272,9 +290,10 @@ export default function CreateMomentScreen() {
       const message = getApiErrorMessage(error, t('moment.publishFailed'));
       Alert.alert(t('moment.publishFailed'), message);
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [canSubmit, submitting, content, images, visibility, prependMoment, router, t]);
+  }, [canSubmit, submitting, intentKeys, content, images, visibility, prependMoment, router, t]);
 
   return (
     <KeyboardAvoidingContainer

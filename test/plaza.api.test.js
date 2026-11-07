@@ -450,12 +450,13 @@ test('createPlazaPost forwards the selected expiry duration', async () => {
     signupVipRestriction: null,
     signupCreditRestriction: null,
     signupFancyRestriction: false,
-  });
+  }, { idempotencyKey: 'post-key' });
 
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [
     '/circle-plaza/posts',
     {
       method: 'POST',
+      headers: { 'Idempotency-Key': 'post-key' },
       body: {
         content: 'hello',
         images: [],

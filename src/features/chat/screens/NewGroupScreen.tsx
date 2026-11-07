@@ -19,6 +19,8 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { createGroupConversation } from '@/chat-core/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -102,6 +104,8 @@ export default function NewGroupScreen() {
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  // 同一个群(同名同成员)重试沿用同一个幂等键:超时那次可能已经建好,服务端按键回放。
+  const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -173,11 +177,11 @@ export default function NewGroupScreen() {
     }
     submittingRef.current = true;
     setSubmitting(true);
+    const input = { name: trimmedName, memberIds: Object.keys(selected) };
     try {
-      const { conversationID } = await createGroupConversation({
-        name: trimmedName,
-        memberIds: Object.keys(selected),
-      });
+      const { conversationID } = await intentKeys.run(JSON.stringify(input), (idempotencyKey) =>
+        createGroupConversation(input, { idempotencyKey }),
+      );
       if (!mountedRef.current) return;
       const inDiscoverStack = (segments as readonly string[]).includes(
         'discover',
@@ -198,7 +202,7 @@ export default function NewGroupScreen() {
     } catch (error) {
       // 只有失败才解锁。成功路径已经 router.replace 走了，但屏幕要到下一帧之后
       // 才真正卸载；把解锁放在 finally 里等于在这段转场窗口里又把按钮放开，而
-      // 建群在服务端没有幂等 —— 慢设备上再点一下就会建出第二个成员完全相同的群。
+      // 成功时幂等键已经作废 —— 慢设备上再点一下就会带新键建出第二个成员完全相同的群。
       submittingRef.current = false;
       if (mountedRef.current) {
         setSubmitting(false);
@@ -209,7 +213,7 @@ export default function NewGroupScreen() {
         );
       }
     }
-  }, [trimmedName, router, segments, selected, selectedCount, t]);
+  }, [intentKeys, trimmedName, router, segments, selected, selectedCount, t]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<FriendProfile>) => {

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 import CreateMomentScreen from './CreateMomentScreen';
 import { createMoment } from '@/services/api/moments';
 import { requestUploadPresign, uploadLocalFileToPresignedUrl } from '@/services/api/upload';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { ApiError } from '@/services/api/api-error';
 
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { maxMb?: number }) => options?.maxMb ? `${key}:${options.maxMb}` : key }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
@@ -21,6 +22,8 @@ jest.mock('@/components/ui/keyboard-avoiding-container', () => {
 });
 jest.mock('@/features/discover/store/use-moments-store', () => ({ useMomentsStore: () => jest.fn() }));
 jest.mock('@/services/api/moments', () => ({ createMoment: jest.fn() }));
+let mockKeySequence = 0;
+jest.mock('@/utils/idempotency-key', () => ({ generateIdempotencyKey: () => `key-${++mockKeySequence}` }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_e: unknown, fallback: string) => fallback }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/constants/config', () => ({ LIMITS: { POST_MAX_MEDIA: 9, IMAGE_MAX_SIZE_MB: 50, VIDEO_MAX_SIZE_MB: 500 } }));
@@ -41,6 +44,7 @@ const assets = [
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockKeySequence = 0;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets } as never);
   jest.mocked(requestUploadPresign).mockImplementation(async ({ filename }) => ({ uploadUrl: 'https://upload.test', fileUrl: `https://cdn.test/posts/me/${filename}`, key: `posts/me/${filename}`, requiredHeaders: { 'Content-Type': 'image/jpeg', 'Content-Length': '12', 'If-None-Match': '*' } }));
@@ -59,7 +63,7 @@ test('selects and publishes multiple videos mixed with images in selection order
     expect.objectContaining({ type: 'video', key: 'posts/me/clip.mp4', duration: 3 }),
     expect.objectContaining({ type: 'image', key: 'posts/me/photo.jpg' }),
     expect.objectContaining({ type: 'video', key: 'posts/me/clip2.mov' }),
-  ] }));
+  ] }), { idempotencyKey: 'key-1' });
   expect(prepareChatImageForUpload).toHaveBeenCalledTimes(1);
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test', 'video/mp4', 'file:///clip.mp4', expect.any(Object), 5 * 60_000,
@@ -114,4 +118,65 @@ test('reserves remaining shared slots when adding another batch of images and vi
   await waitFor(() => expect(screen.getAllByLabelText('moment.removeMedia')).toHaveLength(9));
   expect(ImagePicker.launchImageLibraryAsync).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 3 }));
   expect(screen.queryByLabelText('moment.selectMedia')).toBeNull();
+});
+
+const sentKeys = () => jest.mocked(createMoment).mock.calls.map(([, options]) => options.idempotencyKey);
+
+async function pickOnePhotoAndWrite(text: string) {
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets: [assets[1]] } as never);
+  render(<CreateMomentScreen />);
+  fireEvent.press(screen.getByText('0/9'));
+  await waitFor(() => expect(screen.getByText('1/9')).toBeTruthy());
+  fireEvent.changeText(screen.getByPlaceholderText('moment.contentPlaceholder'), text);
+}
+
+test('two taps before React re-renders publish once', async () => {
+  await pickOnePhotoAndWrite('once');
+  let node = screen.getByText('moment.publish');
+  while (!node.props.onPress) node = node.parent!;
+  const { onPress } = node.props;
+  act(() => {
+    onPress();
+    onPress();
+  });
+
+  await waitFor(() => expect(createMoment).toHaveBeenCalled());
+  expect(createMoment).toHaveBeenCalledTimes(1);
+  expect(requestUploadPresign).toHaveBeenCalledTimes(1);
+});
+
+test('retrying a timed-out publish reuses its key and the already uploaded media', async () => {
+  jest.mocked(createMoment)
+    .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+    .mockResolvedValue({ id: 'new' } as never);
+  await pickOnePhotoAndWrite('retry me');
+
+  fireEvent.press(screen.getByText('moment.publish'));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('moment.publishFailed', 'moment.publishFailed'));
+  fireEvent.press(screen.getByText('moment.publish'));
+
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(2));
+  expect(sentKeys()).toEqual(['key-1', 'key-1']);
+  expect(jest.mocked(createMoment).mock.calls[1][0]).toEqual(jest.mocked(createMoment).mock.calls[0][0]);
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);
+});
+
+test('a definitive rejection or edited text publishes with a new key', async () => {
+  jest.mocked(createMoment)
+    .mockRejectedValueOnce(new ApiError('bad', { status: 400, errorCode: 'TRACE_EMPTY_COMMENT' }))
+    .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+    .mockResolvedValue({ id: 'new' } as never);
+  await pickOnePhotoAndWrite('first');
+
+  fireEvent.press(screen.getByText('moment.publish'));
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByText('moment.publish')).toBeTruthy());
+  fireEvent.press(screen.getByText('moment.publish'));
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByText('moment.publish')).toBeTruthy());
+  fireEvent.changeText(screen.getByPlaceholderText('moment.contentPlaceholder'), 'edited');
+  fireEvent.press(screen.getByText('moment.publish'));
+
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(3));
+  expect(sentKeys()).toEqual(['key-1', 'key-2', 'key-3']);
 });

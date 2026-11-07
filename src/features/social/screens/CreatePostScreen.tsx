@@ -22,6 +22,8 @@ import { MenuRow } from '@/components/ui/menu-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { createPlazaPost } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -175,6 +177,10 @@ export default function CreatePostScreen() {
   const [submitting, setSubmitting] = useState(false);
   // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
   const inFlightRef = useRef(false);
+  // 重试同一条帖子沿用同一个幂等键(超时那次可能已经发出去了)。已传好的图片按所选
+  // 条目记住、重试不再上传:每次重传 URL 都不同,请求体一变就成了「另一条帖子」。
+  const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
+  const uploadedImagesRef = useRef(new Map<ImagePicker.ImagePickerAsset, string>());
   const { t } = useTranslation();
 
   const d = useMemo(
@@ -346,6 +352,8 @@ export default function CreatePostScreen() {
       }
 
       const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
+        const uploadedUrl = uploadedImagesRef.current.get(asset);
+        if (uploadedUrl) return uploadedUrl;
         try {
           const fileName = asset.uri.split('/').pop() || 'photo.jpg';
           const contentType =
@@ -372,6 +380,7 @@ export default function CreatePostScreen() {
             prepared.uri,
             presign.requiredHeaders,
           );
+          uploadedImagesRef.current.set(asset, presign.fileUrl);
           return presign.fileUrl;
         } catch (uploadError) {
           reportHandledFailure('createPost', 'imageUpload', uploadError);
@@ -400,7 +409,7 @@ export default function CreatePostScreen() {
         return;
       }
 
-      const post = await createPlazaPost({
+      const input = {
         content: content.trim(),
         images: uploadedUrls,
         tags: postTags,
@@ -416,7 +425,10 @@ export default function CreatePostScreen() {
         signupVipRestriction,
         signupCreditRestriction,
         signupFancyRestriction: signupFancyEnabled,
-      });
+      };
+      const post = await intentKeys.run(JSON.stringify(input), (idempotencyKey) =>
+        createPlazaPost(input, { idempotencyKey }),
+      );
 
       prependPlazaPost(post);
       resetForm();
@@ -436,6 +448,7 @@ export default function CreatePostScreen() {
   }, [
     canSubmit,
     submitting,
+    intentKeys,
     selectedCircles,
     setSelectedCircles,
     fetchMyCircles,

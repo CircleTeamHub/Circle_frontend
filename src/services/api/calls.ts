@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import type {
   CallParticipant,
   CallSession,
@@ -18,9 +19,12 @@ export type CreateGroupCallInput = {
   inviteeIDs: string[];
 };
 
+// 每次发起一个键:apiClient 内部 401→刷新后的重放沿用同一 options,服务端按键
+// 认出是同一通,不会再响一次铃。用户再点一次是新的一通,换新键。
 export async function createGroupCall(input: CreateGroupCallInput) {
   const response = await apiClient<unknown>('/calls/group', {
     method: 'POST',
+    headers: { 'Idempotency-Key': generateIdempotencyKey() },
     body: input,
   });
   return normalizeCallActionResponse(response);
@@ -69,6 +73,7 @@ export type CreateDirectCallInput = {
 export async function createDirectCall(input: CreateDirectCallInput) {
   const response = await apiClient<unknown>('/calls/direct', {
     method: 'POST',
+    headers: { 'Idempotency-Key': generateIdempotencyKey() },
     body: input,
   });
   return normalizeCallActionResponse(response);

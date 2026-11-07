@@ -119,7 +119,8 @@ test('转账只做扣款，卡片回执整套挂账已出清', () => {
   // 被拒 —— 回执分支从来没被执行过。卡片改由后端结算后签发，这套全部删掉。
   const composer = read('src/features/chat/screens/TransferComposerScreen.tsx');
   // 幂等键仍然要有：它防的是「同一笔转账被重复扣款」，与卡片无关。
-  assert.match(composer, /idempotencyKey: idempotency\.key/);
+  assert.match(composer, /resolveTransferIdempotencyKey\(/);
+  assert.match(composer, /\{ idempotencyKey \},/);
   assert.doesNotMatch(composer, /useTransferComposerStore/);
 
   const api = read('src/services/api/coin.ts');

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,8 @@ import { Spacing, Typography, useTheme } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { createCircle } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
 import {
   requestUploadPresign,
@@ -76,6 +78,12 @@ export default function CreateCircleScreen() {
 
   const form = useCircleForm();
   const [submitting, setSubmitting] = useState(false);
+  // state 要等下一次渲染才生效,连点两下都会以 submitting=false 进来:ref 在入口同步拦。
+  const inFlightRef = useRef(false);
+  // 重试同一个圈子沿用同一个幂等键;头像只传一次,否则每次重试的 avatarUrl 都不同,
+  // 请求体一变就成了「新的一个圈子」。
+  const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
+  const uploadedAvatarRef = useRef<{ uri: string; url: string } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,11 +110,14 @@ export default function CreateCircleScreen() {
     form.name.trim().length >= 2 && form.description.trim().length >= 10;
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || submitting) return;
+    if (!canSubmit || submitting || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       let uploadedAvatarUrl: string | undefined;
-      if (form.pickedAvatarUri) {
+      if (form.pickedAvatarUri && uploadedAvatarRef.current?.uri === form.pickedAvatarUri) {
+        uploadedAvatarUrl = uploadedAvatarRef.current.url;
+      } else if (form.pickedAvatarUri) {
         try {
           const fileName =
             form.pickedAvatarUri.split('/').pop() ?? 'avatar.jpg';
@@ -125,13 +136,14 @@ export default function CreateCircleScreen() {
             presign.requiredHeaders,
           );
           uploadedAvatarUrl = presign.fileUrl;
+          uploadedAvatarRef.current = { uri: form.pickedAvatarUri, url: presign.fileUrl };
         } catch (error) {
           // 头像上传是非阻塞的 —— 失败时圈子还能创建（avatarUrl 留空）。
           reportHandledFailure('circle', 'avatarUpload', error);
         }
       }
 
-      await createCircle({
+      const input = {
         name: form.name.trim(),
         categories: form.selectedCategories,
         description: form.description.trim(),
@@ -143,7 +155,10 @@ export default function CreateCircleScreen() {
         joinFancyRestriction: form.joinFancyRestriction || undefined,
         memberCanPost: form.memberCanPost,
         requiredVerifierCount: form.requiredVerifierCount,
-      });
+      };
+      await intentKeys.run(JSON.stringify(input), (idempotencyKey) =>
+        createCircle(input, { idempotencyKey }),
+      );
       // review 修复：force 绕过在飞合并 —— 否则可能 await 到建圈前出发的
       // 快照，返回列表页看不到刚建的圈子。
       await fetchMyCircles({ force: true });
@@ -153,11 +168,13 @@ export default function CreateCircleScreen() {
       const message = getApiErrorMessage(error, t('circle.create.failed'));
       Alert.alert(t('circle.create.failed'), message);
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [
     canSubmit,
     submitting,
+    intentKeys,
     form,
     selectedCities,
     fetchMyCircles,

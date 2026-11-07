@@ -89,7 +89,7 @@ test('moments feed hosts the inline comment composer (no detail hop)', () => {
   assert.match(feed, /onComment=\{handleComment\}/);
   assert.match(feed, /onReplyComment=\{handleReplyComment\}/);
   // 提交 = 详情页同款链路：API → store 同步（feed 预览即时更新）。
-  assert.match(feed, /addMomentComment\(target\.momentId, \{/);
+  assert.match(feed, /addMomentComment\(target\.momentId, input, \{ idempotencyKey \}\)/);
   assert.match(feed, /storeAddComment\(target\.momentId, comment\)/);
   // 失败保留输入并弹错误（rethrow 让输入框不关闭）。
   assert.match(feed, /Alert\.alert\(\s*t\('moment\.commentFailedTitle'/);
