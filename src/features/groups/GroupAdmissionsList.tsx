@@ -34,6 +34,8 @@ import { reportHandledFailure } from "@/observability/report-failure";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useFocusReloadGate } from "@/hooks/use-focus-reload-gate";
 import { groupOrCircleMutatedSince } from "@/features/chat/utils/group-reload-key";
+import { getPageSnapshotRevision } from "@/storage/page-snapshots";
+import { readGroupAdmissionsSnapshot, writeGroupAdmissionsSnapshot } from "./group-admissions-cache";
 import { Spacing, useTheme } from "@/theme";
 import { getGroupEntryHref } from "./routes";
 import { getGroupAdmissionRelationship, getGroupAdmissionStatus } from "./admission-copy";
@@ -76,18 +78,24 @@ export function GroupAdmissionsList({
   const sessionEpoch = useAuthStore((s) => s.sessionEpoch);
   const userId = useAuthStore((s) => s.user?.id);
   const conversations = useChatStore((s) => s.conversations);
+  // 上次拉到的第一页先画出来，后台照常重拉；没有快照才整页转圈（见 group-admissions-cache）。
+  const [snapshot] = useState(() =>
+    readGroupAdmissionsSnapshot(sessionEpoch, groupId, groupOrCircleMutatedSince),
+  );
   const [circleInvitations, setCircleInvitations] = useState<
     CircleInvitation[]
-  >([]);
-  const [items, setItems] = useState<GroupAdmissionDetail[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  >(snapshot?.circleInvitations ?? []);
+  const [items, setItems] = useState<GroupAdmissionDetail[]>(snapshot?.items ?? []);
+  const [cursor, setCursor] = useState<string | null>(snapshot?.nextCursor ?? null);
+  const [loading, setLoading] = useState(snapshot === null);
+  // 只有用户下拉才转顶部的圈；进页面的后台重拉是静默的。
+  const [pulling, setPulling] = useState(false);
   const [error, setError] = useState("");
   const generation = useRef(0);
   const paging = useRef(false);
   const failedCursor = useRef<string | undefined>(undefined);
   const refreshPending = useRef(false);
-  const loadedEpoch = useRef<number | null>(null);
+  const loadedEpoch = useRef<number | null>(snapshot ? sessionEpoch : null);
   // 从入群详情/会话回来:30 秒内、同账号、没有新的入群/圈子邀请通知、也没有群或圈子写请求
   // (审批、接受、标记已读都算),就不重拉第一页、我的申请和会话列表。
   const admissionsReloadGate = useFocusReloadGate({
@@ -100,30 +108,50 @@ export function GroupAdmissionsList({
       paging.current = true;
       const version = generation.current;
       const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
+      const stale = () => version !== generation.current || useAuthStore.getState().sessionEpoch !== sessionEpoch;
+      const received: {
+        admissions?: Awaited<ReturnType<typeof fetchGroupAdmissions>>;
+        circles?: CircleInvitation[];
+      } = {};
+      // 有快照时列表不空，这里只影响翻页守卫；空列表的转圈与顶部的下拉圈各自另有条件。
       if (!next) setLoading(true);
       try {
+        // 各路到了就先画，不等最慢的那一路：线路差时某个接口卡住，其余的照样先出来。
         const responses = await Promise.allSettled([
-          fetchGroupAdmissions(next, groupId),
-          !groupId && !next ? fetchMyApplications() : Promise.resolve(null),
+          fetchGroupAdmissions(next, groupId).then((result) => {
+            if (stale()) return;
+            received.admissions = result;
+            setItems(old => next ? [...old, ...result.items.filter(row => !old.some(item => item.id === row.id))] : result.items);
+            setCursor(result.nextCursor);
+            if (!next) setLoading(false);
+          }),
+          !groupId && !next
+            ? fetchMyApplications().then((value) => {
+                if (stale() || !value) return;
+                received.circles = value;
+                setCircleInvitations(value);
+              })
+            : Promise.resolve(),
           // 「已加入」只需要一份新鲜的会话列表:刚拉过就直接用,不再每次刷新都全量拉。
           includeJoined && !next ? ensureChatConversations({ force }) : Promise.resolve(null),
         ]);
-        if (version !== generation.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-        const [admissionsResult, circleResult] = responses;
-        if (circleResult.status === 'fulfilled' && circleResult.value) setCircleInvitations(circleResult.value);
-        if (admissionsResult.status === 'fulfilled') {
-          const result = admissionsResult.value;
-          setItems(old => next ? [...old, ...result.items.filter(row => !old.some(item => item.id === row.id))] : result.items);
-          setCursor(result.nextCursor);
-        }
+        if (stale()) return;
         const failures = responses.filter((response): response is PromiseRejectedResult => response.status === 'rejected');
         failedCursor.current = next;
         setError(failures.length ? getApiErrorMessage(failures[0].reason, t('groupAdmission.loadFailed')) : '');
         for (const failure of failures) reportHandledFailure('groupAdmission', 'listSource', failure.reason);
-        // 第一页各路都拉成功才算「拉过」;任一失败下次聚焦照样重试。
+        // 第一页各路都拉成功才算「拉过」;任一失败下次聚焦照样重试，快照也不更新。
         if (!next && failures.length === 0) {
           loadedEpoch.current = sessionEpoch;
           admissionsReloadGate.markLoaded(startedAt);
+          if (received.admissions) {
+            writeGroupAdmissionsSnapshot(sessionEpoch, groupId, {
+              items: received.admissions.items,
+              circleInvitations: received.circles ?? [],
+              nextCursor: received.admissions.nextCursor,
+            }, startedAt, requestRevision);
+          }
         }
       } catch (e) {
         if (version === generation.current) {
@@ -244,9 +272,12 @@ export function GroupAdmissionsList({
       keyExtractor={(row) => row.key}
       ItemSeparatorComponent={Divider}
       contentContainerStyle={{ padding: Spacing.lg }}
-      refreshing={loading}
+      refreshing={pulling}
       // 用户主动下拉:会话快照也强制重拉,不复用。
-      onRefresh={() => void load(undefined, true)}
+      onRefresh={() => {
+        setPulling(true);
+        void load(undefined, true).finally(() => setPulling(false));
+      }}
       onEndReached={() => {
         if (cursor && !loading && !error) void load(cursor);
       }}

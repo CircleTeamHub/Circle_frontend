@@ -297,24 +297,48 @@ export function registerRequestTraceHooks(hooks: RequestTraceHooks | null) {
   requestTraceHooks = hooks;
 }
 
+// 安卓 RN 的 OkHttp 把同一域名的请求全塞进一条 HTTP/2 连接，它被丢包冻住时，在上面再发多少
+// 次都一样卡。备份请求改走独立连接池（modules/fresh-connection），一定是新连接。启动时注册
+// （见 app/_layout）；没注册（iOS / web / 还没这个原生模块的旧包）就照常用 fetch。
+export type FreshConnectionTransport = (
+  url: string,
+  init: { headers: Record<string, string>; timeoutMs: number },
+) => Promise<Response>;
+let freshConnectionTransport: FreshConnectionTransport | null = null;
+
+export function registerFreshConnectionTransport(transport: FreshConnectionTransport | null) {
+  freshConnectionTransport = transport;
+}
+
 // 整个请求的预算（headers + body）。
 const REQUEST_TIMEOUT_MS = 15_000;
-// GET 到这个时刻还「没动静」就判定卡住，换一个新请求：2026-11 实测服务器 30ms 内回了、
-// 回包也到了手机，个别请求仍在客户端卡死，同一连接上前后的请求却正常——卡住的那次等满
-// 也不会回来，新请求通常立刻成功。响应头已到、body 还在下载的慢请求不算卡住，照常等满
-// 整段预算（判断靠 request-trace 钩子；没装钩子的 web 不做这一步）。重试只用剩下的预算，
-// 总耗时仍是 REQUEST_TIMEOUT_MS——服务器整个不回包时（冷启动 /auth/me 外面还有一层
+// GET 到这个时刻还「没动静」（没收到响应头，或 XHR 已完成却没交到 JS）就并行发一份备份请求，
+// 谁先回来用谁，另一份随即取消。原请求不叫停：线路丢包时它的回包可能已经在路上了。
+// 2026-11 实测（国内测试机连新加坡）：正常的 GET 1 秒内回来；卡住的那次是整条 HTTP/2 连接被
+// 丢包冻住，等心跳判死再重连要 10 秒以上，而新连接上的请求通常立刻成功。响应头已到、还在下载
+// 的慢请求不算卡住（判断靠 request-trace 钩子；没装钩子的 web 不做这一步）。备份只用剩下的
+// 预算，总耗时仍是 REQUEST_TIMEOUT_MS——服务器整个不回包时（冷启动 /auth/me 外面还有一层
 // retry）不至于把等待翻倍。
-const GET_STALL_CHECK_MS = 8_000;
+const GET_HEDGE_AFTER_MS = 2_500;
 // 连接被判死（安卓 OkHttp 心跳没回音，见 plugins/with-android-okhttp-health）时，挂在上面的
-// 请求直接以 network 失败；GET 换新请求（会走新连接）再试一次，同样只用剩下的预算。
-const GET_RETRYABLE_FAILURES: ReadonlySet<string> = new Set(['stalled', 'network']);
+// 请求直接以 network 失败；还没到备份时刻的 GET 立刻换新连接再试一次，同样只用剩下的预算。
+const GET_RETRYABLE_FAILURES: ReadonlySet<string> = new Set(['network']);
 // 剩余预算再少也给这么多：刚建一条新连接（TLS 握手 + 一个往返）就要这个量级。
 const GET_RETRY_MIN_TIMEOUT_MS = 3_000;
 
 type RequestStage = 'device-id' | 'awaiting-response' | 'reading-body';
-// preparedRequestId：续签在发送前已把这个 X-Request-Id 写盘做围栏，必须原样发出。
-type RequestBudget = { timeoutMs?: number; stallCheckMs?: number; preparedRequestId?: string };
+type RequestBudget = {
+  timeoutMs?: number;
+  /** 到点还没动静就调 onStalled（不叫停请求，由调用方决定要不要发备份）。 */
+  stallCheckMs?: number;
+  onStalled?: () => void;
+  /** 调用方主动放弃（备份赢了）：按超时收尾，卡过的记成 stalled。 */
+  cancelSignal?: AbortSignal;
+  /** fresh-connection：GET 走已注册的独立连接通道（安卓），没注册就照常 fetch。 */
+  transport?: 'fetch' | 'fresh-connection';
+  /** 续签在发送前已把这个 X-Request-Id 写盘做围栏，必须原样发出。 */
+  preparedRequestId?: string;
+};
 
 // 稳定 ID 只是顺带上报（这次没报，下次续签再报），绝不能为它拖住续签：
 // 续签是单例，它卡住所有等着 401 重试的请求都跟着挂住。
@@ -337,7 +361,14 @@ async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
   accessTokenOverride?: string | null,
-  { timeoutMs = REQUEST_TIMEOUT_MS, stallCheckMs, preparedRequestId }: RequestBudget = {},
+  {
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    stallCheckMs,
+    onStalled,
+    cancelSignal,
+    transport = 'fetch',
+    preparedRequestId,
+  }: RequestBudget = {},
 ) {
   const {
     method = 'GET',
@@ -383,7 +414,10 @@ async function executeRequest<T>(
   // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
   // 若在那时就 clearTimeout,body 读将没有任何上限,卡住的流会永久挂起。
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  // 到点还没动静（没收到响应头，或 XHR 已完成却没交到 JS）就提前叫停，交给调用方重试。
+  const cancel = () => controller.abort();
+  if (cancelSignal?.aborted) cancel();
+  else cancelSignal?.addEventListener('abort', cancel, { once: true });
+  // 到点还没动静（没收到响应头，或 XHR 已完成却没交到 JS）就告诉调用方，请求本身接着等。
   const stallTimer = stallCheckMs === undefined ? undefined : setTimeout(() => {
     try {
       if (!requestTraceHooks || requestTraceHooks.isReceiving(traceRequestId)) return;
@@ -391,7 +425,7 @@ async function executeRequest<T>(
       return;
     }
     stalled = true;
-    controller.abort();
+    onStalled?.();
   }, stallCheckMs);
   try {
     requestTraceHooks?.begin(traceRequestId);
@@ -406,22 +440,30 @@ async function executeRequest<T>(
         ? await untilAborted(deviceIdProvider().catch(() => null), controller.signal)
         : null;
       stage = 'awaiting-response';
-      res = await untilAborted(fetch(url, {
-        method,
-        headers: {
-          // 只有 JSON / urlencoded 才由我们设置 Content-Type；
-          // FormData 必须让 fetch 自动加上含 multipart boundary 的头。
-          ...(serializedBody?.contentType
-            ? { 'Content-Type': serializedBody.contentType }
-            : {}),
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
-          ...Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'x-request-id')),
-          'X-Request-Id': requestId,
-        },
-        ...(serializedBody ? { body: serializedBody.body } : {}),
-        signal: controller.signal,
-      }), controller.signal);
+      const requestHeaders: Record<string, string> = {
+        // 只有 JSON / urlencoded 才由我们设置 Content-Type；
+        // FormData 必须让 fetch 自动加上含 multipart boundary 的头。
+        ...(serializedBody?.contentType
+          ? { 'Content-Type': serializedBody.contentType }
+          : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
+        ...Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'x-request-id')),
+        'X-Request-Id': requestId,
+      };
+      const viaFreshConnection =
+        transport === 'fresh-connection' && freshConnectionTransport !== null && diagnosticMethod === 'GET' && !serializedBody;
+      res = await untilAborted(
+        viaFreshConnection
+          ? freshConnectionTransport!(url, { headers: requestHeaders, timeoutMs })
+          : fetch(url, {
+              method,
+              headers: requestHeaders,
+              ...(serializedBody ? { body: serializedBody.body } : {}),
+              signal: controller.signal,
+            }),
+        controller.signal,
+      );
     } catch (error) {
       logApiEvent('network-error', {
         endpointPath,
@@ -473,7 +515,7 @@ async function executeRequest<T>(
     return { res, payload, requestId, clientRequestId, responseRequestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
   } catch (error) {
     if (error instanceof ApiError) {
-      // 卡顿检查叫停的不是「预算用完」：标成 stalled，apiClient 据此换新请求重试。
+      // 卡过的请求被放弃（备份赢了）或耗尽预算：标成 stalled，上报时与普通超时分开。
       if (stalled && error.failureKind === 'timeout') error.failureKind = 'stalled';
       failure = error;
       failureKind = error.failureKind;
@@ -486,6 +528,7 @@ async function executeRequest<T>(
   } finally {
     clearTimeout(timer);
     clearTimeout(stallTimer);
+    cancelSignal?.removeEventListener('abort', cancel);
     const durationMs = Math.max(0, Math.round(diagnosticNow() - startedAt));
     // 只有传输层失败（status 0：超时 / 断网 / body 断流）才需要「卡在哪」。
     const transportFailure = failure?.status === 0;
@@ -834,57 +877,158 @@ function reportApiFailure(
   }
 }
 
-export async function apiClient<T>(
+type ExecutedRequest<T> = Awaited<ReturnType<typeof executeRequest<T>>>;
+
+/** 两个尝试谁先拿到响应用谁；一个失败就等另一个，两个都失败才按 [第一次, 第二次] 给出错误。 */
+function firstResponse<R>(attempts: readonly [Promise<R>, Promise<R>]): Promise<{ index: 0 | 1; value: R }> {
+  return new Promise((resolve, reject) => {
+    const errors: unknown[] = [];
+    attempts.forEach((attempt, index) => {
+      attempt.then(
+        (value) => resolve({ index: index as 0 | 1, value }),
+        (error: unknown) => {
+          errors[index] = error;
+          if (errors.filter((e) => e !== undefined).length === 2) reject(errors);
+        },
+      );
+    });
+  });
+}
+
+/**
+ * GET 的传输：卡住就并行备份、断网就换新连接重试一次（幂等，重发不会造成重复写入）。
+ * 上报：备份/重试救回来报第一次的现场 `retry:recovered`；也没拿到响应时只报一次
+ * （第一次的现场，`attempts:2, retry:failed`，此时 report.done=true）；会话变了不备份不报。
+ */
+async function sendGet<T>(
   endpoint: string,
-  options: RequestOptions = {}
+  options: RequestOptions,
+  sessionUnchanged: () => boolean,
+  report: { done: boolean },
+): Promise<ExecutedRequest<T>> {
+  const primaryCancel = new AbortController();
+  let markStalled = () => {};
+  const stalled = new Promise<'stalled'>((resolve) => {
+    markStalled = () => resolve('stalled');
+  });
+  const primary = executeRequest<T>(endpoint, options, undefined, {
+    stallCheckMs: GET_HEDGE_AFTER_MS,
+    onStalled: markStalled,
+    cancelSignal: primaryCancel.signal,
+  });
+  const first = await Promise.race([
+    primary.then((request) => ({ request }), (error: unknown) => ({ error })),
+    stalled,
+  ]);
+  const second = (timeoutMs: number, cancelSignal?: AbortSignal) =>
+    executeRequest<T>(endpoint, options, undefined, { timeoutMs, cancelSignal, transport: 'fresh-connection' });
+  const giveUp = (stuck: unknown, error: unknown): never => {
+    // 第二次也没拿到响应：用户看到的是第二次的报错，上报的是第一次卡住的现场。
+    if (error instanceof ApiError && error.status === 0 && sessionUnchanged()) {
+      reportApiFailure(stuck, endpoint, options, { attempts: 2, retry: 'failed' });
+      report.done = true;
+    }
+    throw error;
+  };
+  // 拿到了响应（无论状态码）就算救回来了，用户无感，但也要留下现场。之后若是 5xx /
+  // 刷新失败，那是另一件事，由外层照常上报。
+  const recovered = (stuck: unknown) => {
+    if (sessionUnchanged()) reportApiFailure(stuck, endpoint, options, { attempts: 1, retry: 'recovered' });
+  };
+
+  if (first !== 'stalled') {
+    if ('request' in first) return first.request;
+    const failure = first.error;
+    if (!(failure instanceof ApiError) || !GET_RETRYABLE_FAILURES.has(failure.failureKind ?? '') || !sessionUnchanged()) {
+      throw failure;
+    }
+    let retried: ExecutedRequest<T>;
+    try {
+      retried = await second(Math.max(REQUEST_TIMEOUT_MS - (failure.durationMs ?? 0), GET_RETRY_MIN_TIMEOUT_MS));
+    } catch (error) {
+      return giveUp(failure, error);
+    }
+    recovered(failure);
+    return retried;
+  }
+
+  if (!sessionUnchanged()) return primary;
+  const hedgeCancel = new AbortController();
+  const hedge = second(Math.max(REQUEST_TIMEOUT_MS - GET_HEDGE_AFTER_MS, GET_RETRY_MIN_TIMEOUT_MS), hedgeCancel.signal);
+  let winner: { index: 0 | 1; value: ExecutedRequest<T> };
+  try {
+    winner = await firstResponse([primary, hedge]);
+  } catch (errors) {
+    const [stuck, error] = errors as [unknown, unknown];
+    return giveUp(stuck, error);
+  }
+  if (winner.index === 0) {
+    hedgeCancel.abort();
+    hedge.catch(() => {});
+    return winner.value;
+  }
+  primaryCancel.abort();
+  const stuck = await primary.then(() => null, (error: unknown) => error);
+  if (stuck) recovered(stuck);
+  return winner.value;
+}
+
+// 同一时刻、同一账号、同一地址的 GET 只真正发一次：「新的朋友」页一打开，同一个未读数 2 秒内
+// 被不同组件各拉 4～5 次，线路差时请求越多越容易互相拖住。只合并还在路上的请求，落地即撤，
+// 不做缓存。不止一个调用方时每人拿一份深拷贝：调用方可能就地改数据（排序、补字段）。
+const inflightGets = new Map<string, { result: Promise<unknown>; joiners: number }>();
+
+function inflightKey(endpoint: string, options: RequestOptions): string | null {
+  if ((options.method ?? 'GET').toUpperCase() !== 'GET' || options.body !== undefined || options.onResponseHeaders) {
+    return null;
+  }
+  return JSON.stringify([
+    useAuthStore.getState().sessionEpoch,
+    options.auth ?? true,
+    options.accessToken ?? null,
+    options.retryOnAuthError ?? true,
+    endpoint,
+    options.headers ?? {},
+  ]);
+}
+
+const copyJson = <T>(data: T): T =>
+  data !== null && typeof data === 'object' ? (JSON.parse(JSON.stringify(data)) as T) : data;
+
+export function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const key = inflightKey(endpoint, options);
+  if (key === null) return requestOnce<T>(endpoint, options);
+  const inflight = inflightGets.get(key);
+  if (inflight) {
+    inflight.joiners += 1;
+    return inflight.result.then((data) => copyJson(data as T));
+  }
+  const entry = { result: requestOnce<T>(endpoint, options) as Promise<unknown>, joiners: 0 };
+  inflightGets.set(key, entry);
+  // 先于任何调用方的回调执行：落地后的新调用不会再并进来，joiners 在这之后不再变。
+  const release = () => {
+    if (inflightGets.get(key) === entry) inflightGets.delete(key);
+  };
+  entry.result.then(release, release);
+  return entry.result.then((data) => (entry.joiners > 0 ? copyJson(data as T) : (data as T)));
+}
+
+async function requestOnce<T>(
+  endpoint: string,
+  options: RequestOptions,
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
   const requestSessionEpoch =
     auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;
-  // 只有 GET 在卡住 / 连接判死时自动换新请求重试：幂等，重发不会造成重复写入。
-  const retriesStall = (options.method ?? 'GET').toUpperCase() === 'GET';
+  const isGet = (options.method ?? 'GET').toUpperCase() === 'GET';
   const sessionUnchanged = () => useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch;
-  // 卡顿已按「第一次的现场」报过时，不再把重试的失败重复报一次。
-  let stallReported = false;
+  // 卡顿已按「第一次的现场」报过时，不再把第二次的失败重复报一次。
+  const transportReport = { done: false };
   try {
-    let initialRequest: Awaited<ReturnType<typeof executeRequest<T>>>;
-    try {
-      initialRequest = await executeRequest<T>(
-        endpoint,
-        options,
-        undefined,
-        retriesStall ? { stallCheckMs: GET_STALL_CHECK_MS } : {},
-      );
-    } catch (stall) {
-      if (
-        !retriesStall ||
-        !(stall instanceof ApiError) ||
-        !GET_RETRYABLE_FAILURES.has(stall.failureKind ?? '') ||
-        !sessionUnchanged()
-      ) {
-        throw stall;
-      }
-      // 卡顿是在检查点被叫停的；连接判死则在任意时刻，按实际耗时扣。
-      const spentMs = stall.failureKind === 'stalled' ? GET_STALL_CHECK_MS : stall.durationMs ?? 0;
-      try {
-        initialRequest = await executeRequest<T>(endpoint, options, undefined, {
-          timeoutMs: Math.max(REQUEST_TIMEOUT_MS - spentMs, GET_RETRY_MIN_TIMEOUT_MS),
-        });
-      } catch (retryError) {
-        // 重试也没拿到响应：用户看到的是重试的报错，上报的是第一次卡住的现场。
-        if (retryError instanceof ApiError && retryError.status === 0 && sessionUnchanged()) {
-          reportApiFailure(stall, endpoint, options, { attempts: 2, retry: 'failed' });
-          stallReported = true;
-        }
-        throw retryError;
-      }
-      // 重试拿到了响应（无论状态码）：卡顿救回来了，用户无感，但也要留下现场。
-      // 之后若是 5xx / 刷新失败，那是另一件事，由外层照常上报。
-      if (sessionUnchanged()) {
-        reportApiFailure(stall, endpoint, options, { attempts: 1, retry: 'recovered' });
-      }
-    }
+    const initialRequest = isGet
+      ? await sendGet<T>(endpoint, options, sessionUnchanged, transportReport)
+      : await executeRequest<T>(endpoint, options);
 
     // An authenticated current-password check can fail without invalidating the session.
     if (initialRequest.res.status === 401 && auth && retryOnAuthError &&
@@ -981,7 +1125,7 @@ export async function apiClient<T>(
     return data;
   } catch (error) {
     // The error is still re-thrown exactly as before; reporting is a side channel.
-    if (!stallReported && sessionUnchanged()) reportApiFailure(error, endpoint, options);
+    if (!transportReport.done && sessionUnchanged()) reportApiFailure(error, endpoint, options);
     throw error;
   }
 }

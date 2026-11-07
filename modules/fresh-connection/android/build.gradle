@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.freshconnection'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.freshconnection'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // 与 React Native 自带的 OkHttp 同版本：只是另开一个客户端（独立连接池），不引入第二份库。
+  implementation "com.squareup.okhttp3:okhttp:${safeExtGet('okHttpVersion', '4.9.2')}"
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
