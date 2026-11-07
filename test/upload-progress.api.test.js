@@ -92,6 +92,7 @@ function loadUpload({ platform = 'web', nativeResult, nativeError, hang = false,
         };
         case 'expo-file-system/legacy': return {
           FileSystemUploadType: { BINARY_CONTENT: 0 },
+          FileSystemSessionType: { BACKGROUND: 0, FOREGROUND: 1 },
           getInfoAsync: async () => {
             if (statWait) await statWait;
             return { exists: true, isDirectory: false, size: 1000 };
@@ -196,6 +197,19 @@ test('fresh presign headers after a reset can start a new-session native transfe
   assert.equal(api.tasks.length, 1);
   assert.equal(api.tasks[0].finishes, 1);
   assert.equal(api.nativeCalls.length, 1);
+});
+
+// 编辑笔记时人就在页面上等:走 iOS 前台会话。后台会话由系统排期,会长时间停在最后。
+// 聊天等其余调用不传,仍是默认的后台会话(切走 App 也能继续传)。
+test('a foreground upload asks for the native foreground session; the default stays background', async () => {
+  const api = loadUpload({ platform: 'ios' });
+  const presign = await api.requestUploadPresign({ filename: 'a.jpg', contentType: 'image/jpeg', folder: 'notes', sizeBytes: 1000 });
+  void api.uploadLocalFileToPresignedUrl(presign.uploadUrl, 'image/jpeg', 'file:///tmp/a.jpg', presign.requiredHeaders, 1000, { progressKey: 'tile', foreground: true }).catch(() => {});
+  void api.uploadLocalFileToPresignedUrl(presign.uploadUrl, 'image/jpeg', 'file:///tmp/b.jpg', presign.requiredHeaders, 1000).catch(() => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(api.nativeCalls.length, 2);
+  assert.equal(api.nativeCalls[0].options.sessionType, 1);
+  assert.equal(api.nativeCalls[1].options.sessionType, undefined);
 });
 
 for (const platform of ['android', 'ios']) {

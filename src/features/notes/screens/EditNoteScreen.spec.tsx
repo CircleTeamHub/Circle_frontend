@@ -22,8 +22,10 @@ jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 test('each uploading image shows its own progress ring and no global upload card', async () => {
   render(<EditNoteScreen />);
   const upload = await beginDeferredImageUpload();
-  const options = mockUploadFile.mock.calls[0][5] as { progressKey?: string };
+  const options = mockUploadFile.mock.calls[0][5] as { progressKey?: string; foreground?: boolean };
   expect(options?.progressKey).toEqual(expect.any(String));
+  // 人就在编辑页等着:走 iOS 前台会话,不让系统后台排期拖在 99%。
+  expect(options?.foreground).toBe(true);
   let transfer!: ReturnType<typeof startUploadProgress>;
   act(() => {
     transfer = startUploadProgress('image/jpeg', { progressKey: options.progressKey });

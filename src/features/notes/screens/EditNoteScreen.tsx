@@ -1975,8 +1975,9 @@ export default function EditNoteScreen() {
             upload.uri,
             presign.requiredHeaders,
             isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
-            // 进度画在这张图自己的格子上(圆圈),不进全局的上传卡片。
-            { progressKey: clientId },
+            // 进度画在这张图自己的格子上(圆圈),不进全局的上传卡片。人就停在编辑页等着,
+            // 走 iOS 前台会话:后台会话由系统排期,会长时间停在 99%。
+            { progressKey: clientId, foreground: true },
           );
           markClientUploaded(clientId);
           // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。

@@ -642,7 +642,14 @@ export async function uploadLocalFileToPresignedUrl(
   fileUri: string,
   requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
-  options?: UploadProgressOptions,
+  options?: UploadProgressOptions & {
+    /**
+     * iOS 上走前台会话。默认的后台会话把任务交给系统后台传输服务排期:切走 App 也能
+     * 继续传(聊天发图要的就是这个),但起步慢、传得慢,进度一交出去就报满,之后长时间
+     * 停在最后。人就停在页面上等着的场景(编辑笔记)用前台会话;代价是切到后台会中断。
+     */
+    foreground?: boolean;
+  },
 ) {
   const convertedUri = convertedUploadFiles.get(requiredHeaders);
   try {
@@ -678,6 +685,9 @@ export async function uploadLocalFileToPresignedUrl(
           headers: requiredHeaders,
           httpMethod: 'PUT',
           uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          ...(options?.foreground
+            ? { sessionType: FileSystem.FileSystemSessionType.FOREGROUND }
+            : {}),
         }, ({ totalBytesSent, totalBytesExpectedToSend }) => {
           progress.update(totalBytesSent, totalBytesExpectedToSend);
         });
