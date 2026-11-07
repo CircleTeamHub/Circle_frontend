@@ -98,6 +98,7 @@ export default function GroupEntryScreen() {
   const load = useCallback(
     async (autoEnter = false) => {
       const version = ++generation.current;
+      let enteringChat = false;
       setLoading(true);
       setError("");
       try {
@@ -110,6 +111,13 @@ export default function GroupEntryScreen() {
           useAuthStore.getState().sessionEpoch !== sessionEpoch
         )
           return;
+        // 已是成员、要直接进群聊:不先渲染群资料与申请页(那一帧就是「闪一下」),
+        // 保持加载圈直到跳走。
+        if (autoEnter && !admissionId && params.manage !== "1" && next.isMember) {
+          enteringChat = true;
+          openChat(next);
+          return;
+        }
         setGroup(next);
         setDetail(record);
         if (next.circleId && !next.isMember) {
@@ -121,8 +129,6 @@ export default function GroupEntryScreen() {
           );
           return;
         }
-        if (autoEnter && !admissionId && params.manage !== "1" && next.isMember)
-          openChat(next);
         if (record || next.admission)
           void markGroupAdmissionSeen((record ?? next.admission)!.id).catch(
             (e) => reportHandledFailure("groupAdmission", "markSeen", e),
@@ -135,7 +141,7 @@ export default function GroupEntryScreen() {
           reportHandledFailure("groupAdmission", "load", e);
         }
       } finally {
-        if (version === generation.current) setLoading(false);
+        if (version === generation.current && !enteringChat) setLoading(false);
       }
     },
     [

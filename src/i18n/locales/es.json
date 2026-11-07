@@ -474,8 +474,7 @@
       "empty": "No hay miembros para mencionar",
       "title": "Mencionar a alguien",
       "count": "{{count}} miembros",
-      "all": "Todos",
-      "allHint": "Avisa a todo el grupo"
+      "all": "Todos"
     },
     "forward": {
       "title": "Elige un chat",
@@ -974,7 +973,7 @@
         "offShelf": "Retirado"
       },
       "sectionSendFailed": "No se pudo enviar. Inténtalo de nuevo.",
-      "sectionSending": "Enviando…"
+      "noLocation": "Esta nota no tiene una ubicación para enviar"
     },
     "voice": {
       "cancelTip": "Suelta para cancelar",
@@ -1030,7 +1029,9 @@
       "sendSelected": "Enviar ({{count}})",
       "nameSeparator": ", ",
       "resolveFailed": "No se pudo enviar a {{names}}: {{reason}}",
-      "partialDelivered": "Ya se envió a {{count}} de los chats; se quitaron de tu selección."
+      "partialDelivered": "Ya se envió a {{count}} de los chats; se quitaron de tu selección.",
+      "sent": "Enviado",
+      "view": "Ver"
     },
     "quickChat": {
       "expand": "Abrir el chat completo"
@@ -1495,18 +1496,18 @@
     "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
     "collect": {
       "chooseGroup": "¿A qué grupo de notas añadirla?",
-      "editTitle": "Editar título guardado",
+      "editTitle": "Editar título",
       "groupHint": "Elige un grupo primero; después podrás editar el título.",
       "ungrouped": "Sin grupo",
-      "titleHint": "Ponle un título fácil de encontrar. Déjalo vacío para usar el título original.",
-      "titleLabel": "Título guardado",
+      "titleLabel": "Título",
       "untitled": "Nota sin título",
       "skipTitleNextTime": "No editar el título la próxima vez",
       "createGroup": "Nuevo grupo",
       "createGroupPlaceholder": "Nombre del grupo",
       "createGroupConfirm": "Crear",
       "createGroupFailed": "No se pudo crear el grupo",
-      "createGroupFailedHint": "Inténtalo de nuevo más tarde."
+      "createGroupFailedHint": "Inténtalo de nuevo más tarde.",
+      "createGroupShort": "Nuevo"
     },
     "shareToChat": {
       "partialFailed": "Fallaron {{count}} envíos. Puedes reintentar solo los elementos fallidos.",

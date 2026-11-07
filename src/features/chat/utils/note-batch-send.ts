@@ -122,6 +122,9 @@ export function resolveSendableNoteLocation(
   if (longitude < -180 || longitude > 180) return null;
   const title = trimmedLabel(section.title);
   const address = trimmedLabel(section.address);
+  // (0,0) 又没有名称和地址:是没填位置时留下的空壳(线上真有这样的笔记),发出去就是一条
+  // 「未知位置」,不算可发送的位置。
+  if (latitude === 0 && longitude === 0 && !title && !address) return null;
   return {
     latitude,
     longitude,

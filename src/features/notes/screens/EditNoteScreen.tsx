@@ -7,7 +7,12 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import {
+  getNoteDetailHref,
+  getNoteLocationPickerHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -167,7 +172,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
-import { UploadProgressHost } from '@/components/app/UploadProgressHost';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -470,6 +476,8 @@ function useKeyboardVisible() {
 
 export default function EditNoteScreen() {
   const router = useRouter();
+  // 编辑页挂在进入它的那个 tab 栈里(见 getNoteEditHref),往下跳的页面也压进同一栈。
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const { colors, resolvedMode } = useTheme();
@@ -563,6 +571,15 @@ export default function EditNoteScreen() {
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
+  // 离开时要重发的那个返回动作:等编辑器真的卸载、守卫已放行(这一次提交之后)再发,
+  // 否则重发赶在重新渲染之前会被守卫拿旧值再拦一次。
+  const pendingExitActionRef = useRef<NavigationAction | null>(null);
+  // 一批里先传完的那几张:不必等整批收尾,这张的圆圈进度立刻消失。
+  const [uploadedClientIds, setUploadedClientIds] = useState<ReadonlySet<string>>(() => new Set());
+  const markClientUploaded = useCallback((clientId: string) => {
+    setUploadedClientIds((current) => new Set(current).add(clientId));
+  }, []);
+  const [exitRequest, setExitRequest] = useState(0);
   const [navigating, setNavigating] = useState(false);
   const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
   const [showcaseItems, setShowcaseItems] = useState<EditorNoteMediaDraft[]>([]);
@@ -1633,12 +1650,13 @@ export default function EditNoteScreen() {
       invalidateUploadOwnership();
       setEditorMounted(false);
       if (action) {
-        setTimeout(() => navigation.dispatch(action), 0);
+        pendingExitActionRef.current = action;
+        setExitRequest((request) => request + 1);
       } else {
         setNavigating(true);
       }
     },
-    [invalidateUploadOwnership, navigation],
+    [invalidateUploadOwnership],
   );
 
   const promptDraftExit = useCallback(
@@ -1741,8 +1759,26 @@ export default function EditNoteScreen() {
   // refs to avoid re-rendering the whole note while typing, so the callback
   // computes the latest fingerprint when navigation is actually attempted.
   usePreventRemove(editorMounted && !navigationRequestedRef.current, ({ data }) => {
+    // 已经决定离开(草稿已存、编辑器在卸载),这次被拦只是重新渲染慢了一拍、守卫还是旧值:
+    // 挂起这次返回,放行后再发。不能再走 promptDraftExit —— 那里看到「保存进行中」只会弹
+    // 「请先完成当前操作」,人就卡在一个正文空白、按钮一直「保存中」的页面上。
+    if (navigationRequestedRef.current) {
+      pendingExitActionRef.current = data.action;
+      setExitRequest((request) => request + 1);
+      return;
+    }
     promptDraftExit(data.action);
   });
+
+  // 放在守卫之后:同一次提交里守卫先拿到「不拦」,这里再重发返回。编辑器(WebView)在这一次
+  // 提交里已经卸载,也满足「先卸 WebView 再导航」(DOM 桥 injectJavaScript 崩溃)。
+  useEffect(() => {
+    if (editorMounted) return;
+    const action = pendingExitActionRef.current;
+    if (!action) return;
+    pendingExitActionRef.current = null;
+    navigation.dispatch(action);
+  }, [editorMounted, exitRequest, navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1916,27 +1952,42 @@ export default function EditNoteScreen() {
           const contentType =
             resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
             fallbackType;
+          // 图片和聊天、朋友圈一样先压缩(长边 2048、JPEG 0.82,去掉 EXIF 定位)再传:相册原图
+          // 动辄几 MB,远距离链路上要传很久。视频、GIF 原样传;压缩失败就传原图。
+          const upload = isVideo
+            ? { uri: asset.uri, contentType, filename, width: asset.width ?? undefined, height: asset.height ?? undefined }
+            : await prepareChatImageForUpload({
+                uri: asset.uri,
+                width: asset.width ?? undefined,
+                height: asset.height ?? undefined,
+                contentType,
+                filename,
+              });
           const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(filename),
-            contentType,
+            filename: sanitizeUploadFilename(upload.filename),
+            contentType: upload.contentType,
             folder: 'notes',
-            fileUri: asset.uri,
+            fileUri: upload.uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
-            contentType,
-            asset.uri,
+            upload.contentType,
+            upload.uri,
             presign.requiredHeaders,
             isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+            // 进度画在这张图自己的格子上(圆圈),不进全局的上传卡片。人就停在编辑页等着,
+            // 走 iOS 前台会话:后台会话由系统排期,会长时间停在 99%。
+            { progressKey: clientId, foreground: true },
           );
+          markClientUploaded(clientId);
           // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
           // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
           return {
             clientId,
             type: isVideo ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
-            width: asset.width ?? undefined,
-            height: asset.height ?? undefined,
+            width: upload.width,
+            height: upload.height,
             mimeType: presign.requiredHeaders['Content-Type'],
             size: Number(presign.requiredHeaders['Content-Length']),
             durationMs:
@@ -2010,7 +2061,7 @@ export default function EditNoteScreen() {
         }
       }
     },
-    [isRouteDataReady, t],
+    [isRouteDataReady, markClientUploaded, t],
   );
 
   const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {
@@ -2487,19 +2538,17 @@ export default function EditNoteScreen() {
 
   const handleOpenLocationPicker = useCallback(() => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
-    router.push({
-      pathname: '/(tabs)/profile/notes/location-picker',
-      params: {
-        title: locationDraft.title,
-        address: locationDraft.address,
-        latitude: locationDraft.latitude != null ? String(locationDraft.latitude) : '',
-        longitude: locationDraft.longitude != null ? String(locationDraft.longitude) : '',
-      },
-    } as never);
+    router.push(getNoteLocationPickerHref(scope, {
+      title: locationDraft.title,
+      address: locationDraft.address,
+      latitude: locationDraft.latitude != null ? String(locationDraft.latitude) : '',
+      longitude: locationDraft.longitude != null ? String(locationDraft.longitude) : '',
+    }));
   }, [
     locationDraft,
     isRouteDataReady,
     router,
+    scope,
   ]);
 
   const handleClearLocation = useCallback(() => {
@@ -3021,7 +3070,6 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
       mediaMeta: { color: colors.textSecondary },
       emptyText: { color: colors.textSecondary },
@@ -3250,24 +3298,15 @@ export default function EditNoteScreen() {
                   />
                 </View>
               )}
-              {videoUri ? (
+              {videoUri && item.uploadStatus !== 'PENDING' ? (
                 <View style={s.videoPlayOverlay} pointerEvents="none">
                   <Ionicons name="play-circle" size={48} color="#FFFFFF" />
                 </View>
               ) : null}
+              {item.uploadStatus === 'PENDING' && !uploadedClientIds.has(item.clientId) ? (
+                <NoteMediaUploadRing progressKey={item.clientId} />
+              ) : null}
               </Pressable>
-              <View style={[s.mediaBadge, d.mediaBadge]}>
-                <Ionicons
-                  name={item.type === 'VIDEO' ? 'videocam' : 'image'}
-                  size={13}
-                  color={colors.text}
-                />
-                <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={1}>
-                  {item.type === 'VIDEO'
-                    ? t('notes.edit.videoItem', { defaultValue: '视频' })
-                    : t('notes.edit.imageItem', { defaultValue: '图片' })}
-                </Text>
-              </View>
               <Pressable
                 style={s.mediaRemoveButton}
                 onPress={() => handleRemoveSectionMedia(target, item.clientId)}
@@ -3286,12 +3325,11 @@ export default function EditNoteScreen() {
     colors.text,
     d.emptyText,
     d.emptyTray,
-    d.mediaBadge,
-    d.mediaMeta,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
     isRouteDataReady,
+    uploadedClientIds,
     uploadingSection,
     t,
   ]);
@@ -3896,9 +3934,9 @@ export default function EditNoteScreen() {
     }
     const auth = useAuthStore.getState();
     if (draftRouteKeyRef.current === draftRouteKey && auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch) {
-      router.push({ pathname: '/(tabs)/profile/notes/[id]', params: { id: noteId } } as never);
+      router.push(getNoteDetailHref(scope, noteId));
     }
-  }, [currentUser?.id, draftRouteKey, persistDraft, router, sessionEpoch, t]);
+  }, [currentUser?.id, draftRouteKey, persistDraft, router, scope, sessionEpoch, t]);
 
   const editorVideoItem = editorVideoViewer?.routeKey === draftRouteKey
     ? [...mediaItems, ...showcaseItems].find((item) => item.type === 'VIDEO' && item.clientId === editorVideoViewer.clientId)
@@ -4205,7 +4243,6 @@ export default function EditNoteScreen() {
                 <ActivityIndicator color={colors.primary} />
               </View>
             )}
-            <UploadProgressHost />
           </View>
         </Modal>
       ) : null}
@@ -4390,7 +4427,6 @@ export default function EditNoteScreen() {
             </View>
           </View>
         </KeyboardAvoidingContainer>
-        <UploadProgressHost />
       </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}
@@ -4891,18 +4927,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  mediaBadge: {
-    position: 'absolute',
-    left: 6,
-    right: 6,
-    bottom: 6,
-    minHeight: 24,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   mediaRemoveButton: {
     position: 'absolute',

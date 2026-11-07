@@ -544,8 +544,7 @@
       "empty": "暂无可 @ 的成员",
       "title": "选择提醒的人",
       "count": "{{count}} 位成员",
-      "all": "所有人",
-      "allHint": "提醒群里每一个人"
+      "all": "所有人"
     },
     "forward": {
       "title": "选择转发对象",
@@ -1043,7 +1042,7 @@
         "offShelf": "下架"
       },
       "sectionSendFailed": "发送失败，请重试",
-      "sectionSending": "正在发送…"
+      "noLocation": "这条笔记没有可发送的位置"
     },
     "voice": {
       "cancelTip": "松开手指，取消发送",
@@ -1099,7 +1098,9 @@
       "sendSelected": "发送（{{count}}）",
       "nameSeparator": "、",
       "resolveFailed": "无法发送给 {{names}}：{{reason}}",
-      "partialDelivered": "已发送给 {{count}} 个聊天，已从选择中移除。"
+      "partialDelivered": "已发送给 {{count}} 个聊天，已从选择中移除。",
+      "sent": "已发送",
+      "view": "查看"
     },
     "quickChat": {
       "expand": "展开完整聊天"
@@ -3173,18 +3174,18 @@
     "loadFailed": "笔记加载失败，请检查网络后重试",
     "collect": {
       "chooseGroup": "添加到哪个笔记分组？",
-      "editTitle": "编辑收藏标题",
+      "editTitle": "编辑标题",
       "groupHint": "先选择分组，下一步可以修改标题。",
       "ungrouped": "未分组",
-      "titleHint": "输入一个方便自己查找的标题，不填就用原笔记标题。",
-      "titleLabel": "收藏标题",
+      "titleLabel": "标题",
       "untitled": "未命名笔记",
       "skipTitleNextTime": "下次不再编辑标题",
       "createGroup": "新建分组",
       "createGroupPlaceholder": "输入分组名称",
       "createGroupConfirm": "创建",
       "createGroupFailed": "分组创建失败",
-      "createGroupFailedHint": "请稍后重试。"
+      "createGroupFailedHint": "请稍后重试。",
+      "createGroupShort": "新建"
     },
     "shareToChat": {
       "partialFailed": "有 {{count}} 条内容发送失败。重试时只会发送失败项。",

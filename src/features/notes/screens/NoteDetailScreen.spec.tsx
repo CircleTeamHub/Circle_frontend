@@ -15,6 +15,7 @@ let mockAuth = { user: { id: 'me' }, sessionEpoch: 1 };
 const mockRouter = { push: jest.fn(), back: jest.fn(), navigate: jest.fn() };
 const mockTranslate = (key: string) => key;
 let mockBodyProps: any;
+let mockConversations: { id: string; type: string; circleId: string | null }[] = [];
 let mockViewport: NoteImageViewport | null = null;
 let mockClock = 0;
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
@@ -50,6 +51,9 @@ jest.mock('@/features/notes/components/NoteDocumentBody', () => ({ NoteDocumentB
 } }));
 jest.mock('@/features/notes/components/ShareNoteSheet', () => ({ ShareNoteSheet: () => null }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: { getState: () => ({ conversations: mockConversations }) },
+}));
 jest.mock('@/theme', () => ({
   Radius: { full: 50 }, Spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 }, Typography: {},
   useTheme: () => ({ colors: { background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111', primary: '#6200ee', white: '#fff' } }),
@@ -62,6 +66,7 @@ const note = {
 const source = { conversationID: 'conversation', clientMsgID: 'message', conversationType: 'private', sender: { id: 'peer', name: 'Peer' } };
 
 beforeEach(() => {
+  mockConversations = [];
   jest.clearAllMocks();
   mockClock = 0;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -177,6 +182,29 @@ const privateCards = {
 };
 const savedCopy = { ...note, id: 'saved-copy', ownerId: 'me', canEdit: true, collectedFrom: privateCards, cardPreview: null };
 
+// 从聊天里的笔记点编辑:编辑页压进「消息」这一栈(与详情同栈),返回才能正常移走编辑页。
+test('editing a note opened from chat stays in the messages stack', async () => {
+  jest.mocked(fetchNoteDetail).mockResolvedValue({ ...note, ownerId: 'me', canEdit: true } as any);
+  render(<NoteDetailScreen />);
+  fireEvent.press(await screen.findByTestId('note-detail-edit'));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notes/edit', params: { id: 'note' } });
+});
+
+test('the group avatar opens a group the viewer already belongs to straight into the chat', async () => {
+  const owned = { ...note, ownerId: 'me', canEdit: true,
+    sections: { contacts: { items: [privateCards.sender] }, groups: { items: [{ ...privateCards.group, conversationID: 'group-chat' }] } } };
+  jest.mocked(fetchNoteDetail).mockResolvedValue(owned as any);
+  mockConversations = [{ id: 'group-chat', type: 'GROUP', circleId: null }];
+  render(<NoteDetailScreen />);
+  fireEvent.press(await screen.findByTestId('note-group-chat'));
+  // 已是成员不经群入口页:那一页会先查成员资格,中间闪一下群资料与申请。
+  expect(mockRouter.push).toHaveBeenCalledWith(expect.objectContaining({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'group-chat', sourceID: 'group-chat', conversationType: 'group' }),
+  }));
+  expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/messages/group-entry' }));
+});
+
 test.each(['created', 'collected'])('an owned %s note shows its group card and circular avatar actions linked to the same chats', async (kind) => {
   const owned = kind === 'collected' ? { ...savedCopy, id: 'note' } : { ...note, ownerId: 'me', canEdit: true,
     sections: { contacts: { items: [privateCards.sender] }, groups: { items: [{ ...privateCards.group, conversationID: 'group-chat' }] } } };
@@ -189,6 +217,11 @@ test.each(['created', 'collected'])('an owned %s note shows its group card and c
   expect(screen.UNSAFE_getByType(Avatar).props.uri).toBe(privateCards.sender.faceURL);
   expect(screen.UNSAFE_getByType(GroupChatAvatar).props.uri).toBe(privateCards.group.faceURL);
   expect(person).toHaveStyle({ width: 48, height: 48, borderRadius: 50 });
+  // 头像铺满圆钮,只留一圈细白边:不再垫一圈粗的底色。
+  expect(StyleSheet.flatten(person.props.style).backgroundColor).toBeUndefined();
+  expect(StyleSheet.flatten(person.props.style).borderWidth).toBe(1.5);
+  expect(screen.UNSAFE_getByType(Avatar).props.size).toBe(45);
+  expect(screen.UNSAFE_getByType(GroupChatAvatar).props.size).toBe(45);
   expect(StyleSheet.flatten(group.findByType(View).props.style)).toMatchObject({ borderRadius: 50, overflow: 'hidden' });
   fireEvent.press(person);
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/chat-detail', params: {

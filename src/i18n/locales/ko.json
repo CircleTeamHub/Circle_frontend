@@ -471,8 +471,7 @@
       "empty": "멘션할 수 있는 멤버가 없습니다",
       "title": "언급할 사람",
       "count": "멤버 {{count}}명",
-      "all": "모두",
-      "allHint": "그룹의 모든 사람에게 알림"
+      "all": "모두"
     },
     "forward": {
       "title": "채팅 선택",
@@ -970,7 +969,7 @@
         "offShelf": "판매 중지"
       },
       "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요",
-      "sectionSending": "보내는 중…"
+      "noLocation": "이 노트에는 보낼 수 있는 위치가 없습니다"
     },
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
@@ -1026,7 +1025,9 @@
       "sendSelected": "보내기 ({{count}})",
       "nameSeparator": ", ",
       "resolveFailed": "{{names}}에게 보낼 수 없습니다: {{reason}}",
-      "partialDelivered": "{{count}}개 채팅에는 이미 보내서 선택에서 제외했습니다."
+      "partialDelivered": "{{count}}개 채팅에는 이미 보내서 선택에서 제외했습니다.",
+      "sent": "전송됨",
+      "view": "보기"
     },
     "quickChat": {
       "expand": "전체 채팅 열기"
@@ -1510,18 +1511,18 @@
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
     "collect": {
       "chooseGroup": "어떤 노트 그룹에 추가할까요?",
-      "editTitle": "저장 제목 편집",
+      "editTitle": "제목 편집",
       "groupHint": "먼저 그룹을 선택한 뒤 제목을 수정할 수 있습니다.",
       "ungrouped": "미분류",
-      "titleHint": "찾기 쉬운 제목을 입력하세요. 비워 두면 원래 제목을 사용합니다.",
-      "titleLabel": "저장 제목",
+      "titleLabel": "제목",
       "untitled": "제목 없는 노트",
       "skipTitleNextTime": "다음부터 제목 편집 안 함",
       "createGroup": "새 그룹",
       "createGroupPlaceholder": "그룹 이름 입력",
       "createGroupConfirm": "만들기",
       "createGroupFailed": "그룹을 만들지 못했습니다",
-      "createGroupFailedHint": "잠시 후 다시 시도해 주세요."
+      "createGroupFailedHint": "잠시 후 다시 시도해 주세요.",
+      "createGroupShort": "새로 만들기"
     },
     "shareToChat": {
       "partialFailed": "{{count}}건을 보내지 못했습니다. 실패한 항목만 다시 보낼 수 있어요.",

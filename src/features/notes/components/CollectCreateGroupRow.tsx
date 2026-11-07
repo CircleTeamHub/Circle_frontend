@@ -23,29 +23,24 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
   icon: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  label: { ...Typography.body, flex: 1 },
   input: { ...Typography.body, flex: 1, minHeight: 40, paddingVertical: Spacing.xs },
   confirm: { minHeight: 36, paddingHorizontal: Spacing.md, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 });
 
-/** 收藏选分组那一步的「新建分组」:点开就地输入名字,建好直接选中。 */
+/** 收藏选分组那一步的新建分组输入行:弹窗右上角「新建」点开后出现在列表顶部,建好直接选中。 */
 export function CollectCreateGroupRow({ disabled = false, onCreate }: CollectCreateGroupRowProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const trimmed = name.trim();
 
   const handleCreate = async () => {
-    if (!trimmed || creating) return;
+    if (!trimmed || creating || disabled) return;
     setCreating(true);
     const created = await onCreate(trimmed);
     setCreating(false);
-    if (created) {
-      setName('');
-      setEditing(false);
-    }
+    if (created) setName('');
   };
 
   const rowStyle = [s.row, { borderColor: colors.primary, backgroundColor: colors.background }];
@@ -54,22 +49,6 @@ export function CollectCreateGroupRow({ disabled = false, onCreate }: CollectCre
       <Ionicons name="add" size={18} color={colors.primary} />
     </View>
   );
-
-  if (!editing) {
-    return (
-      <Pressable
-        style={rowStyle}
-        onPress={() => setEditing(true)}
-        disabled={disabled}
-        accessibilityRole="button"
-      >
-        {icon}
-        <Text style={[s.label, { color: colors.primary }]}>
-          {t('notes.collect.createGroup', { defaultValue: '新建分组' })}
-        </Text>
-      </Pressable>
-    );
-  }
 
   return (
     <View style={rowStyle}>
@@ -84,13 +63,13 @@ export function CollectCreateGroupRow({ disabled = false, onCreate }: CollectCre
         autoFocus
         returnKeyType="done"
         onSubmitEditing={() => void handleCreate()}
-        editable={!creating}
+        editable={!creating && !disabled}
         accessibilityLabel={t('notes.collect.createGroup', { defaultValue: '新建分组' })}
       />
       <Pressable
         style={[s.confirm, { backgroundColor: colors.primary }, !trimmed && { opacity: 0.55 }]}
         onPress={() => void handleCreate()}
-        disabled={!trimmed || creating}
+        disabled={!trimmed || creating || disabled}
         accessibilityRole="button"
       >
         {creating ? (

@@ -277,6 +277,50 @@ export function getQrLandingHref(
   }
 }
 
+/**
+ * 编辑笔记页。和笔记详情一样每个 tab 栈各挂一份,按来源 scope 压进同一个栈:从聊天里的
+ * 笔记点编辑,原来固定压进「我的」那一栈 —— 保存/返回时的 back 要跨 tab,编辑页没被
+ * 移走,停在「编辑器已卸载、按钮保存中」的样子,下次再点编辑打开的还是它。
+ */
+export function getNoteEditHref(
+  scope: UserProfileScope,
+  params: Record<string, string>,
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/notes/edit', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/notes/edit', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/notes/edit', params };
+    case 'messages':
+      return { pathname: '/(tabs)/messages/notes/edit', params };
+    case 'profile':
+    default:
+      return { pathname: '/(tabs)/profile/notes/edit', params };
+  }
+}
+
+/** 编辑页里的选位置页:跟编辑页在同一个栈,选完 back 回到编辑页。 */
+export function getNoteLocationPickerHref(
+  scope: UserProfileScope,
+  params: Record<string, string>,
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/notes/location-picker', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/notes/location-picker', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/notes/location-picker', params };
+    case 'messages':
+      return { pathname: '/(tabs)/messages/notes/location-picker', params };
+    case 'profile':
+    default:
+      return { pathname: '/(tabs)/profile/notes/location-picker', params };
+  }
+}
+
 export function getNoteDetailHref(
   scope: UserProfileScope,
   id: string,

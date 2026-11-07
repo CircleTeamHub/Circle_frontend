@@ -2568,6 +2568,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (!sourceNoteId) return;
     const { conversations, messagesByConversation } = get();
     let changed = false;
+    const patchedByConversation: [string, ChatMessageDto[]][] = [];
     const nextTimelines: Record<string, ChatMessageDto[]> = {
       ...messagesByConversation,
     };
@@ -2582,8 +2583,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           publicationStatus,
         ),
       );
-      if (next.some((message, index) => message !== timeline[index])) {
+      const patched = next.filter((message, index) => message !== timeline[index]);
+      if (patched.length > 0) {
         nextTimelines[conversationId] = next;
+        patchedByConversation.push([conversationId, patched]);
         changed = true;
       }
     }
@@ -2606,6 +2609,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       messagesByConversation: nextTimelines,
       conversations: sortConversations(nextConversations),
     });
+    // 补丁也写进本地库:冷启动先读本地库渲染,不写的话断网时又是发送那一刻的旧状态。
+    for (const [conversationId, patched] of patchedByConversation) {
+      void persistLocalMessages(conversationId, patched);
+    }
   },
 
   applyBurnDuration: (conversationId, burnDurationSec, burnStartedAt) => {

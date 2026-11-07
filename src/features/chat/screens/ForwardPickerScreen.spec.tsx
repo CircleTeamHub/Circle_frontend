@@ -8,17 +8,20 @@ const mockPending = { message: { type: 'received', text: 'hello' } };
 let mockPendingValue: typeof mockPending | null;
 let mockPendingBatch: typeof mockPending[] | null;
 let mockPickTargets: ChatTarget[] = [];
-const mockSetPendingBatch = jest.fn((items: typeof mockPending[]) => { mockPendingBatch = items; });
 const mockClearPending = jest.fn();
 const mockSendText = jest.fn();
 const mockStartChatSend = jest.fn();
 const mockRecord = jest.fn();
 const mockResolve = jest.fn();
 const mockBack = jest.fn();
-const mockDeselect = jest.fn();
+const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 const mockShowTopNotice = jest.fn();
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ back: mockBack }),
+  router: { push: (...args: unknown[]) => mockPush(...args), navigate: (...args: unknown[]) => mockNavigate(...args) },
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -36,7 +39,7 @@ jest.mock('@/stores/authStore', () => ({
 }));
 jest.mock('@/features/chat/store/use-message-forward-store', () => ({
   useMessageForwardStore: (selector: (state: unknown) => unknown) => selector({
-    pending: mockPendingValue, pendingBatch: mockPendingBatch, setPendingBatch: mockSetPendingBatch, clear: mockClearPending,
+    pending: mockPendingValue, pendingBatch: mockPendingBatch, clear: mockClearPending,
   }),
 }));
 jest.mock('@/chat-core/send-handle', () => ({ startChatSend: (send: (onCreate: () => void) => Promise<unknown>) => mockStartChatSend(send) }));
@@ -74,15 +77,10 @@ jest.mock('@/features/chat/components/chat-target-picker/use-recent-forward-targ
 }));
 jest.mock('@/features/chat/components/chat-target-picker/ChatTargetPicker', () => {
   const { Pressable, Text } = jest.requireActual('react-native');
-  const { useImperativeHandle } = jest.requireActual('react');
   return {
-    ChatTargetPicker: ({ ref, onConfirm }: {
-      ref?: React.Ref<unknown>;
-      onConfirm: (targets: ChatTarget[]) => void;
-    }) => {
-      useImperativeHandle(ref, () => ({ deselect: mockDeselect }));
-      return <Pressable onPress={() => onConfirm(mockPickTargets)}><Text>picker.pick</Text></Pressable>;
-    },
+    ChatTargetPicker: ({ onConfirm }: { onConfirm: (targets: ChatTarget[]) => void }) => (
+      <Pressable onPress={() => onConfirm(mockPickTargets)}><Text>picker.pick</Text></Pressable>
+    ),
   };
 });
 jest.mock('@/features/chat/components/send-confirm-dialog', () => {
@@ -112,8 +110,11 @@ const chat = (id: string, kind: ChatTarget['kind'] = 'direct'): ChatTarget => ({
   key: id, conversationId: id, userId: null, name: `name-${id}`, kind,
 });
 
+let alertSpy: jest.SpyInstance;
+
 beforeEach(() => {
   jest.clearAllMocks();
+  alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockPendingValue = mockPending;
   mockPendingBatch = null;
   mockPickTargets = [chat('direct-1')];
@@ -121,6 +122,16 @@ beforeEach(() => {
   mockResolve.mockImplementation((target: ChatTarget) => Promise.resolve(target.conversationId ?? `created-${target.userId}`));
   mockStartChatSend.mockImplementation((send: (onCreate: () => void) => Promise<unknown>) => ({ queued: true, delivered: send(jest.fn()) }));
 });
+
+afterEach(() => alertSpy.mockRestore());
+
+type AlertButton = { text: string; onPress?: () => void };
+/** 「已发送」弹窗的两个按钮:确定、查看。 */
+function sentButtons(): AlertButton[] {
+  const call = alertSpy.mock.calls.find(([title]) => title === 'chat.targetPicker.sent');
+  if (!call) throw new Error('「已发送」弹窗没有弹出');
+  return call[2] as AlertButton[];
+}
 
 function pick(caption = '') {
   fireEvent.press(screen.getByText('picker.pick'));
@@ -152,13 +163,64 @@ test('cancelling the confirmation forwards nothing and keeps the pending message
   expect(mockClearPending).not.toHaveBeenCalled();
 });
 
+test('confirming says "sent" right away, before the forward has gone out', () => {
+  mockStartChatSend.mockImplementation(() => ({ queued: true, delivered: new Promise(() => undefined) }));
+  render(<ForwardPickerScreen />);
+  pick();
+  expect(alertSpy).toHaveBeenCalledWith('chat.targetPicker.sent', undefined, expect.any(Array));
+  expect(sentButtons().map((button) => button.text)).toEqual(['common.confirm', 'chat.targetPicker.view']);
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
 test('a confirmed single target forwards the message and remembers the chat', async () => {
   render(<ForwardPickerScreen />);
   pick();
-  await waitFor(() => expect(mockClearPending).toHaveBeenCalled());
+  await waitFor(() => expect(mockRecord).toHaveBeenCalledWith('me', [expect.objectContaining({ conversationId: 'direct-1' })]));
   expect(mockSendText).toHaveBeenCalledTimes(1);
   expect(mockSendText).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'direct-1', text: 'hello' }));
-  expect(mockRecord).toHaveBeenCalledWith('me', [expect.objectContaining({ conversationId: 'direct-1' })]);
+});
+
+test('"confirm" in the sent dialog clears the pending forward and closes the page', () => {
+  render(<ForwardPickerScreen />);
+  pick();
+  sentButtons()[0].onPress?.();
+  expect(mockClearPending).toHaveBeenCalled();
+  expect(mockBack).toHaveBeenCalled();
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+test('"view" opens the chat it was sent to, including a friend with no chat yet', async () => {
+  mockPickTargets = [{ key: 'user:u2', conversationId: null, userId: 'u2', name: '小王', kind: 'direct' }];
+  render(<ForwardPickerScreen />);
+  pick();
+  sentButtons()[1].onPress?.();
+  expect(mockBack).toHaveBeenCalled();
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({
+      conversationID: 'created-u2', sourceID: 'u2', title: '小王', conversationType: 'private',
+    }),
+  }));
+});
+
+test('"view" after sending to a group opens it as a group chat', async () => {
+  mockPickTargets = [chat('group-1', 'group')];
+  render(<ForwardPickerScreen />);
+  pick();
+  sentButtons()[1].onPress?.();
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'group-1', sourceID: 'group-1', conversationType: 'group' }),
+  }));
+});
+
+test('"view" after sending to several chats goes to the message list', () => {
+  mockPickTargets = [chat('direct-1'), chat('group-1', 'group')];
+  render(<ForwardPickerScreen />);
+  pick();
+  sentButtons()[1].onPress?.();
+  expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/messages');
+  expect(mockPush).not.toHaveBeenCalled();
 });
 
 test('several targets each get every message, then the caption', async () => {
@@ -178,74 +240,36 @@ test('several targets each get every message, then the caption', async () => {
     .map((options) => options.text);
   expect(sentTo('group-1')).toEqual(['first', 'second', '一起看看']);
   expect(sentTo('created-u2')).toEqual(['first', 'second', '一起看看']);
-  expect(mockClearPending).toHaveBeenCalled();
 });
 
-test('a partial batch failure to one chat retains only the unsent messages for retry', async () => {
-  const first = { message: { type: 'received', text: 'first' } };
-  const second = { message: { type: 'received', text: 'second' } };
-  mockPendingBatch = [first, second];
-  mockStartChatSend.mockImplementationOnce((send: (onCreate: () => void) => Promise<unknown>) => ({ queued: true, delivered: send(jest.fn()) }))
-    .mockImplementationOnce(() => ({ queued: false, delivered: Promise.reject(new Error('blocked')) }));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ForwardPickerScreen />);
-    pick('不会发出');
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'chat.forward.failedRetry'));
-    expect(mockSetPendingBatch).toHaveBeenLastCalledWith([second]);
-    expect(mockClearPending).not.toHaveBeenCalled();
-    // 转发没发完时附言也不发,免得对方只收到一句没头没尾的话。
-    expect(mockSendText.mock.calls.map(([options]) => options.text)).toEqual(['first']);
-  } finally { alert.mockRestore(); }
-});
-
-test('a chat that cannot be opened reports failure without sending', async () => {
-  mockResolve.mockRejectedValueOnce(new Error('offline'));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ForwardPickerScreen />);
-    pick();
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'resolve.failed'));
-    expect(mockStartChatSend).not.toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
-});
-
-test('with several chats, one that cannot be opened stops the whole send so a retry never repeats', async () => {
+test('a chat that cannot be opened is reported, and the others still get it', async () => {
   mockPickTargets = [chat('direct-1'), { key: 'user:u9', conversationId: null, userId: 'u9', name: '拉黑我的人', kind: 'direct' }];
   mockResolve
     .mockImplementationOnce((target: ChatTarget) => Promise.resolve(target.conversationId))
     .mockImplementationOnce(() => Promise.reject(new Error('CHAT_BLOCKED')));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ForwardPickerScreen />);
-    pick();
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'resolve.failed'));
-    expect(mockStartChatSend).not.toHaveBeenCalled();
-
-    // 去掉那个人再发:第一个聊天只收到一份。
-    mockPickTargets = [chat('direct-1')];
-    pick();
-    await waitFor(() => expect(mockClearPending).toHaveBeenCalled());
-    expect(mockSendText.mock.calls.map(([options]) => options.conversationId)).toEqual(['direct-1']);
-  } finally { alert.mockRestore(); }
+  render(<ForwardPickerScreen />);
+  pick();
+  await waitFor(() => expect(mockShowTopNotice).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'error', title: 'chat.forward.failed', message: 'resolve.failed' }),
+  ));
+  await waitFor(() => expect(mockSendText).toHaveBeenCalledTimes(1));
+  expect(mockSendText.mock.calls.map(([options]) => options.conversationId)).toEqual(['direct-1']);
+  expect(mockRecord).toHaveBeenCalledWith('me', [expect.objectContaining({ conversationId: 'direct-1' })]);
 });
 
-test('after a partial failure the chats that already got it are dropped from the selection', async () => {
-  mockPickTargets = [chat('direct-1'), chat('group-2', 'group')];
+test('a forward the client refuses names the chat in a top notice and skips the caption', async () => {
+  mockPendingBatch = [{ message: { type: 'received', text: 'first' } }, { message: { type: 'received', text: 'second' } }];
   mockStartChatSend
     .mockImplementationOnce((send: (onCreate: () => void) => Promise<unknown>) => ({ queued: true, delivered: send(jest.fn()) }))
-    .mockImplementationOnce(() => ({ queued: false, delivered: Promise.reject(new Error('credit')) }));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ForwardPickerScreen />);
-    pick();
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(
-      'chat.forward.failed',
-      'chat.targetPicker.partialDelivered\nchat.forward.failedRetry',
-    ));
-    expect(mockDeselect).toHaveBeenCalledWith(['direct-1']);
-    expect(mockClearPending).not.toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
+    .mockImplementationOnce(() => ({ queued: false, delivered: Promise.reject(new Error('blocked')) }));
+  render(<ForwardPickerScreen />);
+  pick('不会发出');
+  await waitFor(() => expect(mockShowTopNotice).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'error', title: 'chat.forward.failed', message: 'name-direct-1：chat.forward.failedRetry',
+  })));
+  // 转发没发完时附言也不发,免得对方只收到一句没头没尾的话。
+  expect(mockSendText.mock.calls.map(([options]) => options.text)).toEqual(['first']);
+  expect(mockRecord).not.toHaveBeenCalled();
 });
 
 test('the caption is held back when the forwarded content was rejected', async () => {

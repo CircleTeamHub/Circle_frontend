@@ -50,9 +50,19 @@ test('NoteDetailScreen falls back to plain content string', () => {
   assert.match(body, /sections\.text\.content/);
 });
 
-test('NoteDetailScreen has edit navigation', () => {
+test('NoteDetailScreen has edit navigation into the same tab stack it was opened from', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
-  assert.match(src, /notes\/edit/);
+  // 从聊天里的笔记点编辑,原来固定压进「我的」那一栈:保存/返回跨 tab,编辑页没被移走,
+  // 下次再点编辑打开的还是那个卡在「保存中」的旧页面。
+  assert.match(src, /router\.push\(getNoteEditHref\(scope, \{ id: note\.id \}\)\)/);
+  assert.doesNotMatch(src, /profile\/notes\/edit/);
+  const routes = read('src/features/user/utils/routes.ts');
+  for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.match(routes, new RegExp(`pathname: '/\\(tabs\\)/${tab}/notes/edit'`));
+    assert.match(routes, new RegExp(`pathname: '/\\(tabs\\)/${tab}/notes/location-picker'`));
+    assert.match(read(`app/(tabs)/${tab}/notes/edit.tsx`), /EditNoteScreen/);
+    assert.match(read(`app/(tabs)/${tab}/notes/location-picker.tsx`), /NoteLocationPickerScreen/);
+  }
 });
 
 test('NoteDetailScreen only shows edit when the current user can edit', () => {

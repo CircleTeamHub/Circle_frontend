@@ -6,15 +6,16 @@ import {
   useRef,
 } from 'react';
 import { type NoteSummary } from '@/features/notes/types';
+import { type NoteCardData } from '@/types';
 import {
   appendNoteBatchRun,
   type NoteSendOptions,
+  resolveSendableNoteLocation,
 } from '@/features/chat/utils/note-batch-send';
 import { sendNotesToConversation } from '@/features/chat/utils/send-notes-to-conversation';
-import { fetchNoteDetail } from '@/services/api/notes';
+import { fetchNoteDetail, getCachedNoteDetail } from '@/services/api/notes';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
-import { showTopNotice } from '@/components/app/top-notice-store';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
 
@@ -49,7 +50,7 @@ export function useNoteBatchSend({
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
   // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
   const noteSendTimestampsRef = useRef<number[]>([]);
-  // 卡片小标签「视频 / 展示 / 位置」正在发的 noteId:section。先拉详情再拷媒体,弱网下要好几秒,
+  // 卡片小标签「视频 / 展示 / 位置」正在发的 noteId:section。拷媒体弱网下要好几秒,
   // 期间再点同一块直接忽略,否则同一组内容会被发两三遍。
   const sectionSendsInFlightRef = useRef<Set<string>>(new Set());
   /**
@@ -112,36 +113,55 @@ export function useNoteBatchSend({
 
   /**
    * 聊天里笔记卡片下方的「视频 / 展示 / 位置」:以我的名义把这条笔记对应的那一块
-   * 发到当前聊天。卡片上只有计数,先拉详情拿到真实的媒体数和地址,再走同一条
-   * 批量发送管线(媒体由服务端拷进我的 chat/ 命名空间,和批量发笔记同一套限流)。
+   * 发到当前聊天,走同一条批量发送管线(媒体由服务端拷进我的 chat/ 命名空间,
+   * 和批量发笔记同一套限流)。
+   *
+   * 要快:视频/展示不再先拉一遍详情 —— 卡片上已有计数,服务端拷贝接口自己按笔记
+   * 校验权限、按分区取媒体;位置优先用本机缓存的详情,没有才拉。不弹「正在发送」,
+   * 消息一进队就出现在会话里,那就是反馈。
    */
   const handleSendNoteSection = useCallback(
-    (noteId: string, section: NoteCardSendSection) => {
+    (card: NoteCardData, section: NoteCardSendSection) => {
       if (!sourceID || isPreviewMode) return Promise.resolve();
-      const inFlightKey = `${noteId}:${section}`;
+      const inFlightKey = `${card.noteId}:${section}`;
       const inFlight = sectionSendsInFlightRef.current;
       if (inFlight.has(inFlightKey)) return Promise.resolve();
       inFlight.add(inFlightKey);
-      showTopNotice({
-        type: 'info',
-        title: t('chat.noteCard.sectionSending', { defaultValue: '正在发送…' }),
-      });
+      const reportFailure = (error: unknown) => {
+        reportHandledFailure('chatDetail', 'fetchNoteForSection', error);
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.noteCard.sectionSendFailed', { defaultValue: '发送失败，请重试' }),
+            ),
+          );
+        }
+      };
       const run = appendNoteBatchRun(noteBatchQueueRef.current, async () => {
         if (!mountedRef.current) return;
         let note: NoteSummary;
-        try {
-          note = await fetchNoteDetail(noteId);
-        } catch (error) {
-          reportHandledFailure('chatDetail', 'fetchNoteForSection', error);
-          if (mountedRef.current) {
-            setSendError(
-              getChatSendErrorMessage(
-                error,
-                t('chat.noteCard.sectionSendFailed', { defaultValue: '发送失败，请重试' }),
-              ),
-            );
+        if (section === 'location') {
+          const cached = getCachedNoteDetail(card.noteId)?.value;
+          try {
+            note = cached ?? (await fetchNoteDetail(card.noteId));
+          } catch (error) {
+            reportFailure(error);
+            return;
           }
-          return;
+          if (!resolveSendableNoteLocation(note.sections?.location)) {
+            if (mountedRef.current) {
+              setSendError(t('chat.noteCard.noLocation', { defaultValue: '这条笔记没有可发送的位置' }));
+            }
+            return;
+          }
+        } else {
+          // 只用到 id 和「有媒体」:卡片的计数足够,拷哪些对象由服务端按分区决定。
+          note = {
+            id: card.noteId,
+            mediaCount: Math.max(1, card.imageCount + card.videoCount),
+            hasLocation: false,
+          } as NoteSummary;
         }
         if (!mountedRef.current) return;
         await runNoteBatchSend([note], {

@@ -1,14 +1,9 @@
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
-import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { useTheme, Spacing, Typography } from '@/theme';
 import type { ChatMessage, NoteCardData } from '@/types';
-import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
+import { NoteCardBody, type NoteCardSection } from './note-card-body';
 import {
   BubbleStatusText,
-  CHAT_CARD_GAP,
-  CHAT_CARD_PADDING_VERTICAL,
   CHAT_CARD_STANDARD_WIDTH,
   MessageAvatar,
 } from './shared';
@@ -21,7 +16,7 @@ interface NoteCardBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onPress?: (note: NoteCardData) => void;
-  onSectionPress?: (note: NoteCardData, section: 'text' | 'media' | 'showcase' | 'location') => void;
+  onSectionPress?: (note: NoteCardData, section: NoteCardSection) => void;
   onAvatarPress?: () => void;
   onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
@@ -43,75 +38,6 @@ const sNote = StyleSheet.create({
   bodyOutgoing: {
     alignItems: 'flex-end',
   },
-  card: {
-    width: CHAT_CARD_STANDARD_WIDTH,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
-    paddingHorizontal: Spacing.md,
-  },
-  topRow: {
-    flexDirection: 'row',
-    gap: CHAT_CARD_GAP,
-    alignItems: 'flex-start',
-  },
-  cover: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-  },
-  textCol: {
-    flex: 1,
-    gap: 2,
-  },
-  title: { ...Typography.body, fontWeight: '600' },
-  preview: { ...Typography.small, lineHeight: 17 },
-  workStatus: {
-    ...Typography.tiny,
-    fontWeight: '700',
-    marginTop: 5,
-  },
-  // 与笔记页的开工/打烊标签同一套实心底(workingFill / closedFill + onStatusFill)。
-  workStatusPill: {
-    alignSelf: 'flex-start',
-    borderRadius: Radius.full,
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-  },
-  workStatusPillText: {
-    ...Typography.tiny,
-    fontWeight: '700',
-  },
-  meta: {
-    ...Typography.tinyRegular,
-    marginTop: 6,
-  },
-  previewRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
-  },
-  // 最多 4 张等宽方图;不足 4 张时保持同样大小,靠左排。
-  previewImage: {
-    width: '23.5%',
-    aspectRatio: 1,
-    borderRadius: Radius.sm,
-  },
-  chips: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 6,
-    flexWrap: 'wrap',
-  },
-  chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  chipText: { ...Typography.tiny, fontWeight: '600' },
   avatarSlot: { paddingBottom: 2 },
   timeRow: {
     flexDirection: 'row',
@@ -121,8 +47,7 @@ const sNote = StyleSheet.create({
   },
 });
 
-const NOTE_CARD_ACTIVE_GREEN = '#16A34A';
-
+/** 笔记卡片消息:头像 + 卡片主体(NoteCardBody)+ 时间/送达状态。 */
 export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   message,
   outgoing,
@@ -138,7 +63,6 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
-  const { t } = useTranslation();
   const note = message.noteCard;
 
   const avatarNode = (
@@ -155,171 +79,15 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
   if (!note) return null;
 
-  // 4 个标签：笔记 / 视频 / 展示 / 位置 —— 笔记内容包含哪一项就高亮显示
-  const flags = {
-    note: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
-    video: note.videoCount > 0,
-    display: (note.showcaseCount ?? note.imageCount) > 0,
-    location: note.hasLocation ?? false,
-  };
-
-  const chips: {
-    id: keyof typeof flags;
-    labelKey: string;
-    defaultLabel: string;
-    section: 'text' | 'media' | 'showcase' | 'location';
-  }[] = [
-    { id: 'note', labelKey: 'chat.noteCard.chips.note', defaultLabel: '笔记', section: 'text' },
-    { id: 'video', labelKey: 'chat.noteCard.chips.video', defaultLabel: '视频', section: 'media' },
-    { id: 'display', labelKey: 'chat.noteCard.chips.display', defaultLabel: '展示', section: 'showcase' },
-    { id: 'location', labelKey: 'chat.noteCard.chips.location', defaultLabel: '位置', section: 'location' },
-  ];
-
-  const metaSegments: string[] = [];
-  if (note.imageCount > 0)
-    metaSegments.push(
-      t('chat.noteCard.imageCount', {
-        defaultValue: '{{count}}张图片',
-        count: note.imageCount,
-      }),
-    );
-  if (note.videoCount > 0)
-    metaSegments.push(
-      t('chat.noteCard.videoCount', {
-        defaultValue: '{{count}}个视频',
-        count: note.videoCount,
-      }),
-    );
-  const metaLine = metaSegments.length
-    ? t('chat.noteCard.includes', {
-        defaultValue: '包含: {{segments}}',
-        segments: metaSegments.join('|'),
-      })
-    : null;
-
-  const cardBg = outgoing ? colors.sentBubble : colors.receivedBubble;
-  const onCardColor = outgoing ? colors.white : colors.text;
-  const onCardSecondary = outgoing
-    ? 'rgba(255,255,255,0.78)'
-    : colors.text;
-
   const cardNode = (
     <View style={[sNote.body, outgoing ? sNote.bodyOutgoing : null]}>
-      <Pressable
-        style={[sNote.card, { backgroundColor: cardBg }]}
-        onPress={onPress ? () => onPress(note) : undefined}
+      <NoteCardBody
+        note={note}
+        outgoing={outgoing}
+        onPress={onPress}
+        onSectionPress={onSectionPress}
         onLongPress={onLongPress}
-        delayLongPress={350}
-      >
-        <View style={sNote.topRow}>
-          {note.coverUrl ? (
-            <Image
-              source={{ uri: note.coverUrl }}
-              style={sNote.cover}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={0}
-              // 封面来自对端可控的卡片 payload，尺寸无从预判；理由同 image-bubble。
-              enforceEarlyResizing
-            />
-          ) : (
-            <View style={[sNote.cover, { alignItems: 'center', justifyContent: 'center' }]}>
-              <Ionicons name="document-text-outline" size={28} color={onCardSecondary} />
-            </View>
-          )}
-          <View style={sNote.textCol}>
-            <Text style={[sNote.title, { color: onCardColor }]} numberOfLines={1}>
-              {note.title}
-            </Text>
-            {note.contentPreview ? (
-              <Text
-                style={[sNote.preview, { color: onCardSecondary }]}
-                numberOfLines={2}
-              >
-                {note.contentPreview}
-              </Text>
-            ) : null}
-            {note.publicationStatus === 'UNLISTED' ||
-            note.publicationStatus === 'DELETED' ? (
-              <Text style={[sNote.workStatus, { color: colors.warning }]}>
-                {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
-              </Text>
-            ) : isSetNoteWorkStatus(note.workStatus) ? (
-              <View
-                style={[
-                  sNote.workStatusPill,
-                  { backgroundColor: noteWorkStatusFill(note.workStatus, colors) },
-                ]}
-              >
-                <Text style={[sNote.workStatusPillText, { color: colors.onStatusFill }]}>
-                  {note.workStatus === 'WORKING'
-                    ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
-                    : note.workStatus === 'CLOSED'
-                      ? t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })
-                      : t('chat.noteCard.workStatus.offShelf', { defaultValue: '下架' })}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        {metaLine ? (
-          <Text style={[sNote.meta, { color: onCardSecondary }]}>{metaLine}</Text>
-        ) : null}
-
-        {note.previewUrls && note.previewUrls.length > 0 ? (
-          <View style={sNote.previewRow} testID="note-card-previews">
-            {note.previewUrls.map((uri) => (
-              <Image
-                key={uri}
-                source={{ uri }}
-                style={sNote.previewImage}
-                contentFit="cover"
-                recyclingKey={uri}
-                accessibilityIgnoresInvertColors
-              />
-            ))}
-          </View>
-        ) : null}
-
-        <View style={sNote.chips}>
-          {chips.map((chip) => {
-            const active = flags[chip.id];
-            return (
-              <Pressable
-                key={chip.id}
-                style={[
-                  sNote.chip,
-                  {
-                    backgroundColor: active
-                      ? NOTE_CARD_ACTIVE_GREEN
-                      : 'transparent',
-                    borderColor: active ? NOTE_CARD_ACTIVE_GREEN : onCardSecondary,
-                  },
-                ]}
-                disabled={!active}
-                onLongPress={onLongPress}
-                delayLongPress={350}
-                onPress={
-                  active && onSectionPress
-                    ? () => onSectionPress(note, chip.section)
-                    : undefined
-                }
-              >
-                <Text
-                  style={[
-                    sNote.chipText,
-                    { color: active ? colors.white : onCardSecondary },
-                  ]}
-                >
-                  {t(chip.labelKey, { defaultValue: chip.defaultLabel })}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Pressable>
-
+      />
       {message.time ? (
         <View style={sNote.timeRow}>
           <Text

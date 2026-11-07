@@ -75,10 +75,22 @@ test('does not animate when the full text already fits',async()=>{
 });
 
 
-test('immediately removes the old banner on a realtime invalidation',async()=>{
+// 重连补拉(App 从后台回来)会发失效信号:旧横幅留到新结果回来再换,不能先清空再出现 —— 那就是「闪一下」。
+test('keeps the banner up while a realtime invalidation refetches, then applies the result',async()=>{
  let resolve!: (value:typeof notice[])=>void;
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValueOnce([notice]).mockReturnValueOnce(new Promise(r=>{resolve=r;}));
  render(<ScrollingAnnouncements />);await screen.findByText(line);
- act(()=>useAnnouncementSignalStore.getState().bump());expect(screen.queryByText(line)).toBeNull();
- await act(async()=>{resolve([]);});expect(fetchScrollingAnnouncements).toHaveBeenCalledTimes(2);
+ act(()=>useAnnouncementSignalStore.getState().bump());
+ expect(screen.getByText(line)).toBeTruthy();
+ expect(fetchScrollingAnnouncements).toHaveBeenCalledTimes(2);
+ // 公告在断线期间被撤回:新结果回来后横幅才消失。
+ await act(async()=>{resolve([]);});
+ expect(screen.queryByText(line)).toBeNull();
+});
+
+test('a revalidation that fails keeps showing the last announcement',async()=>{
+ jest.mocked(fetchScrollingAnnouncements).mockResolvedValueOnce([notice]).mockRejectedValueOnce(new Error('offline'));
+ render(<ScrollingAnnouncements />);await screen.findByText(line);
+ await act(async()=>{useAnnouncementSignalStore.getState().bump();});
+ expect(screen.getByText(line)).toBeTruthy();
 });

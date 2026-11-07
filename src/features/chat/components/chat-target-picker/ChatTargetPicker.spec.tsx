@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { CHAT_TARGET_MAX_SELECTION, ChatTargetPicker } from './ChatTargetPicker';
 import { useRecentForwardTargetsStore } from './use-recent-forward-targets-store';
 import type { ChatConversationDto } from '@/chat-core/protocol';
@@ -92,6 +92,17 @@ test('the groups tab only lists groups', () => {
   fireEvent.press(screen.getByText('chat.targetPicker.groups'));
   expect(screen.getByText('周末爬山')).toBeTruthy();
   expect(screen.queryByText('小王')).toBeNull();
+});
+
+test('the active tab is a filled purple pill so it stands out on a dark background', () => {
+  renderPicker();
+  const tabStyle = (label: string) =>
+    StyleSheet.flatten(screen.getByRole('tab', { name: label }).props.style);
+  expect(tabStyle('chat.targetPicker.recentChats').backgroundColor).toBe('#70f');
+  expect(tabStyle('chat.targetPicker.groups').backgroundColor).toBe('#eee');
+  fireEvent.press(screen.getByText('chat.targetPicker.groups'));
+  expect(tabStyle('chat.targetPicker.groups').backgroundColor).toBe('#70f');
+  expect(tabStyle('chat.targetPicker.recentChats').backgroundColor).toBe('#eee');
 });
 
 test('contacts load on demand and reuse an existing private chat', async () => {

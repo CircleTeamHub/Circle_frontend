@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -19,13 +19,12 @@ import { getChatMessagePreview } from '@/chat-core/mappers';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { showTopNotice } from '@/components/app/top-notice-store';
 import { SendConfirmDialog } from '@/features/chat/components/send-confirm-dialog';
-import {
-  ChatTargetPicker,
-  type ChatTargetPickerHandle,
-} from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
+import { announceSent } from '@/features/chat/components/chat-target-picker/announce-sent';
+import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
 import {
   chatTargetResolveFailureMessage,
   resolveChatTargets,
+  type ResolvedChatTarget,
 } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
@@ -189,23 +188,13 @@ export default function ForwardPickerScreen() {
   const { t } = useTranslation();
   const pending = useMessageForwardStore((state) => state.pending);
   const pendingBatch = useMessageForwardStore((state) => state.pendingBatch);
-  const setPendingBatch = useMessageForwardStore((state) => state.setPendingBatch);
   const clearPending = useMessageForwardStore((state) => state.clear);
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const recordRecent = useRecentForwardTargetsStore((state) => state.record);
-  const [sending, setSending] = useState(false);
   // 选中对象后先停在「发送给」确认框,可以附一句留言再转发。
   const [confirmTargets, setConfirmTargets] = useState<ChatTarget[] | null>(null);
-  const mountedRef = useRef(true);
+  // 点了发送就关页,同一页里不会再发第二次:挡住确认框连点。
   const sendingRef = useRef(false);
-  const pickerRef = useRef<ChatTargetPickerHandle>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   /**
    * 进队即算成功,返回「最终是否送达」的结果但不等它;没进队(本地门禁)直接抛,
@@ -262,73 +251,68 @@ export default function ForwardPickerScreen() {
       });
   }
 
-  async function handleForward(targets: ChatTarget[], caption: string) {
-    if (!pending || sendingRef.current || targets.length === 0) return;
-    sendingRef.current = true;
-    setSending(true);
+  /** 后台把要转发的内容(和留言)发给每个对象;失败用顶部提示报,这时选择页多半已经关了。 */
+  async function forwardInBackground(
+    targets: ChatTarget[],
+    items: PendingForward[],
+    caption: string,
+  ): Promise<ResolvedChatTarget[]> {
+    const { resolved, failed } = await resolveChatTargets(targets);
+    if (failed.length > 0) {
+      failed.forEach((item) => reportHandledFailure('forward', 'resolveTarget', item.error));
+      showTopNotice({
+        type: 'error',
+        title: t('chat.forward.failed'),
+        message: chatTargetResolveFailureMessage(failed, t, t('chat.forward.failedRetry')),
+      });
+    }
     const delivered: ChatTarget[] = [];
-    // 选择页里的原 key(通讯录好友是 user:<id>),部分失败后按它从多选里去掉。
-    const deliveredKeys: string[] = [];
-    try {
-      // 先把所有对象都落到会话 id:建单聊失败时一条都不发,重试不会给已发过的人再发一份。
-      const { resolved, failed } = await resolveChatTargets(targets);
-      if (failed.length > 0) {
-        failed.forEach((item) => reportHandledFailure('forward', 'resolveTarget', item.error));
-        if (mountedRef.current) {
-          Alert.alert(
-            t('chat.forward.failed'),
-            chatTargetResolveFailureMessage(failed, t, t('chat.forward.failedRetry')),
-          );
-        }
-        return;
-      }
-      // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
-      // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
-      // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
-      const items = pendingBatch ?? [pending];
-      for (const { target, conversationId } of resolved) {
+    for (const { target, conversationId } of resolved) {
+      try {
+        // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
+        // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
+        // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
         const deliveries: Promise<boolean>[] = [];
-        for (let index = 0; index < items.length; index++) {
+        for (const item of items) {
           const { delivered: itemDelivered } = await queueSend(
-            (onCreate) => sendForwardedMessage(items[index], conversationId, onCreate),
+            (onCreate) => sendForwardedMessage(item, conversationId, onCreate),
             'forwardMessage',
           );
           deliveries.push(itemDelivered);
-          // 只发给一个对象时,本地失败后只把没发出去的留在选择页里重试。
-          if (pendingBatch && resolved.length === 1) setPendingBatch(items.slice(index + 1));
         }
         if (caption) queueCaptionAfter(deliveries, conversationId, caption);
         delivered.push({ ...target, key: conversationId, conversationId });
-        deliveredKeys.push(target.key);
+      } catch (error) {
+        reportHandledFailure('forward', 'forwardMessage', error);
+        showTopNotice({
+          type: 'error',
+          title: t('chat.forward.failed'),
+          message: `${target.name}：${getChatSendErrorMessage(error, t('chat.forward.failedRetry'))}`,
+        });
       }
-      clearPending();
-      if (!mountedRef.current) return;
-      Alert.alert(t('chat.forward.done'), undefined, [
-        {
-          text: t('common.confirm'),
-          onPress: () => router.back(),
-        },
-      ]);
-    } catch (error) {
-      reportHandledFailure('forward', 'forwardMessage', error);
-      if (!mountedRef.current) return;
-      // 已经发出去的对象从多选里去掉,再点发送只发给剩下的。
-      pickerRef.current?.deselect(deliveredKeys);
-      const reason = getChatSendErrorMessage(error, t('chat.forward.failedRetry'));
-      Alert.alert(
-        t('chat.forward.failed'),
-        deliveredKeys.length > 0
-          ? `${t('chat.targetPicker.partialDelivered', {
-              count: deliveredKeys.length,
-              defaultValue: '已发送给 {{count}} 个聊天，已从选择中移除。',
-            })}\n${reason}`
-          : reason,
-      );
-    } finally {
-      if (userId && delivered.length > 0) recordRecent(userId, delivered);
-      sendingRef.current = false;
-      if (mountedRef.current) setSending(false);
     }
+    if (userId && delivered.length > 0) recordRecent(userId, delivered);
+    return resolved;
+  }
+
+  function handleForward(targets: ChatTarget[], caption: string) {
+    if (!pending || sendingRef.current || targets.length === 0) return;
+    sendingRef.current = true;
+    // 先把要发的内容拿在手里:关页时会清掉转发暂存。
+    const items = pendingBatch ?? [pending];
+    const resolution = forwardInBackground(targets, items, caption).catch((error: unknown) => {
+      reportHandledFailure('forward', 'forwardMessage', error);
+      return [];
+    });
+    announceSent({
+      t,
+      targets,
+      resolution,
+      onDismiss: () => {
+        clearPending();
+        router.back();
+      },
+    });
   }
 
   const forwardPreview = pendingBatch && pendingBatch.length > 1
@@ -354,8 +338,6 @@ export default function ForwardPickerScreen() {
   return (
     <View style={s.container}>
       <ChatTargetPicker
-        ref={pickerRef}
-        busy={sending}
         onClose={() => router.back()}
         onConfirm={setConfirmTargets}
       />
@@ -377,7 +359,7 @@ export default function ForwardPickerScreen() {
         onConfirm={(caption) => {
           const targets = confirmTargets;
           setConfirmTargets(null);
-          if (targets) void handleForward(targets, caption);
+          if (targets) handleForward(targets, caption);
         }}
       >
         <Text style={[s.subtitle, { color: colors.textSecondary }]} numberOfLines={3}>

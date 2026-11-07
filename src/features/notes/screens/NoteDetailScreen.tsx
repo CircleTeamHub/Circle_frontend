@@ -37,6 +37,7 @@ import {
 import type { NoteDetail, NoteExportFormat, NoteSummary } from '@/features/notes/types';
 import {
   getChatDetailHref,
+  getNoteEditHref,
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
@@ -63,6 +64,7 @@ import { ApiError } from '@/services/api/client';
 import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { useChatStore } from '@/chat-core/store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -244,8 +246,8 @@ function NoteDetailContent() {
 
   const handleEdit = useCallback(() => {
     if (!note) return;
-    router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never);
-  }, [router, note]);
+    router.push(getNoteEditHref(scope, { id: note.id }));
+  }, [router, note, scope]);
 
   // 名片只来自当前账号自己的笔记/已收藏副本，路由里的 ownerId 不授予可见性。
   const ownsNote = Boolean(note?.id === id && currentUserId &&
@@ -654,7 +656,7 @@ function NoteDetailContent() {
             <Ionicons name="share-outline" size={18} color={colors.text} />
           </Pressable>
           {canEditNote ? (
-            <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
+            <Pressable testID="note-detail-edit" style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
               <Ionicons name="pencil-outline" size={17} color={colors.text} />
             </Pressable>
           ) : hasChatSource ? (
@@ -722,7 +724,7 @@ function NoteDetailContent() {
           {contact ? (
             <Pressable
               testID="note-contact-chat"
-              style={[s.floatingBtn, d.floatingBtn]}
+              style={s.floatingAvatarBtn}
               accessibilityRole="button"
               accessibilityLabel={t('notes.list.openSenderChat', { name: contact.name })}
               onPress={() => {
@@ -733,25 +735,43 @@ function NoteDetailContent() {
                 router.push(getChatDetailHref(scope, contact.id, contact.name, contact.faceURL ?? undefined, contact.conversationID));
               }}
             >
-              <Avatar size={36} shape="circle" name={contact.name} uri={contact.faceURL ?? undefined} />
+              <Avatar size={FLOATING_AVATAR_SIZE} shape="circle" name={contact.name} uri={contact.faceURL ?? undefined} />
             </Pressable>
           ) : null}
           {group ? (
             <Pressable
               testID="note-group-chat"
-              style={[s.floatingBtn, d.floatingBtn]}
+              style={s.floatingAvatarBtn}
               accessibilityRole="button"
               accessibilityLabel={t('notes.list.openGroupChat', { name: group.name })}
               onPress={() => {
                 if (group.target === 'circle') {
                   router.push(getCircleDetailHref(toCircleScope(scope), group.id));
-                } else {
-                  router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
+                  return;
                 }
+                const groupId = group.conversationID ?? group.id;
+                // 本地会话列表里有这个群 = 已经是成员:直接进群聊。经群入口页的话要先查一次
+                // 成员资格,中间会闪一下群资料与申请页。不在列表里(没进过、已退)才走入口页。
+                const joined = useChatStore.getState().conversations.find(
+                  (conversation) => conversation.id === groupId && conversation.type === 'GROUP',
+                );
+                if (joined) {
+                  router.push(getChatDetailHref(
+                    scope,
+                    joined.circleId ?? joined.id,
+                    group.name,
+                    group.faceURL ?? undefined,
+                    joined.id,
+                    group.clientMsgID,
+                    'group',
+                  ));
+                  return;
+                }
+                router.push(getGroupEntryHref(scope, { groupId, searchedMsgID: group.clientMsgID }));
               }}
             >
               <View style={s.floatingAvatar}>
-                <GroupChatAvatar size={36} name={group.name} uri={group.faceURL} />
+                <GroupChatAvatar size={FLOATING_AVATAR_SIZE} name={group.name} uri={group.faceURL} />
               </View>
             </Pressable>
           ) : null}
@@ -842,6 +862,10 @@ function NoteDetailContent() {
   );
 }
 
+/** 右下角头像钮:48 的圆里头像铺满,只剩 1.5 的细白边。 */
+const FLOATING_AVATAR_RING = 1.5;
+const FLOATING_AVATAR_SIZE = 48 - FLOATING_AVATAR_RING * 2;
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
@@ -895,9 +919,24 @@ const s = StyleSheet.create({
     elevation: 4,
   },
   floatingBtnBusy: { opacity: 0.6 },
+  floatingAvatarBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    // 头像铺满,只留一圈细白边把它和底下的图片分开(不再垫一圈粗底色)。
+    borderWidth: FLOATING_AVATAR_RING,
+    borderColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   floatingAvatar: {
-    width: 36,
-    height: 36,
+    width: FLOATING_AVATAR_SIZE,
+    height: FLOATING_AVATAR_SIZE,
     borderRadius: Radius.full,
     overflow: 'hidden',
     alignItems: 'center',

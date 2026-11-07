@@ -547,8 +547,7 @@
       "empty": "No members available to mention",
       "title": "Mention someone",
       "count": "{{count}} members",
-      "all": "Everyone",
-      "allHint": "Notify everyone in the group"
+      "all": "Everyone"
     },
     "forward": {
       "title": "Choose a chat",
@@ -1047,7 +1046,7 @@
         "offShelf": "Off shelf"
       },
       "sectionSendFailed": "Couldn't send. Please try again.",
-      "sectionSending": "Sending…"
+      "noLocation": "This note has no location to send"
     },
     "voice": {
       "cancelTip": "Release to cancel",
@@ -1103,7 +1102,9 @@
       "sendSelected": "Send ({{count}})",
       "nameSeparator": ", ",
       "resolveFailed": "Couldn't send to {{names}}: {{reason}}",
-      "partialDelivered": "Already sent to {{count}} of the chats; they have been removed from your selection."
+      "partialDelivered": "Already sent to {{count}} of the chats; they have been removed from your selection.",
+      "sent": "Sent",
+      "view": "View"
     },
     "quickChat": {
       "expand": "Open full chat"
@@ -3181,18 +3182,18 @@
     "loadFailed": "Couldn't load notes. Check your connection and try again",
     "collect": {
       "chooseGroup": "Add to which note group?",
-      "editTitle": "Edit saved title",
+      "editTitle": "Edit title",
       "groupHint": "Choose a group first; you can edit the title next.",
       "ungrouped": "Ungrouped",
-      "titleHint": "Give it a title you will recognise. Leave it blank to keep the original title.",
-      "titleLabel": "Saved note title",
+      "titleLabel": "Title",
       "untitled": "Untitled note",
       "skipTitleNextTime": "Skip title editing next time",
       "createGroup": "New group",
       "createGroupPlaceholder": "Group name",
       "createGroupConfirm": "Create",
       "createGroupFailed": "Couldn't create the group",
-      "createGroupFailedHint": "Please try again later."
+      "createGroupFailedHint": "Please try again later.",
+      "createGroupShort": "New"
     },
     "shareToChat": {
       "partialFailed": "{{count}} sends failed. You can retry only the failed items.",

@@ -429,7 +429,8 @@ test('EditNoteScreen can select a real map location and save the existing locati
   assert.match(src, /handleOpenLocationPicker/);
   assert.match(src, /latitude: locationDraft\.latitude/);
   assert.match(src, /longitude: locationDraft\.longitude/);
-  assert.match(src, /notes\/location-picker/);
+  // 选位置页压进编辑页所在的那个 tab 栈。
+  assert.match(src, /router\.push\(getNoteLocationPickerHref\(scope, \{/);
 });
 
 test('EditNoteScreen presents structured regions with quieter section chrome', () => {

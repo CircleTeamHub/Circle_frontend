@@ -6,6 +6,11 @@ import { ChatTargetAvatar } from './ChatTargetAvatar';
 import type { ChatTarget } from './types';
 
 const AVATAR_SIZE = 56;
+/** 每格比头像宽一圈:名字有地方放,右上角的 × 也不会伸出格子。 */
+const ITEM_WIDTH = AVATAR_SIZE + Spacing.md;
+/** × 的圆心压在头像右上角;横向 ScrollView 会裁掉越界的部分,上方要留出这一截。 */
+const REMOVE_SIZE = 20;
+const REMOVE_OVERHANG = 6;
 
 interface RecentForwardStripProps {
   targets: ChatTarget[];
@@ -27,21 +32,21 @@ const s = StyleSheet.create({
   title: { ...Typography.body, fontWeight: '700' },
   clear: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.full },
   clearText: { ...Typography.small },
-  row: { paddingHorizontal: Spacing.md, gap: Spacing.md },
-  item: { width: AVATAR_SIZE },
+  row: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm },
+  item: { width: ITEM_WIDTH },
   itemButton: { alignItems: 'center', gap: Spacing.xs },
   remove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
+    top: -REMOVE_OVERHANG,
+    right: (ITEM_WIDTH - AVATAR_SIZE) / 2 - REMOVE_OVERHANG,
+    width: REMOVE_SIZE,
+    height: REMOVE_SIZE,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   selectedMark: { position: 'absolute', bottom: -4, right: -4 },
-  label: { ...Typography.tinyRegular, width: AVATAR_SIZE + Spacing.sm, textAlign: 'center' },
+  label: { ...Typography.tinyRegular, width: ITEM_WIDTH, textAlign: 'center' },
 });
 
 /** 选择页顶部的「最近转发」:横排头像,点头像直接选,右上角 × 从记录里删掉。 */

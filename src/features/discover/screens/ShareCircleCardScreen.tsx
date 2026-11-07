@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { sendCardMessage, sendTextMessage } from '@/chat-core/client';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { startChatSend } from '@/chat-core/send-handle';
-import {
-  ChatTargetPicker,
-  type ChatTargetPickerHandle,
-} from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
+import { announceSent } from '@/features/chat/components/chat-target-picker/announce-sent';
+import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
 import {
   chatTargetResolveFailureMessage,
   resolveChatTargets,
+  type ResolvedChatTarget,
 } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
@@ -61,27 +60,11 @@ export default function ShareCircleCardScreen() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const recordRecent = useRecentForwardTargetsStore((state) => state.record);
   const [confirmTargets, setConfirmTargets] = useState<ChatTarget[] | null>(null);
-  const [sending, setSending] = useState(false);
-  const mountedRef = useRef(true);
-  const inFlightRef = useRef(false);
-  const pickerRef = useRef<ChatTargetPickerHandle>(null);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
-
-  const handleSend = useCallback(
-    async (targets: ChatTarget[], caption: string) => {
-      if (!circleId || inFlightRef.current) return;
-      inFlightRef.current = true;
-      setSending(true);
-      const delivered: ChatTarget[] = [];
-      const deliveredKeys: string[] = [];
-      let firstError: unknown = null;
-      // 先把所有对象都落到会话 id:建单聊失败时一条都不发,重试不会给已发过的人再发一份。
+  /** 后台把名片(和留言)发给每个对象;失败用顶部提示报,因为这时选择页多半已经关了。 */
+  const sendInBackground = useCallback(
+    async (targets: ChatTarget[], caption: string): Promise<ResolvedChatTarget[]> => {
+      const failedTitle = t('circle.shareCard.failedTitle', { defaultValue: '发送失败' });
       const { resolved, failed } = await resolveChatTargets(targets);
       if (failed.length > 0) {
         failed.forEach((item) =>
@@ -90,23 +73,20 @@ export default function ShareCircleCardScreen() {
             message: diagnosticErrorMessage(item.error),
           }),
         );
-        inFlightRef.current = false;
-        if (!mountedRef.current) return;
-        setSending(false);
-        Alert.alert(
-          t('circle.shareCard.failedTitle', { defaultValue: '发送失败' }),
-          chatTargetResolveFailureMessage(
+        showTopNotice({
+          type: 'error',
+          title: failedTitle,
+          message: chatTargetResolveFailureMessage(
             failed,
             t,
             t('common.retryLater', { defaultValue: '请稍后重试' }),
           ),
-        );
-        return;
+        });
       }
+      const delivered: ChatTarget[] = [];
       for (const { target, conversationId } of resolved) {
         try {
-          // 进了发送队列就算发出:断线时队列自己等重连,发不出去的在会话里标红可重发,
-          // 这里不等送达,页面也就不会因为网络卡住一直转圈。
+          // 进了发送队列就算发出:断线时队列自己等重连,发不出去的在会话里标红可重发。
           const card = await queueSend((onCreate) =>
             sendCardMessage({
               conversationId,
@@ -139,48 +119,46 @@ export default function ShareCircleCardScreen() {
             });
           }
           delivered.push({ ...target, key: conversationId, conversationId });
-          deliveredKeys.push(target.key);
         } catch (error) {
-          firstError ??= error;
           logClientDiagnostic('share_circle_send_failed', {
             circleId,
             message: diagnosticErrorMessage(error),
           });
+          showTopNotice({
+            type: 'error',
+            title: failedTitle,
+            message: `${target.name}：${getChatSendErrorMessage(
+              error,
+              t('common.retryLater', { defaultValue: '请稍后重试' }),
+            )}`,
+          });
         }
       }
-      inFlightRef.current = false;
       if (userId && delivered.length > 0) recordRecent(userId, delivered);
-      if (!mountedRef.current) return;
-      setSending(false);
-      if (firstError) {
-        // 已经发出去的从多选里去掉,再点发送只发给剩下的。
-        pickerRef.current?.deselect(deliveredKeys);
-        const reason = getChatSendErrorMessage(
-          firstError,
-          t('common.retryLater', { defaultValue: '请稍后重试' }),
-        );
-        Alert.alert(
-          t('circle.shareCard.failedTitle', { defaultValue: '发送失败' }),
-          deliveredKeys.length > 0
-            ? `${t('chat.targetPicker.partialDelivered', {
-                count: deliveredKeys.length,
-                defaultValue: '已发送给 {{count}} 个聊天，已从选择中移除。',
-              })}\n${reason}`
-            : reason,
-        );
-        return;
-      }
-      router.back();
+      return resolved;
     },
     [circleAvatar, circleId, circleName, recordRecent, t, userId],
+  );
+
+  const handleSend = useCallback(
+    (targets: ChatTarget[], caption: string) => {
+      if (!circleId) return;
+      const resolution = sendInBackground(targets, caption).catch((error: unknown) => {
+        logClientDiagnostic('share_circle_send_failed', {
+          circleId,
+          message: diagnosticErrorMessage(error),
+        });
+        return [];
+      });
+      announceSent({ t, targets, resolution, onDismiss: () => router.back() });
+    },
+    [circleId, sendInBackground, t],
   );
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ChatTargetPicker
-        ref={pickerRef}
         title={t('circle.shareCard.title', { defaultValue: '发送圈子名片' })}
-        busy={sending}
         onClose={() => router.back()}
         onConfirm={setConfirmTargets}
       />
@@ -202,7 +180,7 @@ export default function ShareCircleCardScreen() {
         onConfirm={(caption) => {
           const targets = confirmTargets;
           setConfirmTargets(null);
-          if (targets) void handleSend(targets, caption);
+          if (targets) handleSend(targets, caption);
         }}
       >
         <Text style={[s.preview, { color: colors.textSecondary }]} numberOfLines={2}>

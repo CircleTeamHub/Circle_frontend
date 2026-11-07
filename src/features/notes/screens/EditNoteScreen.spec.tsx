@@ -18,15 +18,34 @@ import * as noteSections from '@/features/notes/utils/note-sections';
 import { recordMetric } from '@/observability/metrics';
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
-test('note preview keeps live upload progress visible inside its native modal', async () => {
-  const transfer = startUploadProgress('video/mp4');
-  transfer.update(50, 100);
-  const rendered = render(<EditNoteScreen />);
+// 图片格子里只有图本身:不再在底部垫一条写着「图片 / 视频」的白条。
+test('a media tile shows the image without a type label bar', async () => {
+  render(<EditNoteScreen />);
+  const upload = await beginDeferredImageUpload();
+  const tile = screen.getByTestId('note-media-preview-tile');
+  expect(within(tile).queryByText('notes.edit.imageItem')).toBeNull();
+  await act(async () => { upload.resolve(); });
+});
+
+// 上传进度画在每张图自己的格子上(圆圈),不再有右上角的全局上传卡片;一张传完它的圆圈就消失。
+test('each uploading image shows its own progress ring and no global upload card', async () => {
+  render(<EditNoteScreen />);
+  const upload = await beginDeferredImageUpload();
+  const options = mockUploadFile.mock.calls[0][5] as { progressKey?: string; foreground?: boolean };
+  expect(options?.progressKey).toEqual(expect.any(String));
+  // 人就在编辑页等着:走 iOS 前台会话,不让系统后台排期拖在 99%。
+  expect(options?.foreground).toBe(true);
+  let transfer!: ReturnType<typeof startUploadProgress>;
+  act(() => {
+    transfer = startUploadProgress('image/jpeg', { progressKey: options.progressKey });
+    transfer.update(30, 100);
+  });
   try {
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.preview' }));
-    await waitFor(() => expect(screen.getByRole('progressbar').props.accessibilityValue.now).toBe(50));
-    expect(screen.UNSAFE_getAllByType(Modal).some(modal => modal.props.visible && within(modal).queryAllByRole('progressbar').length > 0)).toBe(true);
-  } finally { act(() => { transfer.finish(); resetUploadProgress(); }); rendered.unmount(); }
+    expect(within(screen.getByTestId('note-media-preview-tile')).getByText('30%')).toBeTruthy();
+    expect(screen.queryByTestId('upload-progress-host')).toBeNull();
+    await act(async () => { transfer.finish(); upload.resolve(); });
+    await waitFor(() => expect(screen.queryByTestId('note-media-upload-ring')).toBeNull());
+  } finally { act(() => resetUploadProgress()); }
 });
 
 let mockSaveClock = 0;
@@ -376,10 +395,12 @@ const mockDarkThemeColors = {
 let mockThemeMode: 'light' | 'dark' = 'light';
 let mockThemeColors = mockLightThemeColors;
 
+let mockSegments: string[] = ['(tabs)', 'profile', 'notes', 'edit'];
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
+    useSegments: () => mockSegments,
     useLocalSearchParams: () => ({ id: mockRouteId, draftId: mockRouteDraftId, draftMode: mockDraftMode }),
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => {
@@ -709,6 +730,8 @@ test('keeps a selected video preview visible before and after its upload settles
   pressComposer('video');
   await screen.findByTestId('note-media-preview-video');
   expect(screen.getByTestId('note-media-preview-video').props.source).toBe(mockGeneratedVideoThumbnail);
+  // 视频格子同样不再垫一条写着「视频」的白条。
+  expect(screen.queryByText('notes.edit.videoItem')).toBeNull();
   expect(mockVideoPlayerRelease).toHaveBeenCalledTimes(1);
 
   upload.resolve();
@@ -2117,6 +2140,30 @@ test('adding a region after restoring gapped IDs creates a distinct composer ID'
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+// 右滑返回:拦下 → 存草稿 → 放行并重发返回。重发若赶在重新渲染之前,守卫还是旧值又拦一次;
+// 这时已经决定离开,不能再当成「保存进行中」弹「请先完成当前操作」把人困在空白编辑页里。
+test('a back gesture re-prevented while already leaving still leaves instead of getting stuck on saving', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockNavigation.dispatch.mockClear();
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    const staleGuard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    await act(async () => {
+      staleGuard?.({ data: { action: { type: 'GO_BACK' } } } as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      staleGuard?.({ data: { action: { type: 'GO_BACK' } } } as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
+    expect(alert).not.toHaveBeenCalledWith('notes.edit.waitForMediaTitle', expect.anything());
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
 test('save and exit stays in the editor when both local and server persistence fail', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
@@ -3272,7 +3319,7 @@ test.each(['conflict', 'different-replay'] as const)('%s keeps the pending draft
     expect(alert).toHaveBeenCalledWith('notes.edit.saveFailedTitle', 'notes.edit.pendingSubmitMessage');
     if (failure === 'different-replay') {
       fireEvent.press(screen.getByRole('button', { name: 'notes.edit.openCommittedNote' }));
-      await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/[id]', params: { id: 'saved-note' } }));
+      await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/[id]', params: { id: 'saved-note', ownerId: '' } }));
       expect(storedReviewDraft(values)?.pendingSubmission).toBeTruthy();
     }
   } finally { rendered.unmount(); alert.mockRestore(); }
