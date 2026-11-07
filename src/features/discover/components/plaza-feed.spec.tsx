@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen } from '@testing-library/react-native';
-import { FlatList, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { PlazaFeed } from './plaza-feed';
 
 interface MockDiscoverState {
@@ -149,4 +149,7 @@ test('a circle with nothing cached yet shows a spinner in the content area', asy
   await renderFeed();
   act(() => setDiscover({ selectedCircleId: 'c1', plazaPosts: [], plazaLoading: true, plazaLoaded: false }));
   expect(screen.getByTestId('plaza-content-loading')).toBeTruthy();
+  // 和下拉刷新的圈同一个主题紫(浅色 #7C5CF0 / 暗色 #B18AFF),不是靛蓝 primary。
+  const spinner = screen.UNSAFE_getByType(ActivityIndicator);
+  expect(spinner.props.color).toMatch(/^#(7C5CF0|B18AFF)$/i);
 });

@@ -313,7 +313,8 @@ export default function ShareScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void load(true)}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         showsVerticalScrollIndicator={false}

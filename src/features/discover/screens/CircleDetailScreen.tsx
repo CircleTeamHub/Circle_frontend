@@ -710,7 +710,8 @@ function CircleDetailContent() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefreshCircle}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
       >

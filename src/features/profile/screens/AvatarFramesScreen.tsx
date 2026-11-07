@@ -356,7 +356,8 @@ export default function AvatarFramesScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void loadInventory(true)}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         contentContainerStyle={[

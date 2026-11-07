@@ -11,7 +11,6 @@ import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
-import { getPostExpiryTier } from '@/features/discover/utils/plaza-post-expiry';
 import {
   cancelSignup,
   signupForPost,
@@ -67,7 +66,7 @@ function badgeDisplayRank(icon: DisplayIcon): number {
 }
 
 const s = StyleSheet.create({
-  // 活动卡片左侧强调竖条 —— 给广场帖一个「活动」身份，普通 horn 用橙、常规用主色。
+  // 左侧竖条:告诉看帖的人「我能不能报」(配色见 accentColor)。
   // 卡片 overflow:hidden 让竖条顶到圆角内被裁切，观感干净。
   accent: {
     position: 'absolute',
@@ -116,7 +115,10 @@ const s = StyleSheet.create({
     // 圈子标签在第二行：仅设宽度上限（圈子名过长时省略），不参与收缩，让城市文本先让位。
     maxWidth: 132,
   },
+  // 报名条件在左、可换行收缩;按钮靠右不收缩。两样各占一行时右边全空着,合成一行。
   conditionRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -141,14 +143,15 @@ const s = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   signupBtn: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 6,
+    paddingHorizontal: Spacing.md - 4,
+    paddingVertical: Spacing.xs,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
@@ -172,7 +175,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         borderColor: colors.surfaceBorder,
         padding: Spacing.md,
         paddingLeft: Spacing.md + 4,
-        gap: Spacing.md - 4,
+        gap: Spacing.sm,
         overflow: 'hidden' as const,
       },
       authorName: {
@@ -426,19 +429,17 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     });
   }, [post.author.displayIcons]);
 
-  // 左侧强调竖条配色按「距到期的剩余时间」分档，随时间推移逐级跳变：≤1天(橙) →
-  // ≤3天(绿) → 更久(紫)。越接近到期越暖，推动及时报名（不用红色，观感更柔和）。
-  const accentColor = useMemo(() => {
-    const tier = getPostExpiryTier(post.expiresAt);
-    if (tier === 'urgent') return colors.warning;
-    if (tier === 'soon') return colors.success;
-    return colors.primary;
-  }, [post.expiresAt, colors]);
+  // 左侧竖条按「我能不能报」上色:能报绿、已报主题紫、不满足条件橙。跟着本地的 signed 走,
+  // 一报名立刻变紫。自己发的帖子也是主题紫(和「已报名」一样:这条和我有关)。
+  const accentColor = isOwnPost || signed
+    ? colors.tabBarActive
+    : post.canSignup
+      ? colors.success
+      : colors.warning;
 
   return (
     <View style={d.card}>
-      {/* 左侧「活动」强调竖条：配色随距到期剩余时间逐级跳变(>3天紫→≤3天绿→≤1天橙)。 */}
-      <View style={[s.accent, { backgroundColor: accentColor }]} />
+      <View style={[s.accent, { backgroundColor: accentColor }]} testID="plaza-card-accent" />
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={handleAvatarPress}>
@@ -528,26 +529,24 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       {/* Images */}
       <ImageGrid images={post.images} media={post.media} />
 
-      {/* 报名条件: 始终显示；绑定 signup-restriction 集（后端 403 实际校验的那套），
-          无门槛时显示"不限制"，让作者/浏览者都能一眼看到报名门槛。 */}
-      <View style={s.conditionRow}>
-        <Text style={[s.conditionLabel, { color: colors.textSecondary }]}>
-          {t('plaza.signupCondition', { defaultValue: '报名条件：' })}
-        </Text>
-        {hasCondition ? (
-          <RestrictionBadge restrictions={post.signupRestrictions} />
-        ) : (
-          <View style={[s.openBadge, { backgroundColor: OPEN_BADGE_COLOR }]}>
-            <Ionicons name="earth-outline" size={10} color={colors.white} />
-            <Text style={[s.openBadgeText, { color: colors.white }]}>
-              {t('common.noRestriction', { defaultValue: '不限制' })}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Footer：自己的帖子显示报名人数(点击进入报名管理),否则显示报名按钮 */}
-      <View style={s.footer}>
+      {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
+          无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}
+      <View style={s.footer} testID="plaza-card-footer">
+        <View style={s.conditionRow}>
+          <Text style={[s.conditionLabel, { color: colors.textSecondary }]}>
+            {t('plaza.signupCondition', { defaultValue: '报名条件：' })}
+          </Text>
+          {hasCondition ? (
+            <RestrictionBadge restrictions={post.signupRestrictions} />
+          ) : (
+            <View style={[s.openBadge, { backgroundColor: OPEN_BADGE_COLOR }]}>
+              <Ionicons name="earth-outline" size={10} color={colors.white} />
+              <Text style={[s.openBadgeText, { color: colors.white }]}>
+                {t('common.noRestriction', { defaultValue: '不限制' })}
+              </Text>
+            </View>
+          )}
+        </View>
         {isOwnPost ? (
           <Pressable
             onPress={handleManageSignups}
@@ -564,17 +563,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
           </Pressable>
         ) : (
           <Pressable
+            testID="plaza-card-signup"
             onPress={handleToggleSignup}
             disabled={busy}
             hitSlop={6}
             style={[
               s.signupBtn,
-              // 未报名 = 实心主色强 CTA（推动及时报名）；已报名 = 克制的成功色描边确认态。
+              // 和左侧竖条同一个颜色(accentColor):未报名 = 实心 CTA(能报绿、不满足条件橙并变淡);
+              // 已报名 = 主题紫描边的确认态。
               signed
-                ? { borderColor: colors.success, backgroundColor: 'transparent' }
+                ? { borderColor: accentColor, backgroundColor: 'transparent' }
                 : {
-                    borderColor: colors.primary,
-                    backgroundColor: colors.primary,
+                    borderColor: accentColor,
+                    backgroundColor: accentColor,
                     opacity: post.canSignup ? 1 : 0.5,
                   },
             ]}
@@ -582,13 +583,13 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
             <Ionicons
               name={signed ? 'checkmark-circle' : 'person-add'}
               size={16}
-              color={signed ? colors.success : colors.white}
+              color={signed ? accentColor : colors.white}
             />
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: '700',
-                color: signed ? colors.success : colors.white,
+                color: signed ? accentColor : colors.white,
               }}
             >
               {signed

@@ -71,7 +71,7 @@ test('UserIconBadge renders system badges from local artwork', () => {
   assert.match(row, /getSystemBadgeAsset/);
   assert.match(row, /systemBadgeImage/);
   assert.match(row, /contentFit="contain"/);
-  assert.match(row, /getSystemBadgeVisualTranslateY/);
+  assert.match(row, /getSystemBadgeArtBox/);
   assert.match(row, /translateY/);
 });
 
@@ -130,8 +130,30 @@ test('verified profile and circle builder badges use their dedicated local artwo
   assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
 });
 
-test('system badge visual scales compensate for uneven transparent artwork padding', () => {
-  const { getSystemBadgeVisualScale, getSystemBadgeVisualTranslateY } = loadBadgeAssets();
+// 系统徽章的 PNG 四周留着多少不等的透明边(实心画面只占画布 58%~86%),画面也不一定在正中。
+// 记下每张素材可见部分的大小和中心偏移(都按画布长边算),渲染时据此居中、放大,
+// 让各徽章和圆形圈子徽章一样大、圆心对齐。这里直接量 PNG 核对记下的数。
+test('system badge art boxes match the real artwork', () => {
+  const { getSystemBadgeAsset, getSystemBadgeArtBox } = loadBadgeAssets();
+  const { PNG } = require('pngjs');
+  const measure = (rel) => {
+    const png = PNG.sync.read(fs.readFileSync(path.join(root, rel)));
+    let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+    for (let y = 0; y < png.height; y++) {
+      for (let x = 0; x < png.width; x++) {
+        // 只量实心部分:素材底下那圈很淡的投影在深色背景上看不见,算进来会高估画面、把中心往下拉。
+        if (png.data[(y * png.width + x) * 4 + 3] > 128) {
+          x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+        }
+      }
+    }
+    const long = Math.max(png.width, png.height);
+    return {
+      visibleRatio: Math.max(x1 - x0 + 1, y1 - y0 + 1) / long,
+      offsetX: ((x0 + x1 + 1) / 2 - png.width / 2) / long,
+      offsetY: ((y0 + y1 + 1) / 2 - png.height / 2) / long,
+    };
+  };
   const makeIcon = (systemKey, title = systemKey, recognitionCount) => ({
     id: `system-${systemKey}`,
     type: 'SYSTEM',
@@ -142,23 +164,27 @@ test('system badge visual scales compensate for uneven transparent artwork paddi
     sortOrder: 0,
     recognitionCount,
   });
-
-  // 超级(≥VIP4)= super.png 橙色皇冠。该素材内容填满方形画布,需要略微缩小,
-  // 否则在“我的徽章”里会比银/金/钻等竖版透明画布素材大一圈。
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP5')), 0.8);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP4')), 0.8);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP3')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP1')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('NEW_USER')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('CIRCLE_BUILDER')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VERIFIED_PROFILE')), 1);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 1.04);
-
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP5')), -8);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP3')), 2);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('CIRCLE_BUILDER')), 1);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VERIFIED_PROFILE')), 3);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 0);
+  const icons = [
+    makeIcon('VIP', 'VIP1'),
+    makeIcon('VIP', 'VIP2'),
+    makeIcon('VIP', 'VIP3'),
+    makeIcon('VIP', 'VIP5'),
+    makeIcon('NEW_USER'),
+    makeIcon('CIRCLE_BUILDER'),
+    makeIcon('VERIFIED_PROFILE'),
+    makeIcon('TOP_COLLABORATOR', 'Top', 100),
+    makeIcon('TOP_COLLABORATOR', 'Top', 1000),
+    makeIcon('TOP_COLLABORATOR', 'Top', 10000),
+  ];
+  for (const icon of icons) {
+    const rel = getSystemBadgeAsset(icon).replace(/^(\.\.\/)+/, '');
+    const recorded = getSystemBadgeArtBox(icon);
+    const measured = measure(rel);
+    assert.ok(Math.abs(recorded.visibleRatio - measured.visibleRatio) < 0.01, `${rel}: visibleRatio ${recorded.visibleRatio} vs ${measured.visibleRatio.toFixed(3)}`);
+    assert.ok(Math.abs(recorded.offsetX - measured.offsetX) < 0.005, `${rel}: offsetX ${recorded.offsetX} vs ${measured.offsetX.toFixed(3)}`);
+    assert.ok(Math.abs(recorded.offsetY - measured.offsetY) < 0.005, `${rel}: offsetY ${recorded.offsetY} vs ${measured.offsetY.toFixed(3)}`);
+  }
+  assert.deepEqual({ ...getSystemBadgeArtBox(makeIcon('UNKNOWN')) }, { visibleRatio: 1, offsetX: 0, offsetY: 0 });
 });
 
 test('first release system badge keys are modeled on the client', () => {

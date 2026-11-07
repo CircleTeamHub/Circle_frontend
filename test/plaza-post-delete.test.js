@@ -49,21 +49,6 @@ test('PlazaPostCard signup button uses a person-add icon instead of a hand', () 
   assert.doesNotMatch(src, /hand-right-outline/);
 });
 
-test('PlazaPostCard accent bar color steps by time-to-expiry (day scale), not horn', () => {
-  const src = read(SRC);
-
-  // 「活动」身份：左侧强调竖条，配色随距到期剩余时间在天级阈值(1天/3天)逐级跳变。
-  assert.match(src, /s\.accent/);
-  assert.match(src, /getPostExpiryTier\(post\.expiresAt\)/);
-  assert.match(src, /backgroundColor: accentColor/);
-  // 三档分别映射到 warning(≤1天橙)/success(≤3天绿)/primary(更久紫)——不用红色。
-  assert.match(src, /tier === 'urgent'\) return colors\.warning/);
-  assert.match(src, /tier === 'soon'\) return colors\.success/);
-  assert.doesNotMatch(src, /return colors\.error/);
-  // 不再按喇叭帖决定强调色。
-  assert.doesNotMatch(src, /post\.isHorn \? colors\.warning/);
-});
-
 test('PlazaPostCard uses a filled primary signup CTA', () => {
   const src = read(SRC);
 

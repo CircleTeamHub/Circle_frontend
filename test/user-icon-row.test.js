@@ -15,15 +15,14 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /accessible\s*\n\s*accessibilityLabel=\{label\}/);
   assert.doesNotMatch(row, /showLabel|labelColor|tone\s*=\s*'default'/);
   assert.match(row, /getSystemBadgeAsset/);
-  assert.match(row, /getSystemBadgeVisualScale/);
-  assert.match(row, /getSystemBadgeVisualTranslateY/);
+  assert.match(row, /getSystemBadgeArtBox/);
   assert.match(row, /systemBadgeAsset/);
   assert.match(row, /systemBadgeScale/);
   assert.match(row, /systemBadgeTranslateY/);
   assert.match(row, /systemBadgeTransform/);
   assert.match(row, /systemBadgeImage/);
   assert.match(row, /\{ scale: systemBadgeScale \}/);
-  assert.match(row, /\{ translateY: systemBadgeTranslateY \* transformSizeRatio \}/);
+  assert.match(row, /\{ translateY: systemBadgeTranslateY \}/);
   assert.match(row, /dense\s*=\s*false/);
   assert.match(row, /denseItem/);
   assert.match(row, /contentFit="contain"/);

@@ -341,7 +341,8 @@ export default function FriendTagsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefreshTags}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
       >
