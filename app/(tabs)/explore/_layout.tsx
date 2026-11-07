@@ -24,7 +24,13 @@ export default function ExploreLayout() {
           gestureDirection: 'horizontal',
           contentStyle: { backgroundColor: colors.background },
         }}
-      />
+      >
+        {/* 编辑笔记里的选位置页:往右拖地图不能被当成全屏右滑返回。 */}
+        <Stack.Screen
+          name="notes/location-picker"
+          options={{ fullScreenGestureEnabled: false }}
+        />
+      </Stack>
     </DesktopCenteredColumn>
   );
 }

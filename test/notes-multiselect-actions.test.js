@@ -165,7 +165,10 @@ test('ShareNoteSheet sends the selected notes to each chosen conversation throug
   assert.match(sheet, /request: NoteShareRequest \| null/);
   assert.match(sheet, /export interface NoteShareRequest \{\s*notes: NoteSummary\[\];\s*options: NoteSendOptions;/);
   // 先把所有对象都落到会话 id 再发:建单聊失败时一条都不发,重试不会重复投递。
-  assert.match(sheet, /await resolveChatTargets\(chosen\)/);
+  // 「查看」只等这一步(会话落定),不等内容发完。
+  assert.match(sheet, /const lookup = resolveChatTargets\(chosen\);/);
+  assert.match(sheet, /const resolution = lookup\.then\(\(\{ resolved \}\) => resolved, \(\) => \[\]\);/);
+  assert.match(sheet, /const \{ resolved, failed \} = await lookup;/);
   assert.match(sheet, /for \(const \{ target, conversationId \} of resolved\)/);
   assert.match(
     sheet,

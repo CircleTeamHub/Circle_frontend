@@ -71,6 +71,11 @@ export default function MessagesLayout() {
       <Stack.Screen name="edit-group-notice" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="post-signups" />
+      {/* 编辑笔记里的选位置页:往右拖地图不能被当成全屏右滑返回。 */}
+      <Stack.Screen
+        name="notes/location-picker"
+        options={{ fullScreenGestureEnabled: false }}
+      />
     </Stack>
   );
 }

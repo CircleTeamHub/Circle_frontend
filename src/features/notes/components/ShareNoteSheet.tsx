@@ -9,7 +9,6 @@ import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/
 import {
   chatTargetResolveFailureMessage,
   resolveChatTargets,
-  type ResolvedChatTarget,
 } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
@@ -71,12 +70,12 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
   const sendInBackground = useCallback(
     async (
       shared: NoteShareRequest,
-      chosen: ChatTarget[],
+      lookup: ReturnType<typeof resolveChatTargets>,
       caption: string,
-    ): Promise<ResolvedChatTarget[]> => {
+    ): Promise<void> => {
       const failedTitle = t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' });
       const isActive = () => useAuthStore.getState().user?.id === userId;
-      const { resolved, failed } = await resolveChatTargets(chosen);
+      const { resolved, failed } = await lookup;
       if (failed.length > 0) {
         failed.forEach((item) => reportHandledFailure('noteShare', 'resolveTarget', item.error));
         showTopNotice({
@@ -131,7 +130,6 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
           message: firstError ? getChatSendErrorMessage(firstError, countMessage) : countMessage,
         });
       }
-      return resolved;
     },
     [recordRecent, t, userId],
   );
@@ -139,9 +137,11 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
   const handleConfirm = useCallback(
     (chosen: ChatTarget[], caption: string) => {
       if (!request) return;
-      const resolution = sendInBackground(request, chosen, caption).catch((error: unknown) => {
+      // 「查看」只等会话落定:拷媒体、按限额排队能拖几十秒,等内容发完再跳就成了突然被拉走。
+      const lookup = resolveChatTargets(chosen);
+      const resolution = lookup.then(({ resolved }) => resolved, () => []);
+      void sendInBackground(request, lookup, caption).catch((error: unknown) => {
         reportHandledFailure('noteShare', 'send', error);
-        return [];
       });
       announceSent({ t, targets: chosen, resolution, onDismiss: onClose });
     },

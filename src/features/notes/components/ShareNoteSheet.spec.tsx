@@ -7,6 +7,7 @@ import { sendNotesToConversation } from '@/features/chat/utils/send-notes-to-con
 import { resolveChatTargetConversationId } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import type { NoteSummary } from '@/features/notes/types';
+import { router } from 'expo-router';
 
 const mockRecord = jest.fn();
 const mockShowTopNotice = jest.fn();
@@ -139,6 +140,24 @@ test('sending says "sent" at once and "confirm" closes the sheet without waiting
   expect(onClose).not.toHaveBeenCalled();
   sentButtons()[0].onPress?.();
   expect(onClose).toHaveBeenCalled();
+});
+
+// 拷媒体、按限额排队能拖几十秒:「查看」只等会话落定,不等内容发完,否则面板关了半天才突然跳走。
+test('"view" opens the chat as soon as it is known, while the notes are still sending', async () => {
+  jest.mocked(sendNotesToConversation).mockReturnValueOnce(new Promise(() => undefined));
+  const onClose = jest.fn();
+  render(<ShareNoteSheet request={request} onClose={onClose} />);
+  await pickAndSend();
+  await act(async () => {
+    sentButtons()[1].onPress?.();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(onClose).toHaveBeenCalled();
+  expect(jest.mocked(router.push)).toHaveBeenCalledWith(expect.objectContaining({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'conv-1' }),
+  }));
 });
 
 test('the chosen sections go to the chosen chat', async () => {

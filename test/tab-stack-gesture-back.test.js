@@ -103,6 +103,15 @@ test('map picker routes keep full-screen swipe-back disabled', () => {
       `${layoutPath} should keep map panning from dismissing the picker`,
     );
   }
+  // 编辑笔记页挂在进入它的那个 tab 栈里,选位置页也在同一栈:每个栈都要关掉全屏右滑。
+  for (const tab of ['messages', 'contacts', 'discover', 'explore']) {
+    const layoutPath = `app/(tabs)/${tab}/_layout.tsx`;
+    assert.match(
+      read(layoutPath),
+      /<Stack\.Screen\s+name="notes\/location-picker"\s+options=\{\{\s*fullScreenGestureEnabled:\s*false\s*\}\}/s,
+      `${layoutPath} should keep map panning from dismissing the note location picker`,
+    );
+  }
 });
 
 test('active group calls keep full-screen swipe-back disabled', () => {
