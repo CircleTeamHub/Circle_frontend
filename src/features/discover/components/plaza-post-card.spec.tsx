@@ -126,6 +126,29 @@ test('signing up turns the bar purple right away', async () => {
   expect(accentColor()).toBe(colors.tabBarActive);
 });
 
+// 报名按钮和竖条同一套颜色:能报绿色实心、已报紫色描边、不满足条件橙色(变淡)。
+const signupButtonStyle = () => StyleSheet.flatten(screen.getByTestId('plaza-card-signup').props.style);
+
+test('the signup button is solid green when I can sign up', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={post} />);
+  expect(signupButtonStyle()).toMatchObject({ backgroundColor: colors.success, borderColor: colors.success });
+  expect(accentColor()).toBe(colors.success);
+});
+
+test('the signed-up button is outlined in the theme purple', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  expect(signupButtonStyle()).toMatchObject({ backgroundColor: 'transparent', borderColor: colors.tabBarActive });
+  expect(screen.getByText('已报名 1').props.style).toMatchObject({ color: colors.tabBarActive });
+});
+
+test('the button is a faded orange when I do not meet the conditions', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={{ ...post, canSignup: false }} />);
+  expect(signupButtonStyle()).toMatchObject({ backgroundColor: colors.warning, opacity: 0.5 });
+});
+
 // 自己的帖子谈不上「我能不能报」:竖条用不带含义的描边色。
 test("the bar on the author's own post carries no signup meaning", () => {
   mockUserId = 'author';

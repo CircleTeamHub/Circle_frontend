@@ -565,17 +565,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
           </Pressable>
         ) : (
           <Pressable
+            testID="plaza-card-signup"
             onPress={handleToggleSignup}
             disabled={busy}
             hitSlop={6}
             style={[
               s.signupBtn,
-              // 未报名 = 实心主色强 CTA（推动及时报名）；已报名 = 克制的成功色描边确认态。
+              // 和左侧竖条同一个颜色(accentColor):未报名 = 实心 CTA(能报绿、不满足条件橙并变淡);
+              // 已报名 = 主题紫描边的确认态。
               signed
-                ? { borderColor: colors.success, backgroundColor: 'transparent' }
+                ? { borderColor: accentColor, backgroundColor: 'transparent' }
                 : {
-                    borderColor: colors.primary,
-                    backgroundColor: colors.primary,
+                    borderColor: accentColor,
+                    backgroundColor: accentColor,
                     opacity: post.canSignup ? 1 : 0.5,
                   },
             ]}
@@ -583,13 +585,13 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
             <Ionicons
               name={signed ? 'checkmark-circle' : 'person-add'}
               size={16}
-              color={signed ? colors.success : colors.white}
+              color={signed ? accentColor : colors.white}
             />
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: '700',
-                color: signed ? colors.success : colors.white,
+                color: signed ? accentColor : colors.white,
               }}
             >
               {signed
