@@ -71,8 +71,7 @@ test('UserIconBadge renders system badges from local artwork', () => {
   assert.match(row, /getSystemBadgeAsset/);
   assert.match(row, /systemBadgeImage/);
   assert.match(row, /contentFit="contain"/);
-  assert.match(row, /getSystemBadgeVisualTranslateY/);
-  assert.match(row, /getSystemBadgeVisibleRatio/);
+  assert.match(row, /getSystemBadgeArtBox/);
   assert.match(row, /translateY/);
 });
 
@@ -131,10 +130,11 @@ test('verified profile and circle builder badges use their dedicated local artwo
   assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
 });
 
-// 系统徽章的 PNG 四周留着多少不等的透明边(可见部分只占画布 73%~93%)。记下每张素材可见
-// 部分长边占画布长边的比例,渲染时据此放大,让各徽章看起来和圆形圈子徽章一样大。
-test('system badge visible ratios match the real artwork', () => {
-  const { getSystemBadgeAsset, getSystemBadgeVisibleRatio } = loadBadgeAssets();
+// 系统徽章的 PNG 四周留着多少不等的透明边(可见部分只占画布 73%~93%),画面也不一定在正中。
+// 记下每张素材可见部分的大小和中心偏移(都按画布长边算),渲染时据此居中、放大,
+// 让各徽章和圆形圈子徽章一样大、圆心对齐。这里直接量 PNG 核对记下的数。
+test('system badge art boxes match the real artwork', () => {
+  const { getSystemBadgeAsset, getSystemBadgeArtBox } = loadBadgeAssets();
   const { PNG } = require('pngjs');
   const measure = (rel) => {
     const png = PNG.sync.read(fs.readFileSync(path.join(root, rel)));
@@ -146,7 +146,12 @@ test('system badge visible ratios match the real artwork', () => {
         }
       }
     }
-    return Math.max(x1 - x0 + 1, y1 - y0 + 1) / Math.max(png.width, png.height);
+    const long = Math.max(png.width, png.height);
+    return {
+      visibleRatio: Math.max(x1 - x0 + 1, y1 - y0 + 1) / long,
+      offsetX: ((x0 + x1 + 1) / 2 - png.width / 2) / long,
+      offsetY: ((y0 + y1 + 1) / 2 - png.height / 2) / long,
+    };
   };
   const makeIcon = (systemKey, title = systemKey, recognitionCount) => ({
     id: `system-${systemKey}`,
@@ -171,14 +176,14 @@ test('system badge visible ratios match the real artwork', () => {
     makeIcon('TOP_COLLABORATOR', 'Top', 10000),
   ];
   for (const icon of icons) {
-    const asset = getSystemBadgeAsset(icon);
-    const rel = asset.replace(/^(\.\.\/)+/, '');
-    assert.ok(
-      Math.abs(getSystemBadgeVisibleRatio(icon) - measure(rel)) < 0.01,
-      `${rel}: visible ratio ${getSystemBadgeVisibleRatio(icon)} vs measured ${measure(rel).toFixed(3)}`,
-    );
+    const rel = getSystemBadgeAsset(icon).replace(/^(\.\.\/)+/, '');
+    const recorded = getSystemBadgeArtBox(icon);
+    const measured = measure(rel);
+    assert.ok(Math.abs(recorded.visibleRatio - measured.visibleRatio) < 0.01, `${rel}: visibleRatio ${recorded.visibleRatio} vs ${measured.visibleRatio.toFixed(3)}`);
+    assert.ok(Math.abs(recorded.offsetX - measured.offsetX) < 0.005, `${rel}: offsetX ${recorded.offsetX} vs ${measured.offsetX.toFixed(3)}`);
+    assert.ok(Math.abs(recorded.offsetY - measured.offsetY) < 0.005, `${rel}: offsetY ${recorded.offsetY} vs ${measured.offsetY.toFixed(3)}`);
   }
-  assert.equal(getSystemBadgeVisibleRatio(makeIcon('UNKNOWN')), 1);
+  assert.deepEqual({ ...getSystemBadgeArtBox(makeIcon('UNKNOWN')) }, { visibleRatio: 1, offsetX: 0, offsetY: 0 });
 });
 
 test('first release system badge keys are modeled on the client', () => {

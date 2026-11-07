@@ -6,8 +6,7 @@ import { Radius, Spacing, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
 import {
   getSystemBadgeAsset,
-  getSystemBadgeVisibleRatio,
-  getSystemBadgeVisualTranslateY,
+  getSystemBadgeArtBox,
 } from './user-badge-assets';
 
 type CompactSize = 'default' | 'small';
@@ -316,8 +315,6 @@ export function UserIconBadge({
   const hasSystemBadgeImage = Boolean(systemBadgeAsset) &&
     !(failedSystemBadge?.identity === systemBadgeIdentity && failedSystemBadge?.asset === systemBadgeAsset);
   const hasCircleImage = Boolean(circleImageUri) && failedCircleIdentity !== circleImageIdentity;
-  const systemBadgeTranslateY =
-    icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
   // 徽章下面不再画名字(新手/会员/圈子徽章),名字只留给读屏。
   const label =
     icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
@@ -348,32 +345,27 @@ export function UserIconBadge({
           height: Math.round((size * 40) / 52),
         }
       : resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
-  const transformSizeRatio =
-    size !== undefined
-      ? size / 52
-      : compact
-        ? isSmallCompact
-          ? 30 / 52
-          : 38 / 52
-        : 1;
-  // 系统徽章的可见部分(去掉素材的透明边)放大到和同档圆形圈子徽章的外圈一样大:
+  // 系统徽章外壳边长(素材 contain 进这个方框,画布长边 = 外壳边长)。
+  const shellSize = size ?? (compact ? (isSmallCompact ? 30 : 38) : 52);
+  // 系统徽章的可见画面要和同档圆形圈子徽章一样大、圆心对齐:
   // 圆形外圈 / 外壳 = 40/52(默认与显式 size)、34/38(compact)、28/30(compact small)。
   const circleToShellRatio = size !== undefined || !compact
     ? 40 / 52
     : isSmallCompact
       ? 28 / 30
       : 34 / 38;
-  const rawSystemBadgeScale =
-    icon.type === 'SYSTEM'
-      ? circleToShellRatio / getSystemBadgeVisibleRatio(icon)
-      : 1;
-  // 去掉浮点尾差:比例刚好相等时不挂多余的 transform。
-  const systemBadgeScale = Math.round(rawSystemBadgeScale * 1000) / 1000;
+  const art = icon.type === 'SYSTEM' ? getSystemBadgeArtBox(icon) : null;
+  // 保留三位小数:比例刚好相等时不挂多余的 transform。
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+  const systemBadgeScale = art ? round(circleToShellRatio / art.visibleRatio) : 1;
+  // 画面中心偏离素材中心多少,放大后就偏多少像素;反向挪回外壳中心。平移写在缩放前面,
+  // 数值就是屏幕上的实际像素(写在后面会被缩放再放大一次)。
+  const systemBadgeTranslateX = art ? round(-art.offsetX * shellSize * systemBadgeScale) : 0;
+  const systemBadgeTranslateY = art ? round(-art.offsetY * shellSize * systemBadgeScale) : 0;
   const systemBadgeTransform = [
+    ...(systemBadgeTranslateX !== 0 ? [{ translateX: systemBadgeTranslateX }] : []),
+    ...(systemBadgeTranslateY !== 0 ? [{ translateY: systemBadgeTranslateY }] : []),
     ...(systemBadgeScale !== 1 ? [{ scale: systemBadgeScale }] : []),
-    ...(systemBadgeTranslateY !== 0
-      ? [{ translateY: systemBadgeTranslateY * transformSizeRatio }]
-      : []),
   ];
 
   return (

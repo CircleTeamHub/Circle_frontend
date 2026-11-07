@@ -88,50 +88,40 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
   return null;
 }
 
-/**
- * 每张系统徽章素材「可见部分长边 / 画布长边」(alpha > 16 的包围盒,实测)。素材四周留的
- * 透明边各不相同,按画布等大渲染时可见部分大小不一,竖版素材会比圆形圈子徽章小一圈。
- * 渲染时按这个比例放大,让可见部分和同档的圆形徽章一样大(见 UserIconBadge)。
- * 换素材要同步改这里;test/user-badge-assets.test.js 会直接量 PNG 核对。
- */
-const SYSTEM_BADGE_VISIBLE_RATIO = new Map<unknown, number>([
-  [VIP_BADGE_ASSETS[1], 0.73],
-  [VIP_BADGE_ASSETS[2], 0.73],
-  [VIP_BADGE_ASSETS[3], 0.73],
-  [VIP_BADGE_ASSETS[4], 0.73],
-  [VIP_BADGE_ASSETS[5], 0.76],
-  [SUPER_BADGE_ASSET, 0.93],
-  [TOP_COLLABORATOR_BADGE_ASSETS[1], 0.78],
-  [TOP_COLLABORATOR_BADGE_ASSETS[2], 0.78],
-  [TOP_COLLABORATOR_BADGE_ASSETS[3], 0.78],
-  [NEW_JOINER_BADGE_ASSET, 0.73],
-  [VERIFIED_PROFILE_BADGE_ASSET, 0.8],
-  [CIRCLE_BUILDER_BADGE_ASSET, 0.73],
-]);
-
-export function getSystemBadgeVisibleRatio(icon: DisplayIcon): number {
-  const asset = getSystemBadgeAsset(icon);
-  return (asset && SYSTEM_BADGE_VISIBLE_RATIO.get(asset)) ?? 1;
+/** 一张系统徽章素材里可见画面的大小与位置,都按画布长边归一。 */
+export interface SystemBadgeArtBox {
+  /** 可见部分(alpha > 16 的包围盒)长边 / 画布长边。 */
+  visibleRatio: number;
+  /** 可见部分中心相对画布中心的偏移(正 = 偏右 / 偏下)。 */
+  offsetX: number;
+  offsetY: number;
 }
 
-export function getSystemBadgeVisualTranslateY(icon: DisplayIcon) {
-  if (icon.systemKey === 'TOP_COLLABORATOR') {
-    return 0;
-  }
+/**
+ * 每张系统徽章素材的可见画面(实测)。素材四周留的透明边各不相同、画面也不一定在正中:
+ * 按画布等大渲染时,竖版素材比圆形圈子徽章小一圈、高低也对不齐。UserIconBadge 据此把
+ * 画面挪回中心、放大到和同档圆形徽章一样大。
+ * 换素材要同步改这里;test/user-badge-assets.test.js 会直接量 PNG 核对。
+ */
+const VIP_ART: SystemBadgeArtBox = { visibleRatio: 0.73, offsetX: 0, offsetY: -0.035 };
+const SYSTEM_BADGE_ART = new Map<unknown, SystemBadgeArtBox>([
+  [VIP_BADGE_ASSETS[1], VIP_ART],
+  [VIP_BADGE_ASSETS[2], VIP_ART],
+  [VIP_BADGE_ASSETS[3], VIP_ART],
+  [VIP_BADGE_ASSETS[4], { visibleRatio: 0.73, offsetX: 0, offsetY: -0.037 }],
+  [VIP_BADGE_ASSETS[5], { visibleRatio: 0.76, offsetX: 0.023, offsetY: -0.057 }],
+  [SUPER_BADGE_ASSET, { visibleRatio: 0.93, offsetX: 0.002, offsetY: 0.034 }],
+  [TOP_COLLABORATOR_BADGE_ASSETS[1], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
+  [TOP_COLLABORATOR_BADGE_ASSETS[2], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
+  [TOP_COLLABORATOR_BADGE_ASSETS[3], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
+  [NEW_JOINER_BADGE_ASSET, { visibleRatio: 0.73, offsetX: 0, offsetY: -0.034 }],
+  [VERIFIED_PROFILE_BADGE_ASSET, { visibleRatio: 0.8, offsetX: 0, offsetY: -0.084 }],
+  [CIRCLE_BUILDER_BADGE_ASSET, { visibleRatio: 0.73, offsetX: 0, offsetY: -0.034 }],
+]);
 
-  if (icon.systemKey === 'VERIFIED_PROFILE') {
-    return 3;
-  }
+const FULL_CANVAS_ART: SystemBadgeArtBox = { visibleRatio: 1, offsetX: 0, offsetY: 0 };
 
-  if (icon.systemKey === 'NEW_USER' || icon.systemKey === 'CIRCLE_BUILDER') {
-    return 1;
-  }
-
-  if (icon.systemKey === 'VIP') {
-    const level = clampLevel(readLevel(icon), 5);
-    if (level >= 4) return -8;
-    return level === 3 ? 2 : 1;
-  }
-
-  return 0;
+export function getSystemBadgeArtBox(icon: DisplayIcon): SystemBadgeArtBox {
+  const asset = getSystemBadgeAsset(icon);
+  return (asset && SYSTEM_BADGE_ART.get(asset)) ?? FULL_CANVAS_ART;
 }
