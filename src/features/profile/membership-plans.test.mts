@@ -96,7 +96,7 @@ test('catalog defines every value in the seven benefit rows', () => {
       id: 'name-color',
       labelKey: 'profile.membership.benefits.nameColor',
       values: {
-        silver: 'silver',
+        silver: 'none',
         gold: 'gold',
         diamond: 'rainbow',
         super: 'exclusive-shimmer',

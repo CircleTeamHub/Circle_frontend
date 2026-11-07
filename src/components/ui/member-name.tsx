@@ -38,19 +38,23 @@ interface MemberNameProps {
   animated?: boolean;
 }
 
-// 银色 / 金色 / 钻石 = 纯色。按主题取变体保证可读:浅色主题白底上用深变体(≥4.8:1),
+// 白银档(vipLevel 1:每日会员 / 包月会员)不染色,和非会员一样用调用处的普通文字颜色。
+// 之前给它的 #5F6B7A 灰在白底上像禁用态,看着就是「灰掉了」。
+const PLAIN_NAME_TIERS: ReadonlySet<MembershipTier> = new Set(['silver']);
+
+// 金色 / 钻石 = 纯色。按主题取变体保证可读:浅色主题白底上用深变体(≥4.8:1),
 // 深色主题用亮变体(深底可读)。钻石取纯紫(violet-600 / violet-400),不再走渐变。
 const SOLID_COLOR: Record<
   'light' | 'dark',
   Partial<Record<MembershipTier, string>>
 > = {
-  light: { silver: '#5F6B7A', gold: '#946A00', diamond: '#7C3AED' },
-  dark: { silver: '#AEB6C2', gold: '#E7B34D', diamond: '#A78BFA' },
+  light: { gold: '#946A00', diamond: '#7C3AED' },
+  dark: { gold: '#E7B34D', diamond: '#A78BFA' },
 };
 
 // 超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,中等饱和度确保浅色
 // 卡片上可读,暖调贵气)。仅顶档 super 用这条色带(列表里静态铺开,资料页头部流动);
-// 银 / 金 / 钻石均为纯色。
+// 金 / 钻石为纯色,白银不染色。
 const FLOW_COLORS: Record<'super', readonly string[]> = {
   super: [
     '#D9A85E',
@@ -85,7 +89,7 @@ function staticColorAt(
  * 按会员档位给用户名加特效的文字组件。非会员 / 拿不到 vipLevel 时退化为普通 <Text>,
  * 可无脑替换现有的 `<Text style={...}>{name}</Text>`(额外传 vipLevel 即可)。
  *
- * 银/金/钻石为纯色;超级(玫瑰金流光)默认静态渐变,animated 时为流动渐变。
+ * 白银不染色;金/钻石为纯色;超级(玫瑰金流光)默认静态渐变,animated 时为流动渐变。
  * 流动渐变原生端由已在包里的 Skia 绘制(见 member-name-flow.tsx),不新增原生依赖,
  * 所以 OTA 下发到旧安装包也安全。
  */
@@ -111,7 +115,7 @@ export const MemberName = memo(function MemberName({
   const flowing = animated && tier === 'super' && !COLOR_EMOJI.test(name);
   const { progress, reduceMotionEnabled } = useMemberNameAnimation(flowing);
 
-  if (!tier) {
+  if (!tier || PLAIN_NAME_TIERS.has(tier)) {
     return (
       <Text style={style} numberOfLines={numberOfLines}>
         {name}
