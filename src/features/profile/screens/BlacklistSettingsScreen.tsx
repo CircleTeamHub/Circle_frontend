@@ -201,7 +201,8 @@ export default function BlacklistSettingsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void loadUsers('refresh')}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         ItemSeparatorComponent={() => (

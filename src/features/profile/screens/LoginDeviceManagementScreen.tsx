@@ -302,7 +302,8 @@ export default function LoginDeviceManagementScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void loadSessions("refresh")}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
       >

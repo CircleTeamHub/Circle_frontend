@@ -343,7 +343,8 @@ export const MomentsFeed: React.FC = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         onEndReached={handleEndReached}

@@ -330,21 +330,21 @@ export const PlazaFeed: React.FC = () => {
 
   const ContentLoading = (
     <View style={s.contentLoading} testID="plaza-content-loading">
-      <ActivityIndicator color={colors.primary} />
+      <ActivityIndicator color={colors.tabBarActive} />
     </View>
   );
 
   const ListFooter =
     plazaLoading && plazaPosts.length > 0 ? (
       <View style={s.footerLoader}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.tabBarActive} />
       </View>
     ) : null;
 
   if (programEnabled === null && !plazaLoaded) {
     return (
       <View style={s.emptyContainer}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.tabBarActive} />
       </View>
     );
   }
@@ -382,7 +382,8 @@ export const PlazaFeed: React.FC = () => {
           <RefreshControl
             refreshing={pullRefreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         onEndReached={handleEndReached}

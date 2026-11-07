@@ -193,7 +193,8 @@ export default function CirclePostsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.primary}
+            tintColor={colors.tabBarActive}
+            colors={[colors.tabBarActive]}
           />
         }
         onEndReached={handleEndReached}
