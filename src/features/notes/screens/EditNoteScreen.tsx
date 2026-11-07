@@ -3070,7 +3070,6 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
       mediaMeta: { color: colors.textSecondary },
       emptyText: { color: colors.textSecondary },
@@ -3308,18 +3307,6 @@ export default function EditNoteScreen() {
                 <NoteMediaUploadRing progressKey={item.clientId} />
               ) : null}
               </Pressable>
-              <View style={[s.mediaBadge, d.mediaBadge]}>
-                <Ionicons
-                  name={item.type === 'VIDEO' ? 'videocam' : 'image'}
-                  size={13}
-                  color={colors.text}
-                />
-                <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={1}>
-                  {item.type === 'VIDEO'
-                    ? t('notes.edit.videoItem', { defaultValue: '视频' })
-                    : t('notes.edit.imageItem', { defaultValue: '图片' })}
-                </Text>
-              </View>
               <Pressable
                 style={s.mediaRemoveButton}
                 onPress={() => handleRemoveSectionMedia(target, item.clientId)}
@@ -3338,8 +3325,6 @@ export default function EditNoteScreen() {
     colors.text,
     d.emptyText,
     d.emptyTray,
-    d.mediaBadge,
-    d.mediaMeta,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
@@ -4942,18 +4927,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  mediaBadge: {
-    position: 'absolute',
-    left: 6,
-    right: 6,
-    bottom: 6,
-    minHeight: 24,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   mediaRemoveButton: {
     position: 'absolute',

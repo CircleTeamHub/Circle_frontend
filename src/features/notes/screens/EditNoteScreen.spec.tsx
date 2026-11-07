@@ -18,6 +18,15 @@ import * as noteSections from '@/features/notes/utils/note-sections';
 import { recordMetric } from '@/observability/metrics';
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
+// 图片格子里只有图本身:不再在底部垫一条写着「图片 / 视频」的白条。
+test('a media tile shows the image without a type label bar', async () => {
+  render(<EditNoteScreen />);
+  const upload = await beginDeferredImageUpload();
+  const tile = screen.getByTestId('note-media-preview-tile');
+  expect(within(tile).queryByText('notes.edit.imageItem')).toBeNull();
+  await act(async () => { upload.resolve(); });
+});
+
 // 上传进度画在每张图自己的格子上(圆圈),不再有右上角的全局上传卡片;一张传完它的圆圈就消失。
 test('each uploading image shows its own progress ring and no global upload card', async () => {
   render(<EditNoteScreen />);
@@ -721,6 +730,8 @@ test('keeps a selected video preview visible before and after its upload settles
   pressComposer('video');
   await screen.findByTestId('note-media-preview-video');
   expect(screen.getByTestId('note-media-preview-video').props.source).toBe(mockGeneratedVideoThumbnail);
+  // 视频格子同样不再垫一条写着「视频」的白条。
+  expect(screen.queryByText('notes.edit.videoItem')).toBeNull();
   expect(mockVideoPlayerRelease).toHaveBeenCalledTimes(1);
 
   upload.resolve();
