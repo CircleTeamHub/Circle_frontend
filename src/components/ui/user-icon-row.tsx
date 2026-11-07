@@ -6,7 +6,7 @@ import { Radius, Spacing, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
 import {
   getSystemBadgeAsset,
-  getSystemBadgeVisualScale,
+  getSystemBadgeVisibleRatio,
   getSystemBadgeVisualTranslateY,
 } from './user-badge-assets';
 
@@ -316,8 +316,6 @@ export function UserIconBadge({
   const hasSystemBadgeImage = Boolean(systemBadgeAsset) &&
     !(failedSystemBadge?.identity === systemBadgeIdentity && failedSystemBadge?.asset === systemBadgeAsset);
   const hasCircleImage = Boolean(circleImageUri) && failedCircleIdentity !== circleImageIdentity;
-  const systemBadgeScale =
-    icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
   const systemBadgeTranslateY =
     icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
   // 徽章下面不再画名字(新手/会员/圈子徽章),名字只留给读屏。
@@ -358,6 +356,19 @@ export function UserIconBadge({
           ? 30 / 52
           : 38 / 52
         : 1;
+  // 系统徽章的可见部分(去掉素材的透明边)放大到和同档圆形圈子徽章的外圈一样大:
+  // 圆形外圈 / 外壳 = 40/52(默认与显式 size)、34/38(compact)、28/30(compact small)。
+  const circleToShellRatio = size !== undefined || !compact
+    ? 40 / 52
+    : isSmallCompact
+      ? 28 / 30
+      : 34 / 38;
+  const rawSystemBadgeScale =
+    icon.type === 'SYSTEM'
+      ? circleToShellRatio / getSystemBadgeVisibleRatio(icon)
+      : 1;
+  // 去掉浮点尾差:比例刚好相等时不挂多余的 transform。
+  const systemBadgeScale = Math.round(rawSystemBadgeScale * 1000) / 1000;
   const systemBadgeTransform = [
     ...(systemBadgeScale !== 1 ? [{ scale: systemBadgeScale }] : []),
     ...(systemBadgeTranslateY !== 0

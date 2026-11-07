@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { UserIconBadge, UserIconRow } from './user-icon-row';
 import type { DisplayIcon } from '@/types';
 
-const mockImages: { source?: unknown; onError?: () => void }[] = [];
+const mockImages: { source?: unknown; style?: unknown; onError?: () => void }[] = [];
 const mockBadgeAssets = new Map<string, { uri: string }>();
 const mockGetSystemBadgeAsset = jest.fn<{ uri: string } | null, [DisplayIcon]>();
 
@@ -11,7 +11,7 @@ jest.mock('expo-image', () => {
   const { Pressable, View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    Image: (props: { source?: unknown; onError?: () => void }) => {
+    Image: (props: { source?: unknown; style?: unknown; onError?: () => void }) => {
       mockImages.push(props);
       return <Pressable testID="badge-image" onPress={props.onError}><View /></Pressable>;
     },
@@ -47,9 +47,11 @@ jest.mock('@/theme', () => ({
 
 jest.mock('./user-badge-assets', () => ({
   getSystemBadgeAsset: (icon: DisplayIcon) => mockGetSystemBadgeAsset(icon),
-  getSystemBadgeVisualScale: () => 1,
+  getSystemBadgeVisibleRatio: () => mockVisibleRatio,
   getSystemBadgeVisualTranslateY: () => 0,
 }));
+
+let mockVisibleRatio = 1;
 
 const vipIcon = (systemVariant: string, sortOrder: number): DisplayIcon => ({
   id: 'system:VIP3',
@@ -63,6 +65,7 @@ const vipIcon = (systemVariant: string, sortOrder: number): DisplayIcon => ({
 });
 
 beforeEach(() => {
+  mockVisibleRatio = 1;
   mockImages.length = 0;
   mockBadgeAssets.clear();
   mockGetSystemBadgeAsset.mockReset().mockImplementation((icon) => {
@@ -119,4 +122,23 @@ test('a system badge without local artwork still displays its custom image', () 
   render(<UserIconBadge icon={{ ...vipIcon('VIP2', 0), imageUrl: 'https://example.test/custom.png' }} />);
   expect(screen.getByTestId('badge-image')).toBeTruthy();
   expect(mockImages[mockImages.length - 1].source).toEqual({ uri: 'https://example.test/custom.png' });
+});
+
+// 系统徽章的可见部分(去掉 PNG 透明边)要和同档的圆形圈子徽章一样大:最小档圆形外圈 28,
+// 外壳 30,可见比例 0.73 的素材就要放大 28 / (30 × 0.73) 倍。
+test('a small compact system badge is scaled so its visible art matches the circle badge', () => {
+  mockVisibleRatio = 0.73;
+  render(<UserIconBadge icon={vipIcon('VIP1', 0)} compact compactSize="small" />);
+  const style = [mockImages[0].style].flat(3).find((item): item is object => typeof item === 'object' && item !== null && 'transform' in item) as
+    | { transform: { scale?: number }[] }
+    | undefined;
+  const scale = style?.transform.find((item) => item.scale !== undefined)?.scale;
+  expect(scale).toBeCloseTo(28 / (30 * 0.73), 3);
+});
+
+test('artwork that fills its canvas exactly at circle size is left unscaled', () => {
+  mockVisibleRatio = 40 / 52;
+  render(<UserIconBadge icon={vipIcon('VIP1', 0)} />);
+  const style = [mockImages[0].style].flat(3).find((item): item is object => typeof item === 'object' && item !== null && 'transform' in item);
+  expect(style).toBeUndefined();
 });

@@ -88,22 +88,30 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
   return null;
 }
 
-export function getSystemBadgeVisualScale(icon: DisplayIcon) {
-  if (icon.systemKey === 'TOP_COLLABORATOR') {
-    return 1.04;
-  }
+/**
+ * 每张系统徽章素材「可见部分长边 / 画布长边」(alpha > 16 的包围盒,实测)。素材四周留的
+ * 透明边各不相同,按画布等大渲染时可见部分大小不一,竖版素材会比圆形圈子徽章小一圈。
+ * 渲染时按这个比例放大,让可见部分和同档的圆形徽章一样大(见 UserIconBadge)。
+ * 换素材要同步改这里;test/user-badge-assets.test.js 会直接量 PNG 核对。
+ */
+const SYSTEM_BADGE_VISIBLE_RATIO = new Map<unknown, number>([
+  [VIP_BADGE_ASSETS[1], 0.73],
+  [VIP_BADGE_ASSETS[2], 0.73],
+  [VIP_BADGE_ASSETS[3], 0.73],
+  [VIP_BADGE_ASSETS[4], 0.73],
+  [VIP_BADGE_ASSETS[5], 0.76],
+  [SUPER_BADGE_ASSET, 0.93],
+  [TOP_COLLABORATOR_BADGE_ASSETS[1], 0.78],
+  [TOP_COLLABORATOR_BADGE_ASSETS[2], 0.78],
+  [TOP_COLLABORATOR_BADGE_ASSETS[3], 0.78],
+  [NEW_JOINER_BADGE_ASSET, 0.73],
+  [VERIFIED_PROFILE_BADGE_ASSET, 0.8],
+  [CIRCLE_BUILDER_BADGE_ASSET, 0.73],
+]);
 
-  if (icon.systemKey === 'NEW_USER' || icon.systemKey === 'CIRCLE_BUILDER') {
-    return 1.16;
-  }
-
-  if (icon.systemKey === 'VIP') {
-    const level = clampLevel(readLevel(icon), 5);
-    // super.png(超级,≥4)内容填满方形画布;竖版 VIP 素材有更多透明边,需要放大。
-    return level >= 4 ? 0.8 : 1.16;
-  }
-
-  return 1;
+export function getSystemBadgeVisibleRatio(icon: DisplayIcon): number {
+  const asset = getSystemBadgeAsset(icon);
+  return (asset && SYSTEM_BADGE_VISIBLE_RATIO.get(asset)) ?? 1;
 }
 
 export function getSystemBadgeVisualTranslateY(icon: DisplayIcon) {

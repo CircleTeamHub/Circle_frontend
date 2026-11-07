@@ -72,6 +72,7 @@ test('UserIconBadge renders system badges from local artwork', () => {
   assert.match(row, /systemBadgeImage/);
   assert.match(row, /contentFit="contain"/);
   assert.match(row, /getSystemBadgeVisualTranslateY/);
+  assert.match(row, /getSystemBadgeVisibleRatio/);
   assert.match(row, /translateY/);
 });
 
@@ -130,8 +131,23 @@ test('verified profile and circle builder badges use their dedicated local artwo
   assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
 });
 
-test('system badge visual scales compensate for uneven transparent artwork padding', () => {
-  const { getSystemBadgeVisualScale, getSystemBadgeVisualTranslateY } = loadBadgeAssets();
+// 系统徽章的 PNG 四周留着多少不等的透明边(可见部分只占画布 73%~93%)。记下每张素材可见
+// 部分长边占画布长边的比例,渲染时据此放大,让各徽章看起来和圆形圈子徽章一样大。
+test('system badge visible ratios match the real artwork', () => {
+  const { getSystemBadgeAsset, getSystemBadgeVisibleRatio } = loadBadgeAssets();
+  const { PNG } = require('pngjs');
+  const measure = (rel) => {
+    const png = PNG.sync.read(fs.readFileSync(path.join(root, rel)));
+    let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+    for (let y = 0; y < png.height; y++) {
+      for (let x = 0; x < png.width; x++) {
+        if (png.data[(y * png.width + x) * 4 + 3] > 16) {
+          x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+        }
+      }
+    }
+    return Math.max(x1 - x0 + 1, y1 - y0 + 1) / Math.max(png.width, png.height);
+  };
   const makeIcon = (systemKey, title = systemKey, recognitionCount) => ({
     id: `system-${systemKey}`,
     type: 'SYSTEM',
@@ -142,23 +158,27 @@ test('system badge visual scales compensate for uneven transparent artwork paddi
     sortOrder: 0,
     recognitionCount,
   });
-
-  // 超级(≥VIP4)= super.png 橙色皇冠。该素材内容填满方形画布,需要略微缩小,
-  // 否则在“我的徽章”里会比银/金/钻等竖版透明画布素材大一圈。
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP5')), 0.8);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP4')), 0.8);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP3')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP1')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('NEW_USER')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('CIRCLE_BUILDER')), 1.16);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VERIFIED_PROFILE')), 1);
-  assert.equal(getSystemBadgeVisualScale(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 1.04);
-
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP5')), -8);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP3')), 2);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('CIRCLE_BUILDER')), 1);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VERIFIED_PROFILE')), 3);
-  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 0);
+  const icons = [
+    makeIcon('VIP', 'VIP1'),
+    makeIcon('VIP', 'VIP2'),
+    makeIcon('VIP', 'VIP3'),
+    makeIcon('VIP', 'VIP5'),
+    makeIcon('NEW_USER'),
+    makeIcon('CIRCLE_BUILDER'),
+    makeIcon('VERIFIED_PROFILE'),
+    makeIcon('TOP_COLLABORATOR', 'Top', 100),
+    makeIcon('TOP_COLLABORATOR', 'Top', 1000),
+    makeIcon('TOP_COLLABORATOR', 'Top', 10000),
+  ];
+  for (const icon of icons) {
+    const asset = getSystemBadgeAsset(icon);
+    const rel = asset.replace(/^(\.\.\/)+/, '');
+    assert.ok(
+      Math.abs(getSystemBadgeVisibleRatio(icon) - measure(rel)) < 0.01,
+      `${rel}: visible ratio ${getSystemBadgeVisibleRatio(icon)} vs measured ${measure(rel).toFixed(3)}`,
+    );
+  }
+  assert.equal(getSystemBadgeVisibleRatio(makeIcon('UNKNOWN')), 1);
 });
 
 test('first release system badge keys are modeled on the client', () => {

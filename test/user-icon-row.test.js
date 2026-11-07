@@ -15,7 +15,7 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /accessible\s*\n\s*accessibilityLabel=\{label\}/);
   assert.doesNotMatch(row, /showLabel|labelColor|tone\s*=\s*'default'/);
   assert.match(row, /getSystemBadgeAsset/);
-  assert.match(row, /getSystemBadgeVisualScale/);
+  assert.match(row, /getSystemBadgeVisibleRatio/);
   assert.match(row, /getSystemBadgeVisualTranslateY/);
   assert.match(row, /systemBadgeAsset/);
   assert.match(row, /systemBadgeScale/);
