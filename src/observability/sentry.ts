@@ -309,6 +309,7 @@ type SentryCaptureContext = {
   extra?: Record<string, unknown>;
   tags?: Record<string, string>;
   fingerprint?: string[];
+  level?: 'warning';
 };
 
 const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
@@ -1304,7 +1305,10 @@ function errorExplanation(error: unknown, context?: Record<string, unknown>): st
     releasedExplanation,
   ].some(part => message.includes(part))) return releasedExplanation;
   if (context?.failureKind === 'timeout') return '请求超时';
+  if (context?.failureKind === 'stalled') return '请求卡住无响应';
   if (context?.failureKind === 'network') return '网络连接失败';
+  if (context?.failureKind === 'body-read') return '读取响应内容失败';
+  if (context?.failureKind === 'connect_error') return '实时连接握手失败';
   if (context?.failureKind === 'invalid-json') return '服务端响应格式无法解析';
   switch (source.name) {
     case 'ResponseShapeError': return '服务端返回的数据结构不符合预期';
@@ -1336,7 +1340,8 @@ function safeErrorMessage(context: Record<string, unknown> | undefined, error?: 
     return `页面显示或退出失败｜${explanation}`;
   }
   if (context && readTagValue(context, 'endpointPath')) {
-    return `${requestSummary('接口请求失败', context)}｜${explanation}`;
+    const retryOutcome = context.retry === 'recovered' ? '｜重试已救回' : context.retry === 'failed' ? '｜重试也失败' : '';
+    return `${requestSummary('接口请求失败', context)}｜${explanation}${retryOutcome}`;
   }
   const operation = context ? readTagValue(context, 'operation') : undefined;
   if (operation && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(operation)) {
@@ -1422,6 +1427,8 @@ function buildCaptureContext(
       // 卡顿救回来（用户无感）与重试也失败（用户看到报错）各成一个 issue，计数与告警不混。
       ...(tags.retry ? [tags.retry] : []),
     ];
+    // 救回来的只是现场采样。Sentry 按级别给新 issue 定优先级，error 会触发「高优先级」告警推到 Discord。
+    if (tags.retry === 'recovered') captureContext.level = 'warning';
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
     // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。
