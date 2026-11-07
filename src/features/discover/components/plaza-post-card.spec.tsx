@@ -1,6 +1,10 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
+import { signupForPost } from '@/services/api/plaza';
+import { useTheme } from '@/theme';
+import type { ThemeColors } from '@/theme/types';
 import type { CirclePlazaPost } from '@/types';
 
 let mockUserId = 'me';
@@ -77,6 +81,57 @@ test('the signup condition and the signup button share one row', () => {
   expect(footer.getByText('报名条件：')).toBeTruthy();
   expect(footer.getByText('不限制')).toBeTruthy();
   expect(footer.getByText('报名')).toBeTruthy();
+});
+
+/** 测试环境里的主题色(和组件拿到的是同一份)。 */
+function themeColors(): ThemeColors {
+  let captured: ThemeColors | null = null;
+  const Probe = () => {
+    captured = useTheme().colors;
+    return null;
+  };
+  render(<Probe />);
+  return captured!;
+}
+
+const accentColor = () =>
+  StyleSheet.flatten(screen.getByTestId('plaza-card-accent').props.style).backgroundColor;
+
+// 左侧竖条告诉看帖的人「我能不能报」:能报绿、已报主题紫、不满足条件橙。
+test('the left bar is green when I can sign up', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={post} />);
+  expect(accentColor()).toBe(colors.success);
+});
+
+test('the left bar is the theme purple once I have signed up', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  expect(accentColor()).toBe(colors.tabBarActive);
+});
+
+test('the left bar is orange when I do not meet the conditions', () => {
+  const colors = themeColors();
+  render(<PlazaPostCard post={{ ...post, canSignup: false }} />);
+  expect(accentColor()).toBe(colors.warning);
+});
+
+test('signing up turns the bar purple right away', async () => {
+  const colors = themeColors();
+  jest.mocked(signupForPost).mockResolvedValueOnce({ signed: true, signupCount: 1 });
+  render(<PlazaPostCard post={post} />);
+  await act(async () => {
+    fireEvent.press(within(screen.getByTestId('plaza-card-footer')).getByText('报名'));
+  });
+  expect(accentColor()).toBe(colors.tabBarActive);
+});
+
+// 自己的帖子谈不上「我能不能报」:竖条用不带含义的描边色。
+test("the bar on the author's own post carries no signup meaning", () => {
+  mockUserId = 'author';
+  const colors = themeColors();
+  render(<PlazaPostCard post={post} />);
+  expect(accentColor()).toBe(colors.surfaceBorder);
 });
 
 test("the author's own post shows the signup count in that same row", () => {

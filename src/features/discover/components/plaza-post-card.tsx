@@ -11,7 +11,6 @@ import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
-import { getPostExpiryTier } from '@/features/discover/utils/plaza-post-expiry';
 import {
   cancelSignup,
   signupForPost,
@@ -67,7 +66,7 @@ function badgeDisplayRank(icon: DisplayIcon): number {
 }
 
 const s = StyleSheet.create({
-  // 活动卡片左侧强调竖条 —— 给广场帖一个「活动」身份，普通 horn 用橙、常规用主色。
+  // 左侧竖条:告诉看帖的人「我能不能报」(配色见 accentColor)。
   // 卡片 overflow:hidden 让竖条顶到圆角内被裁切，观感干净。
   accent: {
     position: 'absolute',
@@ -430,19 +429,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     });
   }, [post.author.displayIcons]);
 
-  // 左侧强调竖条配色按「距到期的剩余时间」分档，随时间推移逐级跳变：≤1天(橙) →
-  // ≤3天(绿) → 更久(紫)。越接近到期越暖，推动及时报名（不用红色，观感更柔和）。
-  const accentColor = useMemo(() => {
-    const tier = getPostExpiryTier(post.expiresAt);
-    if (tier === 'urgent') return colors.warning;
-    if (tier === 'soon') return colors.success;
-    return colors.primary;
-  }, [post.expiresAt, colors]);
+  // 左侧竖条按「我能不能报」上色:能报绿、已报主题紫、不满足条件橙。跟着本地的 signed 走,
+  // 一报名立刻变紫。自己的帖子谈不上能不能报,用不带含义的描边色。
+  const accentColor = isOwnPost
+    ? colors.surfaceBorder
+    : signed
+      ? colors.tabBarActive
+      : post.canSignup
+        ? colors.success
+        : colors.warning;
 
   return (
     <View style={d.card}>
-      {/* 左侧「活动」强调竖条：配色随距到期剩余时间逐级跳变(>3天紫→≤3天绿→≤1天橙)。 */}
-      <View style={[s.accent, { backgroundColor: accentColor }]} />
+      <View style={[s.accent, { backgroundColor: accentColor }]} testID="plaza-card-accent" />
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={handleAvatarPress}>
