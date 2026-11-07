@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { UserIconBadge, UserIconRow } from './user-icon-row';
 import type { DisplayIcon } from '@/types';
 
@@ -155,4 +156,59 @@ test('artwork that fills its canvas exactly at circle size is left unscaled', ()
   mockArtBox = { visibleRatio: 40 / 52, offsetX: 0, offsetY: 0 };
   render(<UserIconBadge icon={vipIcon('VIP1', 0)} />);
   expect(badgeTransform()).toBeUndefined();
+});
+
+// 回归:圈子徽章外面曾套着一圈白底「奖章盘」(白底 + 内外两道描边),图片只占中间一小块,
+// 还比旁边已经居中的系统徽章高 4pt。现在和圈子详情页一样,只是一张圆形裁切的图,
+// 圆的大小 = 同档系统徽章的可见画面(外壳 52/38/30 里的 40/34/28),圆心在外壳正中。
+const circleIcon: DisplayIcon = {
+  id: 'circle-a',
+  type: 'CIRCLE',
+  title: 'A',
+  imageUrl: 'https://example.test/a.png',
+  circleId: 'a',
+  fallbackIconName: 'sparkles-outline',
+  sortOrder: 0,
+};
+
+type FlatStyle = {
+  width?: number | string;
+  height?: number | string;
+  borderRadius?: number;
+  borderWidth?: number;
+  backgroundColor?: string;
+  transform?: unknown[];
+};
+
+/** 从图片往上数到徽章根节点,把每一层宿主 View 的样式摊平。 */
+function stylesAroundCircleImage(): FlatStyle[] {
+  const styles: FlatStyle[] = [];
+  let node = screen.getByTestId('badge-image').parent;
+  while (node) {
+    if (typeof node.type === 'string' && node.type === 'View') {
+      styles.push(StyleSheet.flatten(node.props.style) ?? {});
+    }
+    node = node.parent;
+  }
+  return styles;
+}
+
+test.each([
+  ['default', {}, 40],
+  ['compact', { compact: true }, 34],
+  ['small compact', { compact: true, compactSize: 'small' as const }, 28],
+  ['explicit size', { size: 104 }, 80],
+])('a %s circle badge is just the round image, as large as a system badge', (_label, props, diameter) => {
+  render(<UserIconBadge icon={circleIcon} {...props} />);
+  const styles = stylesAroundCircleImage();
+
+  expect(styles.some((style) => (style.borderWidth ?? 0) > 0)).toBe(false);
+  expect(styles.some((style) => style.backgroundColor === '#fff')).toBe(false);
+  const clip = styles.find((style) => style.borderRadius !== undefined);
+  expect(clip).toMatchObject({ width: diameter, height: diameter });
+});
+
+test('a circle badge sits at the centre of its shell, level with system badges', () => {
+  render(<UserIconBadge icon={circleIcon} />);
+  expect(stylesAroundCircleImage().some((style) => style.transform !== undefined)).toBe(false);
 });

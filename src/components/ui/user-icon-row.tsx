@@ -52,11 +52,12 @@ const s = StyleSheet.create({
   denseItem: {
     gap: 2,
   },
+  // 圈子徽章 = 一张圆形裁切的图(同圈子详情页),不加底盘和描边。直径和同档系统徽章的
+  // 可见画面一样大(外壳 52 / 38 / 30 里的 40 / 34 / 28),在外壳里居中。
   circle: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -75,41 +76,13 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
   },
-  circleSlot: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  circleSlotRaised: {
-    transform: [{ translateY: -4 }],
-  },
-  circleOrnament: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  compactCircleOrnament: {
+  compactCircle: {
     width: 34,
     height: 34,
   },
-  smallCompactCircleOrnament: {
+  smallCompactCircle: {
     width: 28,
     height: 28,
-  },
-  compactCircle: {
-    width: 30,
-    height: 30,
-  },
-  smallCompactCircle: {
-    width: 24,
-    height: 24,
   },
   systemBadgeShell: {
     width: 52,
@@ -124,13 +97,6 @@ const s = StyleSheet.create({
   smallCompactSystemBadgeShell: {
     width: 30,
     height: 30,
-  },
-  imageWrap: {
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   image: {
     width: '100%',
@@ -274,16 +240,6 @@ function resolveCircleSizeStyle(compact: boolean, isSmallCompact: boolean) {
   return isSmallCompact ? s.smallCompactCircle : s.compactCircle;
 }
 
-function resolveCircleOrnamentSizeStyle(
-  compact: boolean,
-  isSmallCompact: boolean,
-) {
-  if (!compact) return null;
-  return isSmallCompact
-    ? s.smallCompactCircleOrnament
-    : s.compactCircleOrnament;
-}
-
 export function UserIconBadge({
   icon,
   compact = false,
@@ -320,7 +276,6 @@ export function UserIconBadge({
     icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
   const isSmallCompact = compact && compactSize === 'small';
   // 显式 size（详情大图）优先：按该尺寸原生定尺寸、不做 transform 放大 —— 小图上采样才是糊的根因。
-  const hasExplicitSize = size !== undefined;
   // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
   // 深层嵌套三元，可读且易扩展。显式 size 分支直接用 size（此处已收窄为 number）。
   const shellSizeStyle =
@@ -334,21 +289,14 @@ export function UserIconBadge({
   const circleSizeStyle =
     size !== undefined
       ? {
-          width: Math.round((size * 34) / 52),
-          height: Math.round((size * 34) / 52),
-        }
-      : resolveCircleSizeStyle(compact, isSmallCompact);
-  const circleOrnamentSizeStyle =
-    size !== undefined
-      ? {
           width: Math.round((size * 40) / 52),
           height: Math.round((size * 40) / 52),
         }
-      : resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
+      : resolveCircleSizeStyle(compact, isSmallCompact);
   // 系统徽章外壳边长(素材 contain 进这个方框,画布长边 = 外壳边长)。
   const shellSize = size ?? (compact ? (isSmallCompact ? 30 : 38) : 52);
   // 系统徽章的可见画面要和同档圆形圈子徽章一样大、圆心对齐:
-  // 圆形外圈 / 外壳 = 40/52(默认与显式 size)、34/38(compact)、28/30(compact small)。
+  // 圈子徽章直径 / 外壳 = 40/52(默认与显式 size)、34/38(compact)、28/30(compact small)。
   const circleToShellRatio = size !== undefined || !compact
     ? 40 / 52
     : isSmallCompact
@@ -396,60 +344,41 @@ export function UserIconBadge({
             }}
           />
         ) : (
-          <View style={[s.circleSlot, !compact && !hasExplicitSize ? s.circleSlotRaised : null]}>
-            <View
-              style={[
-                s.circleOrnament,
-                circleOrnamentSizeStyle,
-                {
-                  backgroundColor: colors.white,
-                  borderColor: colors.surfaceBorder,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  s.circle,
-                  circleSizeStyle,
-                  // 徽章内盘固定浅底：深色模式下 surface 是深色，会把圈子图标（多为深色线稿/
-                  // 透明底）吞成黑块。用 white 保持奖章质感，两种模式都有对比。
-                  {
-                    backgroundColor: colors.white,
-                    borderColor: colors.surfaceBorder,
-                  },
-                ]}
-              >
-                <View style={s.imageWrap}>
-                  {hasCircleImage ? (
-                    <Image
-                      source={{ uri: circleImageUri }}
-                      recyclingKey={circleImageUri}
-                      style={s.image}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      transition={0}
-                      onError={() => {
-                        if (currentCircleIdentity.current === circleImageIdentity) setFailedCircleIdentity(circleImageIdentity);
-                      }}
-                    />
-                  ) : (
-                    <Ionicons
-                      name={resolveFallbackIcon(icon.fallbackIconName)}
-                      size={
-                        size !== undefined
-                          ? Math.round((size * 14) / 52)
-                          : compact
-                            ? isSmallCompact
-                              ? 10
-                              : 12
-                            : 14
-                      }
-                      color={colors.textSecondary}
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
+          <View
+            style={[
+              s.circle,
+              circleSizeStyle,
+              // 没图时才垫一块浅底,让兜底图标在深色背景上也看得见;有图就是图本身。
+              hasCircleImage ? null : { backgroundColor: colors.white },
+            ]}
+          >
+            {hasCircleImage ? (
+              <Image
+                source={{ uri: circleImageUri }}
+                recyclingKey={circleImageUri}
+                style={s.image}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={0}
+                onError={() => {
+                  if (currentCircleIdentity.current === circleImageIdentity) setFailedCircleIdentity(circleImageIdentity);
+                }}
+              />
+            ) : (
+              <Ionicons
+                name={resolveFallbackIcon(icon.fallbackIconName)}
+                size={
+                  size !== undefined
+                    ? Math.round((size * 14) / 52)
+                    : compact
+                      ? isSmallCompact
+                        ? 10
+                        : 12
+                      : 14
+                }
+                color={colors.textSecondary}
+              />
+            )}
           </View>
         )}
       </View>

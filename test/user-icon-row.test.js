@@ -36,12 +36,9 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /badgeFrame/);
   assert.match(row, /hasSystemBadgeImage \? s\.systemBadgeShell : s\.badgeFrame/);
   assert.match(row, /hasCircleImage/);
-  assert.match(row, /circleOrnament/);
-  assert.match(row, /compactCircleOrnament/);
-  assert.match(row, /smallCompactCircleOrnament/);
-  assert.match(row, /s\.circleOrnament/);
-  assert.match(row, /circleSlotRaised/);
-  assert.match(row, /<View style=\{\[s\.circleSlot,\s*!compact && !hasExplicitSize \? s\.circleSlotRaised : null\]\}>/);
+  // 圈子徽章只是一张圆形裁切的图:不再套白底奖章盘、不再上移 4pt
+  // (尺寸、描边、位置的行为由 user-icon-row.spec.tsx 渲染核对)。
+  assert.doesNotMatch(row, /circleOrnament|circleSlotRaised/);
   assert.match(row, /width:\s*40,\s*\n\s*height:\s*40,/);
 });
 
