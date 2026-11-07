@@ -116,7 +116,10 @@ const s = StyleSheet.create({
     // 圈子标签在第二行：仅设宽度上限（圈子名过长时省略），不参与收缩，让城市文本先让位。
     maxWidth: 132,
   },
+  // 报名条件在左、可换行收缩;按钮靠右不收缩。两样各占一行时右边全空着,合成一行。
   conditionRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -141,14 +144,15 @@ const s = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   signupBtn: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 6,
+    paddingHorizontal: Spacing.md - 4,
+    paddingVertical: Spacing.xs,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
@@ -172,7 +176,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         borderColor: colors.surfaceBorder,
         padding: Spacing.md,
         paddingLeft: Spacing.md + 4,
-        gap: Spacing.md - 4,
+        gap: Spacing.sm,
         overflow: 'hidden' as const,
       },
       authorName: {
@@ -528,26 +532,24 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       {/* Images */}
       <ImageGrid images={post.images} media={post.media} />
 
-      {/* 报名条件: 始终显示；绑定 signup-restriction 集（后端 403 实际校验的那套），
-          无门槛时显示"不限制"，让作者/浏览者都能一眼看到报名门槛。 */}
-      <View style={s.conditionRow}>
-        <Text style={[s.conditionLabel, { color: colors.textSecondary }]}>
-          {t('plaza.signupCondition', { defaultValue: '报名条件：' })}
-        </Text>
-        {hasCondition ? (
-          <RestrictionBadge restrictions={post.signupRestrictions} />
-        ) : (
-          <View style={[s.openBadge, { backgroundColor: OPEN_BADGE_COLOR }]}>
-            <Ionicons name="earth-outline" size={10} color={colors.white} />
-            <Text style={[s.openBadgeText, { color: colors.white }]}>
-              {t('common.noRestriction', { defaultValue: '不限制' })}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Footer：自己的帖子显示报名人数(点击进入报名管理),否则显示报名按钮 */}
-      <View style={s.footer}>
+      {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
+          无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}
+      <View style={s.footer} testID="plaza-card-footer">
+        <View style={s.conditionRow}>
+          <Text style={[s.conditionLabel, { color: colors.textSecondary }]}>
+            {t('plaza.signupCondition', { defaultValue: '报名条件：' })}
+          </Text>
+          {hasCondition ? (
+            <RestrictionBadge restrictions={post.signupRestrictions} />
+          ) : (
+            <View style={[s.openBadge, { backgroundColor: OPEN_BADGE_COLOR }]}>
+              <Ionicons name="earth-outline" size={10} color={colors.white} />
+              <Text style={[s.openBadgeText, { color: colors.white }]}>
+                {t('common.noRestriction', { defaultValue: '不限制' })}
+              </Text>
+            </View>
+          )}
+        </View>
         {isOwnPost ? (
           <Pressable
             onPress={handleManageSignups}
