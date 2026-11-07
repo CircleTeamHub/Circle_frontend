@@ -444,8 +444,8 @@ export default function NotificationCenterScreen() {
           accessibilityLabel={t('common.retry')}
           onPress={() => { failedCursorRef.current = null; setPageFailed(false); void loadMore(); }}
           style={{ padding: Spacing.lg, alignItems: 'center' }}
-        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : null}
-          {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.primary} /> : null}</View>}
+        ><Text style={{ color: colors.iconAccent }}>{t('common.retry')}</Text></Pressable> : null}
+          {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.iconAccent} /> : null}</View>}
         ListEmptyComponent={
           <NotificationEmptyState
             title={

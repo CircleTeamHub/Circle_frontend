@@ -232,7 +232,7 @@ export default function UserMomentsScreen() {
   const ListFooter =
     loading && moments.length > 0 ? (
       <View style={s.footerLoader}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.iconAccent} />
       </View>
     ) : null;
 

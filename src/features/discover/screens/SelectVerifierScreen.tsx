@@ -191,7 +191,7 @@ export default function SelectVerifierScreen() {
       <NavHeader title={t('invitation.selectVerifier')} />
       {loading ? (
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : loadError && candidates.length === 0 ? (
         <View style={s.centerLoader}>

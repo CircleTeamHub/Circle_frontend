@@ -645,7 +645,7 @@ function CircleDetailContent() {
       dangerBtnText: { color: colors.white },
       refreshError: { backgroundColor: colors.surface },
       refreshErrorText: { color: colors.textSecondary },
-      refreshRetryText: { color: colors.primary },
+      refreshRetryText: { color: colors.iconAccent },
       iconAssetCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -659,7 +659,7 @@ function CircleDetailContent() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('circle.detail')} />
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       </View>
     );

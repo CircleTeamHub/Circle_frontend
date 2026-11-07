@@ -519,7 +519,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       {post.tags.length > 0 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
           {post.tags.map((tag) => (
-            <Text key={tag} style={{ color: colors.primary, ...Typography.caption }}>
+            <Text key={tag} style={{ color: colors.iconAccent, ...Typography.caption }}>
               #{tag}
             </Text>
           ))}

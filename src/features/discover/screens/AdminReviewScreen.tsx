@@ -211,7 +211,7 @@ export default function AdminReviewScreen() {
       <NavHeader title={t('invitation.adminReview')} />
       {loading ? (
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : loadError && invitations.length === 0 ? (
         <View style={s.centerLoader}>

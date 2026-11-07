@@ -167,7 +167,7 @@ export const MyCirclesPanel: React.FC = () => {
         borderColor: colors.surfaceBorder,
       },
       createButtonText: {
-        color: colors.primary,
+        color: colors.iconAccent,
         ...Typography.caption,
         fontWeight: "600" as const,
       },
@@ -205,7 +205,7 @@ export const MyCirclesPanel: React.FC = () => {
         ...Typography.caption,
       },
       filterNoticeAction: {
-        color: colors.primary,
+        color: colors.iconAccent,
         ...Typography.caption,
         fontWeight: "600" as const,
       },
@@ -259,7 +259,7 @@ export const MyCirclesPanel: React.FC = () => {
       {/* 只有手上什么都没有时才转圈;后台刷新时已缓存的列表留在屏上。 */}
       {myCirclesLoading && circles.length === 0 ? (
         <View style={s.emptyContainer}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : myCirclesError && circles.length === 0 ? (
         <View style={s.emptyContainer}>

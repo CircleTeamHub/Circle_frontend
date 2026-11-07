@@ -446,7 +446,7 @@ export default function PostSignupsScreen() {
                     style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
                   />
                   {item.recognized ? (
-                    <Text style={[s.recognizedTag, { color: colors.primary }]}>
+                    <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
                       {t('notifications.signupMgmt.recognizedTag', {
                         defaultValue: '已认可',
                       })}
@@ -505,7 +505,7 @@ export default function PostSignupsScreen() {
                 onPress={load}
                 disabled={refreshing}
               >
-                <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                <Text style={{ color: colors.iconAccent, fontWeight: '600' }}>
                   {t('common.retry')}
                 </Text>
               </Pressable>

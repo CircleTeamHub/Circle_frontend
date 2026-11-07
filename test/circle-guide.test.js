@@ -9,8 +9,11 @@ function read(rel) {
 
 test('circle guide color legend maps to the same accent colors as the activity card', () => {
   const src = read('src/features/discover/screens/CircleGuideScreen.tsx');
-  // 色块必须与 plaza-post-card 强调竖条一一对应：紫 primary / 绿 success / 橙 warning。
-  assert.match(src, /colorPurple', color: colors\.primary/);
+  // 色块必须与 plaza-post-card 强调竖条一一对应：紫 tabBarActive / 绿 success / 橙 warning。
+  // 紫色取卡片竖条的同一个 token(浅色 #7C5CF0、暗色提亮紫),两处才不会一深一浅。
+  const card = read('src/features/discover/components/plaza-post-card.tsx');
+  assert.match(card, /\? colors\.tabBarActive\s*: post\.canSignup/);
+  assert.match(src, /colorPurple', color: colors\.tabBarActive/);
   assert.match(src, /colorGreen', color: colors\.success/);
   assert.match(src, /colorOrange', color: colors\.warning/);
 });

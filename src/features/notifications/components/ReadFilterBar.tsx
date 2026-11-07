@@ -47,9 +47,9 @@ export const ReadFilterBar = memo(function ReadFilterBar(p: Props) {
       <View style={s.spacer} />
       <Pressable onPress={handleMarkAll} disabled={busy} hitSlop={8}>
         {busy ? (
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color={colors.iconAccent} />
         ) : (
-          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>{p.labels.markAll}</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.iconAccent }}>{p.labels.markAll}</Text>
         )}
       </Pressable>
     </View>
