@@ -69,7 +69,9 @@ export default function QuickChatScreen() {
     });
   }, [close, conversationID, params.avatarUrl, params.conversationType, params.sourceID, params.title]);
 
-  const sheetNavigation = useMemo(() => ({ dismiss: close, expand }), [close, expand]);
+  // 发笔记 / 名片 / 转账等「选完回到聊天」的页面盖在半屏上打开,不再借道展开;
+  // 只有右上角展开才进完整聊天页(sheet.onExpand)。
+  const sheetNavigation = useMemo(() => ({ dismiss: close }), [close]);
 
   if (!conversationID) return null;
 

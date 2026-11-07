@@ -37,6 +37,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'chat-history-search',
   'chat-history-text',
   'chat-info',
+  'chat-sheet',
   'circle',
   'circles',
   'circle-guide',

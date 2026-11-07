@@ -261,6 +261,13 @@ function RootStack() {
             fullScreenGestureEnabled: false,
           }}
         />
+        {/* 半屏聊天里打开的分享选择 / 转账 / 选位置:必须是模态才能盖在半屏之上
+            (iOS 会把模态之后的普通 push 页放到模态下面),返回后仍停在半屏。
+            用 fullScreenModal 而不是卡片式 modal:这些页面按 insets.top 留顶部空白。 */}
+        <Stack.Screen
+          name="chat-sheet"
+          options={{ presentation: 'fullScreenModal' }}
+        />
       </Stack>
     </NavThemeProvider>
   );

@@ -30,7 +30,7 @@ jest.mock('@/features/chat/screens/ChatDetailScreen', () => {
           <Pressable onPress={props.sheet.onClose}><Text>chat.close</Text></Pressable>
           <Pressable onPress={props.sheet.onExpand}><Text>chat.expand</Text></Pressable>
           <Pressable onPress={() => chatRouter.push('/(tabs)/messages/user/peer-1')}><Text>chat.openProfile</Text></Pressable>
-          <Pressable onPress={() => chatRouter.pushOverChat('/(tabs)/messages/share-picker')}><Text>chat.openPicker</Text></Pressable>
+          <Pressable onPress={() => chatRouter.pushOverChat('share-picker', { type: 'note' })}><Text>chat.openPicker</Text></Pressable>
         </>
       );
   }
@@ -83,10 +83,15 @@ test('leaving the sheet closes it before navigating so no second tab stack is pu
   expect(mockBack.mock.invocationCallOrder[0]).toBeLessThan(mockPush.mock.invocationCallOrder[0]);
 });
 
-test('pages that return to the chat open over the expanded full chat', () => {
+// 回归:以前这里先展开成完整聊天页再压选择页,用户在别的 tab 时完整聊天页压不进去,
+// 选完直接落到消息列表。现在选择页盖在半屏上打开,半屏不关、不展开。
+test('pages that return to the chat open over the sheet without closing or expanding it', () => {
   render(<QuickChatScreen />);
   fireEvent.press(screen.getByText('chat.openPicker'));
-  expect(mockBack).toHaveBeenCalledTimes(1);
-  expect(mockPush).toHaveBeenNthCalledWith(1, expect.objectContaining({ pathname: '/(tabs)/messages/chat-detail' }));
-  expect(mockPush).toHaveBeenNthCalledWith(2, '/(tabs)/messages/share-picker');
+  expect(mockBack).not.toHaveBeenCalled();
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/chat-sheet/share-picker',
+    params: { type: 'note' },
+  });
 });
