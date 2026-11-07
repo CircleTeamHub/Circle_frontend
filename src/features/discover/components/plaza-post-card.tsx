@@ -430,14 +430,12 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   }, [post.author.displayIcons]);
 
   // 左侧竖条按「我能不能报」上色:能报绿、已报主题紫、不满足条件橙。跟着本地的 signed 走,
-  // 一报名立刻变紫。自己的帖子谈不上能不能报,用不带含义的描边色。
-  const accentColor = isOwnPost
-    ? colors.surfaceBorder
-    : signed
-      ? colors.tabBarActive
-      : post.canSignup
-        ? colors.success
-        : colors.warning;
+  // 一报名立刻变紫。自己发的帖子也是主题紫(和「已报名」一样:这条和我有关)。
+  const accentColor = isOwnPost || signed
+    ? colors.tabBarActive
+    : post.canSignup
+      ? colors.success
+      : colors.warning;
 
   return (
     <View style={d.card}>
@@ -606,6 +604,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       <PlazaPostActionsSheet
         visible={menuVisible}
         actions={postActions}
+        context={post.content.replace(/\s+/g, ' ').trim()}
         onClose={() => setMenuVisible(false)}
       />
     </View>

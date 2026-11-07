@@ -149,12 +149,12 @@ test('the button is a faded orange when I do not meet the conditions', () => {
   expect(signupButtonStyle()).toMatchObject({ backgroundColor: colors.warning, opacity: 0.5 });
 });
 
-// 自己的帖子谈不上「我能不能报」:竖条用不带含义的描边色。
-test("the bar on the author's own post carries no signup meaning", () => {
+// 自己发的帖子用主题紫(和「已报名」同色:都是「这条和我有关」)。
+test("the bar on the author's own post is the theme purple", () => {
   mockUserId = 'author';
   const colors = themeColors();
   render(<PlazaPostCard post={post} />);
-  expect(accentColor()).toBe(colors.surfaceBorder);
+  expect(accentColor()).toBe(colors.tabBarActive);
 });
 
 test("the author's own post shows the signup count in that same row", () => {
