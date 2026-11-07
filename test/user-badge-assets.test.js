@@ -130,7 +130,7 @@ test('verified profile and circle builder badges use their dedicated local artwo
   assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
 });
 
-// 系统徽章的 PNG 四周留着多少不等的透明边(可见部分只占画布 73%~93%),画面也不一定在正中。
+// 系统徽章的 PNG 四周留着多少不等的透明边(实心画面只占画布 58%~86%),画面也不一定在正中。
 // 记下每张素材可见部分的大小和中心偏移(都按画布长边算),渲染时据此居中、放大,
 // 让各徽章和圆形圈子徽章一样大、圆心对齐。这里直接量 PNG 核对记下的数。
 test('system badge art boxes match the real artwork', () => {
@@ -141,7 +141,8 @@ test('system badge art boxes match the real artwork', () => {
     let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
     for (let y = 0; y < png.height; y++) {
       for (let x = 0; x < png.width; x++) {
-        if (png.data[(y * png.width + x) * 4 + 3] > 16) {
+        // 只量实心部分:素材底下那圈很淡的投影在深色背景上看不见,算进来会高估画面、把中心往下拉。
+        if (png.data[(y * png.width + x) * 4 + 3] > 128) {
           x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
         }
       }

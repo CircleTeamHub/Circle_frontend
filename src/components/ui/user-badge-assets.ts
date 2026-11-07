@@ -90,33 +90,36 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
 
 /** 一张系统徽章素材里可见画面的大小与位置,都按画布长边归一。 */
 export interface SystemBadgeArtBox {
-  /** 可见部分(alpha > 16 的包围盒)长边 / 画布长边。 */
+  /** 实心画面(alpha > 128 的包围盒)长边 / 画布长边。 */
   visibleRatio: number;
-  /** 可见部分中心相对画布中心的偏移(正 = 偏右 / 偏下)。 */
+  /** 实心画面中心相对画布中心的偏移(正 = 偏右 / 偏下)。 */
   offsetX: number;
   offsetY: number;
 }
 
 /**
- * 每张系统徽章素材的可见画面(实测)。素材四周留的透明边各不相同、画面也不一定在正中:
- * 按画布等大渲染时,竖版素材比圆形圈子徽章小一圈、高低也对不齐。UserIconBadge 据此把
- * 画面挪回中心、放大到和同档圆形徽章一样大。
+ * 每张系统徽章素材的实心画面(实测)。素材四周留的透明边各不相同、底下还拖着一圈很淡的
+ * 投影(深色背景上看不见),画面也不在正中:按画布等大渲染时,竖版素材比圆形圈子徽章小
+ * 一圈、还偏上。UserIconBadge 据此把画面挪回中心、放大到和同档圆形徽章一样大。
+ * 只量 alpha > 128 的实心部分:把投影算进来会高估画面、把中心往下拉。
  * 换素材要同步改这里;test/user-badge-assets.test.js 会直接量 PNG 核对。
  */
-const VIP_ART: SystemBadgeArtBox = { visibleRatio: 0.73, offsetX: 0, offsetY: -0.035 };
+const VIP_ART: SystemBadgeArtBox = { visibleRatio: 0.579, offsetX: 0, offsetY: -0.108 };
+const TOP_COLLABORATOR_ART: SystemBadgeArtBox = { visibleRatio: 0.762, offsetX: 0, offsetY: -0.098 };
+const HEXAGON_ART: SystemBadgeArtBox = { visibleRatio: 0.575, offsetX: 0, offsetY: -0.109 };
 const SYSTEM_BADGE_ART = new Map<unknown, SystemBadgeArtBox>([
   [VIP_BADGE_ASSETS[1], VIP_ART],
   [VIP_BADGE_ASSETS[2], VIP_ART],
   [VIP_BADGE_ASSETS[3], VIP_ART],
-  [VIP_BADGE_ASSETS[4], { visibleRatio: 0.73, offsetX: 0, offsetY: -0.037 }],
-  [VIP_BADGE_ASSETS[5], { visibleRatio: 0.76, offsetX: 0.023, offsetY: -0.057 }],
-  [SUPER_BADGE_ASSET, { visibleRatio: 0.93, offsetX: 0.002, offsetY: 0.034 }],
-  [TOP_COLLABORATOR_BADGE_ASSETS[1], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
-  [TOP_COLLABORATOR_BADGE_ASSETS[2], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
-  [TOP_COLLABORATOR_BADGE_ASSETS[3], { visibleRatio: 0.78, offsetX: 0, offsetY: -0.022 }],
-  [NEW_JOINER_BADGE_ASSET, { visibleRatio: 0.73, offsetX: 0, offsetY: -0.034 }],
-  [VERIFIED_PROFILE_BADGE_ASSET, { visibleRatio: 0.8, offsetX: 0, offsetY: -0.084 }],
-  [CIRCLE_BUILDER_BADGE_ASSET, { visibleRatio: 0.73, offsetX: 0, offsetY: -0.034 }],
+  [VIP_BADGE_ASSETS[4], VIP_ART],
+  [VIP_BADGE_ASSETS[5], { visibleRatio: 0.622, offsetX: -0.001, offsetY: -0.125 }],
+  [SUPER_BADGE_ASSET, { visibleRatio: 0.863, offsetX: 0.002, offsetY: 0.003 }],
+  [TOP_COLLABORATOR_BADGE_ASSETS[1], TOP_COLLABORATOR_ART],
+  [TOP_COLLABORATOR_BADGE_ASSETS[2], TOP_COLLABORATOR_ART],
+  [TOP_COLLABORATOR_BADGE_ASSETS[3], TOP_COLLABORATOR_ART],
+  [NEW_JOINER_BADGE_ASSET, HEXAGON_ART],
+  [VERIFIED_PROFILE_BADGE_ASSET, { visibleRatio: 0.639, offsetX: 0, offsetY: -0.163 }],
+  [CIRCLE_BUILDER_BADGE_ASSET, HEXAGON_ART],
 ]);
 
 const FULL_CANVAS_ART: SystemBadgeArtBox = { visibleRatio: 1, offsetX: 0, offsetY: 0 };
