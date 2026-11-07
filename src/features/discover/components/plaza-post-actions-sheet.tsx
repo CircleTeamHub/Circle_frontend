@@ -17,8 +17,6 @@ export interface PostAction {
 interface PlazaPostActionsSheetProps {
   visible: boolean;
   actions: readonly PostAction[];
-  /** 面板顶部的一行上下文(帖子正文开头),让人知道是在操作哪一条。 */
-  context?: string;
   onClose: () => void;
 }
 
@@ -38,12 +36,6 @@ const s = StyleSheet.create({
     height: 4,
     borderRadius: Radius.full,
     marginBottom: Spacing.xs,
-  },
-  context: {
-    ...Typography.small,
-    textAlign: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xs,
   },
   // 一组操作一张圆角卡片:普通操作一组,删除/举报单独一组。
   group: {
@@ -90,7 +82,6 @@ const s = StyleSheet.create({
 export function PlazaPostActionsSheet({
   visible,
   actions,
-  context,
   onClose,
 }: PlazaPostActionsSheetProps) {
   const { colors } = useTheme();
@@ -102,7 +93,6 @@ export function PlazaPostActionsSheet({
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      context: { color: colors.textSecondary },
       group: { backgroundColor: withAlpha(colors.text, 0.06) },
       pressed: { backgroundColor: withAlpha(colors.text, 0.08) },
       divider: { backgroundColor: colors.divider },
@@ -162,11 +152,6 @@ export function PlazaPostActionsSheet({
       ]}
     >
       <View style={[s.handle, d.handle]} />
-      {context ? (
-        <Text style={[s.context, d.context]} numberOfLines={1}>
-          {context}
-        </Text>
-      ) : null}
       {main.length > 0 ? renderGroup(main, 'plaza-actions-main') : null}
       {danger.length > 0 ? renderGroup(danger, 'plaza-actions-danger') : null}
       <Pressable

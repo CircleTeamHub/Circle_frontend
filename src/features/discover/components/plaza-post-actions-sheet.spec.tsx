@@ -25,12 +25,6 @@ const actions: PostAction[] = [
 
 beforeEach(() => jest.clearAllMocks());
 
-// 一眼看出是在操作哪条帖子。
-test('the sheet names the post it acts on', () => {
-  render(<PlazaPostActionsSheet visible actions={actions} context="北京来人" onClose={jest.fn()} />);
-  expect(screen.getByText('北京来人')).toBeTruthy();
-});
-
 // 删除/举报单独一组,和分享隔开,不会顺手点错。
 test('destructive actions sit in their own group, apart from share', () => {
   render(<PlazaPostActionsSheet visible actions={actions} onClose={jest.fn()} />);

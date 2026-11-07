@@ -604,7 +604,6 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       <PlazaPostActionsSheet
         visible={menuVisible}
         actions={postActions}
-        context={post.content.replace(/\s+/g, ' ').trim()}
         onClose={() => setMenuVisible(false)}
       />
     </View>
