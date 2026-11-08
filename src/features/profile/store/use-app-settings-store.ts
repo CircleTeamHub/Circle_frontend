@@ -8,6 +8,7 @@ export const appSettingsDefaults = {
   pushNotifications: true,
   friendRequestNotifications: true,
   groupRequestNotifications: true,
+  quickChatSheet: true,
   groupGlobalPush: true,
   groupOnlinePush: true,
   groupOfflinePush: false,

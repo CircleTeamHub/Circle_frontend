@@ -2478,6 +2478,8 @@
       "sound": "开启提示音",
       "messageRingtone": "消息通知铃声",
       "messageDefault": "消息默认",
+      "quickChatSheet": "开启半窗聊天",
+      "quickChatSheetHint": "点消息横幅时在当前页面上弹出半窗，关闭后直接进入聊天页",
       "autoReply": "私信自动回复",
       "autoReplyHint": "收到私聊消息时自动回复一条预设内容",
       "friendSection": "好友与入群通知",

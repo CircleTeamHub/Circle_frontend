@@ -560,9 +560,6 @@ test('CreditScoreScreen keeps the score on the page and moves the rules behind t
   assert.match(src, /<CreditIntroSheet/);
   assert.doesNotMatch(src, /credit\.(improveRules|deductRules|impacts)/);
   assert.match(sheet, /BottomSheetModal/);
-  // 面板根节点按下即成为 JS responder；新架构 iOS 下它是 ScrollView 的祖先就会禁用滚动。
-  // 纯文字正文必须由 ScrollView 内部的节点先接住触摸，弹层才能上下滑。
-  assert.match(sheet, /<ScrollView[\s\S]*onStartShouldSetResponder=\{claimTouch\}[\s\S]*<\/ScrollView>/);
   // 「与积分、金钱无关」的声明要在弹层最前面，打开就能看到。
   assert.ok(sheet.indexOf('credit.introNote') < sheet.indexOf('credit.sections.tiers'));
   for (const key of ['improveRules', 'deductRules', 'impacts']) {

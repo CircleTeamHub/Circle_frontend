@@ -2484,6 +2484,8 @@
       "sound": "Sound",
       "messageRingtone": "Message Ringtone",
       "messageDefault": "Message Default",
+      "quickChatSheet": "Half-Screen Chat",
+      "quickChatSheetHint": "Tapping a message banner opens a half-screen chat over the current page. Turn off to go straight to the chat",
       "autoReply": "Direct Message Auto Reply",
       "autoReplyHint": "Send a preset reply when a direct message arrives",
       "friendSection": "Friends & Group Requests",

@@ -48,7 +48,6 @@ const RULE_SECTIONS: readonly {
 const SHEET_MAX_HEIGHT_RATIO = 0.85;
 // 档位从高到低排，读起来像一架梯子。
 const TIERS_HIGH_TO_LOW = CREDIT_TIERS.map((tier, index) => ({ ...tier, index })).reverse();
-const claimTouch = () => true;
 
 const s = StyleSheet.create({
   sheet: {
@@ -213,10 +212,7 @@ export function CreditIntroSheet({ visible, currentTier, onClose }: CreditIntroS
           </Pressable>
         </View>
         <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-          {/* 面板根节点按下就会成为 JS responder（挡住蒙层的点击）；新架构下 iOS 的 ScrollView
-              只要有祖先是 responder 就不让滚，正文全是纯文字时触摸会一路冒泡到面板根节点。
-              由正文自己先接住触摸 —— 它在 ScrollView 里面而不是祖先，滚动才生效。 */}
-          <View style={s.body} onStartShouldSetResponder={claimTouch}>
+          <View style={s.body}>
             {/* 放在最前面：打开就能看到，不必滚动。 */}
             <View style={[s.note, d.note]}>
               <Ionicons name="shield-checkmark-outline" size={18} color={d.colors.iconAccent} style={s.noteIcon} />

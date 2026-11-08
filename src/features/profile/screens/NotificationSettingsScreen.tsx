@@ -138,6 +138,14 @@ export default function NotificationSettingsScreen() {
               onPress: () => setRingtoneSheet('message'),
             },
             {
+              id: 'quick-chat-sheet',
+              labelKey: 'settingsDetails.notifications.quickChatSheet',
+              subtitleKey: 'settingsDetails.notifications.quickChatSheetHint',
+              type: 'toggle',
+              value: settings.quickChatSheet,
+              onValueChange: (value) => setSetting('quickChatSheet', value),
+            },
+            {
               id: 'auto-reply',
               labelKey: 'settingsDetails.notifications.autoReply',
               subtitleKey: 'settingsDetails.notifications.autoReplyHint',

@@ -47,7 +47,8 @@ test("bottom sheet keeps children as direct sheet content for auto-height layout
 
   assert.doesNotMatch(sharedSheet, /innerContent:\s*\{[\s\S]*flex:\s*1,?[\s\S]*\}/);
   assert.doesNotMatch(sharedSheet, /<Pressable\s+style=\{s\.innerContent\}/);
-  assert.match(sharedSheet, /onStartShouldSetResponder=\{\(\) => true\}/);
+  // 面板和蒙层都不能按下就占住 responder：iOS 新架构下祖先是 responder 时 ScrollView 不让滚。
+  assert.doesNotMatch(sharedSheet, /onStartShouldSetResponder=/);
   assert.match(createTempChatSheet, /gap:\s*Spacing\.lg/);
 });
 
@@ -65,8 +66,6 @@ test("sheet drag starts from the header, or from the body once its list is at th
   // 捕获阶段抢在列表之前判定，拿到后不让出。
   assert.match(sharedSheet, /onMoveShouldSetPanResponderCapture: \(_event, gesture\) => shouldClaim\(gesture\)/);
   assert.match(sharedSheet, /onPanResponderTerminationRequest: \(\) => false/);
-  // 面板根节点按下就是响应者，移动/松手必须按起点判断。
-  assert.match(sharedSheet, /if \(!dragAllowedRef\.current\) return;/);
   // 列表顶部不回弹，否则 iOS 上回弹和面板位移叠在一起。
   assert.match(sharedSheet, /bounces=\{sheetScroll \? false : props\.bounces\}/);
   assert.match(sharedSheet, /overScrollMode=\{sheetScroll \? 'never' : props\.overScrollMode\}/);

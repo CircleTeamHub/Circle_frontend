@@ -108,6 +108,8 @@
       "sound": "Sonido",
       "messageRingtone": "Tono de mensajes",
       "messageDefault": "Predeterminado de mensajes",
+      "quickChatSheet": "Chat en media pantalla",
+      "quickChatSheetHint": "Al tocar un aviso de mensaje, el chat se abre en media pantalla sobre la página actual. Desactívalo para ir directamente al chat",
       "autoReply": "Respuesta automática a mensajes directos",
       "autoReplyHint": "Envía una respuesta predefinida al recibir un mensaje directo",
       "friendSection": "Solicitudes de amigos y grupos",
