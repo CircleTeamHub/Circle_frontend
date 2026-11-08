@@ -42,6 +42,7 @@ jest.mock('@/theme', () => ({
       text: '#111',
       textSecondary: '#666',
       white: '#fff',
+      surfaceMuted: '#eee',
     },
   }),
 }));
@@ -211,4 +212,13 @@ test.each([
 test('a circle badge sits at the centre of its shell, level with system badges', () => {
   render(<UserIconBadge icon={circleIcon} />);
   expect(stylesAroundCircleImage().some((style) => style.transform !== undefined)).toBe(false);
+});
+
+// 回归:没图或图片加载失败时,兜底盘曾固定用 white,而暗色主题的 textSecondary 也是纯白,
+// 兜底图标白字压白底,只剩一块空白圆。底色改用随主题变化的 surfaceMuted。
+test('the fallback disc of a circle badge without an image uses the muted surface, not white', () => {
+  render(<UserIconBadge icon={{ ...circleIcon, imageUrl: null }} />);
+  let disc = screen.getByText('sparkles-outline').parent;
+  while (disc && disc.type !== 'View') disc = disc.parent;
+  expect(StyleSheet.flatten(disc?.props.style)?.backgroundColor).toBe('#eee');
 });

@@ -348,8 +348,8 @@ export function UserIconBadge({
             style={[
               s.circle,
               circleSizeStyle,
-              // 没图时才垫一块浅底,让兜底图标在深色背景上也看得见;有图就是图本身。
-              hasCircleImage ? null : { backgroundColor: colors.white },
+              // 没图时才垫底色,有图就是图本身。不能用 white:暗色主题的 textSecondary 也是纯白,兜底图标会被吞掉。
+              hasCircleImage ? null : { backgroundColor: colors.surfaceMuted },
             ]}
           >
             {hasCircleImage ? (
