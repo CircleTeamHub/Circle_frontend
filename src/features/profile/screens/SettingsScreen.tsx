@@ -114,7 +114,7 @@ export default function SettingsScreen() {
     },
     [setUser, user?.id],
   );
-  const { changeAvatar, changing } = useChangeAvatar({
+  const { changeAvatar, changing, cropper: avatarCropper } = useChangeAvatar({
     submit: submitAvatar,
     // submit 里已经回写了全局用户,这里不用再做什么。
     onChanged: () => {},
@@ -268,6 +268,7 @@ export default function SettingsScreen() {
           name={user.nickname ?? user.accountId}
           changing={changing}
           onChange={changeAvatar}
+          cropper={avatarCropper}
           onClose={() => setAvatarPreviewKey(null)}
         />
       ) : null}

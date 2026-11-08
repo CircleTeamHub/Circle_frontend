@@ -97,6 +97,47 @@ export function mapDisplayCropToPhotoPixels(
   return { originX, originY, width, height };
 }
 
+/** 方形裁剪的默认框：照片内最大的居中正方形。 */
+export function getCenteredSquareCrop(bounds: DisplayCropRect): DisplayCropRect {
+  const size = Math.min(bounds.width, bounds.height);
+  return {
+    x: bounds.x + (bounds.width - size) / 2,
+    y: bounds.y + (bounds.height - size) / 2,
+    width: size,
+    height: size,
+  };
+}
+
+/** 方形裁剪拖角：对角固定，边长跟随拖得更多的方向，并夹在照片范围内。 */
+export function resizeSquareDisplayCrop(
+  crop: DisplayCropRect,
+  handle: CropResizeHandle,
+  dx: number,
+  dy: number,
+  bounds: DisplayCropRect,
+  requestedMinSize: number,
+): DisplayCropRect {
+  const growsRight = handle === 'topRight' || handle === 'bottomRight';
+  const growsDown = handle === 'bottomLeft' || handle === 'bottomRight';
+  const anchorX = growsRight ? crop.x : crop.x + crop.width;
+  const anchorY = growsDown ? crop.y : crop.y + crop.height;
+  const maxSize = Math.min(
+    growsRight ? bounds.x + bounds.width - anchorX : anchorX - bounds.x,
+    growsDown ? bounds.y + bounds.height - anchorY : anchorY - bounds.y,
+  );
+  const size = clamp(
+    Math.max(crop.width + (growsRight ? dx : -dx), crop.height + (growsDown ? dy : -dy)),
+    Math.min(requestedMinSize, maxSize),
+    maxSize,
+  );
+  return {
+    x: growsRight ? anchorX : anchorX - size,
+    y: growsDown ? anchorY : anchorY - size,
+    width: size,
+    height: size,
+  };
+}
+
 export function moveDisplayCrop(
   crop: DisplayCropRect,
   dx: number,

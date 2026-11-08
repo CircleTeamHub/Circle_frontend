@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  getCenteredSquareCrop,
   getContainedPhotoBounds,
   mapDisplayCropToPhotoPixels,
   moveDisplayCrop,
   resizeDisplayCrop,
+  resizeSquareDisplayCrop,
 } from './photo-editor.ts';
 
 test('contained photo bounds match the visible image inside a preview', () => {
@@ -83,4 +85,25 @@ test('invalid preview or photo dimensions do not produce crop geometry', () => {
     ),
     null,
   );
+});
+
+test('the default square crop is the largest centered square of the photo', () => {
+  assert.deepEqual(getCenteredSquareCrop({ x: 0, y: 200, width: 400, height: 200 }), { x: 100, y: 200, width: 200, height: 200 });
+  assert.deepEqual(getCenteredSquareCrop({ x: 50, y: 0, width: 300, height: 600 }), { x: 50, y: 150, width: 300, height: 300 });
+});
+
+const squareBounds = { x: 0, y: 0, width: 400, height: 600 };
+const squareCrop = { x: 100, y: 100, width: 200, height: 200 };
+
+test('dragging a square corner keeps it square and pins the opposite corner', () => {
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'bottomRight', 50, 10, squareBounds, 72), { x: 100, y: 100, width: 250, height: 250 });
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'topLeft', -40, -10, squareBounds, 72), { x: 60, y: 60, width: 240, height: 240 });
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'topRight', 30, 0, squareBounds, 72), { x: 100, y: 70, width: 230, height: 230 });
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'bottomLeft', -20, 0, squareBounds, 72), { x: 80, y: 100, width: 220, height: 220 });
+});
+
+test('a square crop stops at the photo edge and at the minimum size', () => {
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'bottomRight', 500, 500, squareBounds, 72), { x: 100, y: 100, width: 300, height: 300 });
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'topLeft', -500, -500, squareBounds, 72), { x: 0, y: 0, width: 300, height: 300 });
+  assert.deepEqual(resizeSquareDisplayCrop(squareCrop, 'bottomRight', -500, -500, squareBounds, 72), { x: 100, y: 100, width: 72, height: 72 });
 });

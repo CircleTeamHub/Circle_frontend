@@ -8,10 +8,12 @@ import {
 import { Image } from 'expo-image';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import {
+  getCenteredSquareCrop,
   getContainedPhotoBounds,
   mapDisplayCropToPhotoPixels,
   moveDisplayCrop,
   resizeDisplayCrop,
+  resizeSquareDisplayCrop,
   type CropResizeHandle,
   type DisplayCropRect,
   type PhotoCropRect,
@@ -21,6 +23,8 @@ interface FreePhotoCropperProps {
   asset: ImagePickerAsset;
   onCropChange: (crop: PhotoCropRect | null) => void;
   accessibilityLabel: string;
+  /** 锁定 1:1（头像、徽章）。 */
+  square?: boolean;
 }
 
 type GestureMode = 'move' | CropResizeHandle;
@@ -71,6 +75,7 @@ export function FreePhotoCropper({
   asset,
   onCropChange,
   accessibilityLabel,
+  square = false,
 }: FreePhotoCropperProps) {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const bounds = useMemo(
@@ -106,13 +111,13 @@ export function FreePhotoCropper({
       return;
     }
     // 默认保留完整照片；四角触点放在框内侧，所以贴边时仍然容易拖动。
-    const initial = { ...bounds };
+    const initial = square ? getCenteredSquareCrop(bounds) : { ...bounds };
     cropRectRef.current = initial;
     setCropRect(initial);
     onCropChange(
       mapDisplayCropToPhotoPixels(initial, bounds, asset.width, asset.height),
     );
-  }, [asset.height, asset.uri, asset.width, bounds, onCropChange]);
+  }, [asset.height, asset.uri, asset.width, bounds, onCropChange, square]);
 
   const updateDuringGesture = useCallback((rect: DisplayCropRect) => {
     cropRectRef.current = rect;
@@ -133,7 +138,7 @@ export function FreePhotoCropper({
           updateDuringGesture(
             mode === 'move'
               ? moveDisplayCrop(start, gesture.dx, gesture.dy, bounds)
-              : resizeDisplayCrop(
+              : (square ? resizeSquareDisplayCrop : resizeDisplayCrop)(
                   start,
                   mode,
                   gesture.dx,
@@ -146,7 +151,7 @@ export function FreePhotoCropper({
         onPanResponderRelease: () => publishCrop(cropRectRef.current),
         onPanResponderTerminate: () => publishCrop(cropRectRef.current),
       }),
-    [bounds, publishCrop, updateDuringGesture],
+    [bounds, publishCrop, square, updateDuringGesture],
   );
 
   const moveResponder = useMemo(() => createResponder('move'), [createResponder]);

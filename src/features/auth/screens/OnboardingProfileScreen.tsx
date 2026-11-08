@@ -27,6 +27,7 @@ import {
   launchImageLibraryFast,
   loadImagePickerModule,
 } from '@/features/profile/image-picker';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile, type UpdateProfilePayload } from '@/services/api/profile';
 import {
@@ -165,6 +166,8 @@ export default function OnboardingProfileScreen() {
   const avatarPreviewUri = selectedAvatarUri ?? user?.avatarUrl ?? null;
   const d = useOnboardingStyles();
 
+  const { cropIfNeeded, cropper: avatarCropper } = useImageCropStep('square');
+
   async function handlePickAvatar() {
     const imagePicker = loadImagePickerModule();
 
@@ -176,12 +179,11 @@ export default function OnboardingProfileScreen() {
       return;
     }
 
-    // 使用系统编辑器，让用户在上传前确认头像裁剪。
+    // 上传前让用户确认头像裁剪；iOS 选完后走应用内裁剪，保持相册秒开。
     const outcome = await launchImageLibraryFast(imagePicker, {
       quality: 0.8,
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
+      ...getCropLibraryPickerOptions('square'),
     });
     if (outcome.status === 'denied') {
       const message =
@@ -196,7 +198,8 @@ export default function OnboardingProfileScreen() {
       return;
     }
 
-    const asset = result.assets[0];
+    const asset = await cropIfNeeded(result.assets[0]);
+    if (!asset) return;
     const contentType = resolveUploadContentType({
       mimeType: asset.mimeType,
       fileName: asset.fileName,
@@ -449,6 +452,7 @@ export default function OnboardingProfileScreen() {
         onClose={() => setIsCityPickerVisible(false)}
         onConfirm={handleConfirmCity}
       />
+      {avatarCropper}
     </KeyboardAvoidingContainer>
   );
 }
