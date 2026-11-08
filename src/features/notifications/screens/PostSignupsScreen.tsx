@@ -41,6 +41,7 @@ import { markMatchingTargetNotificationsRead } from '@/features/notifications/ut
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 export default function PostSignupsScreen() {
   const insets = useSafeAreaInsets();
@@ -62,9 +63,6 @@ export default function PostSignupsScreen() {
   const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  // 下拉刷新控件只跟「人真的往下拉了」走。打开页面、提交认可后的自动加载要是也把它置成
-  // true,iOS 会把整张名单往下推一截转圈、加载完再弹回去,看起来就是内容从下往上弹。
-  const [pullRefreshing, setPullRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecognitionIds, setSelectedRecognitionIds] = useState<Set<string>>(
@@ -141,12 +139,8 @@ export default function PostSignupsScreen() {
     void load();
   }, [load]);
 
-  const handlePullRefresh = useCallback(() => {
-    setPullRefreshing(true);
-    void load().finally(() => {
-      if (mountedRef.current) setPullRefreshing(false);
-    });
-  }, [load]);
+  // 打开页面、提交认可后的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(load);
 
   useEffect(() => {
     void markMatchingTargetNotificationsRead({ circlePostId: postId });
@@ -497,10 +491,10 @@ export default function PostSignupsScreen() {
         maxToRenderPerBatch={12}
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
-        refreshing={pullRefreshing}
-        onRefresh={handlePullRefresh}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 40 }}
-        ListEmptyComponent={loading && !pullRefreshing && signups.length === 0 ? (
+        ListEmptyComponent={loading && !pull.refreshing && signups.length === 0 ? (
           <View style={s.empty} testID="post-signups-loading">
             <ActivityIndicator color={colors.iconAccent} />
           </View>

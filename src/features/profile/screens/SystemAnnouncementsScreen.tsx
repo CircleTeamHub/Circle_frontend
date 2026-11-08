@@ -1,6 +1,6 @@
 import { useAnnouncementSignalStore } from '../store-announcement-signal';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,11 +16,13 @@ import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import type { NotificationItem } from '@/types';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 /** 公告由服务端下发,本地没有写请求能改列表:新公告靠 announcementVersion 失效。 */
 const NO_TRACKED_WRITES = () => false;
 
 const s = StyleSheet.create({
+  loading: { paddingVertical: Spacing.xl, alignItems: 'center' },
   card: {
     height: 156,
     overflow: 'hidden',
@@ -55,7 +57,7 @@ export default function SystemAnnouncementsScreen() {
   const [pageError, setPageError] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const visibleItems = useMemo(() => cachedSessionKey === sessionKey && loadedVersion === announcementVersion
@@ -129,7 +131,7 @@ export default function SystemAnnouncementsScreen() {
   const load = useCallback(async () => {
     const epoch = ++paginationEpochRef.current;
     const startedAt = Date.now();
-    setRefreshing(true);
+    setLoading(true);
     setLoadingMore(false);
     pageInFlightRef.current = false;
     setPageError(false);
@@ -141,7 +143,7 @@ export default function SystemAnnouncementsScreen() {
       setLoadError(null);
     }
     if (!ownerId) {
-      setRefreshing(false);
+      setLoading(false);
       return;
     }
     try {
@@ -169,10 +171,13 @@ export default function SystemAnnouncementsScreen() {
         isCurrentSession() &&
         epoch === paginationEpochRef.current
       ) {
-        setRefreshing(false);
+        setLoading(false);
       }
     }
   }, [isCurrentSession, ownerId, sessionKey, t, announcementVersion, announcementsReloadGate]);
+
+  // 回到本页的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(load);
 
   useFocusEffect(useCallback(() => {
     if (!announcementsReloadGate.shouldSkip()) void load();
@@ -209,7 +214,7 @@ export default function SystemAnnouncementsScreen() {
   );
 
   const loadMore = useCallback(async (retry = false) => {
-    if (!ownerId || !isCurrentSession() || cachedSessionKey !== sessionKey || pageInFlightRef.current || loadingMore || refreshing || !nextCursor || (pageError && !retry)) return;
+    if (!ownerId || !isCurrentSession() || cachedSessionKey !== sessionKey || pageInFlightRef.current || loadingMore || loading || !nextCursor || (pageError && !retry)) return;
     pageInFlightRef.current = true;
     setPageError(false);
     const epoch = paginationEpochRef.current;
@@ -240,7 +245,7 @@ export default function SystemAnnouncementsScreen() {
         setLoadingMore(false);
       }
     }
-  }, [cachedSessionKey, isCurrentSession, loadingMore, nextCursor, ownerId, pageError, refreshing, sessionKey]);
+  }, [cachedSessionKey, isCurrentSession, loadingMore, nextCursor, ownerId, pageError, loading, sessionKey]);
 
   const renderSystemNotification = useCallback(
     ({ item }: { item: NotificationItem }) => (
@@ -281,7 +286,11 @@ export default function SystemAnnouncementsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderSystemNotification}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={!refreshing && !loadError ? (
+        ListEmptyComponent={loading && !pull.refreshing ? (
+          <View style={s.loading} testID="system-announcements-loading">
+            <ActivityIndicator color={colors.iconAccent} />
+          </View>
+        ) : !loading && !loadError ? (
           <Text style={d.emptyText}>{t('systemAnnouncements.empty')}</Text>
         ) : null}
         ListFooterComponent={cachedSessionKey === sessionKey && pageError ? (
@@ -291,8 +300,8 @@ export default function SystemAnnouncementsScreen() {
         ) : null}
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={load}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
         onEndReached={() => { void loadMore(); }}
         onEndReachedThreshold={0.4}
       />

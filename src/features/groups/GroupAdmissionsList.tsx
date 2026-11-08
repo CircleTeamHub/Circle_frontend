@@ -35,6 +35,7 @@ import { getApiErrorMessage } from "@/services/api/errors";
 import { useFocusReloadGate } from "@/hooks/use-focus-reload-gate";
 import { groupOrCircleMutatedSince } from "@/features/chat/utils/group-reload-key";
 import { Spacing, useTheme } from "@/theme";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { getGroupEntryHref } from "./routes";
 import { getGroupAdmissionRelationship, getGroupAdmissionStatus } from "./admission-copy";
 type Row = {
@@ -141,6 +142,10 @@ export function GroupAdmissionsList({
     },
     [groupId, t, sessionEpoch, includeJoined, admissionsReloadGate],
   );
+  // 用户主动下拉:会话快照也强制重拉,不复用。进页面 / 回到页面的自动加载只走 loading,
+  // 不能驱动下拉刷新控件,见 usePullRefresh。
+  const pullReload = useCallback(() => load(undefined, true), [load]);
+  const pull = usePullRefresh(pullReload);
   useFocusEffect(
     useCallback(() => {
       // 角标未读数很便宜、又直接决定红点对不对:照常刷新。
@@ -244,15 +249,14 @@ export function GroupAdmissionsList({
       keyExtractor={(row) => row.key}
       ItemSeparatorComponent={Divider}
       contentContainerStyle={{ padding: Spacing.lg }}
-      refreshing={loading}
-      // 用户主动下拉:会话快照也强制重拉,不复用。
-      onRefresh={() => void load(undefined, true)}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       onEndReached={() => {
         if (cursor && !loading && !error) void load(cursor);
       }}
       onEndReachedThreshold={0.4}
       ListEmptyComponent={
-        loading ? (
+        loading && !pull.refreshing ? (
           <ActivityIndicator color={colors.primary} />
         ) : !error ? (
           <Text style={{ color: colors.textSecondary }}>

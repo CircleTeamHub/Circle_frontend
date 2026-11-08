@@ -11,6 +11,7 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { getGroupLogHref, getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
 import { useAuthStore } from '@/stores/authStore';
 import { actOnGroupReviews, fetchGroupReviews, type GroupReviewAction, type GroupReviewItem, type GroupReviewPage } from '@/services/api/group-reviews';
@@ -90,6 +91,9 @@ export default function GroupReviewScreen() {
       if (version === generation.current) { paging.current = false; setLoading(false); setLoadingMore(false); }
     }
   }, [conversationID, gate, key, keyword, sessionEpoch, t, userId]);
+  // 回到本页、审批后的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pullReload = useCallback(async () => { if (!busy) await load(); }, [busy, load]);
+  const pull = usePullRefresh(pullReload);
   useFocusEffect(useCallback(() => {
     if (!gate.shouldSkip()) void load();
     return () => { generation.current++; paging.current = false; };
@@ -170,10 +174,10 @@ export default function GroupReviewScreen() {
       <FlatList testID="group-review-list" style={styles.list} data={items} keyExtractor={item => item.id}
         {...keyboardDismissOnDragProps}
         contentContainerStyle={items.length ? styles.listContent : styles.center}
-        refreshing={loading && items.length > 0} onRefresh={() => { if (!busy) void load(); }}
+        refreshing={pull.refreshing} onRefresh={pull.onRefresh}
         onEndReached={() => { if (!busy && visible?.nextCursor && visible.nextCursor !== failedCursor.current) void load(visible.nextCursor); }}
         onEndReachedThreshold={0.3}
-        ListEmptyComponent={loading ? <ActivityIndicator color={colors.primary} /> : <View style={styles.empty}>
+        ListEmptyComponent={loading && !pull.refreshing ? <ActivityIndicator color={colors.primary} /> : <View style={styles.empty}>
           <Text style={[Typography.bodyRegular, { color: colors.textSecondary }]}>{error || t(keyword ? 'groupReview.noResults' : 'groupReview.empty')}</Text>
           {error ? <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : null}
         </View>}

@@ -47,6 +47,7 @@ import {
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 interface Row {
   raw: NotificationItem | MyCirclePost;
@@ -101,9 +102,6 @@ export default function NotificationCenterScreen() {
   const [tab, setTab] = useState<NotificationTabKey>('notifications');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [loading, setLoading] = useState(false);
-  // 下拉刷新控件只跟「人真的往下拉了」走。打开页面的自动加载要是也把它置成 true,
-  // iOS 会把整张列表往下推一截转圈、加载完再弹回去,看起来就是内容从下往上弹。
-  const [pullRefreshing, setPullRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorScopeRef = useRef({ domain, ownerId, sessionEpoch });
@@ -230,12 +228,8 @@ export default function NotificationCenterScreen() {
     void load();
   }, [load]);
 
-  const handlePullRefresh = useCallback(() => {
-    setPullRefreshing(true);
-    void load().finally(() => {
-      if (mountedRef.current) setPullRefreshing(false);
-    });
-  }, [load]);
+  // 打开页面的自动加载只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(load);
 
   const notificationsUnread = useMemo(
     () => interactive.some((n) => !n.read),
@@ -435,8 +429,8 @@ export default function NotificationCenterScreen() {
           />
         )}
         ItemSeparatorComponent={Divider}
-        refreshing={pullRefreshing}
-        onRefresh={handlePullRefresh}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         contentContainerStyle={{
@@ -456,7 +450,7 @@ export default function NotificationCenterScreen() {
           style={{ padding: Spacing.lg, alignItems: 'center' }}
         ><Text style={{ color: colors.iconAccent }}>{t('common.retry')}</Text></Pressable> : null}
           {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.iconAccent} /> : null}</View>}
-        ListEmptyComponent={loading && !pullRefreshing ? (
+        ListEmptyComponent={loading && !pull.refreshing ? (
           <View style={s.loading} testID="notification-center-loading">
             <ActivityIndicator color={colors.iconAccent} />
           </View>
