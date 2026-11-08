@@ -441,6 +441,38 @@ describe('MemberName super tier', () => {
   });
 });
 
+// 回归:每日会员(和包月会员同为 vipLevel 1 = 白银档)的名字曾被染成 #5F6B7A 灰,
+// 看起来像禁用态。白银档不再染色,沿用调用处的普通文字颜色。
+describe('MemberName silver tier (daily / monthly members)', () => {
+  const CALLER_STYLE = { color: '#123456', fontSize: 16 };
+
+  test('keeps the caller text colour instead of tinting the name grey', async () => {
+    render(
+      <Providers>
+        <MemberName name="每日会员" vipLevel={1} style={CALLER_STYLE} />
+      </Providers>,
+    );
+    await flushPreferences();
+
+    expect(StyleSheet.flatten(screen.getByText('每日会员').props.style)).toEqual(
+      CALLER_STYLE,
+    );
+  });
+
+  test('higher tiers still override the caller colour', async () => {
+    render(
+      <Providers>
+        <MemberName name="半年会员" vipLevel={2} style={CALLER_STYLE} />
+      </Providers>,
+    );
+    await flushPreferences();
+
+    const style = StyleSheet.flatten(screen.getByText('半年会员').props.style);
+    expect(style.fontSize).toBe(CALLER_STYLE.fontSize);
+    expect(style.color).not.toBe(CALLER_STYLE.color);
+  });
+});
+
 describe('MemberNameFlow on web', () => {
   test('falls back to per-character interpolation driven by the shared clock', () => {
     // Web 没有加载 CanvasKit;浏览器里逐字插值只触发重绘,不走 React 提交。

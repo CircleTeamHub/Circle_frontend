@@ -47,6 +47,7 @@ import {
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 interface Row {
   raw: NotificationItem | MyCirclePost;
@@ -100,7 +101,7 @@ export default function NotificationCenterScreen() {
 
   const [tab, setTab] = useState<NotificationTabKey>('notifications');
   const [filter, setFilter] = useState<ReadFilter>('all');
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorScopeRef = useRef({ domain, ownerId, sessionEpoch });
@@ -134,7 +135,7 @@ export default function NotificationCenterScreen() {
       setNextCursor(null);
       setLoadError(null);
     }
-    setRefreshing(true);
+    setLoading(true);
     try {
       const [notificationsResult, postsResult] = await Promise.allSettled([
         fetchNotificationsPage(undefined, domain),
@@ -181,7 +182,7 @@ export default function NotificationCenterScreen() {
         isCurrentSession() &&
         epoch === paginationEpochRef.current
       ) {
-        setRefreshing(false);
+        setLoading(false);
       }
     }
   }, [domain, isCurrentSession, ownerId, sessionEpoch, showSignupTab, store, t]);
@@ -191,7 +192,7 @@ export default function NotificationCenterScreen() {
       !isCurrentSession() ||
       tab !== 'notifications' ||
       loadingMore ||
-      refreshing ||
+      loading ||
       !nextCursor ||
       loadingMoreRef.current ||
       failedCursorRef.current === nextCursor
@@ -221,11 +222,14 @@ export default function NotificationCenterScreen() {
         setLoadingMore(false);
       }
     }
-  }, [domain, isCurrentSession, loadingMore, nextCursor, refreshing, store, tab]);
+  }, [domain, isCurrentSession, loading, loadingMore, nextCursor, store, tab]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 打开页面的自动加载只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(load);
 
   const notificationsUnread = useMemo(
     () => interactive.some((n) => !n.read),
@@ -425,8 +429,8 @@ export default function NotificationCenterScreen() {
           />
         )}
         ItemSeparatorComponent={Divider}
-        refreshing={refreshing}
-        onRefresh={load}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         contentContainerStyle={{
@@ -444,9 +448,13 @@ export default function NotificationCenterScreen() {
           accessibilityLabel={t('common.retry')}
           onPress={() => { failedCursorRef.current = null; setPageFailed(false); void loadMore(); }}
           style={{ padding: Spacing.lg, alignItems: 'center' }}
-        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : null}
-          {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.primary} /> : null}</View>}
-        ListEmptyComponent={
+        ><Text style={{ color: colors.iconAccent }}>{t('common.retry')}</Text></Pressable> : null}
+          {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.iconAccent} /> : null}</View>}
+        ListEmptyComponent={loading && !pull.refreshing ? (
+          <View style={s.loading} testID="notification-center-loading">
+            <ActivityIndicator color={colors.iconAccent} />
+          </View>
+        ) : (
           <NotificationEmptyState
             title={
               loadError
@@ -460,7 +468,7 @@ export default function NotificationCenterScreen() {
               t(emptySubtitleKey)
             }
           />
-        }
+        )}
       />
     </View>
   );
@@ -476,4 +484,6 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // 和空状态的图标同一高度,加载完换成内容或空状态时不跳位。
+  loading: { paddingTop: 80, alignItems: 'center' },
 });

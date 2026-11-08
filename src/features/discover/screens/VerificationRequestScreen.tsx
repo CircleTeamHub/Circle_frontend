@@ -167,7 +167,7 @@ export default function VerificationRequestScreen() {
       card: { backgroundColor: colors.surface },
       nameText: { color: colors.text },
       descText: { color: colors.textSecondary },
-      progressText: { color: colors.primary },
+      progressText: { color: colors.iconAccent },
       approveBtn: { backgroundColor: colors.primary },
       rejectBtn: { backgroundColor: colors.surfaceBorder },
       approveBtnText: { color: colors.white },
@@ -205,7 +205,7 @@ export default function VerificationRequestScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('invitation.verificationRequest')} />
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       </View>
     );
@@ -297,7 +297,7 @@ export default function VerificationRequestScreen() {
     if (!identityReady && !settled && !myResponded) {
       return (
         <View style={[s.statusPill, { backgroundColor: colors.surface }]}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       );
     }
@@ -330,7 +330,7 @@ export default function VerificationRequestScreen() {
         : t('invitation.youApproved', { defaultValue: '你已帮 TA 验证' });
     } else if (isApplicant) {
       icon = 'time-outline';
-      tone = colors.primary;
+      tone = colors.iconAccent;
       label = t('invitation.waitingDesc', {
         total: invitation.requiredCount,
         defaultValue:

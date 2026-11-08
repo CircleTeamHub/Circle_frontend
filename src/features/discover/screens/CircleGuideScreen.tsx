@@ -77,7 +77,7 @@ export default function CircleGuideScreen() {
   // 色块与活动卡片强调竖条一一对应：紫=充裕 / 绿=临近 / 橙=紧急。
   const colorItems = useMemo(
     () => [
-      { key: 'discover.guide.colorPurple', color: colors.primary },
+      { key: 'discover.guide.colorPurple', color: colors.tabBarActive },
       { key: 'discover.guide.colorGreen', color: colors.success },
       { key: 'discover.guide.colorOrange', color: colors.warning },
     ],
@@ -95,7 +95,7 @@ export default function CircleGuideScreen() {
       title: { color: colors.text },
       sub: { color: colors.textSecondary },
       body: { color: colors.text },
-      num: { color: colors.primary },
+      num: { color: colors.iconAccent },
     }),
     [colors],
   );

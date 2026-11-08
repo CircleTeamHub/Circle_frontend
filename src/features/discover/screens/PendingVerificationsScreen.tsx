@@ -110,7 +110,7 @@ export default function PendingVerificationsScreen() {
         fontWeight: '600' as const,
       },
       desc: { color: colors.textSecondary, ...Typography.caption },
-      progress: { color: colors.primary },
+      progress: { color: colors.iconAccent },
       emptyText: { color: colors.textSecondary, ...Typography.body },
       retryButton: {
         paddingHorizontal: Spacing.md,
@@ -177,7 +177,7 @@ export default function PendingVerificationsScreen() {
       />
       {loading && items.length === 0 ? (
         <View style={s.emptyContainer}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : error && items.length === 0 ? (
         <View style={s.emptyContainer}>

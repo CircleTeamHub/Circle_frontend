@@ -132,8 +132,9 @@ export const MEMBERSHIP_BENEFITS = [
   {
     id: 'name-color',
     labelKey: 'profile.membership.benefits.nameColor',
+    // 白银档(每日 / 包月会员)名字不染色,与 MemberName 的实际渲染一致。
     values: {
-      silver: 'silver',
+      silver: 'none',
       gold: 'gold',
       diamond: 'rainbow',
       super: 'exclusive-shimmer',

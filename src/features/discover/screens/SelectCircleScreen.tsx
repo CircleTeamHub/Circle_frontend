@@ -204,7 +204,7 @@ export default function SelectCircleScreen() {
       <NavHeader title={t('plaza.selectCircle')} />
       {myCirclesLoading ? (
         <View style={s.emptyContainer}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : myCirclesError && circles.length === 0 ? (
         <View style={s.emptyContainer}>

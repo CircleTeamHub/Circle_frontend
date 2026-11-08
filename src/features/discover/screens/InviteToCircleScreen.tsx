@@ -461,7 +461,7 @@ export default function InviteToCircleScreen() {
 
       {loading ? (
         <View style={s.empty}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : loadError ? (
         <View style={s.empty}>

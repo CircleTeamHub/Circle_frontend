@@ -304,7 +304,7 @@ export const PlazaFeed: React.FC = () => {
               {myCirclesError}
             </Text>
             <Pressable onPress={() => fetchMyCircles()}>
-              <Text style={{ color: colors.primary, ...Typography.caption }}>
+              <Text style={{ color: colors.iconAccent, ...Typography.caption }}>
                 {t('common.retry')}
               </Text>
             </Pressable>
@@ -356,7 +356,7 @@ export const PlazaFeed: React.FC = () => {
           accessibilityRole="button"
           onPress={() => router.push('/(tabs)/profile/member-center' as never)}
         >
-          <Text style={{ color: colors.primary, ...Typography.body }}>
+          <Text style={{ color: colors.iconAccent, ...Typography.body }}>
             {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', {
               defaultValue: '升级会员查看圈子动态',
             })}

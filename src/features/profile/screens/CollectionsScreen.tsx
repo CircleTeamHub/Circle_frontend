@@ -24,6 +24,7 @@ import { ApiError } from '@/services/api/client';
 import { saveMediaToLibrary } from '@/utils/save-image';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 
 type CollectionRow = { item: UserCollection; content: CollectionContent };
@@ -178,6 +179,10 @@ function CollectionsContent() {
   useFocusEffect(useCallback(() => {
     if (!reloadGate.shouldSkip()) void load();
   }, [load, reloadGate]));
+  // 回到本页的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  // 加载中也保留控件:以前加载一开始就把它拆掉,iOS 上刚拉出来的转圈会立刻弹回去。
+  const pullReload = useCallback(() => { setSelectedIds(null); return load(); }, [load]);
+  const pull = usePullRefresh(pullReload);
 
   const toggle = useCallback((id: string, enter = false) => {
     if (operationRef.current) return;
@@ -309,8 +314,8 @@ function CollectionsContent() {
         rightSlot={selectionMode ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} style={s.button} onPress={() => setSelectedIds(null)}><Text style={{ color: colors.primary }}>{t('common.cancel', { defaultValue: '取消' })}</Text></Pressable> : undefined} />
       {header}
       <FlatList data={rows} keyExtractor={row => row.item.id} renderItem={renderItem} extraData={selectedIds} contentContainerStyle={s.content}
-        ItemSeparatorComponent={ItemSeparator} refreshing={loading && items.length > 0}
-        onRefresh={busy || loading ? undefined : () => { setSelectedIds(null); void load(); }}
+        ItemSeparatorComponent={ItemSeparator} refreshing={pull.refreshing}
+        onRefresh={busy ? undefined : pull.onRefresh}
         ListEmptyComponent={<View style={s.state}>
           {loading && !loadedRef.current ? <ActivityIndicator color={colors.primary} /> : loadError ? <>
             <Text style={{ color: colors.textSecondary }}>{loadError}</Text>

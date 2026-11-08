@@ -199,7 +199,7 @@ export default function SelectFilterCirclesScreen() {
         color: colors.text,
       },
       countText: { color: colors.textSecondary },
-      toggleAllText: { color: colors.primary },
+      toggleAllText: { color: colors.iconAccent },
       cover: { backgroundColor: colors.surfaceBorder },
       name: {
         color: colors.text,
@@ -298,7 +298,7 @@ export default function SelectFilterCirclesScreen() {
 
       {myCirclesLoading && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : myCirclesError && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>

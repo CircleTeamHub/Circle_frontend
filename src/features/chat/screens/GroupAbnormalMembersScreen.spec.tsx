@@ -125,6 +125,25 @@ test('filters by reason and refetches when the inactivity window changes', async
   await waitFor(() => expect(fetchChatAbnormalMembers).toHaveBeenLastCalledWith('conv-1', 90), SETTLE);
 });
 
+// 回归:切天数时旧行留在屏上、没有任何加载迹象,标签还按新天数显示(30 天档的人显示成「90 天未登录」),
+// 操作栏照样能对着旧行批量移出。切天数要先清掉旧行,走中间转圈。
+test('switching the inactivity window drops the old rows while the new window loads', async () => {
+  let resolveSecond: (value: unknown) => void = () => {};
+  jest
+    .mocked(fetchChatAbnormalMembers)
+    .mockResolvedValueOnce(page([inactive('u1', 45)]) as never)
+    .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }) as never);
+  render(<GroupAbnormalMembersScreen />);
+  await screen.findByText('张三', {}, SETTLE);
+
+  fireEvent.press(screen.getByTestId('abnormal-days-90'));
+  await waitFor(() => expect(fetchChatAbnormalMembers).toHaveBeenLastCalledWith('conv-1', 90), SETTLE);
+  expect(screen.queryByText('张三')).toBeNull();
+
+  await act(async () => { resolveSecond(page([inactive('u3', 120)])); });
+  expect(await screen.findByText('王五', {}, SETTLE)).toBeTruthy();
+});
+
 test('removes the selected members in one batch and drops them from the list', async () => {
   jest.mocked(fetchChatAbnormalMembers).mockResolvedValue(
     page([inactive('u1', 45), inactive('u3', 60)]) as never,
