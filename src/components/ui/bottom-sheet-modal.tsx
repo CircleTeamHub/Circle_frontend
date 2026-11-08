@@ -112,8 +112,11 @@ export function BottomSheetModal({
   const dragY = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  // 面板上沿在 Modal 根坐标系里的位置；Modal 铺满窗口，与手势的 y0 同一坐标系。
+  // 面板上沿在 Modal 根坐标系里的位置；Modal 铺满窗口，与触摸的 pageY 同一坐标系。
   const sheetTopRef = useRef<number | null>(null);
+  // 手指按下的位置。PanResponder 的 y0 要到接管时才赋值：接管前是 0，接管时是当时手指的
+  // 位置而不是起点，判断手势从哪开始只能在按下时自己记。
+  const touchStartYRef = useRef(0);
   const sheetHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
   const scrollableCountRef = useRef(0);
@@ -121,16 +124,17 @@ export function BottomSheetModal({
   // 响应者，所以移动/松手阶段也必须按起点判断，不能只靠「移动时是否接管」。
   const dragAllowedRef = useRef(false);
 
-  const canDragFrom = (y0: number) => {
+  const canDragFromTouchStart = () => {
     const sheetTop = sheetTopRef.current;
-    const startsInHandleZone = sheetTop !== null && y0 - sheetTop <= DISMISS_HANDLE_ZONE;
+    const startsInHandleZone =
+      sheetTop !== null && touchStartYRef.current - sheetTop <= DISMISS_HANDLE_ZONE;
     // 正文里的列表已接入且滚到顶时，正文下拉也归面板。
     const listAtTop =
       scrollableCountRef.current > 0 && scrollOffsetRef.current <= SCROLL_TOP_TOLERANCE;
     return startsInHandleZone || listAtTop;
   };
   const shouldClaim = (gesture: PanResponderGestureState) =>
-    canDragFrom(gesture.y0) &&
+    canDragFromTouchStart() &&
     gesture.dy > DRAG_ACTIVATION_DISTANCE &&
     Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5;
 
@@ -157,13 +161,18 @@ export function BottomSheetModal({
 
   const pan = useRef(
     PanResponder.create({
+      // 捕获阶段只记位置，返回 false 不抢手势。
+      onStartShouldSetPanResponderCapture: (event) => {
+        touchStartYRef.current = event.nativeEvent.pageY;
+        return false;
+      },
       // 冒泡阶段：没有子节点接手时的常规判定。
       onMoveShouldSetPanResponder: (_event, gesture) => shouldClaim(gesture),
       // 捕获阶段：抢在列表之前判定，列表已在顶部时下拉归面板、列表钉住不动；
       // 列表还没到顶就放给列表滚，同一次手势里不会两边一起动。
       onMoveShouldSetPanResponderCapture: (_event, gesture) => shouldClaim(gesture),
-      onPanResponderGrant: (_event, gesture) => {
-        dragAllowedRef.current = canDragFrom(gesture.y0);
+      onPanResponderGrant: () => {
+        dragAllowedRef.current = canDragFromTouchStart();
       },
       // 拿到手势后不让给列表，否则拖到一半面板会被弹回。
       onPanResponderTerminationRequest: () => false,

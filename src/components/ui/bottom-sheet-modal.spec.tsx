@@ -23,6 +23,7 @@ jest.mock('@/components/ui/keyboard-avoiding-container', () => {
 
 type Gesture = { dx: number; dy: number; vy: number; y0: number };
 type Handlers = {
+  onStartShouldSetPanResponderCapture: (event: { nativeEvent: { pageY: number } }, gesture: Gesture) => boolean;
   onMoveShouldSetPanResponder: (event: unknown, gesture: Gesture) => boolean;
   onMoveShouldSetPanResponderCapture: (event: unknown, gesture: Gesture) => boolean;
   onPanResponderGrant: (event: unknown, gesture: Gesture) => void;
@@ -68,9 +69,27 @@ function renderSheetAt(top: number, onClose = jest.fn()) {
   return onClose;
 }
 
+function touchDown(startY: number) {
+  handlers.onStartShouldSetPanResponderCapture({ nativeEvent: { pageY: startY } }, { dx: 0, dy: 0, vy: 0, y0: 0 });
+}
+
+/**
+ * 接管判定时 PanResponder 真实给出的手势:y0 要到接管时才赋值,这时还是 0。
+ * 回归:按 y0 判定「起点在顶部」恒成立,正文里手指稍一下滑,点按就被面板抢走。
+ */
+function claim(
+  phase: 'onMoveShouldSetPanResponder' | 'onMoveShouldSetPanResponderCapture',
+  startY: number,
+  movement: { dx: number; dy: number },
+) {
+  touchDown(startY);
+  return handlers[phase]({}, { ...movement, vy: 0, y0: 0 });
+}
+
 /** Drive the real handler sequence the responder system would call. */
 function drag(y0: number, dy: number, vy = 0) {
   act(() => {
+    touchDown(y0);
     handlers.onPanResponderGrant({}, { dx: 0, dy: 0, vy: 0, y0 });
     handlers.onPanResponderMove({}, { dx: 0, dy, vy, y0 });
     handlers.onPanResponderRelease({}, { dx: 0, dy, vy, y0 });
@@ -79,14 +98,14 @@ function drag(y0: number, dy: number, vy = 0) {
 
 test('a downward drag from the header claims the gesture and dismisses the sheet', () => {
   const onClose = renderSheetAt(400);
-  expect(handlers.onMoveShouldSetPanResponder({}, { dx: 0, dy: 20, vy: 0, y0: 420 })).toBe(true);
+  expect(claim('onMoveShouldSetPanResponder', 420, { dx: 0, dy: 20 })).toBe(true);
   drag(420, 200);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('a drag that starts in the body never moves or dismisses the sheet', () => {
   const onClose = renderSheetAt(400);
-  expect(handlers.onMoveShouldSetPanResponder({}, { dx: 0, dy: 120, vy: 0, y0: 600 })).toBe(false);
+  expect(claim('onMoveShouldSetPanResponder', 600, { dx: 0, dy: 120 })).toBe(false);
   // Even when the sheet root already owns the responder from touch start
   // (backdrop suppression), body-originated gestures are ignored.
   drag(600, 300, 3);
@@ -95,8 +114,21 @@ test('a drag that starts in the body never moves or dismisses the sheet', () => 
 
 test('horizontal or upward drags on the header are not treated as dismiss', () => {
   renderSheetAt(400);
-  expect(handlers.onMoveShouldSetPanResponder({}, { dx: 40, dy: 10, vy: 0, y0: 420 })).toBe(false);
-  expect(handlers.onMoveShouldSetPanResponder({}, { dx: 0, dy: -20, vy: 0, y0: 420 })).toBe(false);
+  expect(claim('onMoveShouldSetPanResponder', 420, { dx: 40, dy: 10 })).toBe(false);
+  expect(claim('onMoveShouldSetPanResponder', 420, { dx: 0, dy: -20 })).toBe(false);
+});
+
+// 回归:接管时 y0 是当时手指的位置,不是起点。从标题栏按钮上快速下甩,第一次移动就越过了
+// 把手区域,面板判定不能拖,手势又已经被接管,整个面板没有反应。
+test('a fast flick that starts on a header button still drags the sheet', () => {
+  const onClose = renderSheetAt(400);
+  expect(claim('onMoveShouldSetPanResponderCapture', 420, { dx: 0, dy: 80 })).toBe(true);
+  act(() => {
+    handlers.onPanResponderGrant({}, { dx: 0, dy: 0, vy: 0, y0: 500 });
+    handlers.onPanResponderMove({}, { dx: 0, dy: 200, vy: 0, y0: 500 });
+    handlers.onPanResponderRelease({}, { dx: 0, dy: 200, vy: 0, y0: 500 });
+  });
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('a short or gentle header drag springs back instead of dismissing', () => {
@@ -136,7 +168,7 @@ function scrollListTo(y: number) {
 
 test('with its list at the top, a body drag pins the list and moves the sheet', () => {
   const onClose = renderListSheetAt(400);
-  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 20, vy: 0, y0: 600 })).toBe(true);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 20 })).toBe(true);
   drag(600, 200);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
@@ -144,11 +176,11 @@ test('with its list at the top, a body drag pins the list and moves the sheet', 
 test('while its list is scrolled down, a body drag scrolls the list and leaves the sheet alone', () => {
   const onClose = renderListSheetAt(400);
   scrollListTo(240);
-  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 40, vy: 0, y0: 600 })).toBe(false);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 40 })).toBe(false);
   drag(600, 300, 3);
   expect(onClose).not.toHaveBeenCalled();
   // 把手区域始终可拖。
-  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 20, vy: 0, y0: 420 })).toBe(true);
+  expect(claim('onMoveShouldSetPanResponderCapture', 420, { dx: 0, dy: 20 })).toBe(true);
 });
 
 // 面板常和页面同底色(个人资料编辑就是),背后不压暗的话两者分不出边界。
