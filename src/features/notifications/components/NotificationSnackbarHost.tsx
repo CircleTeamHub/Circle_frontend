@@ -238,7 +238,9 @@ export function NotificationSnackbarHost() {
       scope: notificationScope,
     });
     // 聊天横幅点开是半屏聊天:当场回复,不用离开手上的页面(比如正在写笔记)。
-    if (shown.kind === 'chat' && typeof route === 'object' && 'params' in route) {
+    // 已经在消息列表时没有要留住的页面,直接进完整聊天。
+    const onMessageList = segments.length === 2 && segments[0] === '(tabs)' && segments[1] === 'messages';
+    if (!onMessageList && shown.kind === 'chat' && typeof route === 'object' && 'params' in route) {
       router.push({ pathname: '/quick-chat', params: route.params });
       return;
     }
@@ -247,7 +249,7 @@ export function NotificationSnackbarHost() {
     } else {
       router.push(route);
     }
-  }, [shown, clearTimer, dismissCurrent, notificationScope, router, t]);
+  }, [shown, clearTimer, dismissCurrent, notificationScope, router, segments, t]);
 
   if (!shown || !row || (shown.kind === 'chat' && shown.conversationID === activeConversationId)) {
     return null;

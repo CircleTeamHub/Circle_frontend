@@ -11,6 +11,7 @@ const mockNotify = jest.fn();
 const mockPush = jest.fn();
 let mockActiveConversationId: string | null = null;
 
+let mockSegments: string[] = [];
 jest.mock('@/storage', () => ({ mmkvJsonStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -18,7 +19,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, navigate: jest.fn() }),
-  useSegments: () => [],
+  useSegments: () => mockSegments,
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -73,6 +74,7 @@ beforeEach(() => {
   mockNotify.mockClear();
   mockPush.mockClear();
   mockActiveConversationId = null;
+  mockSegments = [];
   useNotificationSnackbarStore.getState().reset();
   useAppSettingsStore.setState({ settings: { ...appSettingsDefaults } });
 });
@@ -179,7 +181,34 @@ it('a banner whose conversation is opened mid-exit does not come back after leav
   }
 });
 
+// 人已经在消息列表,半屏要留住的「手上的页面」不存在,直接进完整聊天。
+it('on the conversation list a chat banner opens the full chat, not the half sheet', () => {
+  mockSegments = ['(tabs)', 'messages'];
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('m1', '在吗'));
+  });
+  fireEvent.press(screen.getByLabelText('group-a. 在吗'));
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'group-a', sourceID: 'group-a', searchedMsgID: 'm1' }),
+  });
+});
+
+// 正在和别人聊时同样在消息 tab 里,但手上的对话不能被顶掉。
+it('inside another conversation a chat banner still opens the half sheet', () => {
+  mockSegments = ['(tabs)', 'messages', 'chat-detail'];
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('m1', '在吗'));
+  });
+  fireEvent.press(screen.getByLabelText('group-a. 在吗'));
+  expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/quick-chat' }));
+});
+
 it('tapping a chat banner opens the half-screen quick chat on top of the current page', () => {
+  mockSegments = ['(tabs)', 'notes'];
   render(<NotificationSnackbarHost />);
   act(() => {
     useNotificationSnackbarStore.getState().enqueueChatMessage(chat('m1', '在吗'));
