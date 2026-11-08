@@ -528,7 +528,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             {friends === null && !friendsError ? (
               <ActivityIndicator
                 style={{ paddingVertical: Spacing.lg }}
-                color={colors.primary}
+                color={colors.iconAccent}
               />
             ) : friendsError ? (
               <Text style={[s.panelEmpty, { color: colors.textSecondary }]}>

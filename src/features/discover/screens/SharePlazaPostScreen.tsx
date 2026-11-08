@@ -167,7 +167,7 @@ export default function SharePlazaPostScreen() {
         </Text>
       </View>
       {sendingTo === item.id ? (
-        <ActivityIndicator size="small" color={colors.primary} />
+        <ActivityIndicator size="small" color={colors.iconAccent} />
       ) : (
         <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
       )}
@@ -205,7 +205,7 @@ export default function SharePlazaPostScreen() {
 
       {loading ? (
         <View style={s.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : error ? (
         <View style={s.center}>

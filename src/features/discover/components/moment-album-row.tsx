@@ -93,9 +93,9 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
       content: { color: colors.text },
       timeText: { color: colors.textSecondary, ...Typography.small },
       socialBlock: { backgroundColor: colors.surface },
-      likeText: { color: colors.primary, ...Typography.caption },
+      likeText: { color: colors.iconAccent, ...Typography.caption },
       commentUser: {
-        color: colors.primary,
+        color: colors.iconAccent,
         ...Typography.caption,
         fontWeight: '600' as const,
       },

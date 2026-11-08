@@ -13,8 +13,7 @@ const animationSrc = read('src/components/ui/member-name-animation.tsx');
 test('MemberName colors names by membership tier (name-color benefit)', () => {
   // Tier resolved from vipLevel via the shared single-source mapping.
   assert.match(src, /getMembershipTierForVipLevel/);
-  // silver / gold / diamond = solid color; super = animated flow.
-  assert.match(src, /silver: '#[0-9A-Fa-f]{6}'/);
+  // gold / diamond = solid color; super = animated flow.
   assert.match(src, /gold: '#[0-9A-Fa-f]{6}'/);
   assert.match(src, /diamond: '#[0-9A-Fa-f]{6}'/);
   assert.match(src, /const FLOW_COLORS/);
@@ -85,8 +84,17 @@ test('only profile headers opt into the flowing animation; every list stays stat
   }
 });
 
+// 回归:每日会员(后端就是 vipLevel 1 白银档,只给 24 小时)和包月会员的名字曾被染成
+// #5F6B7A 灰,看着像禁用态。白银档必须走普通文字颜色,不能再出现在纯色表里。
+test('silver members (daily / monthly) keep the normal text colour', () => {
+  assert.match(src, /PLAIN_NAME_TIERS[^=]*= new Set\(\['silver'\]\)/);
+  const solidBlock = src.slice(src.indexOf('const SOLID_COLOR'), src.indexOf('const FLOW_COLORS'));
+  assert.doesNotMatch(solidBlock, /silver/);
+  assert.match(src, /if \(!tier \|\| PLAIN_NAME_TIERS\.has\(tier\)\)/);
+});
+
 test('MemberName degrades to a plain name for non-members / missing vipLevel', () => {
-  assert.match(src, /if \(!tier\)/);
+  assert.match(src, /if \(!tier \|\| PLAIN_NAME_TIERS\.has\(tier\)\)/);
   // Multi-byte safe splitting so emoji / surrogate pairs are not mis-colored.
   assert.match(src, /Array\.from\(name\)/);
 });
@@ -119,7 +127,7 @@ test('MemberName solid tier colors stay readable on both theme surfaces', () => 
     return block.match(new RegExp(`${tier}: '(#[0-9A-Fa-f]{6})'`))?.[1];
   };
 
-  for (const tier of ['silver', 'gold', 'diamond']) {
+  for (const tier of ['gold', 'diamond']) {
     const light = grab('light', tier);
     const dark = grab('dark', tier);
     assert.ok(

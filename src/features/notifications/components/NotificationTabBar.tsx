@@ -39,12 +39,12 @@ export const NotificationTabBar = memo(function NotificationTabBar(p: Props) {
         return (
           <Pressable key={item.key} style={s.tab} onPress={() => p.onSelect(item.key)}>
             <View style={s.labelRow}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.primary : colors.text }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.iconAccent : colors.text }}>
                 {item.label}
               </Text>
               {item.unread ? <View style={s.dot} /> : null}
             </View>
-            {selected ? <View style={[s.underline, { backgroundColor: colors.primary }]} /> : null}
+            {selected ? <View style={[s.underline, { backgroundColor: colors.iconAccent }]} /> : null}
           </Pressable>
         );
       })}

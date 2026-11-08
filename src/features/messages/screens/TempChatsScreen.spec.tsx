@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, FlatList } from 'react-native';
 import type { AlertButton } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import TempChatsScreen from './TempChatsScreen';
@@ -257,4 +257,26 @@ test('the daily create limit pops a localized dialog over the open create sheet'
   });
   // 面板不关:用户可以直接关掉或改天再来,不会以为已经建好了。
   expect(screen.getByText('submit-create')).toBeTruthy();
+});
+
+// 回归:建房成功后的重拉曾走 refresh 通道,把下拉刷新控件置成刷新态,iOS 上列表先被推下去再弹回。
+// 程序发起的重拉要静默,刷新控件只跟用户下拉走。
+test('reloading after a room is created does not drive the pull-to-refresh control', async () => {
+  let resolveReload: (rooms: TempChatListItem[]) => void = () => {};
+  jest
+    .mocked(fetchMyTempChats)
+    .mockResolvedValueOnce([baseRoom])
+    .mockReturnValueOnce(new Promise((resolve) => { resolveReload = resolve; }));
+  jest.mocked(createTempChat).mockResolvedValue({ ...activeRoom } as never);
+  render(<TempChatsScreen />);
+  await screen.findByText(baseRoom.title);
+
+  fireEvent.press(screen.getByLabelText('tempChats.create'));
+  await act(async () => {
+    fireEvent.press(screen.getByText('submit-create'));
+  });
+
+  expect(fetchMyTempChats).toHaveBeenCalledTimes(2);
+  expect(screen.UNSAFE_getByType(FlatList).props.refreshing).toBe(false);
+  await act(async () => { resolveReload([activeRoom, baseRoom]); });
 });

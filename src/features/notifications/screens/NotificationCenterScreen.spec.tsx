@@ -33,11 +33,12 @@ jest.mock('react-native', () => {
   const actual = jest.requireActual<typeof import('react-native')>('react-native');
   return new Proxy(actual, { get(target, property, receiver) {
     if (property !== 'FlatList') return Reflect.get(target, property, receiver);
-    return ({ onEndReached, onRefresh, ListFooterComponent, data, renderItem }: { onEndReached: () => void; onRefresh: () => void; ListFooterComponent: React.ReactNode; data: { view: { id: string } }[]; renderItem: (args: { item: { view: { id: string } } }) => React.ReactNode }) =>
+    return ({ onEndReached, onRefresh, refreshing, ListFooterComponent, ListEmptyComponent, data, renderItem }: { onEndReached: () => void; onRefresh: () => void; refreshing: boolean; ListFooterComponent: React.ReactNode; ListEmptyComponent: React.ReactNode; data: { view: { id: string } }[]; renderItem: (args: { item: { view: { id: string } } }) => React.ReactNode }) =>
       ReactModule.createElement(actual.View, null,
         ReactModule.createElement(actual.Pressable, { testID: 'list-end', onPress: onEndReached }),
-        ReactModule.createElement(actual.Pressable, { testID: 'list-refresh', onPress: onRefresh }),
+        ReactModule.createElement(actual.Pressable, { testID: 'list-refresh', onPress: onRefresh, accessibilityState: { busy: refreshing } }),
         ...data.map((item) => ReactModule.createElement(ReactModule.Fragment, { key: item.view.id }, renderItem({ item }))),
+        data.length === 0 ? ListEmptyComponent : null,
         ListFooterComponent);
   } });
 });
@@ -200,6 +201,46 @@ test('failed refresh keeps the cached cursor usable for the next page', async ()
   fireEvent.press(screen.getByTestId('list-end'));
   await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalledTimes(3));
   expect(fetchNotificationsPage).toHaveBeenLastCalledWith('cached-cursor', 'moments');
+});
+
+// iOS 上把 refreshing 设成 true 会把整张列表往下推一截转圈、加载完再弹回去,
+// 看起来就是「内容从下往上弹」。打开页面的自动加载不能驱动下拉刷新控件。
+test('opening the screen loads without driving the pull-to-refresh control', async () => {
+  const first = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  jest.mocked(fetchNotificationsPage).mockReturnValueOnce(first.promise);
+  render(<NotificationCenterScreen />);
+  expect(fetchNotificationsPage).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('list-refresh').props.accessibilityState.busy).toBe(false);
+  expect(screen.getByTestId('notification-center-loading')).toBeTruthy();
+  await act(async () => { first.resolve({ items: [notification('loaded')], nextCursor: null }); });
+  expect(screen.getByText('loaded')).toBeTruthy();
+  expect(screen.queryByTestId('notification-center-loading')).toBeNull();
+  expect(screen.getByTestId('list-refresh').props.accessibilityState.busy).toBe(false);
+});
+
+test('cached rows stay in place while the opening load runs', async () => {
+  useNotificationCenterStore.getState().setInteractiveForDomain('moments', [notification('cached')]);
+  const first = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  jest.mocked(fetchNotificationsPage).mockReturnValueOnce(first.promise);
+  render(<NotificationCenterScreen />);
+  expect(screen.getByText('cached')).toBeTruthy();
+  expect(screen.queryByTestId('notification-center-loading')).toBeNull();
+  expect(screen.getByTestId('list-refresh').props.accessibilityState.busy).toBe(false);
+  await act(async () => { first.resolve({ items: [notification('cached')], nextCursor: null }); });
+});
+
+test('pulling to refresh shows the refresh control until the load settles', async () => {
+  const pulled = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [], nextCursor: null })
+    .mockReturnValueOnce(pulled.promise);
+  render(<NotificationCenterScreen />);
+  await waitFor(() => expect(screen.queryByTestId('notification-center-loading')).toBeNull());
+  fireEvent.press(screen.getByTestId('list-refresh'));
+  expect(screen.getByTestId('list-refresh').props.accessibilityState.busy).toBe(true);
+  // 下拉时顶部已经在转圈,列表中间不再叠一个。
+  expect(screen.queryByTestId('notification-center-loading')).toBeNull();
+  await act(async () => { pulled.resolve({ items: [], nextCursor: null }); });
+  expect(screen.getByTestId('list-refresh').props.accessibilityState.busy).toBe(false);
 });
 
 function notification(id: string, type: NotificationItem['type'] = 'TRACE_LIKE'): NotificationItem {

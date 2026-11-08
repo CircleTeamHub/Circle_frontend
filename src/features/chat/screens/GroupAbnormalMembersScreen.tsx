@@ -22,6 +22,7 @@ import {
 import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -89,6 +90,8 @@ function AbnormalMembersContent() {
     inactiveDays,
   });
   const { removeRow } = data;
+  // 进页面、移出成员后的自动重拉只走 data.loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(data.reload);
 
   const groupAdmin = useGroupAdminActions({
     conversationID,
@@ -243,8 +246,8 @@ function AbnormalMembersContent() {
           </View>
         }
         contentContainerStyle={s.list}
-        refreshing={data.loading}
-        onRefresh={() => void data.reload()}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
       />
     );
   }

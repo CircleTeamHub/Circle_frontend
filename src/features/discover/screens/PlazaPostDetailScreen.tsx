@@ -163,7 +163,7 @@ export default function PlazaPostDetailScreen() {
       <NavHeader title={t('plaza.postDetail.title', { defaultValue: '活动详情' })} />
       {loading ? (
         <View style={s.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       ) : post ? (
         <ScrollView

@@ -89,7 +89,7 @@ export function useComposerSend({
   handlePickQuickReply,
 }: ComposerSendParams) {
   const [sending, setSending] = useState(false);
-  const consumePendingShare = useSharePickerStore((s) => s.consume);
+  const consumePendingShare = useSharePickerStore((s) => s.consumeFor);
   const consumePendingChatCard = usePendingChatCardStore((s) => s.consumeFor);
   // 待发送的圈子帖子卡片（报名→聊天自动挂上，贴在输入框上方，可撤掉）。
   const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
@@ -102,7 +102,7 @@ export function useComposerSend({
         setPendingCard(cardPending.card);
         setDraft((prev) => prev || cardPending.draftText);
       }
-      const item = consumePendingShare();
+      const item = consumePendingShare(sourceID);
       if (!item) return;
       switch (item.kind) {
         case 'note-batch':

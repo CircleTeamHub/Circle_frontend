@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -40,6 +41,7 @@ import { markMatchingTargetNotificationsRead } from '@/features/notifications/ut
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 export default function PostSignupsScreen() {
   const insets = useSafeAreaInsets();
@@ -60,7 +62,7 @@ export default function PostSignupsScreen() {
   const [post, setPost] = useState<CirclePlazaPost | null>(null);
   const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecognitionIds, setSelectedRecognitionIds] = useState<Set<string>>(
@@ -96,7 +98,7 @@ export default function PostSignupsScreen() {
 
   const load = useCallback(async () => {
     if (!postId) return;
-    setRefreshing(true);
+    setLoading(true);
     setLoadError(null);
     try {
       const { items, recognitionOpen: open } = await fetchMyPostSignups(postId);
@@ -129,13 +131,16 @@ export default function PostSignupsScreen() {
         );
       }
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [postId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 打开页面、提交认可后的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
+  const pull = usePullRefresh(load);
 
   useEffect(() => {
     void markMatchingTargetNotificationsRead({ circlePostId: postId });
@@ -446,7 +451,7 @@ export default function PostSignupsScreen() {
                     style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
                   />
                   {item.recognized ? (
-                    <Text style={[s.recognizedTag, { color: colors.primary }]}>
+                    <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
                       {t('notifications.signupMgmt.recognizedTag', {
                         defaultValue: '已认可',
                       })}
@@ -486,10 +491,14 @@ export default function PostSignupsScreen() {
         maxToRenderPerBatch={12}
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
-        refreshing={refreshing}
-        onRefresh={load}
+        refreshing={pull.refreshing}
+        onRefresh={pull.onRefresh}
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 40 }}
-        ListEmptyComponent={
+        ListEmptyComponent={loading && !pull.refreshing && signups.length === 0 ? (
+          <View style={s.empty} testID="post-signups-loading">
+            <ActivityIndicator color={colors.iconAccent} />
+          </View>
+        ) : (
           <View style={s.empty}>
             <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
               {loadError ??
@@ -503,15 +512,15 @@ export default function PostSignupsScreen() {
               <Pressable
                 style={[s.retryBtn, { borderColor: colors.surfaceBorder }]}
                 onPress={load}
-                disabled={refreshing}
+                disabled={loading}
               >
-                <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                <Text style={{ color: colors.iconAccent, fontWeight: '600' }}>
                   {t('common.retry')}
                 </Text>
               </Pressable>
             ) : null}
           </View>
-        }
+        )}
       />
     </View>
   );

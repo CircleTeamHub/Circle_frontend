@@ -14,6 +14,11 @@ import { Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, type Keyboar
  * 遮挡量按容器相对父视图的位置算，容器要从屏幕（或 Modal 窗口）顶端开始铺。页面都是
  * headerShown:false、自绘标题栏，天然满足；不满足时用 keyboardVerticalOffset 补上差值。
  * 同一条链路上只放一层：嵌套时内层按父容器坐标算遮挡，会重复加 padding。
+ *
+ * enabled=false 只是不留白，内部照旧跟踪键盘：RN 的 KeyboardAvoidingView 关着时不更新
+ * 自己的 state，键盘在这期间收起的话，重新打开的那一帧会按旧的键盘高度留白、下一帧才归零
+ * （聊天页从表情面板点回输入框时输入栏会跳一下）。所以这里不把 enabled 传给它，而是在
+ * 关着时把 behavior 置空——它就渲染成不带留白的普通 View，state 仍然随键盘事件更新。
  */
 export function KeyboardAvoidingContainer({
   behavior = 'padding',
@@ -50,9 +55,9 @@ export function KeyboardAvoidingContainer({
   // avoidance while hidden; the page's own safe-area padding still handles the bars.
   return (
     <KeyboardAvoidingView
-      behavior={behavior}
       {...props}
-      enabled={enabled && (Platform.OS !== 'android' || Number(Platform.Version) < 30 || keyboardVisible)}
+      behavior={enabled ? behavior : undefined}
+      enabled={Platform.OS !== 'android' || Number(Platform.Version) < 30 || keyboardVisible}
     />
   );
 }

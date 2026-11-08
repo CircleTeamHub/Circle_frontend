@@ -37,6 +37,7 @@ import { groupOrCircleMutatedSince } from "@/features/chat/utils/group-reload-ke
 import { getPageSnapshotRevision } from "@/storage/page-snapshots";
 import { readGroupAdmissionsSnapshot, writeGroupAdmissionsSnapshot } from "./group-admissions-cache";
 import { Spacing, useTheme } from "@/theme";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { getGroupEntryHref } from "./routes";
 import { getGroupAdmissionRelationship, getGroupAdmissionStatus } from "./admission-copy";
 type Row = {
@@ -88,8 +89,6 @@ export function GroupAdmissionsList({
   const [items, setItems] = useState<GroupAdmissionDetail[]>(snapshot?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(snapshot?.nextCursor ?? null);
   const [loading, setLoading] = useState(snapshot === null);
-  // 只有用户下拉才转顶部的圈；进页面的后台重拉是静默的。
-  const [pulling, setPulling] = useState(false);
   const [error, setError] = useState("");
   const generation = useRef(0);
   const paging = useRef(false);
@@ -169,6 +168,10 @@ export function GroupAdmissionsList({
     },
     [groupId, t, sessionEpoch, includeJoined, admissionsReloadGate],
   );
+  // 用户主动下拉:会话快照也强制重拉,不复用。进页面 / 回到页面的自动加载只走 loading,
+  // 不能驱动下拉刷新控件,见 usePullRefresh。
+  const pullReload = useCallback(() => load(undefined, true), [load]);
+  const pull = usePullRefresh(pullReload);
   useFocusEffect(
     useCallback(() => {
       // 角标未读数很便宜、又直接决定红点对不对:照常刷新。
@@ -272,18 +275,14 @@ export function GroupAdmissionsList({
       keyExtractor={(row) => row.key}
       ItemSeparatorComponent={Divider}
       contentContainerStyle={{ padding: Spacing.lg }}
-      refreshing={pulling}
-      // 用户主动下拉:会话快照也强制重拉,不复用。
-      onRefresh={() => {
-        setPulling(true);
-        void load(undefined, true).finally(() => setPulling(false));
-      }}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       onEndReached={() => {
         if (cursor && !loading && !error) void load(cursor);
       }}
       onEndReachedThreshold={0.4}
       ListEmptyComponent={
-        loading ? (
+        loading && !pull.refreshing ? (
           <ActivityIndicator color={colors.primary} />
         ) : !error ? (
           <Text style={{ color: colors.textSecondary }}>

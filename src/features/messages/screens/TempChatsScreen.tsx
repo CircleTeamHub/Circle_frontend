@@ -158,7 +158,8 @@ function TempChatsContent() {
         const created = await createTempChat(payload);
         if (!isCurrentSession()) return;
         setCreateVisible(false);
-        await loadRooms({ refresh: true });
+        // 程序发起的重拉不走 refresh:那会把下拉刷新控件置成刷新态,iOS 上列表会被推下去再弹回。
+        await loadRooms();
         if (!isCurrentSession()) return;
         // 刚建好就展示链接，方便房主直接复制给参与者。
         setShareTarget({ title: created.title, shareUrl: created.shareUrl });
@@ -181,7 +182,7 @@ function TempChatsContent() {
       setPendingRoomId(room.id);
       try {
         await endTempChat(room.id);
-        await loadRooms({ refresh: true });
+        await loadRooms();
       } catch (caughtError) {
         showActionError('tempChats.endFailed', caughtError);
         reportHandledFailure('tempChats', 'end', caughtError);
@@ -295,7 +296,7 @@ function TempChatsContent() {
       if (!isTempChatOpenable(room)) {
         if (room.isActive) {
           setError(t('tempChats.expiredNow'));
-          void loadRooms({ refresh: true });
+          void loadRooms();
         }
         return;
       }

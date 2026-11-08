@@ -118,7 +118,7 @@ export default function CirclePostsScreen() {
   // 在底部给一个按原游标重拉的入口,否则翻页就此卡死、只能下拉从头刷。
   let footer: React.ReactElement | null = null;
   if (loading && posts.length > 0) {
-    footer = <ActivityIndicator style={s.footer} color={colors.primary} />;
+    footer = <ActivityIndicator style={s.footer} color={colors.iconAccent} />;
   } else if (error && posts.length > 0 && nextCursor) {
     footer = (
       <Pressable
@@ -126,7 +126,7 @@ export default function CirclePostsScreen() {
         accessibilityRole="button"
         onPress={() => void load(nextCursor)}
       >
-        <Text style={{ color: colors.primary, ...Typography.caption, textAlign: 'center' }}>
+        <Text style={{ color: colors.iconAccent, ...Typography.caption, textAlign: 'center' }}>
           {t('discover.loadMorePostsFailed', { defaultValue: '帖子加载失败，点击重试' })}
         </Text>
       </Pressable>
@@ -142,7 +142,7 @@ export default function CirclePostsScreen() {
           accessibilityRole="button"
           onPress={() => router.push('/(tabs)/profile/member-center' as never)}
         >
-          <Text style={{ color: colors.primary, ...Typography.body }}>
+          <Text style={{ color: colors.iconAccent, ...Typography.body }}>
             {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', { defaultValue: '升级会员查看圈子动态' })}
           </Text>
         </Pressable>
@@ -155,14 +155,14 @@ export default function CirclePostsScreen() {
           {getApiErrorMessage(error, t('discover.loadPostsFailed', { defaultValue: '帖子加载失败，请稍后重试' }))}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => void load(null)}>
-          <Text style={{ color: colors.primary, ...Typography.body }}>{t('common.retry')}</Text>
+          <Text style={{ color: colors.iconAccent, ...Typography.body }}>{t('common.retry')}</Text>
         </Pressable>
       </View>
     );
   } else if (loading) {
     emptyState = (
       <View style={s.centered}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.iconAccent} />
       </View>
     );
   } else {

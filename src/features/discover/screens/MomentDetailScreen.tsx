@@ -286,17 +286,17 @@ function MomentDetailContent() {
   const d = useMemo(
     () => ({
       container: { flex: 1, backgroundColor: colors.background },
-      authorName: { color: colors.primary },
+      authorName: { color: colors.iconAccent },
       postContent: { color: colors.text },
       timeText: { color: colors.textSecondary },
       commentsTitle: { color: colors.text },
-      commentUser: { color: colors.primary },
+      commentUser: { color: colors.iconAccent },
       commentText: { color: colors.text },
       commentTime: { color: colors.textSecondary },
       replyLabel: { color: colors.textSecondary },
       detailRefreshError: { backgroundColor: colors.surface },
       detailRefreshErrorText: { color: colors.textSecondary },
-      detailRefreshRetry: { color: colors.primary },
+      detailRefreshRetry: { color: colors.iconAccent },
       targetCommentHighlight: { backgroundColor: colors.primaryLight },
       emptyText: { color: colors.textSecondary, ...Typography.body },
     }),
@@ -513,7 +513,7 @@ function MomentDetailContent() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('moment.detail')} />
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       </View>
     );

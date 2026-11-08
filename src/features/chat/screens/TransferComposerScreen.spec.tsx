@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import TransferComposerScreen from './TransferComposerScreen';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
 import { ApiError } from '@/services/api/api-error';
@@ -8,6 +8,7 @@ import { ApiError } from '@/services/api/api-error';
 const mockStorageValues = new Map<string, string>();
 const mockRouter = { back: jest.fn() };
 let mockKeySequence = 0;
+let mockFocused = true;
 
 jest.mock('@/storage', () => ({
   storage: {
@@ -24,6 +25,7 @@ jest.mock('@/stores/authStore', () => ({
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
+  useNavigation: () => ({ isFocused: () => mockFocused }),
   useLocalSearchParams: () => ({ recipientId: 'friend-1', recipientName: 'Friend' }),
 }));
 jest.mock('react-i18next', () => ({
@@ -79,6 +81,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStorageValues.clear();
   mockKeySequence = 0;
+  mockFocused = true;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   jest.mocked(fetchWallet).mockResolvedValue({ balance: 100 } as never);
 });
@@ -149,4 +152,28 @@ test('a successful transfer drops the key and leaves the composer', async () => 
 
   await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
   expect(mockStorageValues.size).toBe(0);
+});
+
+// 回归:「转账中...」时用户先按了返回,页面已经关掉;请求成功后这页又执行一次 back,
+// 在半屏里把半屏关掉、在完整聊天页里把聊天页关掉。
+test('a transfer that succeeds after the user already went back does not go back again', async () => {
+  let resolveGift: () => void = () => {};
+  jest.mocked(sendCoinGift).mockReturnValue(
+    new Promise<void>((resolve) => {
+      resolveGift = resolve;
+    }) as never,
+  );
+
+  render(<TransferComposerScreen />);
+  await waitFor(() => expect(screen.getByText(/chat\.transfer\.currentBalancePrefix/)).toBeTruthy());
+  fireEvent.changeText(screen.getByPlaceholderText('0'), '10');
+  fireEvent.press(screen.getByText('chat.transfer.submit'));
+  await waitFor(() => expect(sendCoinGift).toHaveBeenCalledTimes(1));
+
+  mockFocused = false;
+  await act(async () => {
+    resolveGift();
+  });
+
+  expect(mockRouter.back).not.toHaveBeenCalled();
 });

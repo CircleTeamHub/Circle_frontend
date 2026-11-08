@@ -217,7 +217,7 @@ export default function EditCircleScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('circle.edit')} />
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       </View>
     );

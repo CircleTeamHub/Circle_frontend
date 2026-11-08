@@ -823,11 +823,64 @@ test.each(['emoji', 'attachment'])('%s panels replace keyboard avoidance while t
   }
 });
 
+// 键盘收起是原生侧立刻开始的,面板要等这次渲染提交后才出现。先收键盘的话,键盘滑走后
+// 输入栏下面会空一截,面板过几帧才补上来 —— 也就是点表情 / 「+」时闪的那一下。
+test.each(['emoji', 'attachment'])('the %s panel is already on screen when the keyboard starts closing', async (panel) => {
+  const panelShown = () => panel === 'emoji'
+    ? screen.queryByLabelText('pick-emoji') !== null
+    : screen.queryByText('chat.attachments.location') !== null;
+  const shownAtDismiss: boolean[] = [];
+  let pressed = false;
+  const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {
+    if (pressed) shownAtDismiss.push(panelShown());
+  });
+  try {
+    render(<ChatDetailScreen />);
+    await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    pressed = true;
+    await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
+    expect(panelShown()).toBe(true);
+    expect(shownAtDismiss).toEqual([true]);
+  } finally {
+    dismiss.mockRestore();
+  }
+});
+
+// 面板是新挂上的,不带过渡、直接出现在最终位置;消息区和输入栏还在往上收。面板若画在
+// 上面,输入栏会先被盖住、再从面板后面钻出来。
+test.each(['emoji', 'attachment'])('the %s panel is drawn beneath the chat body so it never covers the rising composer', async (panel) => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
+  expect(StyleSheet.flatten(screen.getByTestId(`chat-${panel}-panel`).props.style).zIndex).toBe(-1);
+});
+
+// 半屏里避让键盘的是外层半屏容器。面板打开要和外层撤掉键盘留白落在同一次渲染里,
+// 否则面板会先塞进被键盘压矮的半屏、把聊天区挤扁,下一帧才弹回来。
+test('in the sheet, opening a panel tells the sheet before the panel renders so both land in one commit', async () => {
+  const panelShownAtNotice: [boolean, boolean][] = [];
+  let pressed = false;
+  const onPanelOpenChange = jest.fn((open: boolean) => {
+    if (pressed) panelShownAtNotice.push([open, screen.queryByLabelText('pick-emoji') !== null]);
+  });
+  render(<ChatDetailScreen sheet={{ onClose: jest.fn(), onExpand: jest.fn(), onPanelOpenChange }} />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  pressed = true;
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.detail.emojiPanelLabel')));
+  expect(screen.queryByLabelText('pick-emoji')).not.toBeNull();
+  expect(panelShownAtNotice[0]).toEqual([true, false]);
+  onPanelOpenChange.mockClear();
+  await act(async () => fireEvent(screen.getByTestId(E2E_TEST_IDS.chatInput), 'focus'));
+  expect(screen.queryByLabelText('pick-emoji')).toBeNull();
+  expect(onPanelOpenChange).toHaveBeenLastCalledWith(false);
+});
+
 test.each([
-  ['notes', 'share-picker', { type: 'note' }],
-  ['friendCard', 'share-picker', { type: 'friend' }],
-  ['favorites', 'share-picker', { type: 'favorite', conversationID: CONVERSATION }],
-  ['quickReply', 'share-picker', { type: 'quick-reply' }],
+  // sourceID:选择结果只交给打开选择页的这个聊天。
+  ['notes', 'share-picker', { type: 'note', sourceID: PEER }],
+  ['friendCard', 'share-picker', { type: 'friend', sourceID: PEER }],
+  ['favorites', 'share-picker', { type: 'favorite', sourceID: PEER, conversationID: CONVERSATION }],
+  ['quickReply', 'share-picker', { type: 'quick-reply', sourceID: PEER }],
   ['transfer', 'transfer-composer', { recipientId: PEER, recipientName: '对方', recipientAvatar: '' }],
   ['mediaHub', null, null],
 ] as const)('opening the %s tool does not apply a global layout animation to the destination', async (label, route, params) => {

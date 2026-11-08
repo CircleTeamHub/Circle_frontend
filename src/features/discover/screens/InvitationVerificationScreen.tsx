@@ -195,7 +195,7 @@ export default function InvitationVerificationScreen() {
   const d = useMemo(
     () => ({
       container: { flex: 1, backgroundColor: colors.background },
-      progressText: { color: colors.primary },
+      progressText: { color: colors.iconAccent },
       subtitle: { color: colors.textSecondary },
       slotCircle: { borderColor: colors.surfaceBorder },
       slotLabel: { color: colors.textSecondary },
@@ -273,7 +273,7 @@ export default function InvitationVerificationScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('invitation.title')} />
         <View style={s.centerLoader}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       </View>
     );

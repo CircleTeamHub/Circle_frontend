@@ -86,7 +86,7 @@ export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
             {item.name}
           </Text>
           {isActive ? (
-            <View style={[s.tabLine, { backgroundColor: colors.primary }]} />
+            <View style={[s.tabLine, { backgroundColor: colors.iconAccent }]} />
           ) : null}
         </Pressable>
       );

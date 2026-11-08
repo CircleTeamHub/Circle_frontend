@@ -49,10 +49,20 @@ export function useGroupAbnormalMembers(params: Params) {
     error: false,
   });
   const requestRef = useRef(0);
+  const rowsDaysRef = useRef(inactiveDays);
 
   const load = useCallback(async () => {
     const request = ++requestRef.current;
-    setState((current) => ({ ...current, loading: true, error: false }));
+    // 切了天数,旧行的判定条件已经不对(标签会按新天数显示),先清掉走中间转圈,
+    // 免得对着旧行批量移出;同一天数的重拉(移出后)保留旧行。
+    const daysChanged = rowsDaysRef.current !== inactiveDays;
+    rowsDaysRef.current = inactiveDays;
+    setState((current) => ({
+      ...current,
+      rows: daysChanged ? [] : current.rows,
+      loading: true,
+      error: false,
+    }));
     try {
       const [directory, abnormal, detail] = await Promise.all([
         fetchChatMembers(conversationID),

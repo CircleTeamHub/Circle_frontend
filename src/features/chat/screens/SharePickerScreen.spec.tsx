@@ -16,7 +16,7 @@ const mockNavigation = { isFocused: jest.fn(() => true) };
 const mockChatState = { currentUserId: 'me', conversations: [] as { id: string; type: string; circleId?: string; policies?: { membersCanViewProfiles: boolean } }[] };
 const mockAuthState = { sessionEpoch: 1 };
 let mockScope = 'messages';
-let mockParams = { type: 'note', conversationID: 'target' };
+let mockParams = { type: 'note', conversationID: 'target', sourceID: 'peer' };
 function mockTranslate(key: string, options?: Record<string, unknown>) {
   return String(options?.defaultValue ?? key).replace(/\{\{(\w+)\}\}/g, (_match, name) => String(options?.[name] ?? ''));
 }
@@ -62,7 +62,7 @@ function note(overrides: Partial<NoteSummary>): NoteSummary {
 }
 beforeEach(() => {
   jest.clearAllMocks(); mockScope = 'messages';
-  mockParams = { type: 'note', conversationID: 'target' };
+  mockParams = { type: 'note', conversationID: 'target', sourceID: 'peer' };
   mockNavigation.isFocused.mockReturnValue(true);
   mockAuthState.sessionEpoch += 1;
   mockChatState.currentUserId = 'me';
@@ -98,7 +98,7 @@ test.each(['cancel', 'send'])('favorite selection previews the recipient and wai
     fireEvent.press(screen.getByLabelText('pick-emoji'));
     fireEvent.press(screen.getByText('发送'));
     expect(mockPending).toHaveBeenCalledTimes(1);
-    expect(mockPending).toHaveBeenCalledWith({ kind: 'favorite', data: favorite, message: '一起看看😀' });
+    expect(mockPending).toHaveBeenCalledWith('peer', { kind: 'favorite', data: favorite, message: '一起看看😀' });
     expect(mockRouter.back).toHaveBeenCalledTimes(1);
   }
 });
@@ -136,7 +136,7 @@ test('circle card uses the canonical circle ID and keeps search and selected not
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/circle/[id]', params: { id: 'circle' } });
   expect(screen.getByPlaceholderText('搜索').props.value).toBe('With');
   fireEvent.press(screen.getByText('发送 (1)'));
-  expect(mockPending).toHaveBeenCalledWith(expect.objectContaining({ kind: 'note-batch', notes: [expect.objectContaining({ id: 'note' })] }));
+  expect(mockPending).toHaveBeenCalledWith('peer', expect.objectContaining({ kind: 'note-batch', notes: [expect.objectContaining({ id: 'note' })] }));
 });
 
 test.each(['messages', 'profile', 'discover', 'contacts', 'explore'])('standalone group card opens the chat entry in the %s stack using its server conversation ID', async (scope) => {
@@ -241,7 +241,7 @@ test('ordinary note-list multi-selection keeps source navigation disabled by def
 
 describe('send card', () => {
   beforeEach(async () => {
-    mockParams = { type: 'friend', conversationID: 'target' };
+    mockParams = { type: 'friend', conversationID: 'target', sourceID: 'peer' };
     const { fetchFriends } = jest.requireMock('@/services/api/friends') as { fetchFriends: jest.Mock };
     fetchFriends.mockResolvedValue([{ id: 'f1', nickname: '好友甲', accountId: 'a1', avatarUrl: null }]);
     mockChatState.conversations = [
@@ -256,7 +256,7 @@ describe('send card', () => {
     render(<SharePickerScreen />);
     expect(screen.getByText('发送名片')).toBeTruthy();
     fireEvent.press(await screen.findByText('好友甲'));
-    expect(mockPending).toHaveBeenCalledWith({ kind: 'friend', data: expect.objectContaining({ id: 'f1' }) });
+    expect(mockPending).toHaveBeenCalledWith('peer', { kind: 'friend', data: expect.objectContaining({ id: 'f1' }) });
     expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
 
@@ -272,7 +272,7 @@ describe('send card', () => {
     expect(screen.queryByText('好友甲')).toBeNull();
 
     fireEvent.press(screen.getByTestId('share-group-card-g1'));
-    expect(mockPending).toHaveBeenCalledWith({
+    expect(mockPending).toHaveBeenCalledWith('peer', {
       kind: 'group-card',
       data: { conversationId: 'g1', name: '周末羽毛球', avatarUrl: null },
     });

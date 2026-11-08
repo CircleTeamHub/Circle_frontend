@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,6 +33,7 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 export default function TransferComposerScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -158,7 +159,8 @@ export default function TransferComposerScreen() {
       // payload 挂到 store、让 ChatDetailScreen 重新聚焦时补发一条 —— 而那条
       // 发送被服务端 100% 拒收(transfer-card 是服务端专属类型)。
       settleTransferIdempotencyKey(userId, idempotencyKey);
-      router.back();
+      // 「转账中...」时用户可能已经按返回离开了这页;再 back 会多退一层(半屏被关、聊天页被关)。
+      if (navigation.isFocused()) router.back();
     } catch (error) {
       if (isUnsettledMutationFailure(error)) {
         // 超时/5xx/还在处理:钱可能已经划走。不能报「转账失败」催人重发 —— 键留着,
@@ -182,7 +184,7 @@ export default function TransferComposerScreen() {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [amount, balance, loadBalance, message, recipientId, router, submitting, t, userId]);
+  }, [amount, balance, loadBalance, message, navigation, recipientId, router, submitting, t, userId]);
 
   const value = Number(amount.trim());
   const submitDisabled =

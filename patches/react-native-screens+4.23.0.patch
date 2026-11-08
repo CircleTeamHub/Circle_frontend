@@ -1,0 +1,49 @@
+diff --git a/node_modules/react-native-screens/lib/commonjs/components/helpers/DelayedFreeze.js b/node_modules/react-native-screens/lib/commonjs/components/helpers/DelayedFreeze.js
+index 97f26dd..e164b0b 100644
+--- a/node_modules/react-native-screens/lib/commonjs/components/helpers/DelayedFreeze.js
++++ b/node_modules/react-native-screens/lib/commonjs/components/helpers/DelayedFreeze.js
+@@ -15,6 +15,10 @@ function DelayedFreeze({
+ }) {
+   // flag used for determining whether freeze should be enabled
+   const [freezeState, setFreezeState] = _react.default.useState(false);
++  // circle-im patch (react-native-screens#4518 / PR #4608): see src/components/helpers/DelayedFreeze.tsx.
++  if (!freeze && freezeState) {
++    setFreezeState(false);
++  }
+   _react.default.useEffect(() => {
+     const id = setTimeout(() => {
+       setFreezeState(freeze);
+diff --git a/node_modules/react-native-screens/lib/module/components/helpers/DelayedFreeze.js b/node_modules/react-native-screens/lib/module/components/helpers/DelayedFreeze.js
+index 06f08d0..1cfcd93 100644
+--- a/node_modules/react-native-screens/lib/module/components/helpers/DelayedFreeze.js
++++ b/node_modules/react-native-screens/lib/module/components/helpers/DelayedFreeze.js
+@@ -8,6 +8,10 @@ function DelayedFreeze({
+ }) {
+   // flag used for determining whether freeze should be enabled
+   const [freezeState, setFreezeState] = React.useState(false);
++  // circle-im patch (react-native-screens#4518 / PR #4608): see src/components/helpers/DelayedFreeze.tsx.
++  if (!freeze && freezeState) {
++    setFreezeState(false);
++  }
+   React.useEffect(() => {
+     const id = setTimeout(() => {
+       setFreezeState(freeze);
+diff --git a/node_modules/react-native-screens/src/components/helpers/DelayedFreeze.tsx b/node_modules/react-native-screens/src/components/helpers/DelayedFreeze.tsx
+index 443da63..0dedc7c 100644
+--- a/node_modules/react-native-screens/src/components/helpers/DelayedFreeze.tsx
++++ b/node_modules/react-native-screens/src/components/helpers/DelayedFreeze.tsx
+@@ -12,6 +12,14 @@ function DelayedFreeze({ freeze, children }: FreezeWrapperProps) {
+   // flag used for determining whether freeze should be enabled
+   const [freezeState, setFreezeState] = React.useState(false);
+ 
++  // circle-im patch (react-native-screens#4518 / PR #4608): unfreezing must also clear a stale
++  // freezeState synchronously. Otherwise blurring again before the reset timer fires freezes in
++  // the same commit as the deactivation, activityState=0 never reaches native and the tab
++  // navigator stays on the wrong screen for good.
++  if (!freeze && freezeState) {
++    setFreezeState(false);
++  }
++
+   React.useEffect(() => {
+     const id = setTimeout(() => {
+       setFreezeState(freeze);

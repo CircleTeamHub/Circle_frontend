@@ -51,6 +51,7 @@ import { getProfileSignature } from '@/features/profile/profile-display';
 import type { MomentPost } from '@/types';
 import { evictUserProfileCache, isProfileCacheFresh, readUserProfileCache, writeUserProfileCache } from '@/features/user/profile-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -100,8 +101,10 @@ export default function UserMomentsScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
-  const { moments, loading, refreshing, hasMore, error, lastLoadedAt, refresh, loadMore } =
+  const { moments, loading, hasMore, error, lastLoadedAt, refresh, loadMore } =
     useUserMoments(canonicalUserId);
+  // 发完 / 删完动态回来的自动重拉不能驱动下拉刷新控件,见 usePullRefresh。
+  const pull = usePullRefresh(refresh);
 
   useFocusEffect(useCallback(() => {
     if (lastLoadedAt != null && momentsMutatedSince(lastLoadedAt)) void refresh();
@@ -232,7 +235,7 @@ export default function UserMomentsScreen() {
   const ListFooter =
     loading && moments.length > 0 ? (
       <View style={s.footerLoader}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.iconAccent} />
       </View>
     ) : null;
 
@@ -261,8 +264,8 @@ export default function UserMomentsScreen() {
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refresh}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             tintColor={colors.tabBarActive}
             colors={[colors.tabBarActive]}
           />

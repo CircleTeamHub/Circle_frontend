@@ -36,7 +36,9 @@ test('the shared keyboard container pads only while the Android keyboard is visi
 
   assert.match(src, /KeyboardAvoidingView/);
   assert.match(src, /behavior = 'padding'/);
-  assert.match(src, /enabled && \(Platform\.OS !== 'android' \|\| Number\(Platform.Version\) < 30 \|\| keyboardVisible\)/);
+  assert.match(src, /enabled=\{Platform\.OS !== 'android' \|\| Number\(Platform.Version\) < 30 \|\| keyboardVisible\}/);
+  // 调用方关掉避让只撤留白(behavior 置空),RN 内部照旧跟踪键盘,重新打开时不会按旧高度留白。
+  assert.match(src, /behavior=\{enabled \? behavior : undefined\}/);
 });
 
 test('no file drives React Native KeyboardAvoidingView directly', () => {

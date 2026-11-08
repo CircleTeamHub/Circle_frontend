@@ -25,7 +25,7 @@ jest.mock('@/features/notes/components/AddNoteToNotesSheet', () => ({ AddNoteToN
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: (...args: unknown[]) => mockReportFailure(...args) }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
 jest.mock('@/i18n', () => ({ t: (key: string) => key }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useSegments: () => ['(tabs)', 'messages', 'chat-detail'] }));
 jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual('zustand');
   return { useAuthStore: create(() => ({ user: { id: 'me' }, sessionEpoch: 1 })) };

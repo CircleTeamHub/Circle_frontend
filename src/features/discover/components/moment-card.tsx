@@ -110,15 +110,15 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
   const d = useMemo(
     () => ({
-      authorName: { color: colors.primary, ...Typography.body, fontWeight: '600' as const },
+      authorName: { color: colors.iconAccent, ...Typography.body, fontWeight: '600' as const },
       content: { color: colors.text },
       timeText: { color: colors.textSecondary },
       socialBlock: { backgroundColor: colors.surface },
       likeIcon: { color: colors.warning },
-      likeText: { color: colors.primary, ...Typography.caption },
-      commentUser: { color: colors.primary, ...Typography.caption, fontWeight: '600' as const },
+      likeText: { color: colors.iconAccent, ...Typography.caption },
+      commentUser: { color: colors.iconAccent, ...Typography.caption, fontWeight: '600' as const },
       commentText: { color: colors.text, ...Typography.caption },
-      showMoreCommentsText: { color: colors.primary, ...Typography.caption },
+      showMoreCommentsText: { color: colors.iconAccent, ...Typography.caption },
       actionIcon: { color: colors.textSecondary },
       actionIconActive: { color: colors.error },
     }),
