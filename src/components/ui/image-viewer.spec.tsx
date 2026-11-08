@@ -17,6 +17,18 @@ jest.mock('@/components/ui/zoomable-image', () => {
   };
 });
 
+let mockVideoPageMounts = 0;
+jest.mock('@/components/ui/viewer-video-page', () => {
+  const { useEffect } = jest.requireActual<typeof import('react')>('react');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    ViewerVideoPage: (props: Record<string, unknown>) => {
+      useEffect(() => { mockVideoPageMounts += 1; }, []);
+      return <View testID="viewer-video-page" {...props} />;
+    },
+  };
+});
+
 jest.mock('@/utils/save-image', () => ({
   saveImageToLibrary: jest.fn(),
 }));
@@ -254,4 +266,71 @@ test('ignores old page zoom callbacks and clears the old page lock during paging
 test('keeps upload progress visible inside its existing native modal', () => {
   render(<ImageViewer images={['image.jpg']} visible onClose={jest.fn()} />);
   expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
+});
+
+describe('video pages', () => {
+  const mixed = {
+    images: ['photo.jpg', 'poster.jpg'],
+    cacheKeys: ['photo-key', 'poster-key'],
+    videos: [undefined, 'https://example.test/clip.mp4'],
+    visible: true,
+    onClose: jest.fn(),
+  };
+  const pageTo = (x: number) => fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { x, y: 0 } } });
+  const width = () => screen.UNSAFE_getByType(FlatList).props.getItemLayout(null, 1).offset as number;
+
+  test('a swipe from a photo lands on a video page with its source and poster', () => {
+    render(<ImageViewer {...mixed} />);
+    pageTo(width());
+    const page = screen.getByTestId('viewer-video-page');
+    expect(page.props.videoUrl).toBe('https://example.test/clip.mp4');
+    expect(page.props.posterUrl).toBe('poster.jpg');
+    expect(page.props.posterCacheKey).toBe('poster-key');
+    expect(page.props.autoPlay).toBe(false);
+    expect(screen.queryByTestId('zoomable-image')).toBeNull();
+  });
+
+  test('a video without a poster reaches the page with no poster source', () => {
+    render(<ImageViewer {...mixed} images={['photo.jpg', '']} initialIndex={1} />);
+    expect(screen.getByTestId('viewer-video-page').props.posterUrl).toBeUndefined();
+  });
+
+  test('the privacy mode of each video page reaches it', () => {
+    render(<ImageViewer {...mixed} initialIndex={1} privacyModes={['standard', 'ephemeral']} />);
+    expect(screen.getByTestId('viewer-video-page').props.ephemeral).toBe(true);
+  });
+
+  test('the tapped video auto-plays once and does not restart after swiping back', () => {
+    render(<ImageViewer {...mixed} initialIndex={1} autoPlayInitialVideo />);
+    expect(screen.getByTestId('viewer-video-page').props.autoPlay).toBe(true);
+    pageTo(0);
+    expect(screen.queryByTestId('viewer-video-page')).toBeNull();
+    pageTo(width());
+    expect(screen.getByTestId('viewer-video-page').props.autoPlay).toBe(false);
+  });
+
+  test('page swipes stay blocked exactly while the video page holds the pager', () => {
+    render(<ImageViewer {...mixed} initialIndex={1} />);
+    const list = screen.UNSAFE_getByType(FlatList);
+    expect(list.props.scrollEnabled).toBe(true);
+    act(() => screen.getByTestId('viewer-video-page').props.onPagerLockChange(true));
+    expect(list.props.scrollEnabled).toBe(false);
+    act(() => screen.getByTestId('viewer-video-page').props.onPagerLockChange(false));
+    expect(list.props.scrollEnabled).toBe(true);
+  });
+
+  test('swiping down on a video page closes the viewer', () => {
+    const onClose = jest.fn();
+    render(<ImageViewer {...mixed} initialIndex={1} onClose={onClose} />);
+    fireEvent(screen.getByTestId('viewer-video-page'), 'swipeDown');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('a rotated signed poster URL keeps the running video page mounted', () => {
+    const view = render(<ImageViewer {...mixed} initialIndex={1} />);
+    mockVideoPageMounts = 0;
+    view.rerender(<ImageViewer {...mixed} initialIndex={1} images={['photo.jpg', 'poster.jpg?sig=new']} />);
+    expect(mockVideoPageMounts).toBe(0);
+    expect(screen.getByTestId('viewer-video-page').props.posterUrl).toBe('poster.jpg?sig=new');
+  });
 });

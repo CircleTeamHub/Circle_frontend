@@ -29,8 +29,10 @@ const DOUBLE_TAP_SCALE = 2.5;
 const DOUBLE_TAP_WINDOW_MS = 280;
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE = 8;
-const SWIPE_DISMISS_DISTANCE = 96;
-const SWIPE_DISMISS_VELOCITY = 1.1;
+/** 下滑关闭的手感阈值；视频页共用，保证和图片页一致。 */
+export const SWIPE_CLAIM_DISTANCE = MOVE_TOLERANCE * 2;
+export const SWIPE_DISMISS_DISTANCE = 96;
+export const SWIPE_DISMISS_VELOCITY = 1.1;
 
 interface ZoomableImageProps {
   uri: string;
@@ -281,7 +283,7 @@ export function ZoomableImage({
           if (event.nativeEvent.touches.length >= 2) return true;
           if (view.current.scale > 1.01) return true;
           // 未放大：横向手势留给外层列表翻页。
-          return Math.abs(gestureState.dy) > MOVE_TOLERANCE * 2;
+          return Math.abs(gestureState.dy) > SWIPE_CLAIM_DISTANCE;
         },
         // 横滑交给列表；下滑、捏合和平移期间保住手势，直到松手或取消。
         onPanResponderTerminationRequest: () => !pagerLocked.current,
@@ -356,7 +358,7 @@ export function ZoomableImage({
             if (gesture.current.multiTouch) return;
             if (
               !gesture.current.swipingDown &&
-              gestureState.dy > MOVE_TOLERANCE * 2 &&
+              gestureState.dy > SWIPE_CLAIM_DISTANCE &&
               gestureState.dy > Math.abs(gestureState.dx) * 1.5
             ) {
               gesture.current.swipingDown = true;
