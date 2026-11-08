@@ -108,7 +108,61 @@ test('network error titles explain the missing response and retain safe request 
   });
   assert.equal(event.exception.values[0].value, '接口请求失败｜GET /collections｜未收到响应｜12 ms｜网络连接失败');
   assert.equal(event.tags.status, '0');
+  assert.equal(event.level, undefined);
   assert.doesNotMatch(JSON.stringify(event), /Bearer|private-token/);
+});
+
+// 卡顿检查叫停的 GET 换新请求重试：救回来用户无感，只留现场，不该按 error 触发高优先级告警；
+// 标题要说清是「卡住」以及重试结果，不能落到「运行时错误」。
+test('a stalled request rescued by the retry reads as such and is reported as a warning', () => {
+  const { sentry, options, captures } = setup();
+  sentry.reportError(new Error('Aborted'), {
+    endpointPath: '/privacy/settings', method: 'GET', status: 0, durationMs: 8007,
+    failureKind: 'stalled', retry: 'recovered', attempts: 1,
+  });
+  const capture = captures[0];
+  assert.equal(capture.context.level, 'warning');
+  const event = options.beforeSend({
+    ...capture.context,
+    exception: { values: [{ type: capture.error.name, value: capture.error.message }] },
+  });
+  assert.equal(event.exception.values[0].value, '接口请求失败｜GET /privacy/settings｜未收到响应｜8007 ms｜请求卡住无响应｜重试已救回');
+  assert.equal(event.level, 'warning');
+  assert.equal(event.tags.retry, 'recovered');
+});
+
+test('a retry that also failed names the outcome and stays an error', () => {
+  const { sentry, options, captures } = setup();
+  sentry.reportError(new Error('Network request failed'), {
+    endpointPath: '/chat/conversations/:id/messages', method: 'GET', status: 0, durationMs: 9725,
+    failureKind: 'network', retry: 'failed', attempts: 2,
+  });
+  const capture = captures[0];
+  assert.equal(capture.context.level, undefined);
+  const event = options.beforeSend({
+    ...capture.context,
+    exception: { values: [{ type: capture.error.name, value: capture.error.message }] },
+  });
+  assert.equal(event.exception.values[0].value, '接口请求失败｜GET /chat/conversations/:id/messages｜未收到响应｜9725 ms｜网络连接失败｜重试也失败');
+
+  sentry.reportError(new Error('Aborted'), {
+    endpointPath: '/friend', method: 'GET', status: 0, durationMs: 8010,
+    failureKind: 'stalled', retry: 'failed', attempts: 2,
+  });
+  assert.equal(captures[1].error.message, '接口请求失败｜GET /friend｜未收到响应｜8010 ms｜请求卡住无响应｜重试也失败');
+  assert.equal(captures[1].context.level, undefined);
+});
+
+test('every client-side failure kind gets its own explanation instead of the generic runtime error', () => {
+  const { sentry, captures } = setup();
+  sentry.reportError(new Error('Aborted'), {
+    endpointPath: '/note/:id', method: 'GET', status: 200, durationMs: 15000, failureKind: 'body-read',
+  });
+  sentry.reportError(new Error('chat connection failed'), {
+    operation: 'chatConnect', kind: 'timeout', failureKind: 'connect_error', endpointPath: '/chat-ws',
+  });
+  assert.equal(captures[0].error.message, '接口请求失败｜GET /note/:id｜HTTP 200｜15000 ms｜读取响应内容失败');
+  assert.match(captures[1].error.message, /｜实时连接握手失败$/);
 });
 
 test('navigation breadcrumbs retain only normalized from/to routes and a readable message', () => {
