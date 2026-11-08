@@ -49,6 +49,7 @@ import {
   registerStableDeviceIdProvider,
 } from '@/services/api/client';
 import { diagnosticNow } from '@/observability/http-diagnostics';
+import { useSingleTabsRoot } from '@/hooks/use-single-tabs-root';
 import { createRequestTraceHooks } from '@/observability/request-trace';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
@@ -341,6 +342,8 @@ function RootLayout() {
   const sentryRoute = `/${useSegments().join('/')}`;
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
   const navigationRef = useNavigationContainerRef();
+  // 根栈上的页面往 /(tabs)/... 跳会再压一份 (tabs),两份 tab 栏会让点 tab 失灵;只留一份。
+  useSingleTabsRoot(navigationRef);
 
   useEffect(() => {
     setSentryRoute(sentryRoute);
