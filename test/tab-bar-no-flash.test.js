@@ -108,7 +108,9 @@ test('自绘 tab bar：避开系统导航栏，选中态用弹性胶囊反馈当
   assert.match(layout, /const indicatorX = useSharedValue/);
   assert.match(layout, /const indicatorStretch = useSharedValue\(1\)/);
   assert.match(layout, /const indicatorSquash = useSharedValue\(1\)/);
-  assert.match(layout, /indicatorX\.value = withTiming\(targetX/);
+  assert.match(layout, /withTiming\(targetX/);
+  // 每个 tab 首页各有一份 bar:滑动起点按全局记(用户上次看见指示器的那一格),不按这份自己记的位置。
+  assert.match(layout, /const slideFrom = indicatorSlideStart\(activeBarIndex, handledSlide\)/);
   assert.match(layout, /indicatorStretch\.value = withSequence/);
   assert.match(layout, /withTiming\(1\.32/);
   assert.match(layout, /withTiming\(0\.84/);
