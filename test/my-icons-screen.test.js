@@ -103,7 +103,7 @@ test('Badge detail hero renders at a native large size (no upscaled blur)', () =
   assert.doesNotMatch(sheet, /scale:\s*1\.7/);
   // UserIconBadge 支持显式像素尺寸。
   assert.match(iconRow, /size\?: number/);
-  assert.match(iconRow, /hasExplicitSize/);
+  assert.match(iconRow, /\{ width: size, height: size \}/);
 });
 
 test('MyIconsScreen shows all badges grouped by owned and locked', () => {
