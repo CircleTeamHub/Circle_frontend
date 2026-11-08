@@ -56,7 +56,9 @@ export function AttachmentPanel({
 }: AttachmentPanelProps) {
   return attachmentOpen ? (
     <View
+      testID="chat-attachment-panel"
       style={[
+        s.composerPanelLayer,
         s.attachmentPanel,
         d.attachmentPanel,
         { paddingBottom: insets.bottom || Spacing.md },

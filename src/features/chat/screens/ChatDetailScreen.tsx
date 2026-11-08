@@ -430,6 +430,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   } = useComposerPanels({
     mentionPickerVisible,
     setMentionPickerVisible,
+    onPanelOpenChange: sheet?.onPanelOpenChange,
   });
 
   const {
@@ -840,7 +841,9 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       {imageViewer}
       {selectedMessageIds === null && emojiOpen ? (
         <View
+          testID="chat-emoji-panel"
           style={[
+            s.composerPanelLayer,
             d.attachmentPanel,
             { paddingBottom: insets.bottom || Spacing.md },
           ]}

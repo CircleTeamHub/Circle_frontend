@@ -37,6 +37,8 @@ export type ChatSheetActions = {
   onClose: () => void;
   /** 展开成完整的聊天页。 */
   onExpand: () => void;
+  /** 表情 / 「+」面板开合;面板开着时半屏外层不再给键盘留白(面板顶替了键盘)。 */
+  onPanelOpenChange?: (open: boolean) => void;
 };
 
 export type EmbeddedChatParams = {

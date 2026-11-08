@@ -2,6 +2,7 @@ import {
   type Dispatch,
   type SetStateAction,
   useCallback,
+  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
@@ -11,6 +12,8 @@ import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
 export interface ComposerPanelsParams {
   mentionPickerVisible: boolean;
   setMentionPickerVisible: Dispatch<SetStateAction<boolean>>;
+  /** 半屏聊天:外层半屏容器负责避让键盘,面板开着时要撤掉它的键盘留白。 */
+  onPanelOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -19,6 +22,7 @@ export interface ComposerPanelsParams {
 export function useComposerPanels({
   mentionPickerVisible,
   setMentionPickerVisible,
+  onPanelOpenChange,
 }: ComposerPanelsParams) {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [attachmentPage, setAttachmentPage] = useState(0);
@@ -29,22 +33,35 @@ export function useComposerPanels({
     LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
   }, []);
 
+  // 这里不收键盘:键盘收起在原生侧立刻开始,面板却要等这次渲染提交。先收的话键盘滑走后
+  // 输入栏下面空一截,面板几帧后才补上(点表情 / 「+」时闪的那一下)。收键盘放到下面的
+  // layout effect 里,面板提交之后再做。
+  // 半屏外层的留白要和面板落在同一次渲染里,所以打开时在点击里同步通知(同一事件里的
+  // setState 会合并成一次提交);关闭的路径多,统一由下面的 effect 补发。
   const handleAttachmentToggle = useCallback(() => {
-    Keyboard.dismiss();
     animatePanels();
     setEmojiOpen(false);
     setMentionPickerVisible(false);
     setAttachmentPage(0);
-    setAttachmentOpen((prev) => !prev);
-  }, [animatePanels, setMentionPickerVisible]);
+    setAttachmentOpen(!attachmentOpen);
+    onPanelOpenChange?.(!attachmentOpen);
+  }, [animatePanels, attachmentOpen, onPanelOpenChange, setMentionPickerVisible]);
 
   const handleEmojiToggle = useCallback(() => {
-    Keyboard.dismiss();
     animatePanels();
     setAttachmentOpen(false);
     setMentionPickerVisible(false);
-    setEmojiOpen((prev) => !prev);
-  }, [animatePanels, setMentionPickerVisible]);
+    setEmojiOpen(!emojiOpen);
+    onPanelOpenChange?.(!emojiOpen);
+  }, [animatePanels, emojiOpen, onPanelOpenChange, setMentionPickerVisible]);
+
+  const panelOpen = attachmentOpen || emojiOpen;
+  useLayoutEffect(() => {
+    if (panelOpen) Keyboard.dismiss();
+  }, [panelOpen]);
+  useLayoutEffect(() => {
+    onPanelOpenChange?.(panelOpen);
+  }, [onPanelOpenChange, panelOpen]);
 
   // 在消息区下拉/滚动时收起底部面板与键盘（微信式：拖动列表即收回输入区叠层）。
   const closeInputPanels = useCallback((dismissKeyboard = true) => {

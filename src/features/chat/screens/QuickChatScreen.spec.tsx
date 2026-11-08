@@ -6,6 +6,7 @@ let mockParams: Record<string, string | undefined> = {};
 const mockBack = jest.fn();
 const mockPush = jest.fn();
 const mockChat = jest.fn();
+const mockKeyboardAvoidance = jest.fn();
 
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack(), push: (route: unknown) => mockPush(route), canGoBack: () => true },
@@ -13,7 +14,10 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/keyboard-avoiding-container', () => ({
-  KeyboardAvoidingContainer: ({ children }: { children: React.ReactNode }) => children,
+  KeyboardAvoidingContainer: ({ children, enabled }: { children: React.ReactNode; enabled?: boolean }) => {
+    mockKeyboardAvoidance(enabled);
+    return children;
+  },
 }));
 jest.mock('@/theme', () => ({
   Radius: { xxl: 24, full: 99 },
@@ -21,7 +25,10 @@ jest.mock('@/theme', () => ({
 }));
 jest.mock('@/features/chat/screens/ChatDetailScreen', () => {
   const { Pressable, Text } = jest.requireActual('react-native');
-  function MockChatDetailScreen(props: { embedded: unknown; sheet: { onClose: () => void; onExpand: () => void } }) {
+  function MockChatDetailScreen(props: {
+    embedded: unknown;
+    sheet: { onClose: () => void; onExpand: () => void; onPanelOpenChange: (open: boolean) => void };
+  }) {
       mockChat(props);
       const { useChatRouter } = jest.requireActual('@/features/chat/chat-detail/hooks/use-chat-router');
       const chatRouter = useChatRouter();
@@ -31,6 +38,8 @@ jest.mock('@/features/chat/screens/ChatDetailScreen', () => {
           <Pressable onPress={props.sheet.onExpand}><Text>chat.expand</Text></Pressable>
           <Pressable onPress={() => chatRouter.push('/(tabs)/messages/user/peer-1')}><Text>chat.openProfile</Text></Pressable>
           <Pressable onPress={() => chatRouter.pushOverChat('share-picker', { type: 'note' })}><Text>chat.openPicker</Text></Pressable>
+          <Pressable onPress={() => props.sheet.onPanelOpenChange(true)}><Text>chat.openPanel</Text></Pressable>
+          <Pressable onPress={() => props.sheet.onPanelOpenChange(false)}><Text>chat.closePanel</Text></Pressable>
         </>
       );
   }
@@ -94,4 +103,14 @@ test('pages that return to the chat open over the sheet without closing or expan
     pathname: '/chat-sheet/share-picker',
     params: { type: 'note' },
   });
+});
+
+// 表情 / 「+」面板顶替键盘:开着时半屏不再给键盘留白,关上后恢复。
+test('the sheet stops avoiding the keyboard while a composer panel replaces it', () => {
+  render(<QuickChatScreen />);
+  expect(mockKeyboardAvoidance).toHaveBeenLastCalledWith(true);
+  fireEvent.press(screen.getByText('chat.openPanel'));
+  expect(mockKeyboardAvoidance).toHaveBeenLastCalledWith(false);
+  fireEvent.press(screen.getByText('chat.closePanel'));
+  expect(mockKeyboardAvoidance).toHaveBeenLastCalledWith(true);
 });
