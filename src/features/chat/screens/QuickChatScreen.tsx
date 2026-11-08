@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -36,6 +36,9 @@ export default function QuickChatScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<QuickChatParams>();
   const slide = useRef(new Animated.Value(1)).current;
+  // 表情 / 「+」面板顶替键盘占住底部,开着时外层不再给键盘留白,否则面板会叠在
+  // 还没收完的键盘留白上,把聊天区挤扁。
+  const [composerPanelOpen, setComposerPanelOpen] = useState(false);
 
   useEffect(() => {
     Animated.timing(slide, { toValue: 0, duration: 220, useNativeDriver: true }).start();
@@ -69,12 +72,18 @@ export default function QuickChatScreen() {
     });
   }, [close, conversationID, params.avatarUrl, params.conversationType, params.sourceID, params.title]);
 
-  const sheetNavigation = useMemo(() => ({ dismiss: close, expand }), [close, expand]);
+  // 发笔记 / 名片 / 转账等「选完回到聊天」的页面盖在半屏上打开,不再借道展开;
+  // 只有右上角展开才进完整聊天页(sheet.onExpand)。
+  const sheetNavigation = useMemo(() => ({ dismiss: close }), [close]);
+  const sheetActions = useMemo(
+    () => ({ onClose: close, onExpand: expand, onPanelOpenChange: setComposerPanelOpen }),
+    [close, expand],
+  );
 
   if (!conversationID) return null;
 
   return (
-    <KeyboardAvoidingContainer style={[s.root, { backgroundColor: colors.overlay }]}>
+    <KeyboardAvoidingContainer enabled={!composerPanelOpen} style={[s.root, { backgroundColor: colors.overlay }]}>
       <Pressable
         style={s.backdrop}
         onPress={close}
@@ -90,7 +99,7 @@ export default function QuickChatScreen() {
       >
         <View style={[s.grabber, { backgroundColor: colors.surfaceBorder }]} />
         <ChatSheetNavigationContext.Provider value={sheetNavigation}>
-          <ChatDetailScreen key={conversationID} embedded={embedded} sheet={{ onClose: close, onExpand: expand }} />
+          <ChatDetailScreen key={conversationID} embedded={embedded} sheet={sheetActions} />
         </ChatSheetNavigationContext.Provider>
       </Animated.View>
     </KeyboardAvoidingContainer>

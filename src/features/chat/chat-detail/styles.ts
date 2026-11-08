@@ -161,6 +161,9 @@ export const chatDetailStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   voiceHoldText: { ...Typography.body, fontSize: 16, fontWeight: '600' },
+  // 表情 / 「+」面板画在消息区和输入栏下面。面板是新挂上的,直接出现在最终位置,而上面的
+  // 聊天区还在随布局动画往上收;画在上面的话输入栏会先被盖住、再从面板后面钻出来。
+  composerPanelLayer: { zIndex: -1 },
   attachmentPanel: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xs,

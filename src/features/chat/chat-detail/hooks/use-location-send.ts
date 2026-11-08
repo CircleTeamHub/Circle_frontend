@@ -10,7 +10,8 @@ import {
   getCreditPolicyMessage,
   getLocalLowCreditDecision,
 } from '@/services/api/credit-policy';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import * as Location from 'expo-location';
 import { type TFunction } from 'i18next';
 
@@ -42,6 +43,7 @@ export function useLocationSend({
   const clearPickedLocation = useChatLocationPickerStore(
     (state) => state.clearPickedLocation,
   );
+  const chatRouter = useChatRouter();
   const handleSendPickedLocation = useCallback(async (
     picked: {
       title: string;
@@ -120,11 +122,9 @@ export function useLocationSend({
     // 这件事整个堵死。
     const openPickerAt = (params?: Record<string, string>) => {
       clearPickedLocation();
-      router.push({
-        pathname: '/(chat)/location-picker',
-        // conversationID 一路带过去：确认的结果只有回到这个会话才会被消费。
-        params: { ...params, conversationID },
-      } as never);
+      // conversationID 一路带过去：确认的结果只有回到这个会话才会被消费。
+      // 半屏里盖在半屏上打开，返回后仍是半屏。
+      chatRouter.pushOverChat('location-picker', { ...params, conversationID });
     };
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
@@ -172,7 +172,7 @@ export function useLocationSend({
       // 取当前位置失败同样只影响初始中心：照常开图，让用户自己搜或拖。
       openPickerAt();
     }
-  }, [clearPickedLocation, conversationID, isPreviewMode, sourceID, t, setSendError]);
+  }, [chatRouter, clearPickedLocation, conversationID, isPreviewMode, sourceID, t, setSendError]);
 
   useFocusEffect(
     useCallback(() => {

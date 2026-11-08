@@ -177,7 +177,7 @@ test('picked locations are scoped to the conversation that opened the picker', (
   // 对不上的结果必须就地丢弃，不能留在 store 里等下一个会话。
   assert.match(store, /set\(\{ pending: null \}\);\s*\n\s*if \(pending\.conversationID/);
 
-  assert.match(chat, /params: \{ \.\.\.params, conversationID \}/);
+  assert.match(chat, /pushOverChat\('location-picker', \{ \.\.\.params, conversationID \}\)/);
   assert.match(chat, /const picked = consumePickedLocation\(conversationID\);/);
   assert.match(picker, /useLocalSearchParams<\{ conversationID\?: string \}>/);
 });

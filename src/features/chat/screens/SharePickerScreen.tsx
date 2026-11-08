@@ -18,6 +18,7 @@ import { fetchChatMembers, refreshChatConversation } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { type GroupCardTarget, useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { leaveOverChatPage } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { FilterTabs } from '@/components/ui/filter-tabs';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
@@ -289,17 +290,18 @@ export default function SharePickerScreen() {
           sourceOpeningRef.current = false;
         }
       }
-      router.navigate(getUserProfileHref(scope, contact.id, contact.name,
+      // 盖在半屏聊天上打开时，先连同半屏一起关掉再跳，避免根栈再压一份 (tabs)。
+      leaveOverChatPage(segments, () => router.navigate(getUserProfileHref(scope, contact.id, contact.name,
         viaConversationID ? { viaConversationID } : undefined,
-      ));
+      )));
     } else if (target === 'group' && group) {
       if (group.target === 'circle') {
-        router.push(getCircleDetailHref(toCircleScope(scope), group.id));
+        leaveOverChatPage(segments, () => router.push(getCircleDetailHref(toCircleScope(scope), group.id)));
       } else {
-        router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
+        leaveOverChatPage(segments, () => router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID })));
       }
     }
-  }, [navigation, router, scope]);
+  }, [navigation, router, scope, segments]);
 
   const handleConfirmSend = useCallback(() => {
     if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) {

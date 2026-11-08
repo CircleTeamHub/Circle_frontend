@@ -58,9 +58,9 @@ export function useAttachmentActions({
   const chatRouter = useChatRouter();
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
-      chatRouter.pushOverChat({
-        pathname: '/(tabs)/messages/share-picker',
-        params: { type, ...(type === 'favorite' ? { conversationID } : {}) },
+      chatRouter.pushOverChat('share-picker', {
+        type,
+        ...(type === 'favorite' ? { conversationID } : {}),
       });
     },
     [chatRouter, conversationID],
@@ -99,13 +99,10 @@ export function useAttachmentActions({
             return;
           }
           if (!sourceID) return;
-          chatRouter.pushOverChat({
-            pathname: '/(tabs)/messages/transfer-composer',
-            params: {
-              recipientId: sourceID,
-              recipientName: conversationTitle,
-              recipientAvatar: avatarUrl ?? '',
-            },
+          chatRouter.pushOverChat('transfer-composer', {
+            recipientId: sourceID,
+            recipientName: conversationTitle,
+            recipientAvatar: avatarUrl ?? '',
           });
           return;
       }
