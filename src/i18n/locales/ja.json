@@ -108,6 +108,8 @@
       "sound": "サウンド",
       "messageRingtone": "メッセージの着信音",
       "messageDefault": "メッセージ既定",
+      "quickChatSheet": "ハーフ画面チャット",
+      "quickChatSheetHint": "メッセージのバナーをタップすると、今の画面の上にハーフ画面でチャットを開きます。オフにするとチャット画面へ直接移動します",
       "autoReply": "ダイレクトメッセージの自動返信",
       "autoReplyHint": "ダイレクトメッセージを受け取ったら定型文を自動送信します",
       "friendSection": "友だち・グループ申請",

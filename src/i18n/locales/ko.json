@@ -108,6 +108,8 @@
       "sound": "소리",
       "messageRingtone": "메시지 알림음",
       "messageDefault": "메시지 기본값",
+      "quickChatSheet": "반화면 채팅",
+      "quickChatSheetHint": "메시지 배너를 누르면 현재 화면 위에 반화면 채팅이 열립니다. 끄면 채팅 화면으로 바로 이동합니다",
       "autoReply": "개인 메시지 자동 응답",
       "autoReplyHint": "개인 메시지를 받으면 미리 설정한 내용을 자동으로 보냅니다",
       "friendSection": "친구 및 그룹 요청",

@@ -152,3 +152,20 @@ test('both ringtone rows open working selectors and persist their choices separa
   expect(useNotificationFeedbackStore.getState().circleRingtone).toBe('bell');
   await act(async () => {});
 });
+
+// 半窗是这台设备上的偏好:默认开,关掉后点横幅直接进完整聊天。
+test('the half-screen chat switch defaults to on and saves the choice', async () => {
+  render(<NotificationSettingsScreen />);
+  await waitFor(() => expect(screen.getByTestId('group-offline')).not.toBeDisabled());
+  expect(screen.getByTestId('quick-chat-sheet')).toHaveTextContent('true');
+  await act(async () => fireEvent.press(screen.getByTestId('quick-chat-sheet')));
+  expect(useAppSettingsStore.getState().settings.quickChatSheet).toBe(false);
+  expect(updateGroupOfflinePushEnabled).not.toHaveBeenCalled();
+});
+
+test.each(['zh', 'en', 'ja', 'ko', 'es'])('the half-screen chat switch is translated for %s', (locale) => {
+  const { notifications } = jest.requireActual(`@/i18n/locales/${locale}.json`).settingsDetails;
+  expect(notifications.quickChatSheet).toBeTruthy();
+  expect(notifications.quickChatSheetHint).toBeTruthy();
+});
+

@@ -196,6 +196,22 @@ it('on the conversation list a chat banner opens the full chat, not the half she
   });
 });
 
+// 设置里关掉半窗后,哪个页面点横幅都直接进完整聊天。
+it.each([
+  ['another page', ['(tabs)', 'notes']],
+  ['another conversation', ['(tabs)', 'messages', 'chat-detail']],
+])('with the half sheet turned off, a chat banner on %s opens the full chat', (_name, segments) => {
+  mockSegments = segments;
+  useAppSettingsStore.setState({ settings: { ...appSettingsDefaults, quickChatSheet: false } });
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('m1', '在吗'));
+  });
+  fireEvent.press(screen.getByLabelText('group-a. 在吗'));
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/messages/chat-detail' }));
+});
+
 // 正在和别人聊时同样在消息 tab 里,但手上的对话不能被顶掉。
 it('inside another conversation a chat banner still opens the half sheet', () => {
   mockSegments = ['(tabs)', 'messages', 'chat-detail'];
