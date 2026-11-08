@@ -29,11 +29,17 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
  *
  * 缩放与长按保存由 ZoomableImage / save-image 承担（均为零新增依赖的
  * 自绘方案，见各自文件头）。
+ *
+ * 传 videos 时可以和视频混排：视频页没在播放时手势与图片页相同，见 ViewerVideoPage。
  */
 interface ImageViewerProps {
   images: string[];
   /** 与 images 一一对应的缓存键(可缺省);签名地址会轮换的远端图片传存储 key。 */
   cacheKeys?: (string | undefined)[];
+  /** 与 images 一一对应；有值的页是视频，此时 images[i] 是封面（没有封面传空串）。 */
+  videos?: (string | undefined)[];
+  /** 打开时点的就是视频：这一页直接播放，翻走再回来不自动播。只在挂载时读一次。 */
+  autoPlayInitialVideo?: boolean;
   visible: boolean;
   initialIndex?: number;
   privacyMode?: 'standard' | 'ephemeral';
@@ -45,6 +51,8 @@ interface ImageViewerProps {
 export function ImageViewer({
   images,
   cacheKeys,
+  videos,
+  autoPlayInitialVideo = false,
   visible,
   initialIndex = 0,
   privacyMode = 'standard',
@@ -59,8 +67,9 @@ export function ImageViewer({
   const listRef = useRef<FlatList<string>>(null);
   const [index, setIndex] = useState(initialIndex);
   const indexRef = useRef(initialIndex);
-  // 放大态下禁掉列表横滑，否则平移会被翻页抢走。
+  // 放大态或视频播放中禁掉列表横滑，否则平移/拖进度条会被翻页抢走。
   const [zoomed, setZoomed] = useState(false);
+  const [autoPlayIndex, setAutoPlayIndex] = useState(autoPlayInitialVideo ? initialIndex : -1);
   const [saving, setSaving] = useState(false);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
 
@@ -83,6 +92,7 @@ export function ImageViewer({
       if (clamped === indexRef.current) return;
       setIndex(clamped);
       setZoomed(false);
+      setAutoPlayIndex(-1);
       indexRef.current = clamped;
       setActionSheetVisible(false);
       onIndexChange?.(clamped);
@@ -147,6 +157,7 @@ export function ImageViewer({
       indexRef.current = clamped;
       if (clamped !== index) {
         setZoomed(false);
+        setAutoPlayIndex(-1);
         setActionSheetVisible(false);
         onIndexChange?.(clamped);
       }
@@ -182,7 +193,8 @@ export function ImageViewer({
             <FlatList
               ref={listRef}
               data={images}
-              keyExtractor={(uri, i) => `${uri}-${i}`}
+              // 签名地址轮换时优先用稳定的存储 key，否则正在播放的视频页会被整页重建。
+              keyExtractor={(uri, i) => `${cacheKeys?.[i] ?? uri}-${i}`}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
@@ -196,8 +208,31 @@ export function ImageViewer({
               onScroll={updateVisibleIndex}
               scrollEventThrottle={16}
               onMomentumScrollEnd={updateVisibleIndex}
-              renderItem={({ item, index: itemIndex }) =>
-                itemIndex === index ? (
+              renderItem={({ item, index: itemIndex }) => {
+                if (itemIndex !== index) return <View style={{ width, height }} />;
+                const setPagerLocked = (locked: boolean) => {
+                  if (itemIndex === indexRef.current) setZoomed(locked);
+                };
+                const videoUrl = videos?.[itemIndex];
+                if (videoUrl) {
+                  // 翻到视频页才加载：只看图片的页面不该为此拉起原生播放器模块。
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { ViewerVideoPage } = require('@/components/ui/viewer-video-page') as typeof import('@/components/ui/viewer-video-page');
+                  return (
+                    <ViewerVideoPage
+                      videoUrl={videoUrl}
+                      posterUrl={item || undefined}
+                      posterCacheKey={cacheKeys?.[itemIndex]}
+                      ephemeral={(privacyModes?.[itemIndex] ?? privacyMode) === 'ephemeral'}
+                      width={width}
+                      height={height}
+                      autoPlay={itemIndex === autoPlayIndex}
+                      onPagerLockChange={setPagerLocked}
+                      onSwipeDown={handleSwipeDown}
+                    />
+                  );
+                }
+                return (
                   <ZoomableImage
                     uri={item}
                     cacheKey={cacheKeys?.[itemIndex]}
@@ -205,18 +240,14 @@ export function ImageViewer({
                     width={width}
                     height={height}
                     active={itemIndex === index}
-                    onZoomedChange={(locked) => {
-                      if (itemIndex === indexRef.current) setZoomed(locked);
-                    }}
+                    onZoomedChange={setPagerLocked}
                     onSwipeDown={handleSwipeDown}
                     // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
                     onTap={onClose}
                     onLongPress={(privacyModes?.[itemIndex] ?? privacyMode) === 'ephemeral' ? undefined : handleLongPress}
                   />
-                ) : (
-                  <View style={{ width, height }} />
-                )
-              }
+                );
+              }}
             />
 
             <Pressable

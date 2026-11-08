@@ -1,12 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { ActivityIndicator, Modal } from 'react-native';
+import { Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
 import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
 
-// 只观察封面:expo-video 的播放器/视图、主题和头像全部顶掉。
+// 只观察封面和缓存清理:播放归查看器(见 viewer-video-page.spec),主题和头像全部顶掉。
 const posterProps: {
   cachePolicy?: unknown;
   source?: { uri?: string; cacheKey?: string };
@@ -43,34 +43,11 @@ jest.mock('@/storage', () => ({
     set: (key: string, value: string) => mockStorageValues().set(key, value),
   },
 }));
-let mockStatusListener: ((event: { status: string }) => void) | undefined;
-const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn((_event: string, listener: typeof mockStatusListener) => { mockStatusListener = listener; return { remove: jest.fn() }; }), loop: false };
-const mockRelease = jest.fn();
 let mockRegistered = false;
 let mockNativeIdle: (() => void) | undefined;
-jest.mock('expo-video', () => {
-  const { useEffect } = jest.requireActual<typeof import('react')>('react');
-  const { View } =
-    jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    clearVideoCacheAsync: jest.fn(() => Promise.resolve()),
-    useVideoPlayer: () => {
-      useEffect(() => {
-        mockRegistered = true;
-        return () => mockRelease();
-      }, []);
-      return mockPlayer;
-    },
-    VideoView: () => <View testID="video-player" />,
-  };
-});
+jest.mock('expo-video', () => ({ clearVideoCacheAsync: jest.fn(() => Promise.resolve()) }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
-jest.mock('@/components/app/UploadProgressHost', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { UploadProgressHost: () => <View testID="modal-upload-progress-host" /> };
-});
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return <Text>{name}</Text>;
@@ -101,86 +78,29 @@ const video = {
 
 beforeEach(() => {
   posterProps.length = 0;
-  mockPlayer.replaceAsync.mockReset().mockResolvedValue(undefined);
-  mockPlayer.play.mockClear();
-  mockRelease.mockClear();
   mockRegistered = false;
   mockNativeIdle = undefined;
   jest.requireMock('expo-video').clearVideoCacheAsync.mockReset().mockResolvedValue(undefined);
 });
 
-test('a tap opens full-screen playback and closing releases the active player', async () => {
-  render(<VideoBubble message={video} outgoing={false} />);
-  expect(screen.queryByTestId('video-player')).toBeNull();
-  expect(screen.queryByTestId('modal-upload-progress-host')).toBeNull();
+test('a tap hands this message to the conversation viewer instead of opening its own', () => {
+  const onVideoPress = jest.fn();
+  render(<VideoBubble message={video} outgoing={false} onVideoPress={onVideoPress} />);
   fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-  expect(screen.getByTestId('modal-upload-progress-host')).toBeTruthy();
-  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
-  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
-  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(expect.objectContaining({ uri: video.videoUrl, useCaching: true }));
-  fireEvent.press(screen.getByLabelText('common.close'));
-  expect(screen.queryByTestId('video-player')).toBeNull();
-  expect(mockRelease).toHaveBeenCalledTimes(1);
+  expect(onVideoPress).toHaveBeenCalledWith(video);
+  expect(screen.UNSAFE_queryByType(Modal)).toBeNull();
 });
 
-test('shows only a central loading bar until playback is ready and while rebuffering', async () => {
-  let resolve!: () => void;
-  mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>(done => { resolve = done; }));
-  render(<VideoBubble message={video} outgoing={false} />);
-  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
-  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
-  await act(async () => resolve());
-  expect(screen.getByRole('progressbar')).toBeTruthy();
-  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
-  expect(screen.queryByRole('progressbar')).toBeNull();
-  act(() => mockStatusListener?.({ status: 'loading' }));
-  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
-  act(() => mockStatusListener?.({ status: 'error' }));
-  expect(screen.queryByRole('progressbar')).toBeNull();
-  expect(screen.getByLabelText('common.retry')).toBeTruthy();
-});
-
-test('failed video loading exposes retry in full screen and retries without another inline player', async () => {
-  mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('network'));
-  render(<VideoBubble message={video} outgoing={false} />);
-  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-  await waitFor(() => expect(screen.getByLabelText('common.retry')).toBeTruthy());
-  expect(mockPlayer.play).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByLabelText('common.retry'));
-  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
-});
-
-test('closing during loading does not start playback after the modal was dismissed', async () => {
-  let resolve!: () => void;
-  mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>((done) => { resolve = done; }));
-  render(<VideoBubble message={video} outgoing={false} />);
-  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-  fireEvent.press(screen.getByLabelText('common.close'));
-  await act(async () => resolve());
-  expect(mockPlayer.play).not.toHaveBeenCalled();
-  expect(mockRelease).toHaveBeenCalledTimes(1);
-});
-
-test('a refreshed signed URL replaces the open full-screen source', async () => {
-  const view = render(<VideoBubble message={video} outgoing={false} />);
-  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
-  view.rerender(<VideoBubble message={{ ...video, videoUrl: 'https://media.example.com/clip.mp4?fresh' }} outgoing={false} />);
-  await waitFor(() => expect(mockPlayer.replaceAsync).toHaveBeenLastCalledWith(expect.objectContaining({ uri: 'https://media.example.com/clip.mp4?fresh', useCaching: true })));
-  expect(mockRelease).toHaveBeenCalledTimes(1);
+test('an unavailable video cannot be opened', () => {
+  const onVideoPress = jest.fn();
+  render(<VideoBubble message={{ ...video, videoUrl: undefined }} outgoing={false} onVideoPress={onVideoPress} />);
+  expect(screen.queryByLabelText('chat.detail.playVideo')).toBeNull();
+  expect(screen.getByText('chat.detail.videoUnavailable')).toBeTruthy();
 });
 
 describe('VideoBubble poster', () => {
-  it('keeps disappearing video bytes out of persistent storage', async () => {
-    render(<VideoBubble message={{ ...video, burnDurationSec: 30 } as ChatMessage} outgoing={false} />);
-    fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
-    expect(mockPlayer.replaceAsync).toHaveBeenCalledWith({ uri: video.videoUrl, useCaching: false });
-  });
-
   it('keeps the play badge from covering the central poster download progress', () => {
-    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} />);
+    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
     fireEvent(screen.getByTestId('chat-video-poster'), 'loadStart');
     expect(screen.getByTestId('media-progress-track')).toBeTruthy();
     expect(screen.queryByText('play')).toBeNull();
@@ -200,6 +120,7 @@ describe('VideoBubble poster', () => {
           } as ChatMessage
         }
         outgoing={false}
+        onVideoPress={jest.fn()}
       />,
     );
     expect(screen.getByTestId('chat-video-poster')).toBeTruthy();
@@ -211,7 +132,7 @@ describe('VideoBubble poster', () => {
   });
 
   it('keeps the plain dark frame for older videos without a poster', () => {
-    render(<VideoBubble message={video} outgoing={false} />);
+    render(<VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} />);
     expect(screen.queryByTestId('chat-video-poster')).toBeNull();
   });
 
@@ -226,6 +147,7 @@ describe('VideoBubble poster', () => {
           } as ChatMessage
         }
         outgoing={false}
+        onVideoPress={jest.fn()}
       />,
     );
     expect(posterProps.at(-1)?.cachePolicy).toBe('memory');
@@ -244,7 +166,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
   it('purges previously cached ordinary video bytes when a burning policy is first encountered', async () => {
     const { clearVideoCacheAsync } = jest.requireMock('expo-video');
     clearVideoCacheAsync.mockClear();
-    render(<VideoBubble message={burning} outgoing={false} selfDestructCacheKey="burn-policy-video-cache" />);
+    render(<VideoBubble message={burning} outgoing={false} onVideoPress={jest.fn()} selfDestructCacheKey="burn-policy-video-cache" />);
     await waitFor(() => expect(clearVideoCacheAsync).toHaveBeenCalledTimes(1));
   });
 
@@ -253,7 +175,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
     mockStorageValues().clear();
   });
 
-  it.each([false, true])('waits for native idle after a policy closes playback (sibling image: %s)', async (siblingImage) => {
+  it.each([false, true])('waits for native idle when a player is still registered (sibling image: %s)', async (siblingImage) => {
     const { clearVideoCacheAsync } = jest.requireMock('expo-video');
     let rejectBusy!: (error: Error) => void;
     clearVideoCacheAsync.mockImplementation((waitForIdle?: boolean) => {
@@ -266,14 +188,13 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
     const policy = `active-video-policy-${siblingImage}`;
     const tree = (enabled: boolean) => <>
       {siblingImage && enabled ? <ImageBubble message={{ ...video, type: 'image', imageUrl: 'https://media.example.com/photo.jpg', burnDurationSec: 30 }} outgoing={false} selfDestructCacheKey={policy} /> : null}
-      <VideoBubble message={video} outgoing={false} selfDestructEnabled={enabled} selfDestructCacheKey={policy} />
+      <VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} selfDestructEnabled={enabled} selfDestructCacheKey={policy} />
     </>;
     const view = render(tree(false));
-    fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
-    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    // The conversation viewer may still hold a native player when the policy flips.
+    mockRegistered = true;
     view.rerender(tree(true));
     await waitFor(() => expect(clearVideoCacheAsync).toHaveBeenCalledTimes(1));
-    expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(mockStorageValues().get('chat.mediaDiskCacheClearedPolicies')).toBeUndefined();
     await act(async () => {
       // JS unmount precedes native unregister. The old API can reject only now,
@@ -294,6 +215,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
       <VideoBubble
         message={burning}
         outgoing={false}
+        onVideoPress={jest.fn()}
         selfDestructCacheKey="u1|viewer:off|burn:c1@t1"
       />,
     );
@@ -314,6 +236,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
       <VideoBubble
         message={burning}
         outgoing={false}
+        onVideoPress={jest.fn()}
         selfDestructCacheKey="u1|viewer:off|burn:c1@t1"
       />,
     );
@@ -323,7 +246,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
 
   it('never clears for ordinary videos', async () => {
     render(
-      <VideoBubble message={video} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@off" />,
+      <VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} selfDestructCacheKey="u1|viewer:off|burn:c1@off" />,
     );
     await Promise.resolve();
     expect(clearDiskCache).not.toHaveBeenCalled();
@@ -333,15 +256,16 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
 describe('VideoBubble upload progress', () => {
   const pending = { ...video, videoUrl: 'file:///clip.mp4', deliveryId: 'video-delivery', sendStatus: 1 } as ChatMessage;
 
-  it('shows queued upload progress without blocking playback or long press', async () => {
+  it('shows queued upload progress without blocking playback or long press', () => {
     const onLongPress = jest.fn();
-    render(<VideoBubble message={pending} outgoing onLongPress={onLongPress} />);
+    const onVideoPress = jest.fn();
+    render(<VideoBubble message={pending} outgoing onLongPress={onLongPress} onVideoPress={onVideoPress} />);
     expect(screen.getByRole('progressbar')).toBeTruthy();
     const preview = screen.getByLabelText('chat.detail.playVideo');
     fireEvent(preview, 'longPress');
     expect(onLongPress).toHaveBeenCalledTimes(1);
     fireEvent.press(preview);
-    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    expect(onVideoPress).toHaveBeenCalledWith(pending);
   });
 
   it.each([
@@ -349,7 +273,7 @@ describe('VideoBubble upload progress', () => {
     { sendStatus: 3, outgoing: true },
     { sendStatus: 1, outgoing: false },
   ])('hides progress for status $sendStatus with outgoing=$outgoing', ({ sendStatus, outgoing }) => {
-    render(<VideoBubble message={{ ...pending, sendStatus } as ChatMessage} outgoing={outgoing} />);
+    render(<VideoBubble message={{ ...pending, sendStatus } as ChatMessage} outgoing={outgoing} onVideoPress={jest.fn()} />);
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 });

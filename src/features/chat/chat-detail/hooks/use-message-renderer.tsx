@@ -153,7 +153,7 @@ export function useMessageRenderer({
   handleSendNoteSection,
 }: MessageRendererParams) {
   const chatRouter = useChatRouter();
-  const { imageViewer, openImage } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
+  const { imageViewer, openMedia } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
   // 成员表里的昵称才是能稳定显示的「对方名字」。
@@ -309,7 +309,7 @@ export function useMessageRenderer({
       case 'image':
         return withMessageActions(item, (
           <ImageBubble
-            onImagePress={openImage}
+            onImagePress={openMedia}
             message={item}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
@@ -327,6 +327,7 @@ export function useMessageRenderer({
       case 'video':
         return withMessageActions(item, (
           <VideoBubble
+            onVideoPress={openMedia}
             message={item}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
@@ -556,7 +557,7 @@ export function useMessageRenderer({
     getMessageLongPressHandler,
     withMessageActions,
     handleStartCall,
-    openImage,
+    openMedia,
   ]);
 
   const renderItem = useCallback(

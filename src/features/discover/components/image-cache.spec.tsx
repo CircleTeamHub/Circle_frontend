@@ -58,7 +58,7 @@ test('mixed-feed images and posters use stable variant keys and pass original ke
   expect(images.map((image) => image.props.cachePolicy)).toEqual(['memory-disk', 'memory-disk']);
   expect(images.map((image) => image.props.source.cacheKey)).toEqual(['video-poster', 'photo-thumb']);
   fireEvent.press(screen.getByLabelText('moment.openImage'));
-  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].cacheKeys).toEqual(['photo-original']);
+  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].cacheKeys).toEqual(['video-poster', 'photo-original']);
   rerender(<MomentMedia images={[]} attachments={attachments.map((item) => ({ ...item, url: item.url.replace('sig=a', 'sig=b'), posterUrl: item.posterUrl?.replace('sig=a', 'sig=b') }))} media={[{ key: 'photo', thumbUrl: 'thumb?sig=b', thumbKey: 'photo-thumb', originalKey: 'photo-original' }]} />);
   expect(screen.getAllByTestId('cached-image').map((image) => image.props.source.cacheKey)).toEqual(['video-poster', 'photo-thumb']);
 });
@@ -70,7 +70,7 @@ test('mixed-feed legacy image and poster keys cannot collide with the video or o
   ]} />);
   expect(screen.getAllByTestId('cached-image').map((image) => image.props.source.cacheKey)).toEqual(['video:poster', 'photo']);
   fireEvent.press(screen.getByLabelText('moment.openImage'));
-  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].cacheKeys).toEqual(['photo']);
+  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].cacheKeys).toEqual(['video:poster', 'photo']);
 });
 
 test('note covers cache by note and media ID across signature refresh and change key for a replacement cover', () => {
