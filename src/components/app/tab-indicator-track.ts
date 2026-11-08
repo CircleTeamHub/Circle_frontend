@@ -6,15 +6,25 @@
  * 所以起点按全局记:用户上一次看见指示器停在哪一格。每次换格记一笔(seq 递增),
  * 每份 bar 对同一笔只滑一次;同一次提交里先渲染哪份都拿到同一个起点。
  * 圈子(独立圆按钮)不在 bar 里:选中时指示器隐藏、不记,离开时从它之前那一格出发。
+ * 记录跟着 tabs 导航器走(navigatorKey):退出再登录、添加账号后 tabs 重建,就当首次出现。
  */
-let track = { seq: 0, from: -1, to: -1 };
+let track = { navigatorKey: '', seq: 0, from: -1, to: -1 };
 
 /**
  * bar 的选中格变成 `index`(>= 0)时调用。返回这份 bar 要从哪一格滑过来;不用滑(首次出现、
- * 原地重渲染、从圈子回到同一格)时返回 null。`handled` 是这份 bar 自己已经滑过的那一笔。
+ * 原地重渲染、从圈子回到同一格)时返回 null。`handled` 是这份 bar 自己已经滑过的那一笔,
+ * `navigatorKey` 是这份 bar 所属 tabs 导航器的 state.key。
  */
-export function indicatorSlideStart(index: number, handled: { current: number }): number | null {
-  if (index !== track.to) track = { seq: track.seq + 1, from: track.to, to: index };
+export function indicatorSlideStart(
+  index: number,
+  handled: { current: number },
+  navigatorKey: string,
+): number | null {
+  if (navigatorKey !== track.navigatorKey) {
+    track = { navigatorKey, seq: track.seq + 1, from: -1, to: index };
+  } else if (index !== track.to) {
+    track = { navigatorKey, seq: track.seq + 1, from: track.to, to: index };
+  }
   const fresh = handled.current !== track.seq;
   handled.current = track.seq;
   return fresh && track.from >= 0 ? track.from : null;

@@ -495,7 +495,7 @@ function CustomTabBar({
     const targetX = activeBarIndex * slotWidth + TAB_PILL_GAP;
     // 每个 tab 首页各有一份 bar,这份记的位置可能是它上次被看见时的(甚至是失焦前挪到别的 tab 的),
     // 从那里滑会方向反了。从用户上一次看见指示器的那一格滑过来。
-    const slideFrom = indicatorSlideStart(activeBarIndex, handledSlide);
+    const slideFrom = indicatorSlideStart(activeBarIndex, handledSlide, state.key);
 
     indicatorX.value =
       slideFrom === null
@@ -542,6 +542,7 @@ function CustomTabBar({
     indicatorSquash,
     indicatorStretch,
     indicatorX,
+    state.key,
     tabItemsWidth,
   ]);
 
