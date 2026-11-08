@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -60,7 +61,10 @@ export default function PostSignupsScreen() {
   const [post, setPost] = useState<CirclePlazaPost | null>(null);
   const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  // 下拉刷新控件只跟「人真的往下拉了」走。打开页面、提交认可后的自动加载要是也把它置成
+  // true,iOS 会把整张名单往下推一截转圈、加载完再弹回去,看起来就是内容从下往上弹。
+  const [pullRefreshing, setPullRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecognitionIds, setSelectedRecognitionIds] = useState<Set<string>>(
@@ -96,7 +100,7 @@ export default function PostSignupsScreen() {
 
   const load = useCallback(async () => {
     if (!postId) return;
-    setRefreshing(true);
+    setLoading(true);
     setLoadError(null);
     try {
       const { items, recognitionOpen: open } = await fetchMyPostSignups(postId);
@@ -129,12 +133,19 @@ export default function PostSignupsScreen() {
         );
       }
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [postId, t]);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  const handlePullRefresh = useCallback(() => {
+    setPullRefreshing(true);
+    void load().finally(() => {
+      if (mountedRef.current) setPullRefreshing(false);
+    });
   }, [load]);
 
   useEffect(() => {
@@ -486,10 +497,14 @@ export default function PostSignupsScreen() {
         maxToRenderPerBatch={12}
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
-        refreshing={refreshing}
-        onRefresh={load}
+        refreshing={pullRefreshing}
+        onRefresh={handlePullRefresh}
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 40 }}
-        ListEmptyComponent={
+        ListEmptyComponent={loading && !pullRefreshing && signups.length === 0 ? (
+          <View style={s.empty} testID="post-signups-loading">
+            <ActivityIndicator color={colors.iconAccent} />
+          </View>
+        ) : (
           <View style={s.empty}>
             <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
               {loadError ??
@@ -503,7 +518,7 @@ export default function PostSignupsScreen() {
               <Pressable
                 style={[s.retryBtn, { borderColor: colors.surfaceBorder }]}
                 onPress={load}
-                disabled={refreshing}
+                disabled={loading}
               >
                 <Text style={{ color: colors.iconAccent, fontWeight: '600' }}>
                   {t('common.retry')}
@@ -511,7 +526,7 @@ export default function PostSignupsScreen() {
               </Pressable>
             ) : null}
           </View>
-        }
+        )}
       />
     </View>
   );
