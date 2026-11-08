@@ -40,7 +40,10 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # 这里只生成原生工程做配置检查,不编译,用不到 Skia 预编译包。
       - name: Install Dependencies
+        env:
+          SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
 
       - name: Prebuild iOS project
