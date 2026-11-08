@@ -69,13 +69,11 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$tag_commit" >> "$GITHUB_OUTPUT"
 
+      # 预检只跑应用检查,不编译原生代码,用不到 Skia 预编译包。
       - name: Install dependencies
         env:
           SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
-
-      - name: Download Skia binaries
-        run: bash .github/scripts/install-skia-with-retry.sh
 
       - name: Run application checks
         run: npm run ci

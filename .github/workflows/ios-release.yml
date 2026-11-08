@@ -56,13 +56,11 @@ jobs:
           BACKEND_REF_CANDIDATE: ${{ github.ref_name }}
         run: bash .github/scripts/prepare-backend-contracts.sh
 
+      # 原生编译在 EAS 云端完成,这里只做 prebuild,用不到 Skia 预编译包。
       - name: Install dependencies
         env:
           SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
-
-      - name: Download Skia binaries
-        run: bash .github/scripts/install-skia-with-retry.sh
 
       - name: Run application checks
         run: npm run ci

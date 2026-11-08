@@ -15,8 +15,7 @@ const read = (name) => fs.readFileSync(path.join(workflowDir, name), 'utf8');
 const NATIVE_INSTALLS = {
   'android-preprod-build.yml': 1,
   'daily-android-build.yml': 1,
-  'android-release.yml': 2,
-  'ios-release.yml': 1,
+  'android-release.yml': 1,
 };
 
 test('every npm ci in every workflow leaves the Skia download out of the install', () => {
@@ -40,6 +39,13 @@ test('jobs that need the Skia binaries fetch them with retries right after insta
 
 test('Verify and the Windows tests do not fetch Skia binaries at all', () => {
   assert.doesNotMatch(read('ci.yml'), /install-skia-with-retry/);
+});
+
+test('release steps that never compile native code do not depend on Skia downloads', () => {
+  assert.doesNotMatch(read('ios-release.yml'), /install-skia-with-retry/);
+  const preflight = read('android-release.yml').split(/\n  build:\n/)[0];
+  assert.match(preflight, /\n  preflight:\n/);
+  assert.doesNotMatch(preflight, /install-skia-with-retry/);
 });
 
 test('the actionlint download survives a transient 5xx', () => {
