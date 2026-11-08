@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 
 export interface ChatCallParams {
   t: TFunction<"translation", undefined>;
@@ -36,8 +37,15 @@ export function useChatCall({
   isPreviewMode,
 }: ChatCallParams) {
   const setActiveCall = useCallStore((state) => state.setActiveCall);
+  const chatRouter = useChatRouter();
   const [callStarting, setCallStarting] = useState(false);
   const callStartingRef = useRef(false);
+  // 进通话页是「离开聊天」:在半屏里要先关半屏,否则 iOS 把通话页放在半屏下面看不见。
+  // 建单要等网络,用户可能已经自己关了半屏(本页已卸载),这时直接进,不能再关一次。
+  const openCallScreen = useCallback(() => {
+    if (mountedRef.current) chatRouter.push('/(chat)/group-call' as never);
+    else router.push('/(chat)/group-call' as never);
+  }, [chatRouter, mountedRef]);
   const startCallWithType = useCallback(async (callType: CallType) => {
     if (callStartingRef.current) return;
 
@@ -72,7 +80,7 @@ export function useChatCall({
         // unmount（用户先行离开）也要落全局通话态并进通话页（store/router
         // 都是全局对象，unmount 后调用安全），与主页拨打路径一致。
         setActiveCall(response.call, response.livekit);
-        router.push('/(chat)/group-call' as never);
+        openCallScreen();
         return;
       }
 
@@ -103,7 +111,7 @@ export function useChatCall({
       });
       // 同上：成功创建的群呼即使页面已 unmount 也要进入通话 UI
       setActiveCall(response.call, response.livekit);
-      router.push('/(chat)/group-call' as never);
+      openCallScreen();
     } catch (error) {
       if (mountedRef.current) {
         Alert.alert(
@@ -123,6 +131,7 @@ export function useChatCall({
     conversationID,
     isGroupChat,
     isPreviewMode,
+    openCallScreen,
     revalidateMemberViewAccess,
     setActiveCall,
     sourceID,

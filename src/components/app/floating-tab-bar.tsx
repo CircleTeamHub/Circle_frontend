@@ -39,6 +39,7 @@ import {
 } from 'expo-glass-effect';
 import { devWarn } from '@/utils/dev-log';
 import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
+import { indicatorSlideStart } from '@/components/app/tab-indicator-track';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -471,6 +472,8 @@ function CustomTabBar({
   const indicatorSquash = useSharedValue(1);
   const indicatorOpacity = useSharedValue(activeBarIndex < 0 ? 0 : 1);
   const previousIndex = useRef(activeBarIndex);
+  // 这份 bar 已经滑过的那一笔(见 tab-indicator-track):起点按全局记,不按这份自己记的位置。
+  const handledSlide = useRef(-1);
   const indicatorStyle = useAnimatedStyle(() => ({
     opacity: indicatorOpacity.value,
     transform: [
@@ -490,12 +493,21 @@ function CustomTabBar({
     if (activeBarIndex < 0) return;
     const slotWidth = tabItemsWidth / barSlotCount;
     const targetX = activeBarIndex * slotWidth + TAB_PILL_GAP;
+    // 每个 tab 首页各有一份 bar,这份记的位置可能是它上次被看见时的(甚至是失焦前挪到别的 tab 的),
+    // 从那里滑会方向反了。从用户上一次看见指示器的那一格滑过来。
+    const slideFrom = indicatorSlideStart(activeBarIndex, handledSlide, state.key);
 
-    indicatorX.value = withTiming(targetX, {
-      duration: changedTab ? 260 : 0,
-      easing: Easing.out(Easing.cubic),
-    });
-    if (changedTab) {
+    indicatorX.value =
+      slideFrom === null
+        ? withTiming(targetX, { duration: 0 })
+        : withSequence(
+            withTiming(slideFrom * slotWidth + TAB_PILL_GAP, { duration: 0 }),
+            withTiming(targetX, {
+              duration: 260,
+              easing: Easing.out(Easing.cubic),
+            }),
+          );
+    if (slideFrom !== null) {
       // 拉长 + 压扁的短暂形变让胶囊看起来像一滴液体跳到下一个 tab，
       // 再用弹簧恢复成稳定的圆角胶囊。
       indicatorStretch.value = withSequence(
@@ -530,6 +542,7 @@ function CustomTabBar({
     indicatorSquash,
     indicatorStretch,
     indicatorX,
+    state.key,
     tabItemsWidth,
   ]);
 

@@ -60,10 +60,11 @@ export function useAttachmentActions({
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
       chatRouter.pushOverChat('share-picker', {
         type,
+        sourceID,
         ...(type === 'favorite' ? { conversationID } : {}),
       });
     },
-    [chatRouter, conversationID],
+    [chatRouter, conversationID, sourceID],
   );
 
 
