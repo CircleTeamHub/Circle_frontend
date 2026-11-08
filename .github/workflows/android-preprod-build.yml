@@ -83,7 +83,12 @@ jobs:
           node .github/scripts/validate-android-release.js preprod-build-env
 
       - name: Install dependencies
+        env:
+          SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
+
+      - name: Download Skia binaries
+        run: bash .github/scripts/install-skia-with-retry.sh
 
       - name: Verify dependency evidence
         run: npm run licenses:check

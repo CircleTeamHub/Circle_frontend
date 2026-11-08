@@ -57,7 +57,12 @@ jobs:
         run: bash .github/scripts/prepare-backend-contracts.sh
 
       - name: Install dependencies
+        env:
+          SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
+
+      - name: Download Skia binaries
+        run: bash .github/scripts/install-skia-with-retry.sh
 
       - name: Run application checks
         run: npm run ci
