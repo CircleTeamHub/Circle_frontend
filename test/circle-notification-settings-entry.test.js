@@ -5,12 +5,16 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('圈子动态头部不再重复显示圈子通知设置入口', () => {
+test('圈子通知设置入口在圈子动态头部，且只跳整页设置', () => {
   const src = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
-  // 圈子通知设置由圈子管理页统一提供，动态页只保留筛选和通知中心入口。
-  assert.doesNotMatch(src, /name="settings-outline"/);
+  // 入口从圈子管理页挪到了外面一层的动态页头部，两处不并存（跳转见 CirclePlazaScreen.spec）。
+  assert.match(src, /name="settings-outline"/);
   assert.doesNotMatch(src, /CircleNotificationSettingsSheet/);
+  assert.doesNotMatch(
+    read('src/features/discover/screens/CircleManagementScreen.tsx'),
+    /settings-outline/,
+  );
 });
 
 test('动态页入口删掉后，那个快捷弹层也不留成孤儿组件', () => {

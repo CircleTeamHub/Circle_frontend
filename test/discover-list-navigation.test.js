@@ -150,10 +150,8 @@ test('tab badges follow the moved moments and plaza ownership', () => {
   assert.doesNotMatch(source, /discover: discoverUnread/);
 });
 
-test('circle management screen reuses the panel and owns notification settings', () => {
+test('circle management screen reuses the panel', () => {
   const source = read('src/features/discover/screens/CircleManagementScreen.tsx');
 
   assert.match(source, /<MyCirclesPanel \/>/);
-  assert.match(source, /\/\(tabs\)\/discover\/notifications/);
-  assert.match(source, /rightIcon="settings-outline"/);
 });
