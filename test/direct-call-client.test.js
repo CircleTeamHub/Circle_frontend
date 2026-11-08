@@ -15,9 +15,13 @@ function read(relativePath) {
 
 function loadCallsApi(responses) {
   const requests = [];
+  let keySequence = 0;
   const mappers = loadTsModule('src/services/api/call-mappers.ts');
   const mod = loadTsModule('src/services/api/calls.ts', {
     requireShim: (specifier) => {
+      if (specifier === '@/utils/idempotency-key') {
+        return { generateIdempotencyKey: () => `call-key-${++keySequence}` };
+      }
       if (specifier === './client') {
         return {
           apiClient: async (endpoint, options) => {
@@ -72,6 +76,25 @@ test('createDirectCall 打到 POST /calls/direct 并归一化响应 (#113)', asy
   });
   assert.equal(result.call.sessionType, 'single');
   assert.equal(result.livekit.token, 'tok');
+});
+
+test('each call attempt sends its own Idempotency-Key', async () => {
+  const { mod, requests } = loadCallsApi(() => ({
+    call: CALL_FIXTURE,
+    selfParticipant: null,
+    livekit: { url: 'wss://lk', token: 'tok', expiresAt: '2026-07-21T04:00:00.000Z' },
+  }));
+
+  await mod.createDirectCall({ calleeID: 'u2', callType: 'AUDIO' });
+  await mod.createGroupCall({ conversationID: 'sg_g1', callType: 'VIDEO', inviteeIDs: ['u2'] });
+
+  assert.deepEqual(
+    requests.map(({ endpoint, options }) => [endpoint, { ...options.headers }]),
+    [
+      ['/calls/direct', { 'Idempotency-Key': 'call-key-1' }],
+      ['/calls/group', { 'Idempotency-Key': 'call-key-2' }],
+    ],
+  );
 });
 
 test('fetchCurrentCall：无通话返回 null，有通话归一化且不要求 LiveKit 凭据 (#93)', async () => {

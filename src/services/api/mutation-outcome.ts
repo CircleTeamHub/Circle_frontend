@@ -22,3 +22,15 @@ export function isAmbiguousMutationFailure(error: unknown): boolean {
   }
   return error.status >= 500;
 }
+
+/**
+ * 带幂等键的写操作「还没有定论」：结果不确定，或同一个键的第一次请求还在服务端
+ * 处理（IDEMPOTENCY_IN_PROGRESS）。这两种都必须留着键 —— 换新键再发就是第二笔。
+ * 其余失败是服务端的明确结论（含同键不同内容 / 键格式错），键可以作废。
+ */
+export function isUnsettledMutationFailure(error: unknown): boolean {
+  return (
+    isAmbiguousMutationFailure(error) ||
+    (error instanceof ApiError && error.errorCode === 'IDEMPOTENCY_IN_PROGRESS')
+  );
+}

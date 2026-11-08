@@ -146,9 +146,11 @@ export async function fetchMomentById(id: string): Promise<MomentPost> {
 
 export async function createMoment(
   input: CreateMomentInput,
+  { idempotencyKey }: { idempotencyKey: string },
 ): Promise<MomentPost> {
   const post = await markMomentWrite(apiClient<BackendMomentPost>('/trace', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: input,
   }));
   return normalizeMoment(post);
@@ -158,12 +160,14 @@ export async function deleteMoment(id: string): Promise<void> {
   await markMomentWrite(apiClient<void>(`/trace/${id}`, { method: 'DELETE' }));
 }
 
-export async function toggleMomentLike(
+/** 设成指定状态(幂等):重发、乱序到达都不会把赞翻回去。旧的 POST 切换只留给老版本。 */
+export async function setMomentLike(
   id: string,
+  liked: boolean,
 ): Promise<{ liked: boolean; likeCount: number }> {
   return markMomentWrite(apiClient<{ liked: boolean; likeCount: number }>(
     `/trace/${id}/like`,
-    { method: 'POST' },
+    { method: 'PUT', body: { liked } },
   ));
 }
 
@@ -175,10 +179,12 @@ export async function addMomentComment(
     images?: string[];
     mentionedUserIds?: string[];
   },
+  { idempotencyKey }: { idempotencyKey: string },
 ): Promise<MomentComment> {
   const { mentionedUserIds, ...commentInput } = input;
   const comment = await markMomentWrite(apiClient<MomentComment>(`/trace/${traceId}/comment`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: {
       ...commentInput,
       ...(mentionedUserIds?.length ? { mentionedUserIds } : {}),

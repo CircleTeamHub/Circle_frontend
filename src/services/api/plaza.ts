@@ -120,9 +120,11 @@ export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
 
 export async function createPlazaPost(
   input: CreatePlazaPostInput,
+  { idempotencyKey }: { idempotencyKey: string },
 ): Promise<CirclePlazaPost> {
   const post = await markPlazaWrite(apiClient<BackendCirclePlazaPost>('/circle-plaza/posts', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: input,
   }));
   return normalizePlazaPost(post);

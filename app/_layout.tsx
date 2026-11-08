@@ -45,9 +45,11 @@ import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
 import {
   registerDeviceIdProvider,
+  registerFreshConnectionTransport,
   registerRequestTraceHooks,
   registerStableDeviceIdProvider,
 } from '@/services/api/client';
+import { createFreshConnectionTransport } from '@/services/api/fresh-connection-transport';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { createRequestTraceHooks } from '@/observability/request-trace';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
@@ -94,6 +96,8 @@ silenceDomBridgeRejection();
 // 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
 registerDeviceIdProvider(getDeviceId);
 registerStableDeviceIdProvider(getStableDeviceId);
+// 安卓：卡住的 GET 的备份请求走独立连接池（一定是新连接）；其余平台和旧原生包为 null，照常 fetch。
+registerFreshConnectionTransport(createFreshConnectionTransport());
 
 // 请求卡住时记下「卡在哪一步」，随超时上报带走（见 observability/request-trace）。
 // 只在原生端：web 的 fetch 不经过 RN 的 XMLHttpRequest。

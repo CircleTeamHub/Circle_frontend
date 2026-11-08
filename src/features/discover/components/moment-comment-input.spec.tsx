@@ -227,6 +227,35 @@ test('two synchronous image submits start one upload', async () => {
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
 });
 
+test('retrying a failed image comment reuses the uploaded image, so the retry body matches', async () => {
+  const onSubmit = jest
+    .fn()
+    .mockRejectedValueOnce(new Error('timeout'))
+    .mockResolvedValue(undefined);
+  render(
+    <MomentCommentInput
+      replyTo={null}
+      onSubmit={onSubmit}
+      onDismiss={jest.fn()}
+    />,
+  );
+
+  fireEvent.press(screen.getByLabelText('添加图片'));
+  await waitFor(() => expect(screen.getByLabelText('删除')).toBeTruthy());
+  const input = screen.getByPlaceholderText('写评论...');
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+  });
+
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+  expect(mockPresign).toHaveBeenCalledTimes(1);
+  expect(onSubmit.mock.calls[1]).toEqual(onSubmit.mock.calls[0]);
+});
+
 test('success clears text, image, and mention selection without resurrecting a manually typed mention', async () => {
   const onSubmit = jest.fn().mockResolvedValue(undefined);
   render(

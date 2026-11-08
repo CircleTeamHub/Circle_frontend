@@ -122,7 +122,7 @@ test('chat info screen separates standalone-group and circle-group flows', () =>
 
 test('new group screen submits selected friends through chat-core', () => {
   const screen = read('src/features/chat/screens/NewGroupScreen.tsx');
-  assert.match(screen, /createGroupConversation\(\{/);
+  assert.match(screen, /createGroupConversation\(input, \{ idempotencyKey \}\)/);
   assert.match(screen, /const trimmedName = name\.trim\(\)/);
   assert.match(screen, /if \(!trimmedName\)/);
   assert.match(screen, /messages\.newGroupNameRequired/);
@@ -149,11 +149,11 @@ test('chat-core always sends a trimmed group name in the create body', async () 
   await api.createGroupChatConversation({
     name: '  周末爬山  ',
     memberIds: ['f1', 'f2'],
-  });
+  }, { idempotencyKey: 'group-key-1' });
 
   // 空名也要照发:曾经的 `...(name?.trim() ? { name } : {})` 会把空名悄悄省成
   // 「没传」,请求体就和用户实际提交的内容对不上了。
-  await api.createGroupChatConversation({ name: '   ', memberIds: ['f1', 'f2'] });
+  await api.createGroupChatConversation({ name: '   ', memberIds: ['f1', 'f2'] }, { idempotencyKey: 'group-key-2' });
 
   // vm 里造出来的对象跨 realm,deepStrictEqual 认不了原型 —— 先过一遍 JSON。
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
@@ -161,12 +161,17 @@ test('chat-core always sends a trimmed group name in the create body', async () 
       url: '/chat/conversations/group',
       init: {
         method: 'POST',
+        headers: { 'Idempotency-Key': 'group-key-1' },
         body: { name: '周末爬山', memberIds: ['f1', 'f2'] },
       },
     },
     {
       url: '/chat/conversations/group',
-      init: { method: 'POST', body: { name: '', memberIds: ['f1', 'f2'] } },
+      init: {
+        method: 'POST',
+        headers: { 'Idempotency-Key': 'group-key-2' },
+        body: { name: '', memberIds: ['f1', 'f2'] },
+      },
     },
   ]);
 });

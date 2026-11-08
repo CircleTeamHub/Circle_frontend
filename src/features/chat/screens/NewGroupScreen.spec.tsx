@@ -8,6 +8,7 @@ import {
 import NewGroupScreen from './NewGroupScreen';
 import { createGroupConversation } from '@/chat-core/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { ApiError } from '@/services/api/api-error';
 
 /**
  * 建群页的提交闸:群名必填、至少 2 位好友。两条都是服务端会拒的硬条件
@@ -63,6 +64,10 @@ jest.mock('@/services/api/friends', () => ({ fetchFriends: jest.fn() }));
 jest.mock('@/chat-core/client', () => ({
   createGroupConversation: jest.fn(),
 }));
+let mockKeySequence = 0;
+jest.mock('@/utils/idempotency-key', () => ({
+  generateIdempotencyKey: () => `key-${++mockKeySequence}`,
+}));
 
 const friend = (id: string, nickname: string): FriendProfile => ({
   id,
@@ -86,8 +91,12 @@ async function renderWithFriends(selectNames: string[]) {
   }
 }
 
+const sentKeys = () =>
+  jest.mocked(createGroupConversation).mock.calls.map(([, options]) => options.idempotencyKey);
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockKeySequence = 0;
   jest.mocked(fetchFriends).mockResolvedValue(FRIENDS);
   jest
     .mocked(createGroupConversation)
@@ -134,10 +143,10 @@ test('a non-blank name plus 2 friends submits the trimmed name and opens the gro
   fireEvent.press(submitButton());
 
   await waitFor(() => {
-    expect(createGroupConversation).toHaveBeenCalledWith({
-      name: '周末爬山',
-      memberIds: ['f1', 'f2'],
-    });
+    expect(createGroupConversation).toHaveBeenCalledWith(
+      { name: '周末爬山', memberIds: ['f1', 'f2'] },
+      { idempotencyKey: 'key-1' },
+    );
   });
   // 标题用群名本身,不再回落「群聊」兜底名。
   await waitFor(() => {
@@ -190,4 +199,34 @@ test('a failed create unlocks submit so the user can retry', async () => {
     expect(createGroupConversation).toHaveBeenCalledTimes(2);
   });
   expect(mockReplace).toHaveBeenCalledTimes(1);
+  // 结果不明的那次可能已经建好了:同一个群重试必须带同一个键,服务端回放第一次的结果。
+  expect(sentKeys()).toEqual(['key-1', 'key-1']);
+});
+
+test('a definitive rejection or a changed member list is a new create with a new key', async () => {
+  jest
+    .mocked(createGroupConversation)
+    .mockRejectedValueOnce(new ApiError('bad', { status: 400, errorCode: 'CHAT_GROUP_NAME_REQUIRED' }))
+    .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+    .mockResolvedValue({ conversationID: 'conv-3' });
+  await renderWithFriends(['小方', '小李']);
+  fireEvent.changeText(
+    screen.getByPlaceholderText('messages.newGroupNamePlaceholder'),
+    '周末爬山',
+  );
+
+  fireEvent.press(submitButton());
+  await waitFor(() => expect(submitButton()).not.toBeDisabled());
+  fireEvent.press(submitButton());
+  await waitFor(() => expect(submitButton()).not.toBeDisabled());
+  fireEvent.press(screen.getByLabelText('小李'));
+  fireEvent.press(screen.getByLabelText('小李'));
+  fireEvent.changeText(
+    screen.getByPlaceholderText('messages.newGroupNamePlaceholder'),
+    '周日爬山',
+  );
+  fireEvent.press(submitButton());
+
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
+  expect(sentKeys()).toEqual(['key-1', 'key-2', 'key-3']);
 });

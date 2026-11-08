@@ -22,7 +22,12 @@ function loadMomentsApi(apiClient) {
     require: withNativeStorageStubs((specifier) => {
       if (specifier === '@/services/api/client') return { apiClient };
       if (specifier === '@/services/api/utils') {
-        return { buildQuery: () => '', normalizeMediaUrl: (value) => value };
+        return {
+          buildQuery: () => '',
+          normalizeMediaUrl: (value) => value,
+          allowPeerMediaUrl: (value) => value,
+          normalizeUserAvatarFrameAppearance: () => null,
+        };
       }
       if (specifier === './image-media') {
         return {
@@ -63,12 +68,12 @@ test('addMomentComment includes non-empty mentioned user ids', async () => {
   await addMomentComment('trace-1', {
     content: '@Alice hello',
     mentionedUserIds: ['alice-id'],
-  });
+  }, { idempotencyKey: 'k' });
 
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.body)), {
     content: '@Alice hello',
     mentionedUserIds: ['alice-id'],
-  });
+  }, { idempotencyKey: 'k' });
 });
 
 test('addMomentComment omits an empty mentioned user id list', async () => {
@@ -81,7 +86,7 @@ test('addMomentComment omits an empty mentioned user id list', async () => {
   await addMomentComment('trace-1', {
     content: 'hello',
     mentionedUserIds: [],
-  });
+  }, { idempotencyKey: 'k' });
 
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.body)), {
     content: 'hello',
@@ -96,7 +101,7 @@ test('addMomentComment normalizes ignoredMentionCount on the created comment', a
   const comment = await addMomentComment('trace-1', {
     content: '@Alice hello',
     mentionedUserIds: ['alice-id'],
-  });
+  }, { idempotencyKey: 'k' });
 
   assert.equal(comment.ignoredMentionCount, 2);
 });
@@ -173,6 +178,41 @@ test('comment composer and both parents forward active mention ids', () => {
   );
 
   assert.match(input, /onSubmit\(trimmed, replyTo\?\.id, images, mentionedUserIds\)/);
-  assert.match(feed, /mentionedUserIds,\s*\}\);/);
-  assert.match(detail, /mentionedUserIds,\s*\}\);/);
+  assert.match(feed, /const input = \{ content, replyToId, images, mentionedUserIds \};/);
+  assert.match(feed, /addMomentComment\(target\.momentId, input, \{ idempotencyKey \}\)/);
+  assert.match(detail, /const input = \{ content, replyToId, images, mentionedUserIds \};/);
+  assert.match(detail, /addMomentComment\(post\.id, input, \{ idempotencyKey \}\)/);
+});
+
+test('createMoment and addMomentComment send the caller\'s Idempotency-Key', async () => {
+  const calls = [];
+  const { addMomentComment, createMoment } = loadMomentsApi(async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return endpoint === '/trace'
+      ? { id: 'm1', images: [], attachments: [], comments: [], author: { id: 'me', avatarUrl: null } }
+      : commentResponse();
+  });
+
+  await createMoment({ content: 'hi', images: [], attachments: [], visibility: 'FRIENDS_ONLY' }, { idempotencyKey: 'moment-key' });
+  await addMomentComment('trace-1', { content: 'hello' }, { idempotencyKey: 'comment-key' });
+
+  assert.equal(calls[0].endpoint, '/trace');
+  assert.deepEqual({ ...calls[0].options.headers }, { 'Idempotency-Key': 'moment-key' });
+  assert.equal(calls[1].endpoint, '/trace/trace-1/comment');
+  assert.deepEqual({ ...calls[1].options.headers }, { 'Idempotency-Key': 'comment-key' });
+});
+
+test('setMomentLike PUTs the desired state instead of toggling', async () => {
+  const calls = [];
+  const { setMomentLike } = loadMomentsApi(async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return { liked: false, likeCount: 3 };
+  });
+
+  const result = await setMomentLike('trace-1', false);
+
+  assert.equal(calls[0].endpoint, '/trace/trace-1/like');
+  assert.equal(calls[0].options.method, 'PUT');
+  assert.deepEqual({ ...calls[0].options.body }, { liked: false });
+  assert.deepEqual({ ...result }, { liked: false, likeCount: 3 });
 });

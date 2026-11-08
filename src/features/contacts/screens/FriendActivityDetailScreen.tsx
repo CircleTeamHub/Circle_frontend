@@ -27,7 +27,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -157,6 +157,10 @@ export default function FriendActivityDetailScreen() {
   const [messages, setMessages] = useState<FriendRequestMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  // state 要等下一次渲染才生效,连点两下都会以 false 进来:ref 在入口同步拦。
+  // 同意/拒绝/撤回共用一把锁 —— 同一条申请同时只能有一个决定在路上。
+  const handlingRef = useRef(false);
+  const sendingRef = useRef(false);
   const selfUserId = useAuthStore((state) => state.user?.id ?? null);
 
   const activityId = typeof params.id === 'string' ? params.id : '';
@@ -329,10 +333,11 @@ export default function FriendActivityDetailScreen() {
 
   const handleDecision = useCallback(
     async (decision: 'accept' | 'reject') => {
-      if (!activity || handling) {
+      if (!activity || handling || handlingRef.current) {
         return;
       }
 
+      handlingRef.current = true;
       setHandling(true);
 
       try {
@@ -361,6 +366,7 @@ export default function FriendActivityDetailScreen() {
           getApiErrorMessage(nextError, t('contacts.friendActivity.handleError')),
         );
       } finally {
+        handlingRef.current = false;
         setHandling(false);
       }
     },
@@ -368,7 +374,7 @@ export default function FriendActivityDetailScreen() {
   );
 
   const handleCancel = useCallback(() => {
-    if (!activity || handling) {
+    if (!activity || handling || handlingRef.current) {
       return;
     }
     Alert.alert(
@@ -384,6 +390,8 @@ export default function FriendActivityDetailScreen() {
           }),
           style: 'destructive',
           onPress: async () => {
+            if (handlingRef.current) return;
+            handlingRef.current = true;
             setHandling(true);
             try {
               await cancelFriendRequest(activity.requestId);
@@ -399,6 +407,7 @@ export default function FriendActivityDetailScreen() {
                 ),
               );
             } finally {
+              handlingRef.current = false;
               setHandling(false);
             }
           },
@@ -409,9 +418,10 @@ export default function FriendActivityDetailScreen() {
 
   const handleSend = useCallback(async () => {
     const content = draft.trim();
-    if (!content || sending || !requestId) {
+    if (!content || sending || sendingRef.current || !requestId) {
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     try {
       const created = await sendFriendRequestMessage(requestId, content);
@@ -423,6 +433,7 @@ export default function FriendActivityDetailScreen() {
         getApiErrorMessage(sendError, t('contacts.friendActivity.sendFailed')),
       );
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }, [draft, sending, requestId, t]);

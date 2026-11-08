@@ -1,8 +1,13 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import CreateCircleScreen from './CreateCircleScreen';
 import { createCircle } from '@/services/api/circles';
+import { ApiError } from '@/services/api/api-error';
+import {
+  requestUploadPresign,
+  uploadLocalFileToPresignedUrl,
+} from '@/services/api/upload';
 
 const mockRouter = { back: jest.fn() };
 const mockFetchProgramStatus = jest.fn();
@@ -28,6 +33,11 @@ const mockForm = {
   memberCanPost: false,
 };
 const mockGetApiErrorMessage = jest.fn();
+let mockKeySequence = 0;
+
+jest.mock('@/utils/idempotency-key', () => ({
+  generateIdempotencyKey: () => `key-${++mockKeySequence}`,
+}));
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -130,6 +140,7 @@ jest.mock('@/services/api/upload', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockKeySequence = 0;
   mockAuth.user = { vipLevel: 0 };
   mockProgram.status = null;
   mockFetchProgramStatus.mockResolvedValue(null);
@@ -203,4 +214,91 @@ test('create-limit failures use the localized server-error mapping', async () =>
       'localized-create-limit',
     );
   });
+});
+
+function fillValidForm() {
+  mockAuth.user = { vipLevel: 1 };
+  Object.assign(mockForm, {
+    name: 'Circle name',
+    description: 'A sufficiently long circle description',
+    pickedAvatarUri: 'file:///avatar.jpg',
+  });
+  jest.mocked(requestUploadPresign).mockResolvedValue({
+    uploadUrl: 'https://upload.test',
+    fileUrl: 'https://cdn.test/avatars/a.jpg',
+    key: 'avatars/a.jpg',
+    requiredHeaders: {},
+  } as never);
+  jest.mocked(uploadLocalFileToPresignedUrl).mockResolvedValue(undefined as never);
+}
+
+/** Two taps landing before React re-renders: only a ref checked at handler entry stops the second. */
+function pressTwiceBeforeRerender(text: string) {
+  let node = screen.getByText(text);
+  while (!node.props.onPress) node = node.parent!;
+  const { onPress } = node.props;
+  act(() => {
+    onPress();
+    onPress();
+  });
+}
+
+const sentKeys = () =>
+  jest.mocked(createCircle).mock.calls.map(([, options]) => options.idempotencyKey);
+
+test('a double tap creates the circle once', async () => {
+  fillValidForm();
+  let resolveCreate: (value: never) => void = () => {};
+  jest.mocked(createCircle).mockReturnValue(new Promise((resolve) => { resolveCreate = resolve; }));
+  mockFetchMyCircles.mockResolvedValue({ ok: true });
+
+  render(<CreateCircleScreen />);
+  pressTwiceBeforeRerender('circle.create.submitButton');
+  await waitFor(() => expect(createCircle).toHaveBeenCalled());
+  resolveCreate({} as never);
+
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
+  expect(createCircle).toHaveBeenCalledTimes(1);
+});
+
+test('retrying a timed-out create reuses its key and the uploaded avatar', async () => {
+  fillValidForm();
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest
+    .mocked(createCircle)
+    .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+    .mockResolvedValue({} as never);
+  mockFetchMyCircles.mockResolvedValue({ ok: true });
+
+  render(<CreateCircleScreen />);
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
+  expect(sentKeys()).toEqual(['key-1', 'key-1']);
+  expect(createCircle).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({ avatarUrl: 'https://cdn.test/avatars/a.jpg' }),
+    { idempotencyKey: 'key-1' },
+  );
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);
+});
+
+test('a definitive rejection drops the key', async () => {
+  fillValidForm();
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest
+    .mocked(createCircle)
+    .mockRejectedValueOnce(new ApiError('limit', { status: 403, errorCode: 'CIRCLE_CREATE_LIMIT' }))
+    .mockResolvedValue({} as never);
+  mockFetchMyCircles.mockResolvedValue({ ok: true });
+
+  render(<CreateCircleScreen />);
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
+  expect(sentKeys()).toEqual(['key-1', 'key-2']);
 });
