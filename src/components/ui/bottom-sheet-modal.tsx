@@ -79,9 +79,8 @@ export function BottomSheetFlatList<ItemT>({ onScroll, ...props }: FlatListProps
 }
 
 const s = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    justifyContent: 'flex-end',
   },
   keyboardArea: {
     flex: 1,
@@ -120,9 +119,6 @@ export function BottomSheetModal({
   const sheetHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
   const scrollableCountRef = useRef(0);
-  // 本次手势是否允许拖面板。面板根节点为了挡住蒙层点击会在按下时就成为
-  // 响应者，所以移动/松手阶段也必须按起点判断，不能只靠「移动时是否接管」。
-  const dragAllowedRef = useRef(false);
 
   const canDragFromTouchStart = () => {
     const sheetTop = sheetTopRef.current;
@@ -171,20 +167,14 @@ export function BottomSheetModal({
       // 捕获阶段：抢在列表之前判定，列表已在顶部时下拉归面板、列表钉住不动；
       // 列表还没到顶就放给列表滚，同一次手势里不会两边一起动。
       onMoveShouldSetPanResponderCapture: (_event, gesture) => shouldClaim(gesture),
-      onPanResponderGrant: () => {
-        dragAllowedRef.current = canDragFromTouchStart();
-      },
       // 拿到手势后不让给列表，否则拖到一半面板会被弹回。
       onPanResponderTerminationRequest: () => false,
+      // 接管时 dy 已清零，从这里开始算就是跟手的，面板不会跳一下。
       onPanResponderMove: (_event, gesture) => {
-        if (!dragAllowedRef.current) return;
-        // 从越过激活距离那一刻开始跟手，面板不会一下跳 10pt。
-        dragY.setValue(Math.max(0, gesture.dy - DRAG_ACTIVATION_DISTANCE));
+        dragY.setValue(Math.max(0, gesture.dy));
       },
       onPanResponderRelease: (_event, gesture) => {
-        if (!dragAllowedRef.current) return;
-        dragAllowedRef.current = false;
-        const dragged = Math.max(0, gesture.dy - DRAG_ACTIVATION_DISTANCE);
+        const dragged = Math.max(0, gesture.dy);
         const distanceThreshold = Math.max(
           DISMISS_MIN_DISTANCE,
           sheetHeightRef.current * DISMISS_HEIGHT_RATIO,
@@ -206,10 +196,7 @@ export function BottomSheetModal({
         }
         springBack();
       },
-      onPanResponderTerminate: () => {
-        dragAllowedRef.current = false;
-        springBack();
-      },
+      onPanResponderTerminate: springBack,
     }),
   ).current;
 
@@ -241,7 +228,6 @@ export function BottomSheetModal({
         sheetTopRef.current = event.nativeEvent.layout.y;
         sheetHeightRef.current = event.nativeEvent.layout.height;
       }}
-      onStartShouldSetResponder={() => true}
       style={[
         s.content,
         sheetStyle,
@@ -264,21 +250,25 @@ export function BottomSheetModal({
       onRequestClose={onClose}
       statusBarTranslucent={statusBarTranslucent}
     >
-      <Pressable
-        testID="bottom-sheet-backdrop"
-        style={[s.backdrop, d.backdrop, backdropStyle]}
-        onPress={closeOnBackdropPress ? onClose : undefined}
-      >
+      <View style={s.root}>
+        {/* 蒙层是面板的兄弟节点，不能包着面板：iOS 新架构下 ScrollView 只要祖先是 JS responder
+            就不让滚，蒙层或面板按下就占住 responder 的话，手指落在纯文字上列表就滑不动。 */}
+        <Pressable
+          testID="bottom-sheet-backdrop"
+          accessible={false}
+          style={[StyleSheet.absoluteFill, d.backdrop, backdropStyle]}
+          onPress={closeOnBackdropPress ? onClose : undefined}
+        />
         {/* 面板里有输入框时，键盘弹起把整个面板顶上去；蒙层仍铺满全屏。
             各个 sheet 不要再自己套避让容器，嵌套会按父容器坐标重复算。 */}
         {avoidKeyboard ? (
-          <KeyboardAvoidingContainer style={s.keyboardArea}>
+          <KeyboardAvoidingContainer testID="bottom-sheet-area" pointerEvents="box-none" style={s.keyboardArea}>
             {sheetContent}
           </KeyboardAvoidingContainer>
         ) : (
-          <View style={s.keyboardArea}>{sheetContent}</View>
+          <View testID="bottom-sheet-area" pointerEvents="box-none" style={s.keyboardArea}>{sheetContent}</View>
         )}
-      </Pressable>
+      </View>
       <UploadProgressHost />
     </Modal>
   );
