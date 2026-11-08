@@ -11,6 +11,7 @@ const mockKeyboardAvoidance = jest.fn();
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack(), push: (route: unknown) => mockPush(route), canGoBack: () => true },
   useLocalSearchParams: () => mockParams,
+  useSegments: () => ['quick-chat'],
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/keyboard-avoiding-container', () => ({

@@ -3,7 +3,7 @@ import { sendCardMessage, sendForwardedMediaMessage, sendTextMessage } from '@/c
 import { issueQrToken } from '@/services/api/qr';
 import { useAttachmentActions, type AttachmentActionsParams } from './use-attachment-actions';
 import type { UserCollection } from '@/services/api/collections';
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useSegments: () => ['(tabs)', 'messages', 'chat-detail'] }));
 jest.mock('@/chat-core/client', () => ({ sendCardMessage: jest.fn(), sendVoiceMessage: jest.fn(), sendForwardedMediaMessage: jest.fn(async () => ({})), sendTextMessage: jest.fn(async () => ({})) }));
 jest.mock('@/chat-core/send-handle', () => ({ startChatSend: (send: (onCreate: () => void) => Promise<unknown>) => ({ queued: false, delivered: send(() => undefined) }) }));
 jest.mock('@/chat-core/send-errors', () => ({ getChatSendErrorMessage: (_error: unknown, fallback: string) => fallback }));

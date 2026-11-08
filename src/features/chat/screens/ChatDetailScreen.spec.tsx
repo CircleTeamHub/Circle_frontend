@@ -876,10 +876,11 @@ test('in the sheet, opening a panel tells the sheet before the panel renders so 
 });
 
 test.each([
-  ['notes', 'share-picker', { type: 'note' }],
-  ['friendCard', 'share-picker', { type: 'friend' }],
-  ['favorites', 'share-picker', { type: 'favorite', conversationID: CONVERSATION }],
-  ['quickReply', 'share-picker', { type: 'quick-reply' }],
+  // sourceID:选择结果只交给打开选择页的这个聊天。
+  ['notes', 'share-picker', { type: 'note', sourceID: PEER }],
+  ['friendCard', 'share-picker', { type: 'friend', sourceID: PEER }],
+  ['favorites', 'share-picker', { type: 'favorite', sourceID: PEER, conversationID: CONVERSATION }],
+  ['quickReply', 'share-picker', { type: 'quick-reply', sourceID: PEER }],
   ['transfer', 'transfer-composer', { recipientId: PEER, recipientName: '对方', recipientAvatar: '' }],
   ['mediaHub', null, null],
 ] as const)('opening the %s tool does not apply a global layout animation to the destination', async (label, route, params) => {

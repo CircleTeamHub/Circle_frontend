@@ -38,15 +38,27 @@ test('every page opened over the sheet has a chat-sheet route re-exporting its s
 
 test('full-chat fallbacks in use-chat-router point at existing routes', () => {
   const src = read('src/features/chat/chat-detail/hooks/use-chat-router.ts');
-  const files = {
-    '/(tabs)/messages/share-picker': 'app/(tabs)/messages/share-picker.tsx',
-    '/(tabs)/messages/transfer-composer': 'app/(tabs)/messages/transfer-composer.tsx',
-    '/(chat)/location-picker': 'app/(chat)/location-picker.tsx',
-  };
-  for (const [href, file] of Object.entries(files)) {
-    assert.ok(src.includes(`'${href}'`), `${href} missing from FULL_CHAT_PATHS`);
-    assert.ok(fs.existsSync(path.join(root, file)), `${file} does not exist`);
+  assert.ok(src.includes("'/(chat)/location-picker'"), '/(chat)/location-picker missing from fullChatPath');
+  assert.ok(fs.existsSync(path.join(root, 'app/(chat)/location-picker.tsx')), 'app/(chat)/location-picker.tsx does not exist');
+
+  // 分享选择 / 转账压在聊天所在的 tab 栈上:CHAT_TABS 里每个 tab 都要镜像这两页。
+  const tabsList = src.match(/const CHAT_TABS = new Set\(\[([^\]]+)\]\)/);
+  assert.ok(tabsList, 'CHAT_TABS missing from use-chat-router');
+  const chatTabs = [...tabsList[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  for (const tab of chatTabs) {
+    for (const page of ['share-picker', 'transfer-composer']) {
+      const route = read(`app/(tabs)/${tab}/${page}.tsx`);
+      assert.match(route, new RegExp(`from '@/features/chat/screens/${SHEET_PAGES[page]}'`), `app/(tabs)/${tab}/${page}.tsx`);
+    }
   }
+
+  // 有聊天页的 tab 都得在 CHAT_TABS 里,否则那里打开的选择页会退回消息栈,选完落在消息列表。
+  const tabsWithChat = fs
+    .readdirSync(path.join(root, 'app/(tabs)'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(root, 'app/(tabs)', entry.name, 'chat-detail.tsx')))
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual([...chatTabs].sort(), tabsWithChat);
 });
 
 test('chat-detail never pushes the over-chat pages directly (they must go through pushOverChat)', () => {

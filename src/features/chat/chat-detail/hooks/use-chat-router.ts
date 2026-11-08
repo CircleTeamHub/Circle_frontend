@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from 'react';
-import { router, type Href } from 'expo-router';
+import { router, useSegments, type Href } from 'expo-router';
 
 /**
  * 半屏聊天(app/quick-chat.tsx)是根栈上的透明 modal。从它里面直接 push `/(tabs)/...`,
@@ -20,12 +20,18 @@ export type OverChatPage = 'share-picker' | 'transfer-composer' | 'location-pick
 /** app/chat-sheet/ 的路由段:这组页面盖在半屏聊天之上。 */
 const CHAT_SHEET_SEGMENT = 'chat-sheet';
 
-// 完整聊天页里照旧压进各自的栈。
-const FULL_CHAT_PATHS: Record<OverChatPage, string> = {
-  'share-picker': '/(tabs)/messages/share-picker',
-  'transfer-composer': '/(tabs)/messages/transfer-composer',
-  'location-picker': '/(chat)/location-picker',
-};
+/** 各自镜像了一份分享选择 / 转账页的 tab 栈(app/(tabs)/<tab>/share-picker 等)。 */
+const CHAT_TABS = new Set(['messages', 'contacts', 'discover', 'explore', 'profile']);
+
+/**
+ * 完整聊天页里压在聊天所在的那个 tab 栈上:聊天页按来源 scope 分栈(通讯录、发现…都有),
+ * 选择页要和它同栈,返回才回到原聊天。以前一律压进消息栈,别的 tab 里打开会跳去消息 tab,
+ * 选完落在消息列表。选位置页在根上的 (chat) 栈,从哪个 tab 压都会盖在聊天上。
+ */
+function fullChatPath(page: OverChatPage, tab: string): string {
+  if (page === 'location-picker') return '/(chat)/location-picker';
+  return `/(tabs)/${tab}/${page}`;
+}
 
 export type ChatRouter = {
   /** 离开聊天:半屏先关掉。 */
@@ -37,6 +43,9 @@ export type ChatRouter = {
 
 export function useChatRouter(): ChatRouter {
   const sheet = useContext(ChatSheetNavigationContext);
+  const segments = useSegments();
+  // 只取 tab 名(字符串)做依赖:别处路由变化时 segments 数组会换引用,不该让聊天页的回调跟着换。
+  const tab = segments[0] === '(tabs)' && CHAT_TABS.has(segments[1]) ? segments[1] : 'messages';
   return useMemo(
     () => ({
       push: (href: Href) => {
@@ -48,11 +57,11 @@ export function useChatRouter(): ChatRouter {
         router.navigate(href);
       },
       pushOverChat: (page: OverChatPage, params?: Record<string, string>) => {
-        const pathname = sheet ? `/${CHAT_SHEET_SEGMENT}/${page}` : FULL_CHAT_PATHS[page];
+        const pathname = sheet ? `/${CHAT_SHEET_SEGMENT}/${page}` : fullChatPath(page, tab);
         router.push((params ? { pathname, params } : pathname) as Href);
       },
     }),
-    [sheet],
+    [sheet, tab],
   );
 }
 

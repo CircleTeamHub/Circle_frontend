@@ -61,7 +61,7 @@ export function useNoteBatchSend({
    * 只认发送者自己的 key)。地址只在笔记详情里,摘要拿不到坐标时按需拉详情。
    *
    * 不整批持有 inFlightRef:大批次能发几分钟,不该锁死输入栏;重复消费由
-   * share-picker store 的 consume() 一次性语义兜底,批与批之间由
+   * share-picker store 的 consumeFor() 一次性语义兜底,批与批之间由
    * noteBatchQueueRef 串行(两次突发不能叠进同一个服务端限流桶)。
    * 离开会话(卸载)即停发剩余任务 —— 发错聊天时用户退出就是止损。
    * 单条失败不中断整批,发完汇总一次错误提示;首个错误保留语义映射

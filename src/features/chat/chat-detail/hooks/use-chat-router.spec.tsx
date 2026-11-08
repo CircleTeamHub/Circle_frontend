@@ -89,8 +89,17 @@ function renderApp() {
       '(tabs)/messages/chat-detail': FullChat,
       '(tabs)/messages/share-picker': () => <Label text="messages.sharePicker" />,
       '(tabs)/messages/user/[id]': () => <Label text="messages.user" />,
-      '(tabs)/discover/_layout': () => <Stack />,
+      '(tabs)/discover/_layout': {
+        unstable_settings: { initialRouteName: 'index' },
+        default: () => <Stack />,
+      },
       '(tabs)/discover/index': () => <Label text="discover.index" />,
+      '(tabs)/discover/chat-detail': FullChat,
+      '(tabs)/discover/share-picker': () => (
+        <Pressable onPress={() => router.back()}>
+          <Text>discover.pickerDone</Text>
+        </Pressable>
+      ),
       'quick-chat': QuickChat,
       'chat-sheet/_layout': () => <Stack />,
       'chat-sheet/share-picker': SheetPicker,
@@ -203,5 +212,29 @@ describe('半屏聊天里「选完要回到聊天」的页面', () => {
 
     expect(rootRouteNames(app)).toEqual(['(tabs)']);
     expect(tabStack(app, 'messages')).toEqual(['index', 'chat-detail', 'share-picker']);
+  });
+
+  // 回归:别的 tab 里的完整聊天页(从通讯录、发现进的私聊)曾把选择页压进消息栈,跳去消息 tab,
+  // 选完落在消息列表,原聊天页拿不回焦点;选中的笔记/名片留在暂存里,被随后点开的别的会话取走发出去。
+  test('别的 tab 里的完整聊天页:选择页压在同一个 tab 栈里,选完回到原聊天', async () => {
+    const app = renderApp();
+    await act(async () => {
+      router.navigate('/discover');
+    });
+    await act(async () => {
+      router.push('/(tabs)/discover/chat-detail' as never);
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('full.openPicker'));
+    });
+
+    expect(tabStack(app, 'discover')).toEqual(['index', 'chat-detail', 'share-picker']);
+    expect(tabStack(app, 'messages')).not.toContain('share-picker');
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('discover.pickerDone'));
+    });
+    expect(app.getPathname()).toBe('/discover/chat-detail');
   });
 });

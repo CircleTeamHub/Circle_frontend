@@ -49,7 +49,7 @@ jest.mock('@/features/groups/routes', () => ({}));
 jest.mock('@/features/user/utils/routes', () => ({ getNoteDetailHref: jest.fn(() => '/note') }));
 jest.mock('@/components/ui/member-name', () => ({ MemberName: () => null }));
 jest.mock('@/features/chat/chat-detail/styles', () => ({ chatDetailStyles: {} }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useSegments: () => ['(tabs)', 'messages', 'chat-detail'] }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');

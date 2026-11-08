@@ -6,7 +6,9 @@ import { create } from 'zustand';
 
 /**
  * SharePickerScreen 选完后写入这里；ChatDetailScreen 重新拿到焦点时
- * `consume()` 一次性取走并清空，触发对应消息发送。
+ * `consumeFor(sourceID)` 一次性取走并清空，触发对应消息发送。
+ * 按打开选择页的那个聊天(sourceID)认领:别的聊天页先拿到焦点时把它丢掉,
+ * 不让私人笔记/名片发进别的会话,也不留到以后再冒出来。
  *
  * 不持久化 —— 跨屏一次性传值，关 app 就丢，没问题。
  */
@@ -25,17 +27,18 @@ export type SharePickedItem =
   | { kind: 'quick-reply'; data: string };
 
 interface SharePickerState {
-  pending: SharePickedItem | null;
-  setPending: (item: SharePickedItem) => void;
-  consume: () => SharePickedItem | null;
+  pending: { sourceID: string; item: SharePickedItem } | null;
+  setPending: (sourceID: string, item: SharePickedItem) => void;
+  consumeFor: (sourceID: string) => SharePickedItem | null;
 }
 
 export const useSharePickerStore = create<SharePickerState>((set, get) => ({
   pending: null,
-  setPending: (item) => set({ pending: item }),
-  consume: () => {
-    const item = get().pending;
-    if (item) set({ pending: null });
-    return item;
+  setPending: (sourceID, item) => set({ pending: { sourceID, item } }),
+  consumeFor: (sourceID) => {
+    const pending = get().pending;
+    if (!pending) return null;
+    set({ pending: null });
+    return pending.sourceID === sourceID ? pending.item : null;
   },
 }));
