@@ -667,7 +667,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   return (
     <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
-      style={[d.container, { paddingTop: sheet ? 0 : insets.top }]}
+      style={[s.composerPanelStack, d.container, { paddingTop: sheet ? 0 : insets.top }]}
       // The note-collection sheet is a separate full-screen modal. Keeping the
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.

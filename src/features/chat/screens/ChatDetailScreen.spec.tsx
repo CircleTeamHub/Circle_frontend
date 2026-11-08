@@ -262,8 +262,8 @@ jest.mock('@/components/ui/member-name', () => ({
 jest.mock('@/components/ui/divider', () => mockNullComponents());
 jest.mock('@/components/ui/keyboard-avoiding-container', () => {
   return {
-    KeyboardAvoidingContainer: ({ children, style }: { children: React.ReactNode; style?: object }) => (
-      <MockView style={style}>{children}</MockView>
+    KeyboardAvoidingContainer: ({ children, style, testID }: { children: React.ReactNode; style?: object; testID?: string }) => (
+      <MockView style={style} testID={testID}>{children}</MockView>
     ),
   };
 });
@@ -853,6 +853,14 @@ test.each(['emoji', 'attachment'])('the %s panel is drawn beneath the chat body 
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
   await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
   expect(StyleSheet.flatten(screen.getByTestId(`chat-${panel}-panel`).props.style).zIndex).toBe(-1);
+});
+
+// 回归:容器只有背景色时 Fabric 会把它的子视图拍平到外层,按 zIndex 排序后面板落到容器
+// 背景下面,整块面板被盖住,看着是黑的。容器必须自成层叠上下文。
+test('the chat container keeps the panels above its own background', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  expect(StyleSheet.flatten(screen.getByTestId(E2E_TEST_IDS.chatScreen).props.style).isolation).toBe('isolate');
 });
 
 // 半屏里避让键盘的是外层半屏容器。面板打开要和外层撤掉键盘留白落在同一次渲染里,
