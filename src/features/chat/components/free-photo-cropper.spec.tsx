@@ -15,6 +15,37 @@ const asset = {
   mimeType: 'image/jpeg',
 } as ImagePickerAsset;
 
+describe('FreePhotoCropper square mode', () => {
+  beforeEach(() => {
+    jest.spyOn(PanResponder, 'create').mockImplementation((config) => ({
+      panHandlers: {
+        onResponderGrant: config.onPanResponderGrant,
+        onResponderMove: config.onPanResponderMove,
+        onResponderRelease: config.onPanResponderRelease,
+        onResponderTerminate: config.onPanResponderTerminate,
+      },
+    }) as ReturnType<typeof PanResponder.create>);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('starts on a centered square and stays square through a corner drag', async () => {
+    const onCropChange = jest.fn();
+    const view = render(<FreePhotoCropper square asset={asset} onCropChange={onCropChange} accessibilityLabel="crop" />);
+    fireEvent(view.getByTestId('free-photo-cropper'), 'layout', { nativeEvent: { layout: { width: 400, height: 600 } } });
+    await waitFor(() => expect(onCropChange).toHaveBeenLastCalledWith({ originX: 300, originY: 0, width: 600, height: 600 }));
+
+    const handle = view.getByTestId('free-crop-bottom-right');
+    act(() => {
+      handle.props.onResponderGrant({}, { dx: 0, dy: 0 });
+      handle.props.onResponderMove({}, { dx: -100, dy: -20 });
+      handle.props.onResponderRelease({}, { dx: -100, dy: -20 });
+    });
+    const crop = onCropChange.mock.lastCall?.[0];
+    expect(crop.width).toBe(crop.height);
+    expect(crop.width).toBeLessThan(600);
+  });
+});
+
 describe('FreePhotoCropper gestures', () => {
   beforeEach(() => {
     jest.spyOn(PanResponder, 'create').mockImplementation((config) => ({

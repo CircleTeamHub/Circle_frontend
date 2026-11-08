@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -100,6 +101,7 @@ export default function ChatBackgroundScreen() {
     applyingImage,
   ]);
 
+  const { cropIfNeeded, cropper: backgroundCropper } = useImageCropStep('free');
   const handlePickCustomImage = useCallback(async () => {
     if (!isGlobal && !conversationID) {
       Alert.alert(
@@ -113,13 +115,13 @@ export default function ChatBackgroundScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: false,
-      allowsEditing: true,
       quality: 0.85,
+      ...getCropLibraryPickerOptions('free'),
     });
-    if (result.canceled) return;
+    if (result.canceled || !result.assets[0]?.uri) return;
 
-    const asset = result.assets[0];
-    if (!asset?.uri) return;
+    const asset = await cropIfNeeded(result.assets[0]);
+    if (!asset || !mountedRef.current) return;
 
     setApplyingImage(true);
     try {
@@ -158,6 +160,7 @@ export default function ChatBackgroundScreen() {
     setChatBackgroundPreference,
     setGlobalBackgroundPreference,
     applyingImage,
+    cropIfNeeded,
     t,
   ]);
 
@@ -189,6 +192,7 @@ export default function ChatBackgroundScreen() {
           ) : null}
         </View>
       </ScrollView>
+      {backgroundCropper}
     </View>
   );
 }

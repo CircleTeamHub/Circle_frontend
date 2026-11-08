@@ -3,6 +3,8 @@ import { ActivityIndicator, Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import CircleDetailScreen from './CircleDetailScreen';
 import { fetchCircleDetail, fetchMyApplications, leaveCircle } from '@/services/api/circles';
+import * as ImagePicker from 'expo-image-picker';
+import { requestUploadPresign, resolveUploadContentType, sanitizeUploadFilename, uploadLocalFileToPresignedUrl } from '@/services/api/upload';
 const mockChangeAvatar = jest.fn();
 
 // 圈子详情:看过的圈子再进先用内存缓存画出来,后台照常重拉;没缓存过才整页转圈。
@@ -57,7 +59,12 @@ jest.mock('@/services/api/client', () => {
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
-jest.mock('@/services/api/upload', () => ({}));
+jest.mock('@/services/api/upload', () => ({
+  requestUploadPresign: jest.fn(),
+  resolveUploadContentType: jest.fn(),
+  sanitizeUploadFilename: jest.fn(),
+  uploadLocalFileToPresignedUrl: jest.fn(),
+}));
 jest.mock('@/chat-core/client', () => ({ ensureCircleConversation: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/features/discover/store/use-circles-store', () => ({
@@ -74,6 +81,11 @@ jest.mock('@/components/ui/avatar-photo-viewer', () => {
   return { AvatarPhotoViewer: (props: Record<string, unknown>) => <View testID="avatar-preview" {...props} /> };
 });
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn(), MediaTypeOptions: {} }));
+const mockCropCircleIcon = jest.fn();
+jest.mock('@/features/profile/image-crop-step', () => ({
+  useImageCropStep: () => ({ cropIfNeeded: mockCropCircleIcon, cropper: null }),
+  getCropLibraryPickerOptions: () => ({ allowsEditing: true, aspect: [1, 1] }),
+}));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -277,4 +289,35 @@ test('a circle write elsewhere after the visit makes the next visit load fresh',
   render(<CircleDetailScreen />);
   expect(screen.queryByText('徒步圈')).toBeNull();
   expect(spinnerCount()).toBe(1);
+});
+
+describe('uploading a circle badge image', () => {
+  const picked = { uri: 'file:///badge.png', fileName: 'badge.png', mimeType: 'image/png' };
+  const openAsOwner = async () => {
+    jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets: [picked] } as never);
+    jest.mocked(fetchCircleDetail).mockResolvedValue(circle({ myRole: 'OWNER' }) as never);
+    render(<CircleDetailScreen />);
+    await screen.findByText('徒步圈');
+  };
+  beforeEach(() => {
+    jest.mocked(requestUploadPresign).mockResolvedValue({ uploadUrl: 'https://upload', fileUrl: 'https://cdn/badge.png', requiredHeaders: {} } as never);
+    jest.mocked(resolveUploadContentType).mockReturnValue('image/png');
+    jest.mocked(sanitizeUploadFilename).mockImplementation((name: string) => name);
+  });
+
+  test('offers a square crop and uploads the cropped file', async () => {
+    mockCropCircleIcon.mockResolvedValue({ ...picked, uri: 'file:///cropped.png' });
+    await openAsOwner();
+    await act(async () => { fireEvent.press(screen.getByText('上传圈子图标')); });
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true, aspect: [1, 1] }));
+    expect(mockCropCircleIcon).toHaveBeenCalledWith(picked);
+    expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith('https://upload', 'image/png', 'file:///cropped.png', {});
+  });
+
+  test('canceling the crop uploads nothing', async () => {
+    mockCropCircleIcon.mockResolvedValue(null);
+    await openAsOwner();
+    await act(async () => { fireEvent.press(screen.getByText('上传圈子图标')); });
+    expect(requestUploadPresign).not.toHaveBeenCalled();
+  });
 });

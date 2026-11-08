@@ -12,6 +12,12 @@ import {
 jest.mock('@/features/profile/image-picker', () => ({
   loadImagePickerModule: jest.fn(),
 }));
+const mockCropIfNeeded = jest.fn();
+let mockInAppCrop = false;
+jest.mock('@/features/profile/image-crop-step', () => ({
+  useImageCropStep: () => ({ cropIfNeeded: mockCropIfNeeded, cropper: 'cropper-node' }),
+  getCropLibraryPickerOptions: () => (mockInAppCrop ? {} : { allowsEditing: true, aspect: [1, 1] }),
+}));
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: { getState: () => mockAuthState },
 }));
@@ -43,6 +49,10 @@ const mockPicker = {
 const mockAuthState = { sessionEpoch: 1, user: { id: 'viewer' } };
 
 const onFailure = jest.fn();
+// 选图、裁剪、预签名是一串 await:等链路走到下一个挂起点,别数微任务个数。
+const flushPromises = async () => {
+  for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+};
 
 function options(submit: (fileUrl: string) => Promise<void>, onChanged = jest.fn()) {
   return {
@@ -55,6 +65,8 @@ function options(submit: (fileUrl: string) => Promise<void>, onChanged = jest.fn
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockInAppCrop = false;
+  mockCropIfNeeded.mockReset().mockImplementation((asset: unknown) => Promise.resolve(asset));
   mockAuthState.sessionEpoch = 1;
   mockAuthState.user = { id: 'viewer' };
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -309,8 +321,7 @@ test('switching accounts during upload skips the avatar write', async () => {
 
   await act(async () => {
     const pending = result.current.changeAvatar();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushPromises();
     mockAuthState.sessionEpoch += 1;
     finishUpload();
     await pending;
@@ -377,4 +388,56 @@ test('switching accounts during submit skips the old screen completion callback'
   expect(submit).toHaveBeenCalledTimes(1);
   expect(onChanged).not.toHaveBeenCalled();
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+describe('square crop on the fast library picker', () => {
+  beforeEach(() => { mockInAppCrop = true; });
+
+  test('the library opens without native editing so iOS keeps the instant picker', async () => {
+    const { result } = renderHook(() => useChangeAvatar(options(jest.fn().mockResolvedValue(undefined))));
+    await act(async () => { await result.current.changeAvatar('library'); });
+    expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith({ quality: 0.8, mediaTypes: ['images'] });
+  });
+
+  test('the cropped image is what gets uploaded', async () => {
+    mockCropIfNeeded.mockResolvedValueOnce({ uri: 'file://cropped.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' });
+    const { result } = renderHook(() => useChangeAvatar(options(jest.fn().mockResolvedValue(undefined))));
+    await act(async () => { await result.current.changeAvatar('library'); });
+    expect(mockCropIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ uri: 'file://a.jpg' }));
+    expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith('https://upload', 'image/jpeg', 'file://cropped.jpg', { 'If-None-Match': '*' });
+  });
+
+  test('canceling the crop uploads nothing and allows choosing again', async () => {
+    mockCropIfNeeded.mockResolvedValueOnce(null);
+    const submit = jest.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useChangeAvatar(options(submit)));
+    await act(async () => { await result.current.changeAvatar('library'); });
+    expect(requestUploadPresign).not.toHaveBeenCalled();
+    await act(async () => { await result.current.changeAvatar('library'); });
+    expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledTimes(2);
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  test('switching accounts during the crop discards the result', async () => {
+    let finishCrop!: (asset: unknown) => void;
+    mockCropIfNeeded.mockReturnValueOnce(new Promise((resolve) => { finishCrop = resolve; }));
+    const { result } = renderHook(() => useChangeAvatar(options(jest.fn())));
+    let pending!: Promise<void>;
+    await act(async () => { pending = result.current.changeAvatar('library'); await flushPromises(); });
+    mockAuthState.sessionEpoch += 1;
+    await act(async () => { finishCrop({ uri: 'file://cropped.jpg', mimeType: 'image/jpeg' }); await pending; });
+    expect(requestUploadPresign).not.toHaveBeenCalled();
+  });
+
+  test('the camera keeps its native square editor and skips the in-app step', async () => {
+    const { result } = renderHook(() => useChangeAvatar(options(jest.fn().mockResolvedValue(undefined))));
+    await act(async () => { await result.current.changeAvatar('camera'); });
+    expect(mockPicker.launchCameraAsync).toHaveBeenCalledWith({ quality: 0.8, mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1] });
+    expect(mockCropIfNeeded).not.toHaveBeenCalled();
+  });
+
+  test('callers receive the crop step to render', () => {
+    const { result } = renderHook(() => useChangeAvatar(options(jest.fn())));
+    expect(result.current.cropper).toBe('cropper-node');
+  });
 });

@@ -1290,7 +1290,7 @@ export default function ChatInfoScreen() {
 
   // 圈子群走圈子头像端点(仅圈主),独立群聊走会话头像端点(群主/管理员);
   // 上传与失败提示与圈子详情页共用同一个 hook。
-  const { changeAvatar: changeGroupAvatar, changing: groupAvatarChanging } =
+  const { changeAvatar: changeGroupAvatar, changing: groupAvatarChanging, cropper: groupAvatarCropper } =
     useChangeAvatar({
       submit: submitGroupAvatar,
       onChanged: handleGroupAvatarChanged,
@@ -2325,6 +2325,7 @@ export default function ChatInfoScreen() {
             name={groupTitle}
             changing={groupAvatarChanging}
             onChange={canChangeGroupAvatar ? changeGroupAvatar : undefined}
+            cropper={groupAvatarCropper}
             onClose={() => setAvatarPreviewKey(null)}
           />
         ) : null}

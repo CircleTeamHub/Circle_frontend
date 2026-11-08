@@ -117,7 +117,7 @@ export default function UserMomentsScreen() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileResolving, setProfileResolving] = useState(false);
 
-  const { changeCover } = useChangeCover(canonicalUserId, setCover);
+  const { changeCover, cropper: coverCropper } = useChangeCover(canonicalUserId, setCover);
 
   useEffect(() => {
     let active = true;
@@ -279,6 +279,7 @@ export default function UserMomentsScreen() {
         removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
       />
+      {coverCropper}
     </View>
   );
 }

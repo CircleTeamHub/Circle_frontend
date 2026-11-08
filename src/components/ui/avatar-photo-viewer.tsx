@@ -1,5 +1,5 @@
 import { UploadProgressHost } from '@/components/app/UploadProgressHost';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView,
   StatusBar, StyleSheet, Text, View, useWindowDimensions,
@@ -19,10 +19,12 @@ interface Props {
   name: string;
   changing?: boolean;
   onChange?: (source: AvatarImageSource) => Promise<void> | void;
+  /** 选图后的裁剪页：放进本 Modal，iOS 上并排呈现第二个 Modal 会弹不出来。 */
+  cropper?: ReactNode;
   onClose: () => void;
 }
 
-export function AvatarPhotoViewer({ visible, uri, name, changing = false, onChange, onClose }: Props) {
+export function AvatarPhotoViewer({ visible, uri, name, changing = false, onChange, cropper, onClose }: Props) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -130,6 +132,7 @@ export function AvatarPhotoViewer({ visible, uri, name, changing = false, onChan
           </View>
         ) : null}
         <UploadProgressHost />
+        {cropper}
       </View>
     </Modal>
   );

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -33,6 +34,8 @@ export interface ChangeAvatarOptions {
 export interface ChangeAvatarResult {
   changeAvatar: (source?: AvatarImageSource) => Promise<void>;
   changing: boolean;
+  /** 相册选图后的裁剪页，渲染进发起更换的那个原生 Modal（见 AvatarPhotoViewer）。 */
+  cropper: ReactNode;
 }
 
 /**
@@ -56,6 +59,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
   // ref 在整段操作(选图 → 上传 → 落库)上同步关窗。
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const { cropIfNeeded, cropper } = useImageCropStep('square');
 
   // 头像页加载时就把原生模块准备好，点击行时直接进入相册；不能把首次
   // require 的桥接初始化时间叠加到用户的点击反馈上。
@@ -87,12 +91,17 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
         return;
       }
 
-      // 系统编辑器让用户在上传前确认头像裁剪。
-      const pickerOptions: Parameters<typeof imagePicker.launchImageLibraryAsync>[0] = {
+      // 系统编辑器让用户在上传前确认头像裁剪；相册在 iOS 上改走应用内裁剪，保持秒开。
+      const cameraOptions: Parameters<typeof imagePicker.launchCameraAsync>[0] = {
         quality: 0.8,
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
+      };
+      const libraryOptions: Parameters<typeof imagePicker.launchImageLibraryAsync>[0] = {
+        quality: 0.8,
+        mediaTypes: ['images'],
+        ...getCropLibraryPickerOptions('square'),
       };
       let result: Awaited<ReturnType<typeof imagePicker.launchImageLibraryAsync>>;
       if (source === 'camera') {
@@ -103,7 +112,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
             Alert.alert(t('permissions.insufficientTitle'), t('permissions.camera'));
             return;
           }
-          result = await imagePicker.launchCameraAsync(pickerOptions);
+          result = await imagePicker.launchCameraAsync(cameraOptions);
         } catch (error) {
           if (!stillCurrent()) return;
           onFailure(error);
@@ -116,7 +125,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
       } else {
         // 先直接唤起系统选择器，只有失败时才等待权限桥接，避免延迟相册呈现。
         try {
-          result = await imagePicker.launchImageLibraryAsync(pickerOptions);
+          result = await imagePicker.launchImageLibraryAsync(libraryOptions);
         } catch {
           if (!stillCurrent()) return;
           let permission;
@@ -140,7 +149,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
             return;
           }
           try {
-            result = await imagePicker.launchImageLibraryAsync(pickerOptions);
+            result = await imagePicker.launchImageLibraryAsync(libraryOptions);
           } catch (retryError) {
             if (!stillCurrent()) return;
             onFailure(retryError);
@@ -155,7 +164,8 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
       if (!stillCurrent()) return;
       if (result.canceled || !result.assets[0]) return;
 
-      const asset = result.assets[0];
+      const asset = source === 'library' ? await cropIfNeeded(result.assets[0]) : result.assets[0];
+      if (!asset || !stillCurrent()) return;
       const contentType = resolveUploadContentType({
         mimeType: asset.mimeType,
         fileName: asset.fileName,
@@ -209,7 +219,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
     } finally {
       inFlightRef.current = false;
     }
-  }, [changing, failureTitle, onChanged, onFailure, submit, t]);
+  }, [changing, cropIfNeeded, failureTitle, onChanged, onFailure, submit, t]);
 
-  return { changeAvatar, changing };
+  return { changeAvatar, changing, cropper };
 }

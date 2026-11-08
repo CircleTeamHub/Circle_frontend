@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
   launchImageLibraryFast,
   loadImagePickerModule,
 } from '@/features/profile/image-picker';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -19,6 +20,8 @@ const MAX_COVER_BYTES = 10 * 1024 * 1024;
 interface UseChangeCircleCoverResult {
   changeCover: () => Promise<void>;
   changing: boolean;
+  /** 相册选图后的裁剪页，由调用方渲染。 */
+  cropper: ReactNode;
 }
 
 /**
@@ -34,6 +37,7 @@ export function useChangeCircleCover(
   const [changing, setChanging] = useState(false);
   // ref closes the double-tap window synchronously across pick → upload → write.
   const inFlightRef = useRef(false);
+  const { cropIfNeeded, cropper } = useImageCropStep('free');
 
   const changeCover = useCallback(async () => {
     if (inFlightRef.current || changing) return;
@@ -48,11 +52,11 @@ export function useChangeCircleCover(
         return;
       }
 
-      // 原生编辑完成后才上传，取消裁剪不改变当前封面。
+      // 裁剪完成后才上传，取消裁剪不改变当前封面。
       const outcome = await launchImageLibraryFast(imagePicker, {
         quality: 0.8,
         mediaTypes: ['images'],
-        allowsEditing: true,
+        ...getCropLibraryPickerOptions('free'),
       });
       if (outcome.status === 'denied') {
         Alert.alert(
@@ -64,7 +68,8 @@ export function useChangeCircleCover(
       const { result } = outcome;
       if (result.canceled || !result.assets[0]) return;
 
-      const asset = result.assets[0];
+      const asset = await cropIfNeeded(result.assets[0]);
+      if (!asset) return;
       const contentType = resolveUploadContentType({
         mimeType: asset.mimeType,
         fileName: asset.fileName,
@@ -114,7 +119,7 @@ export function useChangeCircleCover(
     } finally {
       inFlightRef.current = false;
     }
-  }, [changing, circleId, onChanged, t]);
+  }, [changing, cropIfNeeded, circleId, onChanged, t]);
 
-  return { changeCover, changing };
+  return { changeCover, changing, cropper };
 }
