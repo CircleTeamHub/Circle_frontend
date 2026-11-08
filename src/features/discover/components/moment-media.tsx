@@ -1,49 +1,13 @@
-import { useEffect, useState } from 'react';
-import { AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useEventListener } from 'expo';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { MediaImage } from '@/components/ui/media-image';
-import { MediaProgressBar } from '@/components/ui/media-progress-bar';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { cachedVideoSource } from '@/utils/video-source';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { ImageViewer } from '@/components/ui/image-viewer';
-import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { Radius, Spacing } from '@/theme';
 import type { ImageMediaVariant, MomentAttachment } from '@/types';
 import { getDisplayImages, ImageGrid } from './image-grid';
-
-function MomentVideo({ url, onClose }: { url: string; onClose: () => void }) {
-  const { t } = useTranslation();
-  const player = useVideoPlayer(cachedVideoSource(url), (instance) => { instance.loop = false; });
-  const [failed, setFailed] = useState(false);
-  const [loading, setLoading] = useState(true);
-  useEventListener(player, 'statusChange', ({ status }) => {
-    setFailed(status === 'error');
-    setLoading(status === 'loading' || status === 'idle');
-  });
-  const close = () => { player.pause(); onClose(); };
-  useEffect(() => {
-    player.play();
-    const subscription = AppState.addEventListener('change', (state) => { if (state !== 'active') player.pause(); });
-    // useVideoPlayer releases the decoder on unmount.
-    return () => subscription.remove();
-  }, [player]);
-  return (
-    <Modal visible animationType="fade" onRequestClose={close}>
-      <View style={s.videoModal}>
-        <VideoView player={player} style={s.video} nativeControls contentFit="contain" />
-        {loading ? <View style={s.loading} pointerEvents="none" accessible accessibilityRole="progressbar" accessibilityLabel={t('common.loading')}><MediaProgressBar percent={null} /></View> : null}
-        {failed ? <Text style={s.error}>{t('moment.videoUnavailable', { defaultValue: '视频加载失败，请稍后重试' })}</Text> : null}
-        <Pressable style={s.close} onPress={close} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={12}>
-          <Ionicons name="close" size={28} color="#fff" />
-        </Pressable>
-        <UploadProgressHost />
-      </View>
-    </Modal>
-  );
-}
 
 export function MomentMedia({ images, media, attachments, containerWidth }: {
   images: string[];
@@ -76,8 +40,17 @@ export function MomentMedia({ images, media, attachments, containerWidth }: {
         </Pressable>
         );
       })}
-      {selected?.type === 'video' ? <MomentVideo key={selected.url} url={selected.url} onClose={() => setSelected(null)} /> : null}
-      {selected?.type === 'image' ? <ImageViewer images={displayPhotos.map((item) => item.originalUri)} cacheKeys={displayPhotos.map((item) => item.originalCacheKey)} visible initialIndex={photos.findIndex((item) => item.key === selected.key)} onClose={() => setSelected(null)} /> : null}
+      {selected ? (
+        <ImageViewer
+          images={attachments.map((item) => (item.type === 'image' ? displayPhotos[photos.indexOf(item)].originalUri : item.posterUrl ?? ''))}
+          cacheKeys={attachments.map((item) => (item.type === 'image' ? displayPhotos[photos.indexOf(item)].originalCacheKey : item.posterKey ?? `${item.key}:poster`))}
+          videos={attachments.map((item) => (item.type === 'video' ? item.url : undefined))}
+          autoPlayInitialVideo={selected.type === 'video'}
+          visible
+          initialIndex={attachments.findIndex((item) => item.key === selected.key)}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -85,9 +58,4 @@ export function MomentMedia({ images, media, attachments, containerWidth }: {
 const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   tile: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, overflow: 'hidden', backgroundColor: '#242424' },
-  videoModal: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
-  video: { width: '100%', height: '100%' },
-  loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  close: { position: 'absolute', top: 60, right: 24, padding: 8 },
-  error: { position: 'absolute', color: '#fff', alignSelf: 'center', padding: 24 },
 });

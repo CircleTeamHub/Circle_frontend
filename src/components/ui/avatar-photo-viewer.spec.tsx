@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Modal } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, Modal, Text } from 'react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { AvatarPhotoViewer } from './avatar-photo-viewer';
 import { saveImageToLibrary } from '@/utils/save-image';
 
@@ -159,4 +159,9 @@ test('a hidden viewer retains no native modal or image resources', () => {
 test('keeps upload progress visible inside its existing native modal', () => {
   render(<AvatarPhotoViewer {...props} />);
   expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
+});
+
+test('hosts the crop step inside its own native modal', () => {
+  render(<AvatarPhotoViewer {...props} cropper={<Text>crop-step</Text>} />);
+  expect(within(screen.UNSAFE_getByType(Modal)).getByText('crop-step')).toBeTruthy();
 });

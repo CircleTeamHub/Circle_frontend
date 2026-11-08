@@ -22,6 +22,11 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.md,
   },
+  // 标题是 32 号大字：长语言（如西语）下让标题收缩，别把右侧图标挤出屏幕。
+  headerTitle: {
+    flexShrink: 1,
+    marginRight: Spacing.md,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -92,10 +97,14 @@ export default function CirclePlazaScreen() {
     router.push('/(tabs)/discover/management');
   }, [router]);
 
+  const handleOpenNotificationSettings = useCallback(() => {
+    router.push('/(tabs)/discover/notifications');
+  }, [router]);
+
   return (
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <View style={[s.header, { paddingTop: Spacing.md }]}>
-        <Text style={d.title} accessibilityRole="header">
+        <Text style={[s.headerTitle, d.title]} numberOfLines={1} accessibilityRole="header">
           {t('discover.circleTitle')}
         </Text>
         <View style={s.headerActions}>
@@ -119,6 +128,18 @@ export default function CirclePlazaScreen() {
           >
             <Ionicons
               name="options-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={handleOpenNotificationSettings}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('discover.notifications.title')}
+          >
+            <Ionicons
+              name="settings-outline"
               size={22}
               color={colors.textSecondary}
             />

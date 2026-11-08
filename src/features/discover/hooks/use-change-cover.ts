@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
   launchImageLibraryFast,
   loadImagePickerModule,
 } from '@/features/profile/image-picker';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -21,6 +22,8 @@ const MAX_COVER_BYTES = 10 * 1024 * 1024;
 interface UseChangeCoverResult {
   changeCover: () => Promise<void>;
   changing: boolean;
+  /** 相册选图后的裁剪页，由调用方渲染。 */
+  cropper: ReactNode;
 }
 
 /**
@@ -38,6 +41,7 @@ export function useChangeCover(
   // clear it and open two pickers / fire two uploads. The ref closes that window
   // synchronously across the whole operation (pick → upload → write).
   const inFlightRef = useRef(false);
+  const { cropIfNeeded, cropper } = useImageCropStep('free');
 
   const changeCover = useCallback(async () => {
     if (inFlightRef.current || changing) return;
@@ -53,11 +57,11 @@ export function useChangeCover(
         return;
       }
 
-      // 原生编辑完成后才上传，取消裁剪不改变当前封面。
+      // 裁剪完成后才上传，取消裁剪不改变当前封面。
       const outcome = await launchImageLibraryFast(imagePicker, {
         quality: 0.8,
         mediaTypes: ['images'],
-        allowsEditing: true,
+        ...getCropLibraryPickerOptions('free'),
       });
       if (outcome.status === 'denied') {
         Alert.alert(
@@ -72,7 +76,8 @@ export function useChangeCover(
         return;
       }
 
-      const asset = result.assets[0];
+      const asset = await cropIfNeeded(result.assets[0]);
+      if (!asset) return;
       const contentType = resolveUploadContentType({
         mimeType: asset.mimeType,
         fileName: asset.fileName,
@@ -135,7 +140,7 @@ export function useChangeCover(
     } finally {
       inFlightRef.current = false;
     }
-  }, [changing, userId, onChanged, setUser, t]);
+  }, [changing, cropIfNeeded, userId, onChanged, setUser, t]);
 
-  return { changeCover, changing };
+  return { changeCover, changing, cropper };
 }

@@ -1,5 +1,4 @@
 import React from 'react';
-import { ActivityIndicator } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { MomentMedia } from './moment-media';
 import { ImageViewer } from '@/components/ui/image-viewer';
@@ -17,56 +16,48 @@ jest.mock('./image-grid', () => ({ ...jest.requireActual('./image-grid'), ImageG
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return <Text>legacy images</Text>;
 } }));
-const mockPlay = jest.fn();
-const mockPause = jest.fn();
-let mockStatusListener: ((event: { status: string }) => void) | undefined;
-jest.mock('expo', () => ({ useEventListener: (_player: unknown, _event: string, listener: typeof mockStatusListener) => { mockStatusListener = listener; } }));
-jest.mock('expo-video', () => ({
-  useVideoPlayer: jest.fn(() => ({ play: mockPlay, pause: mockPause })),
-  VideoView: () => null,
-}));
+const mixed = [
+  { type: 'video' as const, key: 'clip', url: 'https://cdn.test/clip.mp4', posterUrl: 'https://cdn.test/poster.jpg' },
+  { type: 'image' as const, key: 'photo', url: 'https://cdn.test/photo.jpg' },
+  { type: 'video' as const, key: 'clip2', url: 'https://cdn.test/clip2.mp4' },
+];
+const viewerProps = () => jest.mocked(ImageViewer).mock.lastCall?.[0];
 
-test('renders mixed tiles in order and only creates a player after the selected video is opened', () => {
-  const { useVideoPlayer } = jest.requireMock('expo-video');
-  jest.clearAllMocks();
-  render(<MomentMedia images={[]} attachments={[
-    { type: 'video', key: 'clip', url: 'https://cdn.test/clip.mp4', posterUrl: 'https://cdn.test/poster.jpg' },
-    { type: 'image', key: 'photo', url: 'https://cdn.test/photo.jpg' },
-    { type: 'video', key: 'clip2', url: 'https://cdn.test/clip2.mp4' },
-  ]} />);
+test('renders mixed tiles in order and opens no viewer until one is tapped', () => {
+  jest.mocked(ImageViewer).mockClear();
+  render(<MomentMedia images={[]} attachments={mixed} />);
   expect(screen.getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['moment.playVideo', 'moment.openImage', 'moment.playVideo']);
-  expect(useVideoPlayer).not.toHaveBeenCalled();
-  fireEvent.press(screen.getAllByLabelText('moment.playVideo')[1]);
-  expect(useVideoPlayer).toHaveBeenCalledWith(expect.objectContaining({ uri: 'https://cdn.test/clip2.mp4', useCaching: true }), expect.any(Function));
-  fireEvent.press(screen.getByLabelText('common.close'));
-  expect(mockPause).toHaveBeenCalled();
+  expect(ImageViewer).not.toHaveBeenCalled();
 });
 
-test('only starts a persistent video cache after the selected video is opened', () => {
-  const { useVideoPlayer } = jest.requireMock('expo-video');
-  jest.clearAllMocks();
-  const url = 'https://cdn.test/clip.mp4';
-  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url }]} />);
-  expect(useVideoPlayer).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByLabelText('moment.playVideo'));
-  expect(useVideoPlayer).toHaveBeenCalledWith(expect.objectContaining({ uri: url, useCaching: true }), expect.any(Function));
+test('a tapped video opens in one gallery with the photos and auto-plays', () => {
+  render(<MomentMedia images={[]} attachments={mixed} />);
+  fireEvent.press(screen.getAllByLabelText('moment.playVideo')[1]);
+  expect(viewerProps()?.images).toEqual(['https://cdn.test/poster.jpg', 'https://cdn.test/photo.jpg', '']);
+  expect(viewerProps()?.videos).toEqual(['https://cdn.test/clip.mp4', undefined, 'https://cdn.test/clip2.mp4']);
+  expect(viewerProps()?.initialIndex).toBe(2);
+  expect(viewerProps()?.autoPlayInitialVideo).toBe(true);
+});
+
+test('a tapped photo opens the same gallery without auto-playing a video', () => {
+  render(<MomentMedia images={[]} attachments={mixed} />);
+  fireEvent.press(screen.getByLabelText('moment.openImage'));
+  expect(viewerProps()?.initialIndex).toBe(1);
+  expect(viewerProps()?.autoPlayInitialVideo).toBe(false);
+});
+
+test('closing the gallery returns to the feed', () => {
+  render(<MomentMedia images={[]} attachments={mixed} />);
+  fireEvent.press(screen.getByLabelText('moment.openImage'));
+  const close = viewerProps()!.onClose;
+  jest.mocked(ImageViewer).mockClear();
+  act(() => close());
+  expect(ImageViewer).not.toHaveBeenCalled();
 });
 
 test('continues to render legacy image posts', () => {
   render(<MomentMedia images={['https://cdn.test/old.jpg']} />);
   expect(screen.getByText('legacy images')).toBeTruthy();
-});
-
-test('fullscreen video keeps loading progress until the player is ready', () => {
-  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url: 'https://cdn.test/clip.mp4' }]} />);
-  fireEvent.press(screen.getByLabelText('moment.playVideo'));
-  expect(screen.getByRole('progressbar')).toBeTruthy();
-  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
-  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
-  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
-  expect(screen.queryByRole('progressbar')).toBeNull();
-  act(() => mockStatusListener?.({ status: 'loading' }));
-  expect(screen.getByRole('progressbar')).toBeTruthy();
 });
 
 test('keeps the selected image index when a feed refresh replaces attachment objects', () => {
@@ -77,18 +68,8 @@ test('keeps the selected image index when a feed refresh replaces attachment obj
   ];
   const { rerender } = render(<MomentMedia images={[]} attachments={attachments} />);
   fireEvent.press(screen.getAllByLabelText('moment.openImage')[1]);
-  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].initialIndex).toBe(1);
+  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].initialIndex).toBe(2);
 
   rerender(<MomentMedia images={[]} attachments={attachments.map((item) => ({ ...item }))} />);
-  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].initialIndex).toBe(1);
-});
-
-test('shows an actionable error when a selected video cannot load', () => {
-  mockStatusListener = undefined;
-  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url: 'https://cdn.test/clip.mp4' }]} />);
-  fireEvent.press(screen.getByLabelText('moment.playVideo'));
-  expect(mockStatusListener).toEqual(expect.any(Function));
-  act(() => mockStatusListener?.({ status: 'error' }));
-  expect(screen.getByText('moment.videoUnavailable')).toBeTruthy();
-  expect(screen.getByLabelText('common.close')).toBeTruthy();
+  expect(jest.mocked(ImageViewer).mock.lastCall?.[0].initialIndex).toBe(2);
 });

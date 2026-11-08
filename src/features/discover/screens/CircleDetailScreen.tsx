@@ -47,6 +47,7 @@ import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeAvatar } from '@/hooks/use-change-avatar';
+import { getCropLibraryPickerOptions, useImageCropStep } from '@/features/profile/image-crop-step';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
@@ -462,7 +463,7 @@ function CircleDetailContent() {
   const isOwnerOrAdmin = circleValidated && (isOwner || circle?.myRole === 'ADMIN');
   const isActiveMember = circleValidated && circle?.myStatus === 'ACTIVE';
 
-  const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) => {
+  const { changeCover: changeCircleCover, cropper: circleCoverCropper } = useChangeCircleCover(id, (url) => {
     setCircle((current) => (current ? { ...current, cover: url } : current));
     // Keep the cached circle lists in sync so they don't show a stale image.
     useCirclesStore.getState().patchCircle(id, { cover: url });
@@ -486,7 +487,7 @@ function CircleDetailContent() {
     [id, sessionEpoch],
   );
   // 仅圈主可换(服务端 assertOwner);与群头像共用同一个上传/落库流程。
-  const { changeAvatar: changeCircleAvatar, changing: circleAvatarChanging } = useChangeAvatar({
+  const { changeAvatar: changeCircleAvatar, changing: circleAvatarChanging, cropper: circleAvatarCropper } = useChangeAvatar({
     submit: submitCircleAvatar,
     onChanged: handleCircleAvatarChanged,
     failureTitle: t('circle.avatarUpdateFailed', { defaultValue: '头像更新失败' }),
@@ -554,6 +555,7 @@ function CircleDetailContent() {
     );
   }, [id, router, sessionEpoch, t]);
 
+  const { cropIfNeeded: cropCircleIcon, cropper: circleIconCropper } = useImageCropStep('square');
   const handleUploadCircleIcon = useCallback(async () => {
     if (!id || !isOwnerOrAdmin || iconSaving) {
       return;
@@ -562,13 +564,18 @@ function CircleDetailContent() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
+      ...getCropLibraryPickerOptions('square'),
     });
 
     if (result.canceled || !result.assets.length) {
       return;
     }
 
-    const asset = result.assets[0];
+    const asset = await cropCircleIcon(result.assets[0]);
+    if (!asset || !mountedRef.current) {
+      return;
+    }
+
     const contentType = resolveUploadContentType({
       mimeType: asset.mimeType,
       fileName: asset.fileName,
@@ -617,7 +624,7 @@ function CircleDetailContent() {
         setIconSaving(false);
       }
     }
-  }, [circle?.name, iconSaving, id, isOwnerOrAdmin, loadCircle, t]);
+  }, [circle?.name, cropCircleIcon, iconSaving, id, isOwnerOrAdmin, loadCircle, t]);
 
   const d = useMemo(
     () => ({
@@ -1064,9 +1071,12 @@ function CircleDetailContent() {
           name={circle.name}
           changing={circleAvatarChanging}
           onChange={isOwner ? changeCircleAvatar : undefined}
+          cropper={circleAvatarCropper}
           onClose={() => setAvatarPreviewKey(null)}
         />
       ) : null}
+      {circleIconCropper}
+      {circleCoverCropper}
     </View>
   );
 }

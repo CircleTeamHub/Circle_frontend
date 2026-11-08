@@ -85,7 +85,12 @@ jobs:
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - name: Install dependencies
+        env:
+          SKIP_SKIA_DOWNLOAD: '1'
         run: npm ci
+
+      - name: Download Skia binaries
+        run: bash .github/scripts/install-skia-with-retry.sh
 
       - name: Generate Android project
         env:

@@ -7,22 +7,25 @@ const source = fs.readFileSync(
   path.join(process.cwd(), 'src/features/chat/components/bubbles/video-bubble.tsx'),
   'utf8',
 );
+const viewerSource = fs.readFileSync(
+  path.join(process.cwd(), 'src/components/ui/viewer-video-page.tsx'),
+  'utf8',
+);
 
 // 每个 VideoView 背后都是一个原生播放器。把 message.videoUrl 直接交给
 // useVideoPlayer 意味着一屏几条视频就同时装载几路解码器（iOS 上到上限后
 // 后面的气泡直接黑屏），并且每条都会去拉签名 URL 的首段数据。
 // 播放器必须以空源挂载，等用户点了播放再 replaceAsync 装载。
-test('video bubble mounts an empty player and loads the source only on play', () => {
-  assert.match(source, /useVideoPlayer\(\s*null/);
-  assert.doesNotMatch(source, /useVideoPlayer\(\s*message\.videoUrl/);
-  assert.match(source, /replaceAsync\(cachedVideoSource\(videoUrl, !ephemeral\)\)/);
+test('video bubble creates no player and the viewer loads the source only on play', () => {
+  assert.doesNotMatch(source, /useVideoPlayer\(/);
+  assert.match(viewerSource, /useVideoPlayer\(\s*null/);
+  assert.match(viewerSource, /replaceAsync\(cachedVideoSource\(videoUrl, !ephemeral\)\)/);
 });
 
 // 签名 URL 过期后读路径会换发一条新的；播放器还钉着旧 URL 的话，
 // 用户看到的是一条永远转圈的视频。
-test('video bubble replaces fullscreen playback when the signed url changes', () => {
-  assert.match(source, /<FullscreenVideo key=\{videoUrl\} videoUrl=\{videoUrl\}/);
-  assert.match(source, /previewVisible && videoUrl/);
+test('viewer replaces playback when the signed url changes', () => {
+  assert.match(viewerSource, /<ViewerVideoPlayer key=\{videoUrl\} videoUrl=\{videoUrl\}/);
 });
 
 // 气泡文案跟着应用语言走，不能硬编码中文（i18n 五语种齐平测试覆盖键，

@@ -16,6 +16,16 @@ jest.mock('@/features/profile/image-picker', () => ({
   ...jest.requireActual('@/features/profile/image-picker'),
   loadImagePickerModule: jest.fn(),
 }));
+const mockCropIfNeeded = jest.fn();
+const mockCropShapes: string[] = [];
+let mockInAppCrop = false;
+jest.mock('@/features/profile/image-crop-step', () => ({
+  useImageCropStep: (shape: string) => {
+    mockCropShapes.push(shape);
+    return { cropIfNeeded: mockCropIfNeeded, cropper: 'cropper-node' };
+  },
+  getCropLibraryPickerOptions: () => (mockInAppCrop ? {} : { allowsEditing: true }),
+}));
 jest.mock('@/services/api/upload', () => ({
   requestUploadPresign: jest.fn(),
   resolveUploadContentType: jest.fn(),
@@ -48,6 +58,9 @@ const mockPicker = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockInAppCrop = false;
+  mockCropShapes.length = 0;
+  mockCropIfNeeded.mockReset().mockImplementation((asset: unknown) => Promise.resolve(asset));
   Object.assign(useAuthStore.getState(), { sessionEpoch: 11, user: { id: 'user-1' } });
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   (loadImagePickerModule as jest.Mock).mockReturnValue(mockPicker);
@@ -164,4 +177,32 @@ test('a completed cover update cannot replace another signed-in account', async 
   await act(async () => { finishUpdate({ id: 'user-1', cover: 'https://cdn/cover.jpg' } as Awaited<ReturnType<typeof updateUserProfile>>); await operation; });
   expect(useAuthStore.getState().setUser).not.toHaveBeenCalled();
   expect(onChanged).not.toHaveBeenCalled();
+});
+
+describe('free crop on the fast library picker', () => {
+  beforeEach(() => { mockInAppCrop = true; });
+
+  test('the library opens without native editing and asks for a free crop', async () => {
+    const { result } = renderHook(() => useChangeCover('user-1', jest.fn()));
+    await act(async () => { await result.current.changeCover(); });
+    expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith({ quality: 0.8, mediaTypes: ['images'] });
+    expect(mockCropShapes[0]).toBe('free');
+    expect(result.current.cropper).toBe('cropper-node');
+  });
+
+  test('the cropped image is what gets uploaded', async () => {
+    mockCropIfNeeded.mockResolvedValueOnce({ uri: 'file://cropped.jpg', fileName: 'cover.jpg', mimeType: 'image/jpeg' });
+    const { result } = renderHook(() => useChangeCover('user-1', jest.fn()));
+    await act(async () => { await result.current.changeCover(); });
+    expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith('https://upload', 'image/jpeg', 'file://cropped.jpg', undefined);
+  });
+
+  test('canceling the crop keeps the current cover and allows choosing again', async () => {
+    mockCropIfNeeded.mockResolvedValueOnce(null);
+    const { result } = renderHook(() => useChangeCover('user-1', jest.fn()));
+    await act(async () => { await result.current.changeCover(); });
+    expect(requestUploadPresign).not.toHaveBeenCalled();
+    await act(async () => { await result.current.changeCover(); });
+    expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledTimes(2);
+  });
 });
