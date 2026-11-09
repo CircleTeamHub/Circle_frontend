@@ -81,7 +81,6 @@ test("moments and circle bells claim disjoint notification types", () => {
     "CIRCLE_INVITATION_APPROVED",
     "CIRCLE_INVITATION_REJECTED",
     "CIRCLE_ADMIN_OVERRIDE_APPROVED",
-    "CIRCLE_POST_PUBLISHED",
     "CIRCLE_POST_AUTO_ENDED",
     "CIRCLE_POST_COLLABORATION_RECOGNIZED",
   ]) {
@@ -117,7 +116,7 @@ test("refreshing one bell never drops the other bell's rows", () => {
   const { useNotificationCenterStore } = load(STORE);
   const store = useNotificationCenterStore.getState();
 
-  const circleRow = notification("c1", "CIRCLE_POST_PUBLISHED", {
+  const circleRow = notification("c1", "CIRCLE_POST_AUTO_ENDED", {
     createdAt: "2026-08-15T02:00:00.000Z",
   });
   const staleMoment = notification("m1", "TRACE_LIKE", {

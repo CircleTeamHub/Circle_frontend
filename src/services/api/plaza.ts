@@ -255,6 +255,11 @@ export async function fetchMyPostSignups(
   };
 }
 
+/** 告诉服务端用户打开了圈子帖子列表，飞机红点从此刻重新算。 */
+export async function markCirclePlazaSeen(): Promise<void> {
+  await apiClient<void>('/circle-plaza/seen', { method: 'POST' });
+}
+
 export async function markMyPostSignupsRead(
   postId: string,
 ): Promise<{ count: number }> {

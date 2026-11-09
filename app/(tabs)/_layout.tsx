@@ -7,8 +7,10 @@ import { useTranslation } from 'react-i18next';
 import {
   FloatingTabBar,
   TAB_KEYS,
+  useCirclePlazaDotVisible,
   useTabBadgeMap,
 } from '@/components/app/floating-tab-bar';
+import { openCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 import { useTabBarBridgeStore } from '@/stores/tabBarBridgeStore';
 
 // 原生端：tab bar 由各 tab 首页自己渲染（TabRootScreen），这里只把导航器
@@ -33,6 +35,7 @@ export default function TabLayout() {
   // 仅 Web 使用：全局浮层在深层页面隐藏。
   const hideTabBar = segments.length > 2;
   const badgeMap = useTabBadgeMap();
+  const plazaDotVisible = useCirclePlazaDotVisible();
 
   return (
     <Tabs
@@ -52,6 +55,8 @@ export default function TabLayout() {
       {TAB_KEYS.map((tab) => {
         const label = t(tab.key);
         const badgeCount = badgeMap[tab.name] ?? 0;
+        const unreadHint = badgeCount > 0 ? t('tabs.unreadCount', { count: badgeCount }) : null;
+        const updateHint = tab.name === 'discover' && plazaDotVisible ? t('tabs.hasUpdate') : null;
         return (
           <Tabs.Screen
             key={tab.name}
@@ -60,6 +65,7 @@ export default function TabLayout() {
               // 点击 tab 始终回到该 tab 的首页（而非上次停留的子页面）：
               // 把该 tab 的内嵌栈 popToTop。无论当前是否在该 tab 都生效。
               tabPress: () => {
+                if (route.name === 'discover') openCirclePlazaUpdate();
                 const navState = navigation.getState();
                 const tabRoute = navState.routes.find(
                   (r: { name: string }) => r.name === route.name,
@@ -77,9 +83,7 @@ export default function TabLayout() {
             })}
             options={{
               // 视觉文字由自绘 tab bar 渲染；这里只补屏幕阅读器标签（含未读提示）。
-              tabBarAccessibilityLabel: badgeCount > 0
-                ? `${label} ${t('tabs.unreadCount', { count: badgeCount })}`
-                : label,
+              tabBarAccessibilityLabel: [label, unreadHint ?? updateHint].filter(Boolean).join(' '),
             }}
           />
         );

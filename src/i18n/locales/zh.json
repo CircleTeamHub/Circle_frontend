@@ -241,6 +241,7 @@
     "circles": "圈子",
     "explore": "探索",
     "profile": "我的",
+    "hasUpdate": "有更新",
     "unreadCount": "{{count}} 条未读"
   },
   "explore": {
@@ -393,7 +394,6 @@
       "CIRCLE_INVITATION_APPROVED": "你在「{{circle}}」的邀请已全部通过",
       "CIRCLE_INVITATION_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请",
-      "CIRCLE_POST_PUBLISHED": "在圈子发布了新活动",
       "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子",
       "CIRCLE_POST_AUTO_ENDED": "活动已结束，请选择合作认可对象",
       "CIRCLE_POST_COLLABORATION_RECOGNIZED": "认可了你的活动协作"
@@ -1324,7 +1324,7 @@
       "stepsTitle": "怎么玩",
       "step1": "发起活动：在圈子发帖，可设置有效期（1/3/7 天）和报名门槛，支持同时发到多个圈子和城市。",
       "step2": "报名参加：看到感兴趣的活动点「报名」，满足门槛即可加入，报名后随时可取消。",
-      "step3": "及时提醒：圈子有新活动会弹横幅通知，方便第一时间报名（可在本页的通知开关里调整）。",
+      "step3": "及时提醒：圈子有新活动时，底部的飞机图标会亮红点，点进来就能看到最新活动（可在本页的通知开关里调整）。",
       "step4": "结束认可：活动结束后，发起人可认可最多 3 位优秀参与者，被认可者会收到通知，并获得点赞与徽章。"
     },
     "filter": {

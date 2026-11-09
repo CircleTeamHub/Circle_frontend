@@ -102,18 +102,6 @@ export function getSnackbarRoute(
     }
   }
 
-  // 圈子新帖发布 → 直达帖子详情页，方便及时报名（收件人是成员，不能进作者专属的
-  // 报名管理页）。
-  if (item.type === 'CIRCLE_POST_PUBLISHED' && item.fromCirclePost?.id) {
-    return {
-      pathname:
-        options.scope === 'discover'
-          ? '/(tabs)/discover/plaza-post-detail'
-          : '/(tabs)/messages/plaza-post-detail',
-      params: { id: item.fromCirclePost.id },
-    };
-  }
-
   if (
     (item.type === 'CIRCLE_POST_SIGNUP_CREATED' ||
       item.type === 'CIRCLE_POST_AUTO_ENDED') &&

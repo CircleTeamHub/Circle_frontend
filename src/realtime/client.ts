@@ -53,6 +53,7 @@ type BadgeSnapshotPayload = {
   momentsUnread?: number;
   circleUnread?: number;
   signupUnread?: number;
+  circlePlazaHasUpdate?: boolean;
   profileUnread?: number;
 };
 
@@ -115,6 +116,10 @@ type RealtimeEvent =
   | {
       type: 'system.notification.created';
       payload?: { content?: string };
+    }
+  | {
+      type: 'circle.plaza.unread.changed';
+      payload?: { hasUpdate?: unknown };
     }
   | {
       type: 'moments.feed.updated';
@@ -466,6 +471,7 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     circleUnread: gated.circleUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
+    circlePlazaHasUpdate: snapshot.circlePlazaHasUpdate,
   });
 }
 
@@ -599,6 +605,13 @@ function handleRealtimeEvent(message: RealtimeEvent) {
     }
     case 'circle.signup.unread.changed':
       badgeStore.setSignupUnread(message.payload?.count ?? 0);
+      return;
+    case 'circle.plaza.unread.changed':
+      if (typeof message.payload?.hasUpdate !== 'boolean') {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
+      }
+      badgeStore.setCirclePlazaHasUpdate(message.payload.hasUpdate);
       return;
     case 'membership.status.changed':
       refreshCurrentUserSummaryBestEffort();
@@ -793,6 +806,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
       circleUnread: notificationSummary.circleUnread,
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
+      circlePlazaHasUpdate: notificationSummary.circlePlazaHasUpdate,
     });
   } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.

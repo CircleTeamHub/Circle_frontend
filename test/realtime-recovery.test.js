@@ -266,6 +266,24 @@ test('realtime recovery backfills missed interactive notifications after reconne
   assert.equal(badgeStore.discoverUnread, 1);
 });
 
+test('REST 恢复把飞机红点一起带回来（App 关着时发的帖也要亮）', async () => {
+  const harness = loadRecoveryHarness({
+    fetchNotificationUnreadSummary: async () => ({
+      discoverUnread: 0,
+      momentsUnread: 0,
+      circleUnread: 0,
+      profileUnread: 0,
+      totalUnread: 0,
+      circlePlazaHasUpdate: true,
+    }),
+    fetchNotifications: async () => ({ items: [], nextCursor: null }),
+  });
+
+  await harness.client.recoverTabBadgeSnapshot({ force: true });
+
+  assert.equal(harness.badgeStore.circlePlazaHasUpdate, true);
+});
+
 test('newer forced recovery wins when an older request resolves last', async () => {
   const olderSummary = deferred();
   const newerSummary = deferred();

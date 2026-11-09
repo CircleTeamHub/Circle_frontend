@@ -93,10 +93,7 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
   }
 
   // 圈子新帖发布 → 帖子详情页，方便及时报名（成员视角，非作者报名管理页）。
-  if (
-    postId &&
-    (route === 'plaza-post' || type === 'CIRCLE_POST_PUBLISHED')
-  ) {
+  if (postId && route === 'plaza-post') {
     return {
       pathname: '/(tabs)/messages/plaza-post-detail',
       params: { id: postId },

@@ -30,6 +30,7 @@ export const HTTP_ROUTE_TEMPLATES: readonly string[] = [
   "/circle-plaza/me/posts/:id/collaboration-recognitions",
   "/circle-plaza/me/posts/:id/signups",
   "/circle-plaza/me/signups/unread-count",
+  "/circle-plaza/seen",
   "/mall/fancy-numbers/custom/purchase",
   "/mall/fancy-numbers/custom/switch",
   "/auth/password/reset",
