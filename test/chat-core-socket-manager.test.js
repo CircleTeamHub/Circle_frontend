@@ -291,6 +291,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     syncResets: 0,
     syncResumes: 0,
     tokenRefreshes: 0,
+    rejectedTokens: [],
     pendingMediaPrunes: [],
     initialHistory: [],
     privacyFetches: 0,
@@ -350,8 +351,9 @@ function loadManager(localDbOverrides = {}, options = {}) {
     },
     '@/services/api/client': {
       isDefinitiveAuthFailure: (error) => error?.definitive === true,
-      refreshSessionAccessToken: () => {
+      refreshSessionAccessToken: (rejectedToken) => {
         apiCalls.tokenRefreshes += 1;
+        apiCalls.rejectedTokens.push(rejectedToken);
         return options.refreshToken
           ? options.refreshToken()
           : Promise.resolve('fresh-token');
@@ -917,6 +919,8 @@ test('an access token that has already expired is refreshed instead of handshaki
   // 拿过期 token 握手只会被拒,而被拒的握手 socket.io 不会自己重连。
   assert.equal(captured.url, null);
   assert.equal(apiCalls.tokenRefreshes, 1);
+  // 带上被拒的 token:REST 那边要是已经换过了,就不用再转一次 refresh token。
+  assert.deepEqual(apiCalls.rejectedTokens, ['expired-jwt']);
   assert.equal(store.connecting, false);
   // 本地水合与账号身份照常建立:离线时列表和历史仍然能看。
   assert.equal(store.currentUserId, 'u1');

@@ -60,9 +60,7 @@ interface AuthState {
   refreshToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
-  // An ambiguous result requires fresh credentials; an in-flight UUID alone
-  // does not show recovery UI until a failed outcome or the next cold start.
-  refreshUncertain: boolean;
+  // 进行中或结果未确认的那次续签的尝试 ID，发请求前先落盘。下次续签沿用它，服务端才认得出是重试。
   refreshAttemptId: string | null;
   onboardingRequired: boolean;
   // Runtime-only auth session identity generation. This advances when a session
@@ -74,12 +72,10 @@ interface AuthState {
   setSession: (
     tokens: { accessToken: string; refreshToken: string },
     user: AuthUser,
-    options?: { onboardingRequired?: boolean; refreshUncertain?: boolean }
+    options?: { onboardingRequired?: boolean; refreshAttemptId?: string | null }
   ) => void;
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>;
   prepareRefresh: (requestId: string) => Promise<void>;
-  markRefreshUncertain: (requestId?: string) => Promise<void>;
-  releaseRefreshAttempt: (requestId: string) => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: (options?: { preserveLoading?: boolean }) => void;
@@ -95,7 +91,6 @@ function partializeAuthState(state: AuthState) {
     refreshToken: state.refreshToken,
     user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
-    refreshUncertain: state.refreshUncertain,
     refreshAttemptId: state.refreshAttemptId,
     onboardingRequired: state.onboardingRequired,
   };
@@ -118,7 +113,6 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       user: null,
       isAuthenticated: false,
-      refreshUncertain: false,
       refreshAttemptId: null,
       onboardingRequired: false,
       sessionEpoch: 0,
@@ -131,8 +125,7 @@ export const useAuthStore = create<AuthState>()(
           refreshToken,
           user,
           isAuthenticated: true,
-          refreshUncertain: options?.refreshUncertain ?? false,
-          refreshAttemptId: null,
+          refreshAttemptId: options?.refreshAttemptId ?? null,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
           sessionEpoch: state.sessionEpoch + 1,
@@ -143,19 +136,11 @@ export const useAuthStore = create<AuthState>()(
           accessToken,
           refreshToken,
           isAuthenticated: true,
-          refreshUncertain: false,
           refreshAttemptId: null,
         }));
       },
 
-      markRefreshUncertain: async (requestId) => {
-        await set((state) => ({ refreshUncertain: true, refreshAttemptId: requestId ?? state.refreshAttemptId }));
-      },
       prepareRefresh: async (requestId) => { await set({ refreshAttemptId: requestId }); },
-      // 只解除这一次尝试的围栏；期间若已换成别的尝试或新会话，不动它。
-      releaseRefreshAttempt: async (requestId) => {
-        await set((state) => (state.refreshAttemptId === requestId ? { refreshAttemptId: null } : {}));
-      },
 
       setUser: (user) => set({ user }),
 
@@ -168,7 +153,6 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           user: null,
           isAuthenticated: false,
-          refreshUncertain: false,
           refreshAttemptId: null,
           onboardingRequired: false,
           isLoading: options?.preserveLoading ? state.isLoading : false,
@@ -213,7 +197,6 @@ export const useAuthStore = create<AuthState>()(
         return {
           ...currentState,
           ...persisted,
-          refreshUncertain: persisted.refreshUncertain === true || Boolean(refreshAttemptId),
           refreshAttemptId,
         };
       },
@@ -245,7 +228,7 @@ export const useAuthStore = create<AuthState>()(
           typeof live.refreshToken === 'string' &&
           live.refreshToken.length > 0;
         if (memoryHasLiveSession) {
-          if (live.refreshUncertain && live.refreshAttemptId) {
+          if (live.refreshAttemptId) {
             const context = {
               endpointPath: '/auth/refresh', method: 'POST', stage: 'restore',
               clientRequestId: live.refreshAttemptId, sessionPreserved: true,

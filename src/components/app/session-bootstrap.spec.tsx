@@ -141,16 +141,14 @@ test('a backend 5xx on cold start keeps the session', async () => {
   expect(mockClearLocalSession).not.toHaveBeenCalled();
 });
 
-test.each([201, 0])('an uncertain refresh on cold start keeps cached auth (status %s)', async status => {
-  mockAuth.state.refreshUncertain = true;
-  mockFetchCurrentUser.mockRejectedValue(new ApiError('sign in again', {
+test.each([201, 0])('an unconfirmed refresh on cold start keeps cached auth (status %s)', async status => {
+  mockFetchCurrentUser.mockRejectedValue(new ApiError('try again', {
     status, failureKind: 'refresh-response-invalid',
   }));
   render(<SessionBootstrap />);
   await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
   expect(mockClearLocalSession).not.toHaveBeenCalled();
   expect(mockAuth.state.isAuthenticated).toBe(true);
-  expect(mockAuth.state.refreshUncertain).toBe(true);
 });
 
 // 反面：服务端明确否认凭证时必须照常登出，否则用户会卡在一个死会话里。

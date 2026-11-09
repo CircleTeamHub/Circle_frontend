@@ -900,7 +900,7 @@ function openRealtimeSocket(normalizedToken: string) {
     if (isTokenExpiredClose(event)) {
       // 刷新成功后 token 变化会驱动 connectRealtime(新 token);刷新失败(断网等)
       // 仍走下面的退避重连兜底,服务端明确否认会话时 API 层会清掉登录态。
-      void refreshSessionAccessToken().catch((error: unknown) =>
+      void refreshSessionAccessToken(normalizedToken).catch((error: unknown) =>
         reportHandledFailure('realtime', 'tokenRefreshOnExpiry', error),
       );
     }

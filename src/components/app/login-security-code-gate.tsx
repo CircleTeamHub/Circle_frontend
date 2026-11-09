@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useSegments } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
@@ -21,7 +21,6 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
-import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -85,9 +84,6 @@ export function LoginSecurityCodeGate() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
-  const refreshUncertain = useAuthStore((state) => state.refreshUncertain);
-  const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
-  const segments = useSegments();
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const [gateState, setGateState] = useState<GateState>('unlocked');
   // 应用锁状态是替哪个账号确认的（拉到状态 / 失败兜底）。与当前账号不一致——冷启动、
@@ -241,9 +237,7 @@ export function LoginSecurityCodeGate() {
     !isLoading &&
     !onboardingRequired &&
     (gateState === 'locked' || gateState === 'verifying');
-  // Show only the credential form during explicit recovery; navigating back
-  // immediately restores the lock, and approval actions remain blocked.
-  const visible = locked && !(refreshUncertain && addingAccount && segments[0] === '(auth)');
+  const visible = locked;
 
   // 应用锁没解开时，陌生设备登录的批准弹窗不能出来（否则拿到手机的人能直接点同意）。
   const lockStatusKnown = lockStatusUserId !== null && lockStatusUserId === userId;

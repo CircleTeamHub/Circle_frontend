@@ -17,8 +17,6 @@ type AuthRouteDecisionInput = {
   accountSwitching?: boolean;
   /** 「添加账号」:当前账号仍登着,放它进 (auth) 页登录另一个号。 */
   addingAccount?: boolean;
-  /** Explicit recovery may enter authentication without deleting cached data. */
-  sessionRecoveryRequired?: boolean;
 };
 
 export function getAuthRouteDecision({
@@ -29,7 +27,6 @@ export function getAuthRouteDecision({
   onboardingRequired,
   accountSwitching = false,
   addingAccount = false,
-  sessionRecoveryRequired = false,
 }: AuthRouteDecisionInput): AuthRouteDecision {
   if (accountSwitching) return { type: 'allow' };
 
@@ -47,7 +44,6 @@ export function getAuthRouteDecision({
   }
 
   if (onboardingRequired) {
-    if (isAuthRoute && addingAccount && sessionRecoveryRequired) return { type: 'allow' };
     return isOnboardingRoute
       ? { type: 'allow' }
       : { type: 'redirect', href: '/(onboarding)/profile' };

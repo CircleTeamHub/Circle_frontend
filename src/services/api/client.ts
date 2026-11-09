@@ -512,7 +512,7 @@ async function executeRequest<T>(
     );
     if (!res.ok) failureKind = 'http';
     else if (isWrappedResponse(payload) && payload.code !== 0) failureKind = 'api-code';
-    return { res, payload, requestId, clientRequestId, responseRequestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
+    return { res, payload, requestId, clientRequestId, responseRequestId, accessToken, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
   } catch (error) {
     if (error instanceof ApiError) {
       // 卡过的请求被放弃（备份赢了）或耗尽预算：标成 stalled，上报时与普通超时分开。
@@ -630,16 +630,12 @@ async function refreshAccessToken(sessionEpoch: number) {
   }
 
   assertSessionEpoch(sessionEpoch);
-  if (useAuthStore.getState().refreshUncertain) {
-    throw new ApiError(
-      i18n.t('common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
-      { status: 0, failureKind: 'refresh-outcome-unknown' },
-    );
-  }
 
   let refreshResponseStatus: number | undefined;
   let refreshResponseDetails: SessionDiagnosticContext = {};
-  const refreshRequestId = createHttpRequestId();
+  // 上一次续签没确认结果（超时、断流、进程被杀）就沿用它的尝试 ID：服务端据此认出这是重试，
+  // 作废没送到的新令牌再发一个，而不是当成令牌被盗吊销整组会话。
+  const refreshRequestId = useAuthStore.getState().refreshAttemptId ?? createHttpRequestId();
   let stage = 'prepare';
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
@@ -670,9 +666,10 @@ async function refreshAccessToken(sessionEpoch: number) {
         method: 'POST',
         body: { refreshToken },
         auth: false,
-        ...(stableDeviceId
-          ? { headers: { 'X-Stable-Device-Id': stableDeviceId } }
-          : {}),
+        headers: {
+          'Idempotency-Key': refreshRequestId,
+          ...(stableDeviceId ? { 'X-Stable-Device-Id': stableDeviceId } : {}),
+        },
       },
       undefined,
       { preparedRequestId: refreshRequestId },
@@ -700,7 +697,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       // This is an unusable response, not a server authentication rejection.
       throw new ApiError(
         i18n.t('common.errors.refreshResponseInvalid', {
-          defaultValue: '暂时无法更新登录状态，请重新登录后再试',
+          defaultValue: '暂时无法更新登录状态，请稍后重试',
         }),
         {
           status: res.status,
@@ -726,25 +723,11 @@ async function refreshAccessToken(sessionEpoch: number) {
     .catch(async (error) => {
       assertSessionEpoch(sessionEpoch);
       const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus ?? error.status : undefined);
-      // 连接都没建成（离线、电梯里、切 Wi-Fi）：保留会话、解除围栏，下次照常续签。
-      // 就算服务端其实已经轮换，重放也只撤销本设备这一个会话族，结果和围栏一样是
-      // 重新登录；而远更常见的离线回前台，就不必逼用户输密码。超时 / 5xx / 网关
-      // 这类请求确实到过服务器的不确定结果，仍走下面的围栏。
-      if (stage === 'request' && error instanceof ApiError && error.failureKind === 'network') {
-        try {
-          await useAuthStore.getState().releaseRefreshAttempt(refreshRequestId);
-        } catch {
-          reportError(new Error('Authentication refresh fence could not be released'), {
-            operation: 'session', kind: 'refreshStatePersist',
-          });
-        }
-        assertSessionEpoch(sessionEpoch);
-        throw error;
-      }
+      // 超时、断流、5xx、限流都说明不了服务端有没有轮换：会话和盘上的尝试 ID 都留着，
+      // 下次续签带同一 ID 重试，不用把用户赶回登录页。
       if (!isDefinitiveAuthFailure(error)) {
         const invalidResponse = stage === 'request' && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300;
         const state = useAuthStore.getState();
-        const persistence = state.markRefreshUncertain(refreshRequestId);
         const context: SessionDiagnosticContext = {
           endpointPath: '/auth/refresh', method: 'POST', status: responseStatus, stage,
           requestId: error instanceof ApiError ? error.requestId : undefined,
@@ -756,25 +739,17 @@ async function refreshAccessToken(sessionEpoch: number) {
           hasRefreshToken: Boolean(state.refreshToken), sessionPreserved: true,
         };
         const diagnosticId = recordSessionDiagnostic(invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown', context);
+        if (!invalidResponse) throw error;
         reportError(new Error('Authentication refresh outcome unavailable'), {
-          ...context, diagnosticId, operation: 'session', kind: invalidResponse ? 'refreshResponseInvalid' : 'refreshOutcomeUnknown',
+          ...context, diagnosticId, operation: 'session', kind: 'refreshResponseInvalid',
         });
-        try {
-          await persistence;
-        } catch {
-          reportError(new Error('Authentication refresh recovery state could not be persisted'), {
-            diagnosticId, operation: 'session', kind: 'refreshStatePersist',
-          });
-        }
-        assertSessionEpoch(sessionEpoch);
         throw new ApiError(
-          i18n.t(invalidResponse ? 'common.errors.refreshResponseInvalid' : 'common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
-          { status: responseStatus ?? 0, failureKind: invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown',
+          i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请稍后重试' }),
+          { status: responseStatus, failureKind: 'refresh-response-invalid',
             reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: context.requestId, clientRequestId: refreshRequestId, durationMs: context.durationMs },
         );
       }
-      // Only an explicit server rejection clears the session. Ambiguous failures
-      // retain the session and fence the credential rather than replaying it.
+      // Only an explicit server rejection clears the session.
       if (
         isDefinitiveAuthFailure(error) &&
         useAuthStore.getState().sessionEpoch === sessionEpoch
@@ -811,14 +786,21 @@ async function refreshAccessToken(sessionEpoch: number) {
  * 断开的连接不会自己重连 —— 只靠「下一次 REST 请求碰巧 401」来刷新的话,停在一个
  * 不发 REST 的页面上就会一直收不到消息。与 401 路径共用单飞与会话世代闸;
  * 刷新失败时的会话清理语义不变(服务端明确否认 refresh token 才清 session)。
+ *
+ * rejectedAccessToken 是被服务端拒绝的那个 token:握手比 REST 慢,回来时 token 可能已经
+ * 被 REST 那边换过了。换过就不再轮换,session-bootstrap 看到新 token 会带着它重连。
  */
-export function refreshSessionAccessToken(): Promise<string> {
-  return refreshAccessToken(useAuthStore.getState().sessionEpoch);
+export function refreshSessionAccessToken(rejectedAccessToken?: string): Promise<string> {
+  const { accessToken, sessionEpoch } = useAuthStore.getState();
+  if (rejectedAccessToken && accessToken && accessToken !== rejectedAccessToken) {
+    return Promise.resolve(accessToken);
+  }
+  return refreshAccessToken(sessionEpoch);
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   // Auth anomalies are captured once at their decision boundary.
-  if (error instanceof ApiError && ['refresh-response-invalid', 'refresh-outcome-unknown', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
+  if (error instanceof ApiError && ['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
@@ -1026,13 +1008,26 @@ async function requestOnce<T>(
   // 卡顿已按「第一次的现场」报过时，不再把第二次的失败重复报一次。
   const transportReport = { done: false };
   try {
-    const initialRequest = isGet
+    let initialRequest = isGet
       ? await sendGet<T>(endpoint, options, sessionUnchanged, transportReport)
       : await executeRequest<T>(endpoint, options);
 
     // An authenticated current-password check can fail without invalidating the session.
-    if (initialRequest.res.status === 401 && auth && retryOnAuthError &&
-      (initialRequest.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT') {
+    const rejectedBySession = (request: ExecutedRequest<T>) =>
+      request.res.status === 401 && auth && retryOnAuthError &&
+      (request.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT';
+
+    // 发出时用的 token 已经被别的请求换掉了:这个 401 说明不了现在的 token,先换上它重发。
+    // 直接再续签只会多轮换一次,多一段「续签中进程结束,下次启动要重新登录」的窗口。
+    // 重发还被拒才交给下面的正常续签,这里不判登出。
+    const latestAccessToken = useAuthStore.getState().accessToken;
+    if (requestSessionEpoch !== null && rejectedBySession(initialRequest) &&
+      latestAccessToken && latestAccessToken !== initialRequest.accessToken) {
+      assertSessionEpoch(requestSessionEpoch);
+      initialRequest = await executeRequest<T>(endpoint, options, latestAccessToken);
+    }
+
+    if (rejectedBySession(initialRequest)) {
       if (requestSessionEpoch === null) {
         throw sessionChangedError();
       }

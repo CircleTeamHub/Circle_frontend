@@ -58,9 +58,9 @@ test('retry returns the value on the first successful attempt without delay', as
   assert.ok(elapsed < 50, `should not delay on success (took ${elapsed}ms)`);
 });
 
-test('retry does not replay operations after an uncertain refresh requiring fresh credentials', async () => {
+test('retry does not replay operations after a malformed refresh response', async () => {
   const { retry, FakeApiError } = loadRetryModule();
-  for (const failureKind of ['refresh-response-invalid', 'refresh-outcome-unknown']) {
+  for (const failureKind of ['refresh-response-invalid']) {
     for (const status of [201, 0]) {
       let calls = 0;
       const error = new FakeApiError('sign in again', status);

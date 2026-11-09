@@ -34,7 +34,6 @@ import {
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
-import { SessionRecoveryPrompt } from '@/components/app/session-recovery-prompt';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
@@ -293,7 +292,6 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   );
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const accountSwitching = useAccountSwitcherStore((state) => state.switching);
-  const sessionRecoveryRequired = useAuthStore((state) => state.refreshUncertain);
   const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
   const { colors } = useTheme();
   const decision = getAuthRouteDecision({
@@ -303,7 +301,6 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     hasCachedSession,
     onboardingRequired,
     accountSwitching,
-    sessionRecoveryRequired,
     addingAccount,
   });
 
@@ -447,7 +444,6 @@ function RootLayout() {
           <LoginSecurityCodeGate />
           {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
           <AppDialogHost />
-          <SessionRecoveryPrompt />
           {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
           {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>
