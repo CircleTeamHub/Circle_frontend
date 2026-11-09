@@ -138,6 +138,15 @@ test('push notification data resolves to app routes with anchors', () => {
     assert.equal(signupRoute.params.postId, 'post-7');
   }
 
+  // New-post pushes are no longer sent, but ones delivered before the upgrade stay in the tray.
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(resolvePushNotificationRoute({
+      type: 'CIRCLE_POST_PUBLISHED',
+      postId: 'post-1',
+    }))),
+    { pathname: '/(tabs)/messages/plaza-post-detail', params: { id: 'post-1' } },
+  );
+
   const profileLikeRoute = resolvePushNotificationRoute({
     type: 'PROFILE_LIKE',
     fromUserId: 'user / 8',

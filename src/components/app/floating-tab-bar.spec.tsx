@@ -29,6 +29,18 @@ jest.mock('@/features/discover/store/use-discover-store', () => ({
   useDiscoverStore: (selector: (state: { plazaMembershipRequired: boolean }) => unknown) =>
     selector({ plazaMembershipRequired: mockMembershipRequired }),
 }));
+let mockVipLevel = 1;
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { vipLevel: number } }) => unknown) =>
+    selector({ user: { vipLevel: mockVipLevel } }),
+}));
+let mockProgramStatus: { enabled: boolean } | null = null;
+const mockFetchProgramStatus = jest.fn();
+jest.mock('@/stores/membershipProgramStore', () => ({
+  useMembershipProgramStore: (
+    selector: (state: { status: { enabled: boolean } | null; fetchStatus: () => void }) => unknown,
+  ) => selector({ status: mockProgramStatus, fetchStatus: mockFetchProgramStatus }),
+}));
 jest.mock('@/hooks/use-desktop-split-layout', () => ({
   useDesktopSplitLayout: () => false,
 }));
@@ -66,6 +78,9 @@ function renderBar() {
 
 beforeEach(() => {
   mockMembershipRequired = false;
+  mockVipLevel = 1;
+  mockProgramStatus = null;
+  mockFetchProgramStatus.mockClear();
   useTabBadgeStore.getState().reset();
   useCircleNotificationStore.setState({ globalEnabled: true });
 });
@@ -101,6 +116,38 @@ it('stays dark for someone the feed has told to upgrade', () => {
   useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
   renderBar();
   expect(screen.queryByTestId(DOT)).toBeNull();
+});
+
+describe('level-0 members, whom the feed would send to the upgrade wall', () => {
+  beforeEach(() => {
+    mockVipLevel = 0;
+    useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
+  });
+
+  it('stays dark once the program is on, before the feed has ever answered', () => {
+    mockProgramStatus = { enabled: true };
+    renderBar();
+    expect(screen.queryByTestId(DOT)).toBeNull();
+  });
+
+  it('stays dark and looks the program up while its status is unknown', () => {
+    renderBar();
+    expect(screen.queryByTestId(DOT)).toBeNull();
+    expect(mockFetchProgramStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('lights up while the program is off, because the feed is open to them', () => {
+    mockProgramStatus = { enabled: false };
+    renderBar();
+    expect(screen.getByTestId(DOT)).toBeTruthy();
+  });
+});
+
+it('never looks the program up for a paying member', () => {
+  useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
+  renderBar();
+  expect(screen.getByTestId(DOT)).toBeTruthy();
+  expect(mockFetchProgramStatus).not.toHaveBeenCalled();
 });
 
 it('honours the circle notification master switch', () => {

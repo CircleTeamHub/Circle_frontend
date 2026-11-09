@@ -30,6 +30,8 @@ import {
   useCircleNotificationStore,
 } from '@/features/discover/store/use-circle-notification-store';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
+import { useAuthStore } from '@/stores/authStore';
+import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTheme, withAlpha } from '@/theme';
@@ -699,7 +701,15 @@ export function useCirclePlazaDotVisible(): boolean {
   const allowed = useCircleNotificationStore(circleBadgeAllowed);
   // 列表接口已经说要开会员才能看：点进去只有升级墙，红点没有意义。
   const membershipRequired = useDiscoverStore((state) => state.plazaMembershipRequired);
-  return hasUpdate && allowed && !membershipRequired;
+  // 上面那个状态要等列表接口回过话，0 级用户冷启动时还是 false：先确认会员门槛没开才亮。
+  const isLevelZero = useAuthStore((state) => (state.user?.vipLevel ?? 0) <= 0);
+  const programEnabled = useMembershipProgramStore((state) => state.status?.enabled);
+  const fetchProgramStatus = useMembershipProgramStore((state) => state.fetchStatus);
+  const needsProgramStatus = hasUpdate && isLevelZero;
+  useEffect(() => {
+    if (needsProgramStatus) void fetchProgramStatus();
+  }, [needsProgramStatus, fetchProgramStatus]);
+  return hasUpdate && allowed && !membershipRequired && (!isLevelZero || programEnabled === false);
 }
 
 interface FloatingTabBarProps {
