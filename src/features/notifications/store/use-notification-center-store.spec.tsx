@@ -5,7 +5,7 @@ test('logout reset clears notifications from every domain and author signup post
   const store = useNotificationCenterStore.getState();
   store.setInteractive([
     { id: 'private-moment', type: 'TRACE_LIKE' } as NotificationItem,
-    { id: 'private-circle', type: 'CIRCLE_POST_PUBLISHED' } as NotificationItem,
+    { id: 'private-circle', type: 'CIRCLE_POST_AUTO_ENDED' } as NotificationItem,
   ]);
   store.setSignupPosts([{ id: 'private-post', unreadSignupCount: 2 } as MyCirclePost]);
 

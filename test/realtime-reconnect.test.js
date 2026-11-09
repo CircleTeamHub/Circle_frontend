@@ -170,7 +170,6 @@ function loadRealtimeHarness(options = {}) {
               'CIRCLE_INVITATION_APPROVED',
               'CIRCLE_INVITATION_REJECTED',
               'CIRCLE_ADMIN_OVERRIDE_APPROVED',
-              'CIRCLE_POST_PUBLISHED',
               'CIRCLE_POST_AUTO_ENDED',
               'CIRCLE_POST_COLLABORATION_RECOGNIZED',
             ]),
@@ -231,6 +230,7 @@ function loadRealtimeHarness(options = {}) {
               setDiscoverUnread: recordBadge('discoverUnread'),
               setMomentsUnread: recordBadge('momentsUnread'),
               setCircleUnread: recordBadge('circleUnread'),
+              setCirclePlazaHasUpdate: recordBadge('circlePlazaHasUpdate'),
               setSignupUnread: () => {},
               setProfileUnread: () => {},
               setSystemUnread: () => {},
@@ -622,6 +622,35 @@ function connectedHarness(options) {
   openLatestSocket(harness);
   return harness;
 }
+
+test('发帖信号点亮飞机红点，看过的信号熄灭它，格式不对的帧不碰状态', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: false });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: 'yes' });
+
+  assert.deepEqual(
+    [...harness.badgeWrites]
+      .filter((write) => write.kind === 'circlePlazaHasUpdate')
+      .map((write) => write.value),
+    [true, false],
+  );
+  assert.equal(harness.sentryReports.length, 1);
+});
+
+test('badge.snapshot 帧把飞机红点带进展示层', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: true });
+
+  const snapshot = harness.badgeWrites.find((write) => write.kind === 'snapshot');
+  assert.equal(snapshot.value.circlePlazaHasUpdate, true);
+});
 
 test('总闸开着时圈子未读原样进展示层', () => {
   const harness = connectedHarness();

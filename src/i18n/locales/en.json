@@ -240,6 +240,7 @@
     "circles": "Circles",
     "explore": "Explore",
     "profile": "Me",
+    "hasUpdate": "new updates",
     "unreadCount": "{{count}} unread"
   },
   "explore": {
@@ -392,7 +393,6 @@
       "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
-      "CIRCLE_POST_PUBLISHED": "posted a new activity in your circle",
       "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post",
       "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize",
       "CIRCLE_POST_COLLABORATION_RECOGNIZED": "recognized your collaboration"
@@ -1327,7 +1327,7 @@
       "stepsTitle": "How to play",
       "step1": "Start an activity: post in a circle, set how long it runs (1/3/7 days) and any sign-up requirements, and share it to several circles and cities at once.",
       "step2": "Sign up: tap 'Sign up' on an activity you like; join if you meet the requirements, and cancel anytime.",
-      "step3": "Stay in the loop: new activities pop up as a banner so you can sign up right away (toggle it with the switches on this page).",
+      "step3": "Stay in the loop: when there are new activities, a red dot appears on the plane icon at the bottom. Tap it to see the latest (toggle it with the switches on this page).",
       "step4": "Wrap up with recognition: after an activity ends, the host can recognize up to 3 standout participants, who each get a notification, a like, and a badge."
     },
     "filter": {

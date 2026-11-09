@@ -1949,7 +1949,7 @@
       "stepsTitle": "Cómo jugar",
       "step1": "Crea una actividad: publica en un círculo, define su duración (1/3/7 días) y los requisitos de inscripción, y compártela en varios círculos y ciudades a la vez.",
       "step2": "Inscríbete: toca «Inscribirse» en una actividad que te guste; únete si cumples los requisitos y cancela cuando quieras.",
-      "step3": "Entérate al momento: las nuevas actividades aparecen como un banner para inscribirte enseguida (actívalo con los interruptores de esta página).",
+      "step3": "Entérate al momento: cuando hay actividades nuevas, aparece un punto rojo en el icono del avión de abajo. Tócalo para ver las últimas (actívalo con los interruptores de esta página).",
       "step4": "Cierra con reconocimiento: al terminar, el anfitrión puede reconocer hasta 3 participantes destacados, que reciben una notificación, un me gusta y una insignia."
     },
     "filter": {
@@ -2145,7 +2145,6 @@
       "CIRCLE_INVITATION_APPROVED": "tu invitación a {{circle}} fue aprobada por completo",
       "CIRCLE_INVITATION_REJECTED": "se rechazó una plaza de invitación en {{circle}}",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "un administrador aprobó tu solicitud en {{circle}}",
-      "CIRCLE_POST_PUBLISHED": "publicó una nueva actividad en tu círculo",
       "CIRCLE_POST_SIGNUP_CREATED": "se inscribió en tu publicación del círculo",
       "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer",
       "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración"
@@ -3034,6 +3033,7 @@
     "circles": "Círculos",
     "explore": "Explorar",
     "profile": "Yo",
+    "hasUpdate": "hay novedades",
     "unreadCount": "{{count}} sin leer"
   },
   "explore": {

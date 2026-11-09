@@ -25,6 +25,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  circleBadgeAllowed,
+  useCircleNotificationStore,
+} from '@/features/discover/store/use-circle-notification-store';
+import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
+import { useAuthStore } from '@/stores/authStore';
+import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTheme, withAlpha } from '@/theme';
@@ -148,6 +155,7 @@ type TabBarStyles = {
   featuredFill: ViewStyle;
   featuredRim: ViewStyle;
   featuredBadge: ViewStyle;
+  featuredDot: ViewStyle;
   badge: ViewStyle;
   badgeText: TextStyle;
   label: TextStyle;
@@ -335,6 +343,7 @@ const TabSlot = memo(function TabSlot({
 interface FeaturedTabButtonProps {
   focused: boolean;
   badgeCount: number;
+  showUpdateDot: boolean;
   colors: ThemeColors;
   colorScheme: 'light' | 'dark';
   styles: TabBarStyles;
@@ -349,6 +358,7 @@ interface FeaturedTabButtonProps {
 const FeaturedTabButton = memo(function FeaturedTabButton({
   focused,
   badgeCount,
+  showUpdateDot,
   colors,
   colorScheme,
   styles,
@@ -424,6 +434,9 @@ const FeaturedTabButton = memo(function FeaturedTabButton({
             </Text>
           </View>
         ) : null}
+        {showUpdateDot && badgeCount === 0 ? (
+          <View testID="circle-plaza-update-dot" pointerEvents="none" style={styles.featuredDot} />
+        ) : null}
       </Animated.View>
     </Pressable>
   );
@@ -439,12 +452,14 @@ function CustomTabBar({
   colorScheme,
   colors,
   badgeMap,
+  plazaDotVisible,
   styles,
 }: BottomTabBarProps & {
   hidden: boolean;
   colorScheme: 'light' | 'dark';
   colors: ThemeColors;
   badgeMap: Record<string, number>;
+  plazaDotVisible: boolean;
   styles: TabBarStyles;
 }) {
   const { t } = useTranslation();
@@ -616,6 +631,7 @@ function CustomTabBar({
           <FeaturedTabButton
             focused={state.index === featuredEntry.routeIndex}
             badgeCount={badgeMap[featuredEntry.route.name] ?? 0}
+            showUpdateDot={plazaDotVisible}
             colors={colors}
             colorScheme={colorScheme}
             styles={styles}
@@ -679,6 +695,23 @@ export function useTabBadgeMap(): Record<string, number> {
   return badgeMap;
 }
 
+// 飞机红点：圈子帖子列表有更新。跟圈子铃铛的未读一样受「圈子通知」总闸管。
+export function useCirclePlazaDotVisible(): boolean {
+  const hasUpdate = useTabBadgeStore((state) => state.circlePlazaHasUpdate);
+  const allowed = useCircleNotificationStore(circleBadgeAllowed);
+  // 列表接口已经说要开会员才能看：点进去只有升级墙，红点没有意义。
+  const membershipRequired = useDiscoverStore((state) => state.plazaMembershipRequired);
+  // 上面那个状态要等列表接口回过话，0 级用户冷启动时还是 false：先确认会员门槛没开才亮。
+  const isLevelZero = useAuthStore((state) => (state.user?.vipLevel ?? 0) <= 0);
+  const programEnabled = useMembershipProgramStore((state) => state.status?.enabled);
+  const fetchProgramStatus = useMembershipProgramStore((state) => state.fetchStatus);
+  const needsProgramStatus = hasUpdate && isLevelZero;
+  useEffect(() => {
+    if (needsProgramStatus) void fetchProgramStatus();
+  }, [needsProgramStatus, fetchProgramStatus]);
+  return hasUpdate && allowed && !membershipRequired && (!isLevelZero || programEnabled === false);
+}
+
 interface FloatingTabBarProps {
   tabProps: BottomTabBarProps;
   hidden: boolean;
@@ -699,6 +732,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
   // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
   const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
   const badgeMap = useTabBadgeMap();
+  const plazaDotVisible = useCirclePlazaDotVisible();
 
   const styles = useMemo<TabBarStyles>(() => StyleSheet.create({
     // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
@@ -849,6 +883,18 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
       top: 0,
       right: 0,
     },
+    // 贴在圆按钮右上弧线上的小红点：只表示「有更新」，不带数字。
+    featuredDot: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: colors.error,
+      borderWidth: Platform.OS === 'ios' ? 0 : 2,
+      borderColor: colors.surface,
+    },
     badge: {
       position: 'absolute',
       top: -3,
@@ -889,6 +935,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
       colorScheme={resolvedMode}
       colors={colors}
       badgeMap={badgeMap}
+      plazaDotVisible={plazaDotVisible}
       styles={styles}
     />
   );

@@ -16,6 +16,8 @@ export type NotificationUnreadSummary = {
   circleUnread: number;
   profileUnread: number;
   totalUnread: number;
+  /** 飞机 tab 的红点。老后端不返回，此时保持现状而不是当成「没有更新」。 */
+  circlePlazaHasUpdate?: boolean;
 };
 
 export type PushTokenPlatform = 'ios' | 'android' | 'web';
@@ -107,6 +109,10 @@ export async function fetchNotificationUnreadSummary(): Promise<NotificationUnre
     ...summary,
     momentsUnread: optionalUnreadCount(source.momentsUnread),
     circleUnread: optionalUnreadCount(source.circleUnread),
+    circlePlazaHasUpdate:
+      typeof source.circlePlazaHasUpdate === 'boolean'
+        ? source.circlePlazaHasUpdate
+        : undefined,
   };
 }
 

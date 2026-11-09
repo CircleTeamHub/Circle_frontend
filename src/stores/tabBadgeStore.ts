@@ -13,6 +13,7 @@ type TabBadgeSnapshot = {
   circleUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
+  circlePlazaHasUpdate?: boolean;
 };
 
 type TabBadgeState = {
@@ -23,11 +24,13 @@ type TabBadgeState = {
   discoverUnread: number;
   /** 朋友圈铃铛 unread —— 动态点赞/评论/回复/@ + 资料点赞。 */
   momentsUnread: number;
-  /** 圈子铃铛 unread —— 担保验证/入圈审批/圈子帖动态（不含报名）。 */
+  /** 圈子铃铛 unread —— 担保验证/入圈审批/活动结束与认可（不含报名）。 */
   circleUnread: number;
   /** 报名管理 unread (signups on my posts). */
   signupUnread: number;
   profileUnread: number;
+  /** 飞机 tab 的红点：圈子帖子列表有别人发的新帖。只是一个点，不计数。 */
+  circlePlazaHasUpdate: boolean;
   isRealtimeConnected: boolean;
   lastSyncedAt: number | null;
   setMessagesUnread: (count: number) => void;
@@ -38,6 +41,7 @@ type TabBadgeState = {
   setCircleUnread: (count: number) => void;
   setSignupUnread: (count: number) => void;
   setProfileUnread: (count: number) => void;
+  setCirclePlazaHasUpdate: (hasUpdate: boolean) => void;
   applySnapshot: (snapshot: TabBadgeSnapshot) => void;
   setRealtimeConnected: (connected: boolean) => void;
   reset: () => void;
@@ -52,6 +56,7 @@ const initialState = {
   circleUnread: 0,
   signupUnread: 0,
   profileUnread: 0,
+  circlePlazaHasUpdate: false,
   isRealtimeConnected: false,
   lastSyncedAt: null,
 };
@@ -66,6 +71,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
   setCircleUnread: (circleUnread) => set({ circleUnread }),
   setSignupUnread: (signupUnread) => set({ signupUnread }),
   setProfileUnread: (profileUnread) => set({ profileUnread }),
+  setCirclePlazaHasUpdate: (circlePlazaHasUpdate) => set({ circlePlazaHasUpdate }),
   applySnapshot: (snapshot) =>
     set((state) => ({
       messagesUnread: snapshot.messagesUnread ?? state.messagesUnread,
@@ -76,6 +82,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
       circleUnread: snapshot.circleUnread ?? state.circleUnread,
       signupUnread: snapshot.signupUnread ?? state.signupUnread,
       profileUnread: snapshot.profileUnread ?? state.profileUnread,
+      circlePlazaHasUpdate: snapshot.circlePlazaHasUpdate ?? state.circlePlazaHasUpdate,
       lastSyncedAt: Date.now(),
     })),
   setRealtimeConnected: (isRealtimeConnected) => set({ isRealtimeConnected }),

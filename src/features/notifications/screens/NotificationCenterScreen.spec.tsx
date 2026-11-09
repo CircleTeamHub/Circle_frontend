@@ -132,7 +132,7 @@ test.each(['success', 'failure'] as const)('a pending notification page and its 
   expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
   expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
   await act(async () => {
-    if (outcome === 'success') page.resolve({ items: [notification('background-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null });
+    if (outcome === 'success') page.resolve({ items: [notification('background-page', 'CIRCLE_POST_AUTO_ENDED')], nextCursor: null });
     else page.reject(new Error('offline'));
   });
   expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
@@ -165,10 +165,10 @@ test('an old notification page finally cannot clear a new page spinner after sig
   fireEvent.press(screen.getByTestId('list-end'));
   expect(fetchNotificationsPage).toHaveBeenLastCalledWith('fresh-cursor', 'circle');
   expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
-  await act(async () => { old.resolve({ items: [notification('stale-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null }); });
+  await act(async () => { old.resolve({ items: [notification('stale-page', 'CIRCLE_POST_AUTO_ENDED')], nextCursor: null }); });
   expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
   expect(mockAppendPage).not.toHaveBeenCalled();
-  await act(async () => { current.resolve({ items: [notification('current-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null }); });
+  await act(async () => { current.resolve({ items: [notification('current-page', 'CIRCLE_POST_AUTO_ENDED')], nextCursor: null }); });
   expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
   expect(screen.getByText('current-page')).toBeTruthy();
   expect(screen.queryByText('stale-page')).toBeNull();

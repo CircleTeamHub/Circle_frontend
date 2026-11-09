@@ -1941,7 +1941,7 @@
       "stepsTitle": "이용 방법",
       "step1": "활동 열기: 서클에 게시하고 기간(1/3/7일)과 신청 조건을 설정하세요. 여러 서클과 도시에 동시에 올릴 수 있어요.",
       "step2": "신청하기: 관심 있는 활동에서 「신청」을 누르세요. 조건을 충족하면 참여할 수 있고 언제든 취소할 수 있어요.",
-      "step3": "놓치지 않기: 새 활동은 배너로 알려 바로 신청할 수 있어요(이 페이지의 스위치로 켜고 끄기).",
+      "step3": "놓치지 않기: 새 활동이 있으면 하단 비행기 아이콘에 빨간 점이 표시돼요. 누르면 최신 목록을 볼 수 있어요(이 페이지의 스위치로 켜고 끄기).",
       "step4": "인정으로 마무리: 활동이 끝나면 주최자가 우수 참가자를 최대 3명까지 인정할 수 있고, 인정받은 사람은 알림과 좋아요·배지를 받아요."
     },
     "filter": {
@@ -2137,7 +2137,6 @@
       "CIRCLE_INVITATION_APPROVED": "「{{circle}}」 초대가 모두 승인됐어요",
       "CIRCLE_INVITATION_REJECTED": "「{{circle}}」의 초대 자리 하나가 거절됐어요",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "관리자가 「{{circle}}」에서 회원님의 신청을 승인했어요",
-      "CIRCLE_POST_PUBLISHED": "서클에 새 활동을 올렸어요",
       "CIRCLE_POST_SIGNUP_CREATED": "회원님의 서클 게시물에 신청했어요",
       "CIRCLE_POST_AUTO_ENDED": "활동이 종료됐어요. 인정할 협업자를 선택하세요",
       "CIRCLE_POST_COLLABORATION_RECOGNIZED": "회원님의 활동 협업을 인정했어요"
@@ -3026,6 +3025,7 @@
     "circles": "서클",
     "explore": "탐색",
     "profile": "나",
+    "hasUpdate": "새 소식 있음",
     "unreadCount": "읽지 않음 {{count}}개"
   },
   "explore": {

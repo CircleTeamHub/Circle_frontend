@@ -2,6 +2,7 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react-native';
 import { ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { PlazaFeed } from './plaza-feed';
+import { clearCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 
 interface MockDiscoverState {
   plazaPosts: { id: string }[];
@@ -39,6 +40,9 @@ jest.mock('@/features/discover/store/use-discover-store', () => {
   useDiscoverStore.getState = () => mockDiscover;
   return { useDiscoverStore };
 });
+jest.mock('@/features/discover/utils/circle-plaza-update', () => ({
+  clearCirclePlazaUpdate: jest.fn(),
+}));
 jest.mock('zustand/react/shallow', () => ({ useShallow: (selector: unknown) => selector }));
 jest.mock('@/features/discover/store/use-circles-store', () => {
   const state = {
@@ -139,6 +143,13 @@ test('a real pull shows the spinner until that refresh finishes', async () => {
 });
 
 // 圈子 tag 固定在列表上方:不随下拉、刷新或滚动移动。
+test('a pull also clears the plane dot, because the list it loads is the newest', async () => {
+  (clearCirclePlazaUpdate as jest.Mock).mockClear();
+  await renderFeed();
+  act(() => refreshControl().props.onRefresh());
+  expect(clearCirclePlazaUpdate).toHaveBeenCalledTimes(1);
+});
+
 test('the circle tags sit above the list, not inside it', async () => {
   await renderFeed();
   expect(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent).toBeFalsy();
