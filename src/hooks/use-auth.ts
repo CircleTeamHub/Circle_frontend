@@ -447,6 +447,8 @@ export function useAuth() {
               previous.user,
               { onboardingRequired: previous.onboardingRequired, refreshAttemptId: previous.refreshAttemptId },
             );
+            // 上面的 clearLocalSession 清掉了会话分组，恢复原账号要补拉，否则筛选标签一直缺。
+            void useMessageGroupsStore.getState().load();
             useAccountSwitcherStore.getState().setAddingAccount(true);
             router.push(loginRoute);
           } else {

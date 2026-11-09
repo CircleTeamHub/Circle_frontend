@@ -361,6 +361,8 @@ test('a rejected target account restores the previous one and opens login on top
     { accessToken: 'rotated-access', refreshToken: 'rotated-refresh' }, previousUser,
     { onboardingRequired: false, refreshAttemptId: attempt },
   );
+  // clearLocalSession emptied the groups of the account now being restored.
+  expect(mockLoadMessageGroups).toHaveBeenCalledTimes(1);
   expect(mockSetAddingAccount).toHaveBeenCalledWith(true);
   expect(mockRouterPush).toHaveBeenCalledWith({
     pathname: '/(auth)/login', params: { identifier: 'target-id' },
