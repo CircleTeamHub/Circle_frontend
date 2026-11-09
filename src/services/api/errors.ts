@@ -21,9 +21,6 @@ import { isUserFacingError } from '@/utils/user-facing-error';
  */
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
-    if (error.failureKind === 'refresh-outcome-unknown') {
-      return i18n.t('common.errors.refreshOutcomeUnknown', { defaultValue: fallback });
-    }
     if (error.failureKind === 'refresh-response-invalid') {
       return i18n.t('common.errors.refreshResponseInvalid', { defaultValue: fallback });
     }

@@ -79,8 +79,6 @@ function loadApiClient({
               refreshToken: 'refresh-token',
               setTokens: () => {},
               prepareRefresh: async () => {},
-              markRefreshUncertain: async () => {},
-              releaseRefreshAttempt: async () => {},
               ...sessionState,
             }),
           },

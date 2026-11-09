@@ -41,7 +41,7 @@ test('realtime token-expiry close reason matches the backend gateway literal', (
     'utf8',
   );
   assert.match(client, /const TOKEN_EXPIRED_CLOSE_REASON = 'Token expired';/);
-  assert.match(client, /isTokenExpiredClose\(event\)[\s\S]{0,200}refreshSessionAccessToken\(\)/);
+  assert.match(client, /isTokenExpiredClose\(event\)[\s\S]{0,200}refreshSessionAccessToken\(normalizedToken\)/);
 
   const backendRoot =
     process.env.CIRCLE_BE_PATH ?? path.join(process.cwd(), '..', 'circle_be');

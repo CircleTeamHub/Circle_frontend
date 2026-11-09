@@ -11,7 +11,8 @@ export interface KnownAccount {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
-  refreshUncertain?: boolean;
+  /** 切走时还没确认结果的那次续签：切回来要带同一 ID 重试。 */
+  refreshAttemptId?: string | null;
   updatedAt: number;
 }
 

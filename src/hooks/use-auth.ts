@@ -52,13 +52,13 @@ type AuthSuccessOptions = {
  * 过期账号移除。
  */
 function rememberCurrentAccount() {
-  const { user, accessToken, refreshToken, refreshUncertain, refreshAttemptId } = useAuthStore.getState();
+  const { user, accessToken, refreshToken, refreshAttemptId } = useAuthStore.getState();
   if (!user || !accessToken || !refreshToken) return;
   useKnownAccountsStore.getState().upsertAccount({
     user,
     accessToken,
     refreshToken,
-    refreshUncertain: refreshUncertain || Boolean(refreshAttemptId),
+    refreshAttemptId,
     updatedAt: Date.now(),
   });
 }
@@ -166,7 +166,7 @@ export function useAuth() {
           finally { if (mountedRef.current) setCommitting(false); }
           if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
-              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshUncertain: current.refreshUncertain || Boolean(current.refreshAttemptId) });
+              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshAttemptId: current.refreshAttemptId });
             }
             void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
             return;
@@ -385,6 +385,7 @@ export function useAuth() {
       safeSetError(null);
       inFlightRef.current = true;
       safeSetSubmitting(true);
+      const previous = useAuthStore.getState();
       // 下面先清旧会话再激活新账号,中间有一段「未登录」空窗;让根守卫在此期间
       // 不重定向,导航只由本流程结尾那一次 replace 决定。
       useAccountSwitcherStore.getState().setSwitching(true);
@@ -400,7 +401,7 @@ export function useAuth() {
             refreshToken: account.refreshToken,
           },
           account.user,
-          { refreshUncertain: account.refreshUncertain === true },
+          { refreshAttemptId: account.refreshAttemptId ?? null },
         );
 
         // 校验 session：/auth/me 命中 401 时 apiClient 会用 refreshToken 自动续期；
@@ -409,13 +410,13 @@ export function useAuth() {
         useAuthStore.getState().setUser(user);
 
         // 续期可能换了新 token，把最新值写回账号列表。
-        const { accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
+        const { accessToken, refreshToken, refreshAttemptId } = useAuthStore.getState();
         if (accessToken && refreshToken) {
           useKnownAccountsStore.getState().upsertAccount({
             user,
             accessToken,
             refreshToken,
-            refreshUncertain,
+            refreshAttemptId,
             updatedAt: Date.now(),
           });
         }
@@ -433,25 +434,39 @@ export function useAuth() {
           await clearLocalSession(undefined, { reason: 'account-switch-rejected' });
           useAccountSwitcherStore.getState().close();
           reportHandledFailure('auth', 'switchAccountExpired', switchError);
-          router.replace({
+          const loginRoute = {
             pathname: '/(auth)/login',
             // Accounts created without an email still need a usable login
             // identifier after their session expires.
             params: { identifier: account.user.email ?? account.user.accountId },
-          });
+          } as const;
+          if (previous.user && previous.accessToken && previous.refreshToken) {
+            // 目标账号失效不该连累切换前的账号：恢复它，再在它上面打开登录页，登不登都能退回来。
+            setSession(
+              { accessToken: previous.accessToken, refreshToken: previous.refreshToken },
+              previous.user,
+              { onboardingRequired: previous.onboardingRequired, refreshAttemptId: previous.refreshAttemptId },
+            );
+            // 上面的 clearLocalSession 清掉了会话分组，恢复原账号要补拉，否则筛选标签一直缺。
+            void useMessageGroupsStore.getState().load();
+            useAccountSwitcherStore.getState().setAddingAccount(true);
+            router.push(loginRoute);
+          } else {
+            router.replace(loginRoute);
+          }
         } else {
           // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动
           // 同哲学 —— 带着快照进 app，后续请求自然重试；账号列表保持完整。
           // review 修复①：/auth/me 的 401 前置续期可能已轮换 token —— 降级
           // 进入前把 auth store 里的最新值写回账号列表，否则切走再切回会拿
           // 旧 refreshToken 撞 401，把一个好账号误判成死账号移除。
-          const { accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
+          const { accessToken, refreshToken, refreshAttemptId } = useAuthStore.getState();
           if (accessToken && refreshToken) {
             useKnownAccountsStore.getState().upsertAccount({
               user: account.user,
               accessToken,
               refreshToken,
-              refreshUncertain,
+              refreshAttemptId,
               updatedAt: Date.now(),
             });
           }

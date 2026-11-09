@@ -480,7 +480,7 @@ export function connectChat(token: string, userId: string): void {
     store.setConnecting(false);
     // 回前台/重连时立刻试一次,不等上一轮排着的退避重试。
     clearTokenRefreshTimer();
-    requestTokenRefresh();
+    requestTokenRefresh(token);
     return;
   }
 
@@ -586,7 +586,7 @@ export function connectChat(token: string, userId: string): void {
     // 服务端主动断开的连接 socket.io 不会自己重连。token 到期断开的(服务端先发了
     // chat:session_expired,或本地一看就过期了)去刷新 token,新 token 会带着重连。
     if (sessionExpiredNotified || isJwtExpired(token)) {
-      requestTokenRefresh();
+      requestTokenRefresh(token);
       return;
     }
     // 没说原因的(进房失败、连接数超限、会话被吊销):按退避补连。被吊销的话
@@ -626,7 +626,7 @@ export function connectChat(token: string, userId: string): void {
     state.setError(reason);
     // 握手被拒 socket.io 不会自动重连;token 过期导致的去刷新,新 token 会重连进来。
     if (reason === 'unauthorized' && isJwtExpired(token)) {
-      requestTokenRefresh();
+      requestTokenRefresh(token);
       return;
     }
     // 服务器暂时不可达之类的传输层失败,socket 仍是 active,socket.io 自己按退避重连。
@@ -638,7 +638,7 @@ export function connectChat(token: string, userId: string): void {
       // 由 API 层清会话。只刷一次:服务端内部出错也回 unauthorized,那种就只退避
       // 补连,不能刷新 → 重连 → 再刷新地打转。补连照排,刷新没换出新 token 也不停住。
       handshakeRefreshRequested = true;
-      requestTokenRefresh();
+      requestTokenRefresh(token);
     }
     scheduleServerRejectedReconnect(next, gen);
   });
@@ -817,14 +817,14 @@ function scheduleServerRejectedReconnect(target: Socket, generation: number): vo
  * 断网/超时/5xx 按退避重试,直到连上或会话换人;服务端明确否认 refresh token 时
  * 由 API 层清掉会话,这里停手。
  */
-function requestTokenRefresh(attempt = 0): void {
+function requestTokenRefresh(rejectedToken: string, attempt = 0): void {
   if (tokenRefreshInFlight || tokenRefreshTimer) return;
   // 重试跟着账号走,不跟会话代数走:回前台、token 轮换都会换一条 socket(代数 +1),
   // 按代数判的话,那之前排下的重试到点就直接退出,而新一轮的刷新请求又被这条还排着
   // 的定时器挡掉 —— 重试链断掉,网回来了也一直连不上。登出、换账号才停。
   const userId = useChatStore.getState().currentUserId;
   tokenRefreshInFlight = true;
-  void refreshSessionAccessToken().then(
+  void refreshSessionAccessToken(rejectedToken).then(
     () => {
       tokenRefreshInFlight = false;
     },
@@ -844,7 +844,7 @@ function requestTokenRefresh(attempt = 0): void {
         if (useChatStore.getState().currentUserId !== userId || socket?.connected) {
           return;
         }
-        requestTokenRefresh(attempt + 1);
+        requestTokenRefresh(rejectedToken, attempt + 1);
       }, delay);
     },
   );

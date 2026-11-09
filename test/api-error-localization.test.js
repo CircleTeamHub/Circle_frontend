@@ -23,7 +23,6 @@ const I18N = {
         'common.errors.requestTimeout': 'Request timed out. Please try again.',
         'common.errors.networkUnavailable': 'Check your connection and try again.',
         'common.errors.refreshResponseInvalid': 'Please sign in again to restore your session.',
-        'common.errors.refreshOutcomeUnknown': 'Your session could not be confirmed. Please sign in again.',
         'common.errors.invalidServerResponse': 'Invalid server response. Please try again.',
         'common.errors.uploadFailed': 'Upload failed. Please try again later.',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
@@ -134,15 +133,6 @@ test('a replayed auth response uses trusted retry guidance without asking for an
   error.status = 0;
   error.failureKind = 'auth-retry-response-replayed';
   assert.equal(getApiErrorMessage(error, 'fallback'), 'Invalid server response. Please try again.');
-});
-
-test('an unknown refresh outcome gives trusted guidance instead of a server or transport message', () => {
-  for (const status of [0, 201, 502]) {
-    const error = new FakeApiError('PRIVATE_RESPONSE');
-    error.status = status;
-    error.failureKind = 'refresh-outcome-unknown';
-    assert.equal(getApiErrorMessage(error, 'fallback'), 'Your session could not be confirmed. Please sign in again.');
-  }
 });
 
 test('maps a known errorCode to its localized serverErrors string', () => {

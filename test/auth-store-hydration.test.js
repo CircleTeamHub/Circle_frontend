@@ -113,39 +113,21 @@ function spyClearSession(useAuthStore) {
   return counter;
 }
 
-test('uncertain refresh survives auth persistence and hydration without losing credentials', async () => {
-  const first = loadAuthStore();
-  first.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
-  assert.equal(typeof first.useAuthStore.getState().markRefreshUncertain, 'function');
-  await first.useAuthStore.getState().markRefreshUncertain();
-  await first.persistCurrentAuthState();
-  const envelope = JSON.parse(first.storageSetCalls.at(-1)[1]);
-  assert.equal(envelope.state.refreshUncertain, true);
-  const next = loadAuthStore();
-  next.useAuthStore.setState(next.persistOptions.merge(envelope.state, next.useAuthStore.getState()));
-  next.persistOptions.onRehydrateStorage()(next.useAuthStore.getState(), undefined);
-  assert.equal(next.useAuthStore.getState().refreshUncertain, true);
-  assert.equal(next.useAuthStore.getState().isAuthenticated, true);
-  assert.equal(next.useAuthStore.getState().accessToken, 'saved-access');
-  assert.equal(next.useAuthStore.getState().refreshToken, 'saved-refresh');
-  next.useAuthStore.getState().setTokens({ accessToken: 'fresh-access', refreshToken: 'fresh-refresh' });
-  assert.equal(next.useAuthStore.getState().refreshUncertain, false);
-});
-
-test('an interrupted rotation restores its durable request correlation and never loses the cached session', async () => {
+test('an interrupted rotation restores its attempt id for the retry and never loses the cached session', async () => {
   const id = '12345678-1234-4234-8234-123456789abc';
   const first = loadAuthStore();
   first.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
   assert.equal(typeof first.useAuthStore.getState().prepareRefresh, 'function');
   await first.useAuthStore.getState().prepareRefresh(id);
-  assert.equal(first.useAuthStore.getState().refreshUncertain, false);
   await first.persistCurrentAuthState();
   const envelope = JSON.parse(first.storageSetCalls.at(-1)[1]);
   assert.equal(envelope.state.refreshAttemptId, id);
   const next = loadAuthStore();
   next.useAuthStore.setState(next.persistOptions.merge(envelope.state, next.useAuthStore.getState()));
   next.persistOptions.onRehydrateStorage()(next.useAuthStore.getState(), undefined);
-  assert.equal(next.useAuthStore.getState().refreshUncertain, true);
+  assert.equal(next.useAuthStore.getState().refreshAttemptId, id);
+  assert.equal(next.useAuthStore.getState().isAuthenticated, true);
+  assert.equal(next.useAuthStore.getState().accessToken, 'saved-access');
   assert.equal(next.useAuthStore.getState().refreshToken, 'saved-refresh');
   assert.equal(next.retained[0].reason, 'refresh-interrupted');
   assert.equal(next.retained[0].context.clientRequestId, id);
@@ -157,31 +139,34 @@ test('an interrupted rotation restores its durable request correlation and never
 
 test('hydration rejects arbitrary persisted refresh correlation strings at its boundary', () => {
   const h = loadAuthStore();
-  const state = h.persistOptions.merge({ refreshUncertain: true, refreshAttemptId: 'PRIVATE_CANARY' }, h.useAuthStore.getState());
+  const state = h.persistOptions.merge({ refreshAttemptId: 'PRIVATE_CANARY' }, h.useAuthStore.getState());
   assert.equal(state.refreshAttemptId, null);
 });
 
-test('marking an uncertain refresh exposes the single real Zustand persistence failure to its caller', async () => {
+test('saving the attempt id exposes the single real Zustand persistence failure to its caller', async () => {
   const h = loadAuthStore({ realPersist: true });
   h.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
   await h.persistCurrentAuthState();
   const writesBefore = h.storageSetCalls.length;
   h.failWrites();
-  await assert.rejects(h.useAuthStore.getState().markRefreshUncertain(), /fixture storage failure/);
+  await assert.rejects(h.useAuthStore.getState().prepareRefresh('12345678-1234-4234-8234-123456789abc'), /fixture storage failure/);
   assert.equal(h.storageSetCalls.length - writesBefore, 1);
-  assert.equal(h.useAuthStore.getState().refreshUncertain, true);
   assert.equal(h.useAuthStore.getState().isAuthenticated, true);
 });
 
-test('a fresh same-account login advances the epoch and resets the uncertain marker', async () => {
+test('a fresh login advances the epoch and drops the saved attempt id unless told to keep one', async () => {
   const h = loadAuthStore();
   const state = h.useAuthStore.getState();
   state.setSession({ accessToken: 'old', refreshToken: 'old-refresh' }, { id: 'saved-user' });
-  await state.markRefreshUncertain();
-  const oldEpoch = state.sessionEpoch;
+  await state.prepareRefresh('12345678-1234-4234-8234-123456789abc');
+  const oldEpoch = h.useAuthStore.getState().sessionEpoch;
   state.setSession({ accessToken: 'new', refreshToken: 'new-refresh' }, { id: 'saved-user' });
-  assert.equal(state.sessionEpoch, oldEpoch + 1);
-  assert.equal(state.refreshUncertain, false);
+  assert.equal(h.useAuthStore.getState().sessionEpoch, oldEpoch + 1);
+  assert.equal(h.useAuthStore.getState().refreshAttemptId, null);
+
+  const kept = '12345678-1234-4234-8234-123456789abd';
+  state.setSession({ accessToken: 'back', refreshToken: 'back-refresh' }, { id: 'saved-user' }, { refreshAttemptId: kept });
+  assert.equal(h.useAuthStore.getState().refreshAttemptId, kept);
 });
 
 test('authStore unblocks startup but does NOT clearSession when hydration read fails', () => {

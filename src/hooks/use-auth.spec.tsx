@@ -11,10 +11,13 @@ import {
   register as registerRequest,
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockSetSession = jest.fn();
 const mockUpsertAccount = jest.fn();
+const mockRemoveAccount = jest.fn();
+const mockSetAddingAccount = jest.fn();
 const mockLoadMessageGroups = jest.fn();
 const mockRouterPush = jest.fn();
 const mockRouter = { replace: jest.fn(), push: mockRouterPush, dismissTo: jest.fn() };
@@ -48,7 +51,7 @@ jest.mock('@/stores/authStore', () => {
 
 jest.mock('@/stores/knownAccountsStore', () => ({
   useKnownAccountsStore: {
-    getState: () => ({ upsertAccount: mockUpsertAccount }),
+    getState: () => ({ upsertAccount: mockUpsertAccount, removeAccount: mockRemoveAccount }),
   },
 }));
 
@@ -60,6 +63,7 @@ jest.mock('@/stores/accountSwitcherStore', () => ({
       open: jest.fn(),
       close: jest.fn(),
       setSwitching: jest.fn(),
+      setAddingAccount: mockSetAddingAccount,
     }),
   },
 }));
@@ -314,41 +318,56 @@ test('switching accounts records the current account with its latest tokens befo
   expect(rememberOrder).toBeLessThan(clearOrder);
 });
 
-test('switching accounts preserves an uncertain refresh marker when saving and restoring credentials', async () => {
+test('switching accounts keeps each unconfirmed refresh attempt with its account', async () => {
   signInPreviousAccount();
-  mockAuthState.refreshUncertain = true;
+  const leaving = '12345678-1234-4234-8234-123456789abc';
+  const returning = '12345678-1234-4234-8234-123456789abd';
+  mockAuthState.refreshAttemptId = leaving;
   const target = { user: { id: 'user-2', nickname: 'Target' },
-    accessToken: 'target-access', refreshToken: 'target-refresh', refreshUncertain: true, updatedAt: 1 };
+    accessToken: 'target-access', refreshToken: 'target-refresh', refreshAttemptId: returning, updatedAt: 1 };
   mockSetSession.mockImplementationOnce((tokens, nextUser, options) => {
     mockAuthState = { ...mockAuthState, ...tokens, user: nextUser, isAuthenticated: true,
-      refreshUncertain: options?.refreshUncertain ?? false };
+      refreshAttemptId: options?.refreshAttemptId ?? null };
   });
   jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
   const { result } = renderHook(() => useAuth());
   await act(async () => { await result.current.switchToAccount(target as never); });
   expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
-    user: previousUser, refreshUncertain: true,
+    user: previousUser, refreshToken: 'rotated-refresh', refreshAttemptId: leaving,
   }));
   expect(mockSetSession).toHaveBeenCalledWith(
     { accessToken: target.accessToken, refreshToken: target.refreshToken }, target.user,
-    { refreshUncertain: true },
+    { refreshAttemptId: returning },
   );
   expect(mockUpsertAccount).toHaveBeenLastCalledWith(expect.objectContaining({
-    user: target.user, refreshUncertain: true,
+    user: target.user, refreshAttemptId: returning,
   }));
 });
 
-test('leaving an account during rotation quarantines its saved pre-rotation credential', async () => {
+test('a rejected target account restores the previous one and opens login on top of it', async () => {
   signInPreviousAccount();
-  mockAuthState.refreshUncertain = false;
-  mockAuthState.refreshAttemptId = '12345678-1234-4234-8234-123456789abc';
-  const target = { user: { id: 'user-2' }, accessToken: 'target-access', refreshToken: 'target-refresh', updatedAt: 1 };
-  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const attempt = '12345678-1234-4234-8234-123456789abc';
+  mockAuthState.refreshAttemptId = attempt;
+  mockAuthState.onboardingRequired = false;
+  const target = { user: { id: 'user-2', accountId: 'target-id' }, accessToken: 'target-access', refreshToken: 'target-refresh', updatedAt: 1 };
+  jest.mocked(isDefinitiveAuthFailure).mockReturnValueOnce(true);
+  jest.mocked(fetchCurrentUser).mockRejectedValue(new Error('rejected'));
   const { result } = renderHook(() => useAuth());
+
   await act(async () => { await result.current.switchToAccount(target as never); });
-  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
-    user: previousUser, refreshToken: 'rotated-refresh', refreshUncertain: true,
-  }));
+
+  expect(mockRemoveAccount).toHaveBeenCalledWith('user-2');
+  expect(mockSetSession).toHaveBeenLastCalledWith(
+    { accessToken: 'rotated-access', refreshToken: 'rotated-refresh' }, previousUser,
+    { onboardingRequired: false, refreshAttemptId: attempt },
+  );
+  // clearLocalSession emptied the groups of the account now being restored.
+  expect(mockLoadMessageGroups).toHaveBeenCalledTimes(1);
+  expect(mockSetAddingAccount).toHaveBeenCalledWith(true);
+  expect(mockRouterPush).toHaveBeenCalledWith({
+    pathname: '/(auth)/login', params: { identifier: 'target-id' },
+  });
+  expect(mockRouter.replace).not.toHaveBeenCalled();
 });
 
 test('adding an account still lands on messages if the previous account was signed out remotely meanwhile', async () => {

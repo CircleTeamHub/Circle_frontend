@@ -25,7 +25,6 @@ export interface PersistedAuthState {
   refreshToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
-  refreshUncertain?: boolean;
 }
 
 /** 当前持久化数据的版本号。改这个值时务必同步更新 migrateAuthPersist。 */
