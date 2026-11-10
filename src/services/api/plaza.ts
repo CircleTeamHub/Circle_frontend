@@ -92,6 +92,10 @@ export function normalizePlazaPost(
   };
 }
 
+export type PlazaFeedResponse = PaginatedResponse<CirclePlazaPost> & {
+  snapshotAt: string;
+};
+
 export async function fetchPlazaFeed(params?: {
   circleId?: string;
   circleIds?: string;
@@ -100,8 +104,8 @@ export async function fetchPlazaFeed(params?: {
   page?: number;
   limit?: number;
   cursor?: string;
-}): Promise<PaginatedResponse<CirclePlazaPost>> {
-  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost>>(
+}): Promise<PlazaFeedResponse> {
+  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost> & { snapshotAt: string }>(
     `/circle-plaza/feed${buildQuery(params ?? {})}`,
   );
 
@@ -255,9 +259,11 @@ export async function fetchMyPostSignups(
   };
 }
 
-/** 告诉服务端用户打开了圈子帖子列表，飞机红点从此刻重新算。 */
-export async function markCirclePlazaSeen(): Promise<void> {
-  await apiClient<void>('/circle-plaza/seen', { method: 'POST' });
+/** 只确认已成功应用的 feed 快照，保留该水位之后的新帖红点。 */
+export async function markCirclePlazaSeen(snapshotAt: string): Promise<{ hasUpdate: boolean }> {
+  return apiClient<{ hasUpdate: boolean }>('/circle-plaza/seen', {
+    method: 'POST', body: { snapshotAt },
+  });
 }
 
 export async function markMyPostSignupsRead(

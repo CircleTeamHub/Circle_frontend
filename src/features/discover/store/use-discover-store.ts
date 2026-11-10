@@ -29,7 +29,7 @@ interface DiscoverState {
   plazaLoaded: boolean;
   hydrate: () => void;
 
-  fetchPlazaPosts: (reset?: boolean) => Promise<void>;
+  fetchPlazaPosts: (reset?: boolean) => Promise<string | null>;
   setPlazaFilter: (circleId: string | null, city: string | null) => void;
   prependPlazaPost: (post: CirclePlazaPost) => void;
   removePlazaPost: (id: string) => void;
@@ -77,8 +77,8 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     // 刷新(reset)进行中也不分页：refresh 用 plazaRefreshing 标记(而非 plazaLoading),
     // 漏判会让一个并发的 end-reached 分页(requestId 更高)把先返回的 refresh 结果当陈旧
     // 请求丢弃、再把旧游标的一页并到过期列表上,用户的下拉刷新就丢了。
-    if (!reset && (state.plazaLoading || state.plazaRefreshing)) return;
-    if (!reset && !state.plazaHasMore) return;
+    if (!reset && (state.plazaLoading || state.plazaRefreshing)) return null;
+    if (!reset && !state.plazaHasMore) return null;
 
     // reset starts from the newest (no cursor); paginate follows nextCursor.
     const cursor = reset ? undefined : (state.plazaCursor ?? undefined);
@@ -118,8 +118,9 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
         limit: 20,
       });
 
-      if (useAuthStore.getState().sessionEpoch !== requestAuth.sessionEpoch) return;
+      if (useAuthStore.getState().sessionEpoch !== requestAuth.sessionEpoch) return null;
 
+      let applied = false;
       set((current) => {
         const next = applyPlazaFetchSuccess(current, {
           reset,
@@ -130,11 +131,13 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
           requestId,
         });
         if (next === current) return current;
+        applied = true;
         if (requestRevision === getPageSnapshotRevision() && !plazaMutatedSince(startedAt)) writePageSnapshot(requestAuth.user?.id, snapshotKey, next.plazaPosts.slice(0, 100));
         return { ...next, plazaLoaded: true };
       });
+      return reset && applied ? result.snapshotAt : null;
     } catch (error) {
-      if (useAuthStore.getState().sessionEpoch !== requestAuth.sessionEpoch) return;
+      if (useAuthStore.getState().sessionEpoch !== requestAuth.sessionEpoch) return null;
       const current = get();
       if (current.plazaLatestRequestId === requestId && current.plazaQueryVersion === requestQueryVersion &&
         useAuthStore.getState().user?.id === requestAuth.user?.id &&
@@ -152,6 +155,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
             error.errorCode === 'PLAZA_MEMBERSHIP_REQUIRED',
         }),
       );
+      return null;
     }
   },
 

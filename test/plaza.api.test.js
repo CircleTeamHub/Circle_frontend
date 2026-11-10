@@ -476,3 +476,18 @@ test('createPlazaPost forwards the selected expiry duration', async () => {
     },
   ]);
 });
+
+test('feed returns the server snapshot and seen submits that exact watermark', async () => {
+  const snapshotAt = '2026-11-09T01:02:03.456Z';
+  const { api, calls } = loadPlazaApi([
+    { items: [], total: 0, page: 1, limit: 20, hasMore: false, snapshotAt },
+    { hasUpdate: true },
+  ]);
+  const feed = await api.fetchPlazaFeed();
+  assert.equal(feed.snapshotAt, snapshotAt);
+  const seen = await api.markCirclePlazaSeen(feed.snapshotAt);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), [
+    '/circle-plaza/seen', { method: 'POST', body: { snapshotAt } },
+  ]);
+  assert.deepEqual(seen, { hasUpdate: true });
+});

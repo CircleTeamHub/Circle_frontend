@@ -20,7 +20,7 @@ import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { useCircleShortcutOrderStore } from '@/features/discover/store/use-circle-shortcut-order-store';
-import { clearCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
+import { refreshCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 import { orderCircleShortcuts } from '@/features/discover/utils/circle-shortcut-order';
 import { PlazaPostCard } from './plaza-post-card';
 import { CircleFilterBar } from './circle-filter-bar';
@@ -189,7 +189,7 @@ export const PlazaFeed: React.FC = () => {
 
   useEffect(() => {
     if (programEnabled === null || membershipBlocked) return;
-    fetchPlazaPosts(true);
+    void refreshCirclePlazaUpdate();
   }, [
     fetchPlazaPosts,
     filterCircleIds,
@@ -212,7 +212,7 @@ export const PlazaFeed: React.FC = () => {
     const prev = prevVipLevelRef.current;
     prevVipLevelRef.current = vipLevel;
     if (prev <= 0 && vipLevel > 0 && plazaMembershipRequired) {
-      fetchPlazaPosts(true);
+      void refreshCirclePlazaUpdate();
     }
   }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts]);
 
@@ -227,15 +227,14 @@ export const PlazaFeed: React.FC = () => {
     const prev = prevProgramEnabledRef.current;
     prevProgramEnabledRef.current = programEnabled;
     if (prev !== false && programEnabled === false && plazaMembershipRequired) {
-      fetchPlazaPosts(true);
+      void refreshCirclePlazaUpdate();
     }
   }, [programEnabled, plazaMembershipRequired, fetchPlazaPosts]);
 
   const handleRefresh = useCallback(() => {
     setPullRefreshing(true);
-    clearCirclePlazaUpdate();
-    fetchPlazaPosts(true);
-  }, [fetchPlazaPosts]);
+    void refreshCirclePlazaUpdate();
+  }, []);
 
   useEffect(() => {
     if (!plazaRefreshing) setPullRefreshing(false);
