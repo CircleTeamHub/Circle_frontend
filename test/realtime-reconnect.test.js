@@ -844,3 +844,15 @@ test('a newer websocket snapshot advances the plaza version before a delayed eve
   assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
   harness.disconnectRealtime();
 });
+
+for (const reason of ['expired', 'deleted']) {
+  test('a newer observation snapshot clears the dot after its only unread post is ' + reason, () => {
+    const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+    const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+    deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:01.000Z' });
+    deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: false, circlePlazaChangedAt: '2026-11-09T00:00:02.000Z' });
+    assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+    assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, Date.parse('2026-11-09T00:00:02.000Z'));
+    harness.disconnectRealtime();
+  });
+}

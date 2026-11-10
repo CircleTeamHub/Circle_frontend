@@ -10,16 +10,17 @@ export async function refreshCirclePlazaUpdate(): Promise<void> {
   const snapshotAt = await useDiscoverStore.getState().fetchPlazaPosts(true);
   if (snapshotAt === null || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
 
-  const wasLit = useTabBadgeStore.getState().circlePlazaHasUpdate;
+  const { circlePlazaHasUpdate: wasLit, circlePlazaChangedAt: previousVersion } = useTabBadgeStore.getState();
   useTabBadgeStore.getState().setCirclePlazaHasUpdate(false);
   try {
-    const { hasUpdate } = await markCirclePlazaSeen(snapshotAt);
+    const { hasUpdate, changedAt } = await markCirclePlazaSeen(snapshotAt);
     if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-    // 只在请求前清一次：期间实时事件点亮的红点不能被迟到的 false 覆盖。
-    if (hasUpdate) useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
+    useTabBadgeStore.getState().setCirclePlazaHasUpdate(hasUpdate, Date.parse(changedAt));
   } catch (error) {
     if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-    if (wasLit) useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
+    if (wasLit && useTabBadgeStore.getState().circlePlazaChangedAt === previousVersion) {
+      useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
+    }
     reportHandledFailure('circlePlaza', 'markSeen', error);
   }
 }

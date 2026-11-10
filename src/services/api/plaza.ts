@@ -265,10 +265,16 @@ export async function fetchMyPostSignups(
 }
 
 /** 只确认已成功应用的 feed 快照，保留该水位之后的新帖红点。 */
-export async function markCirclePlazaSeen(snapshotAt: string): Promise<{ hasUpdate: boolean }> {
-  return apiClient<{ hasUpdate: boolean }>('/circle-plaza/seen-through', {
+export async function markCirclePlazaSeen(snapshotAt: string): Promise<{ hasUpdate: boolean; changedAt: string }> {
+  const result = await apiClient<{ hasUpdate: boolean; changedAt: string }>('/circle-plaza/seen-through', {
     method: 'POST', body: { snapshotAt },
   });
+  if (!result || typeof result.hasUpdate !== 'boolean' || typeof result.changedAt !== 'string'
+    || !Number.isFinite(Date.parse(result.changedAt))
+    || new Date(result.changedAt).toISOString() !== result.changedAt) {
+    throw new Error('Invalid plaza read confirmation');
+  }
+  return result;
 }
 
 export async function markMyPostSignupsRead(

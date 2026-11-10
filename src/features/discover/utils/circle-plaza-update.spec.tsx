@@ -17,6 +17,7 @@ const mockSeen = markCirclePlazaSeen as jest.MockedFunction<typeof markCirclePla
 const mockDiscoverState = useDiscoverStore.getState as unknown as jest.Mock;
 const fetchPlazaPosts = jest.fn();
 const snapshotAt = '2026-11-09T01:02:03.456Z';
+const changedAt = '2026-11-09T01:02:04.000Z';
 const dotIsLit = () => useTabBadgeStore.getState().circlePlazaHasUpdate;
 const lightDot = () => useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
 function deferred<T>() {
@@ -29,7 +30,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSessionEpoch = 1;
   useTabBadgeStore.getState().reset();
-  mockSeen.mockResolvedValue({ hasUpdate: false });
+  mockSeen.mockResolvedValue({ hasUpdate: false, changedAt });
   fetchPlazaPosts.mockReset().mockResolvedValue(snapshotAt);
   mockDiscoverState.mockReturnValue({ plazaLatestRequestId: 3, plazaLoaded: true, plazaLoading: false,
     plazaRefreshing: false, fetchPlazaPosts });
@@ -67,19 +68,19 @@ test.each([true, false])('seen failure restores a previously %s dot and reports 
 });
 
 test('a newer post reported by seen leaves the dot lit', async () => {
-  mockSeen.mockResolvedValueOnce({ hasUpdate: true });
+  mockSeen.mockResolvedValueOnce({ hasUpdate: true, changedAt });
   await refreshCirclePlazaUpdate();
   expect(dotIsLit()).toBe(true);
 });
 
 test.each(['success', 'failure'] as const)('realtime during seen survives a late %s', async (outcome) => {
-  const seen = deferred<{ hasUpdate: boolean }>();
+  const seen = deferred<{ hasUpdate: boolean; changedAt: string }>();
   mockSeen.mockReturnValueOnce(seen.promise);
   const refresh = refreshCirclePlazaUpdate();
   await Promise.resolve();
   expect(mockSeen).toHaveBeenCalledTimes(1);
-  lightDot();
-  if (outcome === 'success') seen.resolve({ hasUpdate: false });
+  useTabBadgeStore.getState().setCirclePlazaHasUpdate(true, Date.parse(changedAt) + 1000);
+  if (outcome === 'success') seen.resolve({ hasUpdate: false, changedAt });
   else seen.reject(new Error('offline'));
   await refresh;
   expect(dotIsLit()).toBe(true);
@@ -91,14 +92,14 @@ test('acknowledges an applied refresh even when the dot was locally off', async 
 });
 
 test.each(['success', 'failure'] as const)('late seen %s cannot change the next session badge', async (outcome) => {
-  const seen = deferred<{ hasUpdate: boolean }>();
+  const seen = deferred<{ hasUpdate: boolean; changedAt: string }>();
   mockSeen.mockReturnValueOnce(seen.promise);
   lightDot();
   const refresh = refreshCirclePlazaUpdate();
   await Promise.resolve();
   mockSessionEpoch = 2;
   useTabBadgeStore.getState().reset();
-  if (outcome === 'success') seen.resolve({ hasUpdate: true });
+  if (outcome === 'success') seen.resolve({ hasUpdate: true, changedAt });
   else seen.reject(new Error('offline'));
   await refresh;
   expect(dotIsLit()).toBe(false);
@@ -156,4 +157,32 @@ test('a rolling-deploy 404 on seen-through restores the dot without falling back
   await refreshCirclePlazaUpdate();
   expect(dotIsLit()).toBe(true);
   expect(mockSeen).toHaveBeenCalledTimes(1);
+});
+
+test('a delayed HTTP true cannot overwrite a newer false event', async () => {
+  const seen = deferred<{ hasUpdate: boolean; changedAt: string }>();
+  mockSeen.mockReturnValueOnce(seen.promise);
+  const refresh = refreshCirclePlazaUpdate();
+  await Promise.resolve();
+  useTabBadgeStore.getState().setCirclePlazaHasUpdate(false, Date.parse(changedAt) + 1000);
+  seen.resolve({ hasUpdate: true, changedAt });
+  await refresh;
+  expect(dotIsLit()).toBe(false);
+});
+
+test('a failed HTTP acknowledgement cannot roll back a newer false event', async () => {
+  const seen = deferred<{ hasUpdate: boolean; changedAt: string }>();
+  mockSeen.mockReturnValueOnce(seen.promise);
+  lightDot();
+  const refresh = refreshCirclePlazaUpdate();
+  await Promise.resolve();
+  useTabBadgeStore.getState().setCirclePlazaHasUpdate(false, Date.parse(changedAt) + 1000);
+  seen.reject(new Error('offline'));
+  await refresh;
+  expect(dotIsLit()).toBe(false);
+});
+
+test('HTTP observation response advances the badge version even when false', async () => {
+  await refreshCirclePlazaUpdate();
+  expect(useTabBadgeStore.getState().circlePlazaChangedAt).toBe(Date.parse(changedAt));
 });

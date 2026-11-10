@@ -2,7 +2,7 @@
 
 **Goal:** 让圈子广场红点在列表成功刷新后一次性读掉该响应快照内的全部帖子，同时保留快照之后的新帖红点。
 
-**Architecture:** 后端在 feed 查询前读取数据库时间作为 `snapshotAt`，用它限制帖子查询并随响应返回。客户端在成功应用 reset feed 后把该水位提交给 seen 接口；后端以单调、不可越过数据库当前时间的方式推进用户水位，再计算是否仍有更新。前端在确认期间只允许结果把红点重新点亮，不用迟到的确认结果覆盖更新事件。
+**Architecture:** 后端在 feed 查询前读取数据库时间作为 `snapshotAt`，用它限制帖子查询并随响应返回。客户端在成功应用 reset feed 后把该水位提交给 seen 接口；后端以单调、不可越过数据库当前时间的方式推进用户水位，再计算是否仍有更新。状态查询先读取数据库 observedAt，限制 createdAt <= observedAt，并以该时刻判断到期。true/false 状态都携带 observedAt；前端对 HTTP、实时事件和快照使用同一版本门禁，失败回滚不得覆盖更高版本。
 
 **Tech Stack:** NestJS, Prisma/PostgreSQL, class-validator, Expo/React Native, TypeScript, Zustand, Jest
 
@@ -12,7 +12,7 @@
 - 一次成功的 reset feed 只确认该响应返回的 `snapshotAt`；不使用客户端当前时间。
 - feed 的帖子和 count 都使用 `createdAt <= snapshotAt` 的同一范围。
 - seen 水位单调前进，并在数据库中 clamp 到 `CURRENT_TIMESTAMP`。
-- seen 后仍存在 `createdAt > circlePlazaSeenAt` 的可见新帖时，接口返回并实时广播 `hasUpdate: true`。
+- seen 后在数据库观察水位内仍存在 `createdAt > circlePlazaSeenAt` 的可见新帖时，接口返回并实时广播 `hasUpdate: true`；新路由 seen-through 返回 `{ hasUpdate, changedAt }`，旧 seen 保留空 body / 204。
 - 不增加迁移，不改变逐帖/滚动位置状态，不引入通用抽象。
 - 每个仓库独立提交；不推送、不创建 PR。
 

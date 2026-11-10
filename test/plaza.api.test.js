@@ -481,7 +481,7 @@ test('feed returns the server snapshot and seen submits that exact watermark', a
   const snapshotAt = '2026-11-09T01:02:03.456Z';
   const { api, calls } = loadPlazaApi([
     { items: [], total: 0, page: 1, limit: 20, hasMore: false, snapshotAt },
-    { hasUpdate: true },
+    { hasUpdate: true, changedAt: snapshotAt },
   ]);
   const feed = await api.fetchPlazaFeed();
   assert.equal(feed.snapshotAt, snapshotAt);
@@ -489,7 +489,7 @@ test('feed returns the server snapshot and seen submits that exact watermark', a
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), [
     '/circle-plaza/seen-through', { method: 'POST', body: { snapshotAt } },
   ]);
-  assert.deepEqual(seen, { hasUpdate: true });
+  assert.deepEqual(seen, { hasUpdate: true, changedAt: snapshotAt });
 });
 
 for (const snapshotAt of [undefined, null, '', 'invalid', 123, '2026-02-30T00:00:00.000Z']) {
@@ -498,5 +498,12 @@ for (const snapshotAt of [undefined, null, '', 'invalid', 123, '2026-02-30T00:00
     const feed = await api.fetchPlazaFeed();
     assert.equal(feed.snapshotAt, null);
     assert.equal(feed.items.length, 0);
+  });
+}
+
+for (const response of [{ hasUpdate: true }, { hasUpdate: false, changedAt: 'invalid' }, { hasUpdate: 'yes', changedAt: '2026-11-09T00:00:00.000Z' }]) {
+  test('seen-through rejects a response without a usable observation version: ' + JSON.stringify(response), async () => {
+    const { api } = loadPlazaApi([response]);
+    await assert.rejects(api.markCirclePlazaSeen('2026-11-09T00:00:00.000Z'));
   });
 }
