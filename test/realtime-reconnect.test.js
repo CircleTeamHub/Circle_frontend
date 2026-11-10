@@ -220,6 +220,7 @@ function loadRealtimeHarness(options = {}) {
         case '@/stores/authStore':
           return { useAuthStore: stubStore({ setUser: () => {} }) };
         case '@/stores/tabBadgeStore':
+          if (options.badgeStore) return { useTabBadgeStore: options.badgeStore };
           return {
             useTabBadgeStore: stubStore({
               get messagesUnread() {
@@ -797,4 +798,20 @@ test('a platform without crypto.randomUUID still connects with a well-formed tra
     traceIdOf(harness.latestSocket()),
     /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
+});
+
+test('real realtime handler ignores a late seen false older than the post and resets versions on snapshots', () => {
+  const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+  const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: false, changedAt: '2026-11-09T00:00:01.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: false, changedAt: '2026-11-09T00:00:03.000Z' });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: false, syncedAt: '2099-01-01T00:00:00.000Z' });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  harness.disconnectRealtime();
 });

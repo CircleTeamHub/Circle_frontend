@@ -141,3 +141,19 @@ describe('openCirclePlazaUpdate', () => {
     expect(mockSeen).toHaveBeenCalledWith(snapshotAt);
   });
 });
+
+test('a legacy feed without a usable watermark never clears or confirms', async () => {
+  fetchPlazaPosts.mockResolvedValueOnce(null);
+  lightDot();
+  await refreshCirclePlazaUpdate();
+  expect(dotIsLit()).toBe(true);
+  expect(mockSeen).not.toHaveBeenCalled();
+});
+
+test('a rolling-deploy 404 on seen-through restores the dot without falling back to seen', async () => {
+  mockSeen.mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+  lightDot();
+  await refreshCirclePlazaUpdate();
+  expect(dotIsLit()).toBe(true);
+  expect(mockSeen).toHaveBeenCalledTimes(1);
+});

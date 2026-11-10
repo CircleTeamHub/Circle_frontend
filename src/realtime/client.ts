@@ -119,7 +119,7 @@ type RealtimeEvent =
     }
   | {
       type: 'circle.plaza.unread.changed';
-      payload?: { hasUpdate?: unknown };
+      payload?: { hasUpdate?: unknown; changedAt?: unknown };
     }
   | {
       type: 'moments.feed.updated';
@@ -611,7 +611,11 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         reportRealtimeFailureOnce('malformedPayload');
         return;
       }
-      badgeStore.setCirclePlazaHasUpdate(message.payload.hasUpdate);
+      badgeStore.setCirclePlazaHasUpdate(
+        message.payload.hasUpdate,
+        typeof message.payload.changedAt === 'string' && Number.isFinite(Date.parse(message.payload.changedAt))
+          ? Date.parse(message.payload.changedAt) : undefined,
+      );
       return;
     case 'membership.status.changed':
       refreshCurrentUserSummaryBestEffort();

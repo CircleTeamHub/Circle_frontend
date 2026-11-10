@@ -93,7 +93,7 @@ export function normalizePlazaPost(
 }
 
 export type PlazaFeedResponse = PaginatedResponse<CirclePlazaPost> & {
-  snapshotAt: string;
+  snapshotAt: string | null;
 };
 
 export async function fetchPlazaFeed(params?: {
@@ -105,12 +105,17 @@ export async function fetchPlazaFeed(params?: {
   limit?: number;
   cursor?: string;
 }): Promise<PlazaFeedResponse> {
-  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost> & { snapshotAt: string }>(
+  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost> & { snapshotAt?: unknown }>(
     `/circle-plaza/feed${buildQuery(params ?? {})}`,
   );
 
   return {
     ...result,
+    // The server emits canonical UTC ISO timestamps. Old nodes have no watermark.
+    snapshotAt: typeof result.snapshotAt === 'string'
+      && Number.isFinite(Date.parse(result.snapshotAt))
+      && new Date(result.snapshotAt).toISOString() === result.snapshotAt
+      ? result.snapshotAt : null,
     items: result.items.map(normalizePlazaPost),
   };
 }
@@ -261,7 +266,7 @@ export async function fetchMyPostSignups(
 
 /** 只确认已成功应用的 feed 快照，保留该水位之后的新帖红点。 */
 export async function markCirclePlazaSeen(snapshotAt: string): Promise<{ hasUpdate: boolean }> {
-  return apiClient<{ hasUpdate: boolean }>('/circle-plaza/seen', {
+  return apiClient<{ hasUpdate: boolean }>('/circle-plaza/seen-through', {
     method: 'POST', body: { snapshotAt },
   });
 }

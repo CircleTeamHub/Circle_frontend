@@ -487,7 +487,16 @@ test('feed returns the server snapshot and seen submits that exact watermark', a
   assert.equal(feed.snapshotAt, snapshotAt);
   const seen = await api.markCirclePlazaSeen(feed.snapshotAt);
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), [
-    '/circle-plaza/seen', { method: 'POST', body: { snapshotAt } },
+    '/circle-plaza/seen-through', { method: 'POST', body: { snapshotAt } },
   ]);
   assert.deepEqual(seen, { hasUpdate: true });
 });
+
+for (const snapshotAt of [undefined, null, '', 'invalid', 123, '2026-02-30T00:00:00.000Z']) {
+  test('old or malformed feed watermark is normalized to null: ' + snapshotAt, async () => {
+    const { api } = loadPlazaApi([{ items: [], snapshotAt }]);
+    const feed = await api.fetchPlazaFeed();
+    assert.equal(feed.snapshotAt, null);
+    assert.equal(feed.items.length, 0);
+  });
+}

@@ -85,3 +85,9 @@ test('pagination skipped during refresh returns null', async () => {
   request.resolve(page());
   await refresh;
 });
+
+test('an old feed normalized without a watermark still applies items but returns null', async () => {
+  mockFetch.mockResolvedValueOnce({ ...page('legacy'), snapshotAt: null } as unknown as Feed);
+  expect(await useDiscoverStore.getState().fetchPlazaPosts(true)).toBeNull();
+  expect(useDiscoverStore.getState().plazaPosts).toEqual([{ id: 'legacy' }]);
+});
