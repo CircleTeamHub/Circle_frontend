@@ -7,6 +7,7 @@ import type { ChatConversationDto } from '@/chat-core/protocol';
 import { fetchFriends } from '@/services/api/friends';
 
 let mockConversations: ChatConversationDto[] = [];
+let mockAuth = { user: { id: 'me' }, sessionEpoch: 1 };
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -19,7 +20,7 @@ jest.mock('@/storage', () => ({
   mmkvJsonStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
 }));
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
+  useAuthStore: (selector: (state: typeof mockAuth) => unknown) => selector(mockAuth),
 }));
 jest.mock('@/services/api/friends', () => ({ fetchFriends: jest.fn() }));
 jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn(() => Promise.resolve()) }));
@@ -60,6 +61,8 @@ const assistant = conversation({ id: 'ai', type: 'SUPPORT', name: 'AI小助手' 
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(fetchFriends).mockReset();
+  mockAuth = { user: { id: 'me' }, sessionEpoch: 1 };
   mockConversations = [direct, group, assistant];
   useRecentForwardTargetsStore.setState({ byUser: {} });
   jest.mocked(fetchFriends).mockResolvedValue([
@@ -114,6 +117,31 @@ test('contacts load on demand and reuse an existing private chat', async () => {
   expect(onConfirm).toHaveBeenLastCalledWith([expect.objectContaining({ conversationId: 'dm-1', userId: 'u1' })]);
   fireEvent.press(screen.getByText('李哥'));
   expect(onConfirm).toHaveBeenLastCalledWith([expect.objectContaining({ conversationId: null, userId: 'u3', key: 'user:u3' })]);
+});
+
+test('an account switch drops the previous account contacts and ignores stale responses', async () => {
+  let resolveFirst!: (friends: Awaited<ReturnType<typeof fetchFriends>>) => void;
+  jest.mocked(fetchFriends)
+    .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+    .mockResolvedValueOnce([
+      { id: 'other-friend', accountId: 'b1', nickname: '新账号好友', avatarUrl: null, avatarFrameAppearance: null, friendsSince: '', remark: null },
+    ]);
+  const picker = <ChatTargetPicker onClose={jest.fn()} onConfirm={jest.fn()} />;
+  const view = render(picker);
+  fireEvent.press(screen.getByText('chat.targetPicker.contacts'));
+
+  mockAuth = { user: { id: 'other' }, sessionEpoch: 2 };
+  view.rerender(picker);
+  await act(async () => { await Promise.resolve(); });
+
+  resolveFirst([
+    { id: 'old-friend', accountId: 'a1', nickname: '旧账号好友', avatarUrl: null, avatarFrameAppearance: null, friendsSince: '', remark: null },
+  ]);
+  await act(async () => { await Promise.resolve(); });
+
+  expect(fetchFriends).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText('旧账号好友')).toBeNull();
+  expect(screen.getByText('新账号好友')).toBeTruthy();
 });
 
 test('search spans every source and shows the same person once', async () => {

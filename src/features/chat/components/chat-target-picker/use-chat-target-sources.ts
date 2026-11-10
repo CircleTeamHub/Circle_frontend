@@ -25,11 +25,18 @@ export function useChatTargetSources(activeTab: ChatTargetTab, searching = false
   const conversations = useChatStore(selectConversations);
   const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
   const userId = useAuthStore((state) => state.user?.id ?? null);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const accountScope = `${sessionEpoch}:${userId ?? ''}`;
   const storedRecent = useRecentForwardTargetsStore(
     (state) => (userId ? state.byUser[userId] : undefined) ?? EMPTY_RECENT,
   );
-  const [friends, setFriends] = useState<FriendProfile[] | null>(null);
-  const [friendsFailed, setFriendsFailed] = useState(false);
+  const [friendsState, setFriendsState] = useState<{
+    scope: string;
+    value: FriendProfile[] | null;
+    failed: boolean;
+  }>({ scope: accountScope, value: null, failed: false });
+  const friends = friendsState.scope === accountScope ? friendsState.value : null;
+  const friendsFailed = friendsState.scope === accountScope && friendsState.failed;
   const [friendsAttempt, setFriendsAttempt] = useState(0);
 
   useEffect(() => {
@@ -44,19 +51,19 @@ export function useChatTargetSources(activeTab: ChatTargetTab, searching = false
   useEffect(() => {
     if (!wantsFriends || friends) return;
     let cancelled = false;
-    setFriendsFailed(false);
+    setFriendsState({ scope: accountScope, value: null, failed: false });
     fetchFriends()
       .then((list) => {
-        if (!cancelled) setFriends(list);
+        if (!cancelled) setFriendsState({ scope: accountScope, value: list, failed: false });
       })
       .catch((error: unknown) => {
         reportHandledFailure('chatTargetPicker', 'fetchFriends', error);
-        if (!cancelled) setFriendsFailed(true);
+        if (!cancelled) setFriendsState({ scope: accountScope, value: null, failed: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [friends, friendsAttempt, wantsFriends]);
+  }, [accountScope, friends, friendsAttempt, wantsFriends]);
 
   return useMemo(() => {
     const sendable = conversations.filter(isSendableConversation);
@@ -84,11 +91,11 @@ export function useChatTargetSources(activeTab: ChatTargetTab, searching = false
       contactsLoading: wantsFriends && friends === null && !friendsFailed,
       contactsFailed: friendsFailed,
       retryContacts: () => {
-        setFriends(null);
+        setFriendsState({ scope: accountScope, value: null, failed: false });
         setFriendsAttempt((value) => value + 1);
       },
     };
-  }, [conversations, friends, friendsFailed, storedRecent, userId, wantsFriends]);
+  }, [accountScope, conversations, friends, friendsFailed, storedRecent, userId, wantsFriends]);
 }
 
 /** 搜索跨三个来源:同一个人既是最近聊天又是好友时只出现一次。 */
