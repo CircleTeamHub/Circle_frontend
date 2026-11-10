@@ -2,7 +2,7 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react-native';
 import { ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { PlazaFeed } from './plaza-feed';
-import { clearCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
+import { refreshCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 
 interface MockDiscoverState {
   plazaPosts: { id: string }[];
@@ -41,7 +41,7 @@ jest.mock('@/features/discover/store/use-discover-store', () => {
   return { useDiscoverStore };
 });
 jest.mock('@/features/discover/utils/circle-plaza-update', () => ({
-  clearCirclePlazaUpdate: jest.fn(),
+  refreshCirclePlazaUpdate: jest.fn(),
 }));
 jest.mock('zustand/react/shallow', () => ({ useShallow: (selector: unknown) => selector }));
 jest.mock('@/features/discover/store/use-circles-store', () => {
@@ -71,9 +71,10 @@ jest.mock('@/stores/authStore', () => {
 jest.mock('@/services/api/membership', () => ({
   fetchMembershipProgramStatus: () => Promise.resolve({ enabled: false }),
 }));
-jest.mock('@/hooks/use-focus-reload-gate', () => ({
-  useFocusReloadGate: () => ({ shouldSkip: () => false, markLoaded: () => undefined }),
-}));
+jest.mock('@/hooks/use-focus-reload-gate', () => {
+  const gate = { shouldSkip: () => false, markLoaded: () => undefined };
+  return { useFocusReloadGate: () => gate };
+});
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
@@ -97,6 +98,7 @@ jest.mock('@/features/discover/components/circle-shortcut-order-sheet', () => ({
 }));
 
 beforeEach(() => {
+  jest.clearAllMocks();
   mockListeners.clear();
   mockDiscover = {
     plazaPosts: [{ id: 'p1' }],
@@ -123,6 +125,13 @@ async function renderFeed() {
 
 const refreshControl = () => screen.UNSAFE_getByType(RefreshControl);
 
+test('the first uncached load uses the unified refresh and confirmation flow', async () => {
+  mockDiscover = { ...mockDiscover, plazaPosts: [], plazaLoaded: false };
+  await renderFeed();
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(1);
+  expect(mockDiscover.fetchPlazaPosts).not.toHaveBeenCalled();
+});
+
 // 切圈子时后台刷新不能借用下拉刷新控件:它一转,iOS 会把整个列表(连同顶部的圈子 tag)往下推。
 test('switching circles refreshes in the background without the pull-to-refresh spinner', async () => {
   await renderFeed();
@@ -136,18 +145,17 @@ test('a real pull shows the spinner until that refresh finishes', async () => {
     refreshControl().props.onRefresh();
     setDiscover({ plazaRefreshing: true });
   });
-  expect(mockDiscover.fetchPlazaPosts).toHaveBeenCalledWith(true);
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(2);
   expect(refreshControl().props.refreshing).toBe(true);
   act(() => setDiscover({ plazaRefreshing: false }));
   expect(refreshControl().props.refreshing).toBe(false);
 });
 
-// 圈子 tag 固定在列表上方:不随下拉、刷新或滚动移动。
-test('a pull also clears the plane dot, because the list it loads is the newest', async () => {
-  (clearCirclePlazaUpdate as jest.Mock).mockClear();
+test('initial load and pull both use the unified refresh and confirmation flow', async () => {
   await renderFeed();
   act(() => refreshControl().props.onRefresh());
-  expect(clearCirclePlazaUpdate).toHaveBeenCalledTimes(1);
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(2);
+  expect(mockDiscover.fetchPlazaPosts).not.toHaveBeenCalled();
 });
 
 test('the circle tags sit above the list, not inside it', async () => {

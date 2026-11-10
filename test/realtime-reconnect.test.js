@@ -220,6 +220,7 @@ function loadRealtimeHarness(options = {}) {
         case '@/stores/authStore':
           return { useAuthStore: stubStore({ setUser: () => {} }) };
         case '@/stores/tabBadgeStore':
+          if (options.badgeStore) return { useTabBadgeStore: options.badgeStore };
           return {
             useTabBadgeStore: stubStore({
               get messagesUnread() {
@@ -798,3 +799,60 @@ test('a platform without crypto.randomUUID still connects with a well-formed tra
     /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
 });
+
+test('real realtime handler ignores a late seen false older than the post and preserves versions across snapshots', () => {
+  const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+  const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: false, changedAt: '2026-11-09T00:00:01.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: false, changedAt: '2026-11-09T00:00:03.000Z' });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: false, syncedAt: '2099-01-01T00:00:00.000Z' });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  harness.disconnectRealtime();
+});
+
+for (const known of [true, false]) {
+  for (const versioned of [true, false]) {
+    test('snapshot preserves ' + known + ' against a delayed opposite event; versioned=' + versioned, () => {
+      const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+      const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+      const current = '2026-11-09T00:00:03.000Z';
+      deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: known, changedAt: current });
+      deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: known,
+        ...(versioned ? { circlePlazaChangedAt: current } : {}), syncedAt: '2099-01-01T00:00:00.000Z' });
+      deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: !known, changedAt: '2026-11-09T00:00:02.000Z' });
+      assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, known);
+      assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, Date.parse(current));
+      harness.disconnectRealtime();
+    });
+  }
+}
+
+test('a newer websocket snapshot advances the plaza version before a delayed event', () => {
+  const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+  const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: false, circlePlazaChangedAt: '2026-11-09T00:00:03.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, Date.parse('2026-11-09T00:00:03.000Z'));
+  deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:02.000Z' });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  harness.disconnectRealtime();
+});
+
+for (const reason of ['expired', 'deleted']) {
+  test('a newer observation snapshot clears the dot after its only unread post is ' + reason, () => {
+    const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+    const harness = connectedHarness({ badgeStore: useTabBadgeStore });
+    deliver(harness, 'circle.plaza.unread.changed', { hasUpdate: true, changedAt: '2026-11-09T00:00:01.000Z' });
+    deliver(harness, 'badge.snapshot', { circlePlazaHasUpdate: false, circlePlazaChangedAt: '2026-11-09T00:00:02.000Z' });
+    assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+    assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, Date.parse('2026-11-09T00:00:02.000Z'));
+    harness.disconnectRealtime();
+  });
+}

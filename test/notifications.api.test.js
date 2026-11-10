@@ -162,3 +162,15 @@ test("deleteLegacyPushToken uses authenticated non-retrying cleanup", async () =
   assert.equal(calls[0][1].retryOnAuthError, false);
   assert.equal(calls[0][1].accessToken, "captured-access-token");
 });
+
+for (const version of [undefined, null, 123, 'invalid', '2026-02-30T00:00:00.000Z', '2026-11-09T00:00:03.000Z']) {
+  test('unread summary normalizes the plaza semantic version: ' + version, async () => {
+    const { api } = loadApi('src/services/api/notifications.ts', {
+      discoverUnread: 0, profileUnread: 0, totalUnread: 0,
+      circlePlazaHasUpdate: true, circlePlazaChangedAt: version,
+    });
+    const summary = await api.fetchNotificationUnreadSummary();
+    assert.equal(summary.circlePlazaHasUpdate, true);
+    assert.equal(summary.circlePlazaChangedAt, version === '2026-11-09T00:00:03.000Z' ? version : undefined);
+  });
+}

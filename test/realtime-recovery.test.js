@@ -275,6 +275,7 @@ test('REST 恢复把飞机红点一起带回来（App 关着时发的帖也要�
       profileUnread: 0,
       totalUnread: 0,
       circlePlazaHasUpdate: true,
+      circlePlazaChangedAt: '2026-11-09T00:00:03.000Z',
     }),
     fetchNotifications: async () => ({ items: [], nextCursor: null }),
   });
@@ -282,6 +283,7 @@ test('REST 恢复把飞机红点一起带回来（App 关着时发的帖也要�
   await harness.client.recoverTabBadgeSnapshot({ force: true });
 
   assert.equal(harness.badgeStore.circlePlazaHasUpdate, true);
+  assert.equal(harness.badgeStore.circlePlazaChangedAt, Date.parse('2026-11-09T00:00:03.000Z'));
 });
 
 test('newer forced recovery wins when an older request resolves last', async () => {

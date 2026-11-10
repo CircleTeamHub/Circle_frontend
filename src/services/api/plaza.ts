@@ -92,6 +92,10 @@ export function normalizePlazaPost(
   };
 }
 
+export type PlazaFeedResponse = PaginatedResponse<CirclePlazaPost> & {
+  snapshotAt: string | null;
+};
+
 export async function fetchPlazaFeed(params?: {
   circleId?: string;
   circleIds?: string;
@@ -100,13 +104,18 @@ export async function fetchPlazaFeed(params?: {
   page?: number;
   limit?: number;
   cursor?: string;
-}): Promise<PaginatedResponse<CirclePlazaPost>> {
-  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost>>(
+}): Promise<PlazaFeedResponse> {
+  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost> & { snapshotAt?: unknown }>(
     `/circle-plaza/feed${buildQuery(params ?? {})}`,
   );
 
   return {
     ...result,
+    // The server emits canonical UTC ISO timestamps. Old nodes have no watermark.
+    snapshotAt: typeof result.snapshotAt === 'string'
+      && Number.isFinite(Date.parse(result.snapshotAt))
+      && new Date(result.snapshotAt).toISOString() === result.snapshotAt
+      ? result.snapshotAt : null,
     items: result.items.map(normalizePlazaPost),
   };
 }
@@ -255,9 +264,17 @@ export async function fetchMyPostSignups(
   };
 }
 
-/** 告诉服务端用户打开了圈子帖子列表，飞机红点从此刻重新算。 */
-export async function markCirclePlazaSeen(): Promise<void> {
-  await apiClient<void>('/circle-plaza/seen', { method: 'POST' });
+/** 只确认已成功应用的 feed 快照，保留该水位之后的新帖红点。 */
+export async function markCirclePlazaSeen(snapshotAt: string): Promise<{ hasUpdate: boolean; changedAt: string }> {
+  const result = await apiClient<{ hasUpdate: boolean; changedAt: string }>('/circle-plaza/seen-through', {
+    method: 'POST', body: { snapshotAt },
+  });
+  if (!result || typeof result.hasUpdate !== 'boolean' || typeof result.changedAt !== 'string'
+    || !Number.isFinite(Date.parse(result.changedAt))
+    || new Date(result.changedAt).toISOString() !== result.changedAt) {
+    throw new Error('Invalid plaza read confirmation');
+  }
+  return result;
 }
 
 export async function markMyPostSignupsRead(
