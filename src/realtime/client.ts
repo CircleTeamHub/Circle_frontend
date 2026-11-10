@@ -54,6 +54,7 @@ type BadgeSnapshotPayload = {
   circleUnread?: number;
   signupUnread?: number;
   circlePlazaHasUpdate?: boolean;
+  circlePlazaChangedAt?: string;
   profileUnread?: number;
 };
 
@@ -472,6 +473,9 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
     circlePlazaHasUpdate: snapshot.circlePlazaHasUpdate,
+    circlePlazaChangedAt: typeof snapshot.circlePlazaChangedAt === 'string'
+      && Number.isFinite(Date.parse(snapshot.circlePlazaChangedAt))
+      ? Date.parse(snapshot.circlePlazaChangedAt) : undefined,
   });
 }
 
@@ -811,6 +815,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
       circlePlazaHasUpdate: notificationSummary.circlePlazaHasUpdate,
+      circlePlazaChangedAt: notificationSummary.circlePlazaChangedAt,
     });
   } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.

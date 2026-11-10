@@ -14,6 +14,7 @@ type TabBadgeSnapshot = {
   signupUnread?: number;
   profileUnread?: number;
   circlePlazaHasUpdate?: boolean;
+  circlePlazaChangedAt?: number;
 };
 
 type TabBadgeState = {
@@ -82,20 +83,27 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
     };
   }),
   applySnapshot: (snapshot) =>
-    set((state) => ({
-      messagesUnread: snapshot.messagesUnread ?? state.messagesUnread,
-      contactsUnread: snapshot.contactsUnread ?? state.contactsUnread,
-      groupAdmissionsUnread: snapshot.groupAdmissionsUnread ?? state.groupAdmissionsUnread,
-      discoverUnread: snapshot.discoverUnread ?? state.discoverUnread,
-      momentsUnread: snapshot.momentsUnread ?? state.momentsUnread,
-      circleUnread: snapshot.circleUnread ?? state.circleUnread,
-      signupUnread: snapshot.signupUnread ?? state.signupUnread,
-      profileUnread: snapshot.profileUnread ?? state.profileUnread,
-      circlePlazaHasUpdate: snapshot.circlePlazaHasUpdate ?? state.circlePlazaHasUpdate,
-      // Snapshots replace badge truth, but their sync time is not a post version.
-      circlePlazaChangedAt: snapshot.circlePlazaHasUpdate === undefined ? state.circlePlazaChangedAt : null,
-      lastSyncedAt: Date.now(),
-    })),
+    set((state) => {
+      // A legacy snapshot cannot replace a known semantic version.
+      const applyPlaza = snapshot.circlePlazaHasUpdate !== undefined
+        && (state.circlePlazaChangedAt === null
+          || (snapshot.circlePlazaChangedAt !== undefined
+            && snapshot.circlePlazaChangedAt >= state.circlePlazaChangedAt));
+      return {
+        messagesUnread: snapshot.messagesUnread ?? state.messagesUnread,
+        contactsUnread: snapshot.contactsUnread ?? state.contactsUnread,
+        groupAdmissionsUnread: snapshot.groupAdmissionsUnread ?? state.groupAdmissionsUnread,
+        discoverUnread: snapshot.discoverUnread ?? state.discoverUnread,
+        momentsUnread: snapshot.momentsUnread ?? state.momentsUnread,
+        circleUnread: snapshot.circleUnread ?? state.circleUnread,
+        signupUnread: snapshot.signupUnread ?? state.signupUnread,
+        profileUnread: snapshot.profileUnread ?? state.profileUnread,
+        circlePlazaHasUpdate: applyPlaza ? snapshot.circlePlazaHasUpdate! : state.circlePlazaHasUpdate,
+        circlePlazaChangedAt: applyPlaza
+          ? snapshot.circlePlazaChangedAt ?? state.circlePlazaChangedAt : state.circlePlazaChangedAt,
+        lastSyncedAt: Date.now(),
+      };
+    }),
   setRealtimeConnected: (isRealtimeConnected) => set({ isRealtimeConnected }),
   reset: () => set(initialState),
 }));

@@ -21,3 +21,26 @@ test('tab badge store exposes realtime unread state and realtime config url', ()
   assert.match(store, /setRealtimeConnected/);
   assert.match(store, /reset/);
 });
+
+const { loadTsModule } = require('./helpers/load-ts-module');
+for (const version of [undefined, 1000]) {
+  test('stale or legacy snapshot preserves plaza state/version but applies other badges: ' + version, () => {
+    const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+    useTabBadgeStore.getState().setCirclePlazaHasUpdate(true, 2000);
+    useTabBadgeStore.getState().applySnapshot({ circlePlazaHasUpdate: false, circlePlazaChangedAt: version, contactsUnread: 7 });
+    const state = useTabBadgeStore.getState();
+    assert.equal(state.circlePlazaHasUpdate, true);
+    assert.equal(state.circlePlazaChangedAt, 2000);
+    assert.equal(state.contactsUnread, 7);
+  });
+}
+test('first legacy snapshot applies and a newer semantic snapshot advances plaza state atomically', () => {
+  const { useTabBadgeStore } = loadTsModule('src/stores/tabBadgeStore.ts');
+  useTabBadgeStore.getState().applySnapshot({ circlePlazaHasUpdate: true });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, true);
+  useTabBadgeStore.getState().applySnapshot({ circlePlazaHasUpdate: false, circlePlazaChangedAt: 3000 });
+  assert.equal(useTabBadgeStore.getState().circlePlazaHasUpdate, false);
+  assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, 3000);
+  useTabBadgeStore.getState().applySnapshot({ signupUnread: 3 });
+  assert.equal(useTabBadgeStore.getState().circlePlazaChangedAt, 3000);
+});

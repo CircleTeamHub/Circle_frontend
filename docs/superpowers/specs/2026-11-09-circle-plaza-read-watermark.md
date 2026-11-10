@@ -11,4 +11,4 @@
 - `snapshotAt` 之后创建的帖子继续保持未读；`seen` 响应和实时同步都要反映这一结果。
 - 首次进入、已有缓存后点击带红点的 tab、以及下拉刷新，都遵循同一套“先刷新，后确认水位”逻辑。
 
-兼容与事件次序：旧 `POST /circle-plaza/seen` 保留空 body / 204；新客户端只调用 seen-through，旧节点 404 时恢复红点。缺失或无效 feed 水位归一为 null，列表可显示但不确认。实时 changedAt 使用帖子 createdAt 或实际已写的 seen 水位，忽略更旧事件；快照应用重置事件版本。
+兼容与事件次序：旧 `POST /circle-plaza/seen` 保留空 body / 204；新客户端只调用 seen-through，旧节点 404 时恢复红点。缺失或无效 feed 水位归一为 null，列表可显示但不确认。实时 changedAt 使用帖子 createdAt 或实际已写的 seen 水位，忽略更旧事件；快照携带相同语义版本 circlePlazaChangedAt；仅在不落后时应用红点与版本，其他徽标照常更新。旧无版本快照仅在本地尚无版本时应用红点，不清空已知版本。
