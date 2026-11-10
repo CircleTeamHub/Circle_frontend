@@ -37,6 +37,7 @@ let snapshotScope = '';
 let snapshotOwner: string | null = null;
 let snapshotEpoch = -1;
 let snapshotRevision = -1;
+const deletedDuringFetch = new Set<string>();
 
 function mergeMoments(
   currentMoments: MomentPost[],
@@ -92,6 +93,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     const { user, sessionEpoch } = useAuthStore.getState();
     const requestRevision = getPageSnapshotRevision();
     const startedAt = Date.now();
+    deletedDuringFetch.clear();
     const isCurrentSession = () => {
       const auth = useAuthStore.getState();
       return auth.user?.id === user?.id && auth.sessionEpoch === sessionEpoch;
@@ -112,9 +114,9 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         if (!isCurrentSession() || current.latestRequestId !== requestId) {
           return {};
         }
-        const moments = reset
-            ? result.items
-            : mergeMoments(current.moments, result.items);
+        // A page fetched before a successful delete can still contain that post.
+        const items = result.items.filter((item) => !deletedDuringFetch.has(item.id));
+        const moments = reset ? items : mergeMoments(current.moments, items);
         if (requestRevision === getPageSnapshotRevision() && !momentsMutatedSince(startedAt)) writePageSnapshot(user?.id, 'social:moments-feed', moments.slice(0, 100));
         return {
           moments,
@@ -152,6 +154,8 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   },
 
   removeMoment: (id) => {
+    const { loading, refreshing } = get();
+    if (loading || refreshing) deletedDuringFetch.add(id);
     set((s) => ({ moments: s.moments.filter((m) => m.id !== id) }));
     persistMomentFeed();
   },
@@ -196,6 +200,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   reset: () => {
     snapshotScope = '';
     snapshotOwner = null;
+    deletedDuringFetch.clear();
     set((current) => ({
       moments: [],
       cursor: null,

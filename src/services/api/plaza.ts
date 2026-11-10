@@ -19,7 +19,8 @@ import type {
   AvatarFrameAppearance,
 } from '@/types';
 
-type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author'> & {
+type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author' | 'videos'> & {
+  videos?: unknown;
   author: Omit<
     CirclePlazaPost['author'],
     'avatarFrame' | 'avatarFrameAppearance'
@@ -65,10 +66,17 @@ export function normalizePlazaPost(
     (post as unknown as { images?: unknown }).images,
     (post as unknown as { media?: unknown }).media,
   );
+  const videos = Array.isArray(post.videos)
+    ? post.videos.flatMap((item: unknown) => {
+        const url = typeof item === 'string' ? allowPeerMediaUrl(item) : null;
+        return url ? [url] : [];
+      })
+    : [];
   return {
     ...post,
     // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
     images: normalizedMedia.images,
+    videos,
     ...(normalizedMedia.media.length > 0
       ? { media: normalizedMedia.media }
       : {}),
@@ -125,6 +133,18 @@ export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
     `/circle-plaza/posts/${id}`,
   );
   return normalizePlazaPost(post);
+}
+
+export async function fetchMyPlazaPost(id: string): Promise<CirclePlazaPost> {
+  const post = await apiClient<BackendCirclePlazaPost>(`/circle-plaza/me/posts/${id}`);
+  return normalizePlazaPost(post);
+}
+
+export async function updateMyPlazaPost(id: string, content: string): Promise<void> {
+  await markPlazaWrite(apiClient<void>(`/circle-plaza/me/posts/${id}`, {
+    method: 'PATCH',
+    body: { content },
+  }));
 }
 
 export async function createPlazaPost(

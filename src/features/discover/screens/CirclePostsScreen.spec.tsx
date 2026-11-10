@@ -5,6 +5,7 @@ import CirclePostsScreen from './CirclePostsScreen';
 const mockFetchPlazaFeed = jest.fn();
 jest.mock('@/services/api/plaza', () => ({
   fetchPlazaFeed: (...args: unknown[]) => mockFetchPlazaFeed(...args),
+  plazaMutatedSince: () => false,
 }));
 jest.mock('@/services/api/client', () => {
   class ApiError extends Error {
@@ -20,6 +21,7 @@ jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 jest.mock('expo-router', () => ({
+  useFocusEffect: jest.requireActual<typeof import('react')>('react').useEffect,
   useLocalSearchParams: () => ({ id: 'circle-1', name: '徒步圈' }),
   useRouter: () => ({ push: jest.fn() }),
   // 从消息 tab 的圈子详情进来。

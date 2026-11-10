@@ -22,6 +22,7 @@ interface NotificationCenterState {
   ) => void;
   appendInteractivePage: (items: NotificationItem[]) => void;
   setSignupPosts: (items: MyCirclePost[]) => void;
+  updateSignupPostExcerpt: (id: string, excerpt: string) => void;
   markInteractiveReadLocal: (id: string) => void;
   removeInteractiveLocal: (id: string) => void;
   markAllInteractiveReadLocal: () => void;
@@ -64,6 +65,10 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
         };
       }),
     setSignupPosts: (items) => set({ signupPosts: items }),
+    updateSignupPostExcerpt: (id, excerpt) =>
+      set((s) => ({
+        signupPosts: s.signupPosts.map((post) => post.id === id ? { ...post, excerpt } : post),
+      })),
     markInteractiveReadLocal: (id) =>
       set((s) => ({
         interactive: s.interactive.map((n) =>

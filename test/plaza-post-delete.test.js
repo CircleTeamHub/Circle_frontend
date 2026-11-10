@@ -31,7 +31,7 @@ test('PlazaPostCard actions menu offers share to all and report to non-owners', 
   const src = read(SRC);
 
   // 分享 = 进好友选择页把帖子发到对话；举报走后端接口。
-  assert.match(src, /pathname: '\/\(tabs\)\/discover\/share-post'/);
+  assert.match(src, /'\/\(tabs\)\/discover\/share-post'/);
   assert.match(src, /reportPlazaPost\(post\.id\)/);
   assert.match(src, /key: 'share'/);
   assert.match(src, /key: 'report'/);

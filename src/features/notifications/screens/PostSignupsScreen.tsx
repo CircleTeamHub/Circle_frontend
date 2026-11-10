@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,20 +18,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   fetchMyPostSignups,
-  fetchPlazaPost,
+  fetchMyPlazaPost,
   markMyPostSignupsRead,
   submitPostCollaborationRecognitions,
+  updateMyPlazaPost,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
+import { PlazaPostCard } from '@/features/discover/components/plaza-post-card';
+import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import {
   getChatDetailHref,
   getUserProfileHref,
@@ -39,6 +44,7 @@ import {
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
@@ -52,14 +58,14 @@ export default function PostSignupsScreen() {
   const { t } = useTranslation();
   const mountedRef = useRef(true);
   const openingChatRef = useRef(false);
-  const { postId, title } = useLocalSearchParams<{
-    postId: string;
-    title?: string;
-  }>();
+  const { postId } = useLocalSearchParams<{ postId: string }>();
 
   const [signups, setSignups] = useState<PostSignupItem[]>([]);
-  // 拉一次帖子，供「找 TA 聊天」构造帖子卡片（报名→聊天自动带上下文）。
   const [post, setPost] = useState<CirclePlazaPost | null>(null);
+  const [postLoadFailed, setPostLoadFailed] = useState(false);
+  const [editContent, setEditContent] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -71,21 +77,76 @@ export default function PostSignupsScreen() {
   const [recognitionSubmitting, setRecognitionSubmitting] = useState(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  useEffect(() => {
+  const loadPost = useCallback(async () => {
     if (!postId) return;
-    fetchPlazaPost(postId)
-      .then((data) => {
-        if (mountedRef.current) setPost(data);
-      })
-      .catch(() => {
-        // 帖子卡片是锦上添花——拉不到就退化成纯开场白，不打断聊天入口。
-      });
+    setPostLoadFailed(false);
+    try {
+      const data = await fetchMyPlazaPost(postId);
+      if (mountedRef.current) setPost(data);
+    } catch (error) {
+      reportHandledFailure('postSignups', 'loadPost', error);
+      if (mountedRef.current) setPostLoadFailed(true);
+    }
   }, [postId]);
+
+  useEffect(() => {
+    void loadPost();
+  }, [loadPost]);
+
+  const savePost = async () => {
+    const content = editContent?.trim();
+    if (!post || !content || savingRef.current) return;
+    if (content === post.content) {
+      setEditContent(null);
+      return;
+    }
+    const { sessionEpoch } = useAuthStore.getState();
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await updateMyPlazaPost(post.id, content);
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      useDiscoverStore.getState().updatePlazaPostContent(post.id, content);
+      useNotificationCenterStore.getState().updateSignupPostExcerpt(post.id, content.slice(0, 60));
+      if (!mountedRef.current) return;
+      setPost({ ...post, content });
+      setEditContent(null);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      reportHandledFailure('postSignups', 'editPost', error);
+      Alert.alert(
+        t('common.errorOccurred'),
+        getApiErrorMessage(error, t('common.networkError')),
+      );
+    } finally {
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
+    }
+  };
+
+  const handleDeleted = (id: string) => {
+    const store = useNotificationCenterStore.getState();
+    const unread = store.signupPosts.find((item) => item.id === id)?.unreadSignupCount ?? 0;
+    store.setSignupPosts(store.signupPosts.filter((item) => item.id !== id));
+    if (unread > 0) {
+      const badge = useTabBadgeStore.getState();
+      badge.setSignupUnread(Math.max(0, badge.signupUnread - unread));
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace({
+        pathname: scope === 'messages' ? '/(tabs)/messages/notifications' : '/(tabs)/discover/notifications',
+        params: { domain: 'circle' },
+      });
+    }
+  };
 
   const buildPostCard = useCallback(
     (p: CirclePlazaPost): PlazaPostCardData =>
@@ -140,7 +201,9 @@ export default function PostSignupsScreen() {
   }, [load]);
 
   // 打开页面、提交认可后的自动重拉只走 loading;下拉刷新控件只跟下拉走,见 usePullRefresh。
-  const pull = usePullRefresh(load);
+  const pull = usePullRefresh(async () => {
+    await Promise.all([load(), loadPost()]);
+  });
 
   useEffect(() => {
     void markMatchingTargetNotificationsRead({ circlePostId: postId });
@@ -303,7 +366,7 @@ export default function PostSignupsScreen() {
           numberOfLines={1}
           style={{ fontSize: 17, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' }}
         >
-          {title || t('notifications.signupMgmt.signersTitle')}
+          {t('plaza.postDetail.title')}
         </Text>
         <View style={{ width: 26 }} />
       </View>
@@ -313,8 +376,33 @@ export default function PostSignupsScreen() {
         data={filteredSignups}
         keyExtractor={(item) => item.userId}
         ListHeaderComponent={
-          // 认可面板仅在后端确认活动已结束、可认可时展示（recognitionOpen）。
-          recognitionOpen && signups.length > 0 ? (
+          <>
+          {post?.id === postId ? (
+            <View style={s.postDetails}>
+              <PlazaPostCard
+                post={post}
+                scope={scope === 'messages' ? 'messages' : 'discover'}
+                onDeleted={handleDeleted}
+                onEdit={() => setEditContent(post.content)}
+                showSignupAction={false}
+                showShareAction={Date.parse(post.expiresAt) > Date.now()}
+              />
+            </View>
+          ) : postLoadFailed ? (
+            <Pressable accessibilityRole="button" style={s.postDetails} onPress={loadPost}>
+              <Text style={{ color: colors.iconAccent }}>
+                {t('plaza.postDetail.loadFailed')}
+              </Text>
+              <Text style={{ color: colors.textSecondary }}>{t('common.retry')}</Text>
+            </Pressable>
+          ) : (
+            <ActivityIndicator style={s.postDetails} color={colors.iconAccent} />
+          )}
+          <Text accessibilityRole="header" style={[s.signersHeading, { color: colors.text }]}>
+            {t('notifications.signupMgmt.signersTitle')}
+          </Text>
+          {/* 认可面板仅在后端确认活动已结束、可认可时展示。 */}
+          {recognitionOpen && signups.length > 0 ? (
             <View
               style={[
                 s.recognitionPanel,
@@ -391,7 +479,8 @@ export default function PostSignupsScreen() {
                 </Pressable>
               </View>
             </View>
-          ) : null
+          ) : null}
+          </>
         }
         renderItem={({ item }) => {
           const selected = selectedRecognitionIds.has(item.userId);
@@ -522,12 +611,44 @@ export default function PostSignupsScreen() {
           </View>
         )}
       />
+      {editContent !== null ? (
+        <Modal
+          animationType="slide"
+          onRequestClose={() => { if (!saving) setEditContent(null); }}
+        >
+          <KeyboardAvoidingContainer style={[s.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+            <View style={[s.header, { borderBottomColor: colors.surfaceBorder }]}>
+              <Pressable accessibilityRole="button" disabled={saving} onPress={() => setEditContent(null)}>
+                <Text style={{ color: colors.text }}>{t('common.cancel')}</Text>
+              </Pressable>
+              <Text style={[s.signersHeading, { color: colors.text }]}>{t('plaza.actions.editPost')}</Text>
+              <Pressable accessibilityRole="button" disabled={saving || !editContent.trim()} onPress={() => void savePost()}>
+                {saving ? <ActivityIndicator color={colors.iconAccent} /> : (
+                  <Text style={{ color: editContent.trim() ? colors.iconAccent : colors.textSecondary }}>{t('common.save')}</Text>
+                )}
+              </Pressable>
+            </View>
+            <TextInput
+              accessibilityLabel={t('plaza.actions.editPost')}
+              value={editContent}
+              onChangeText={setEditContent}
+              editable={!saving}
+              multiline
+              maxLength={5000}
+              style={[s.editInput, { color: colors.text, marginBottom: insets.bottom }]}
+            />
+          </KeyboardAvoidingContainer>
+        </Modal>
+      ) : null}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  postDetails: { marginVertical: Spacing.md },
+  signersHeading: { fontSize: 16, fontWeight: '700', paddingVertical: Spacing.sm },
+  editInput: { flex: 1, textAlignVertical: 'top', fontSize: 16, padding: Spacing.md },
   header: {
     height: 48,
     flexDirection: 'row',

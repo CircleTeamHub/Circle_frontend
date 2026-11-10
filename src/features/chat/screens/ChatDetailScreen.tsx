@@ -113,6 +113,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
   const inFlightRef = useRef(false);
   const [draft, setDraft] = useState('');
+  const [expandedComposer, setExpandedComposer] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
   const [mentionFocusRequested, setMentionFocusRequested] = useState(false);
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
@@ -664,6 +665,17 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     handlePickQuickReply,
   });
 
+  const mentionPicker = (
+    <MentionPickerPanel
+      colors={colors}
+      t={t}
+      mentionPickerVisible={mentionPickerVisible}
+      d={d}
+      visibleMentionCandidates={visibleMentionCandidates}
+      handlePickMention={handlePickMention}
+    />
+  );
+
   return (
     <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
@@ -672,7 +684,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.
       // Composer panels replace the keyboard and must not stack on its closing inset.
-      enabled={!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen}
+      enabled={!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen && !expandedComposer}
       // 共享容器统一处理键盘避让，两端都把输入栏顶到键盘上方。
     >
       <ChatDetailHeader
@@ -780,14 +792,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
               })}
             </Text>
           ) : null}
-          <MentionPickerPanel
-            colors={colors}
-            t={t}
-            mentionPickerVisible={mentionPickerVisible}
-            d={d}
-            visibleMentionCandidates={visibleMentionCandidates}
-            handlePickMention={handlePickMention}
-          />
+          {!expandedComposer ? mentionPicker : null}
           <ComposerBanners
             colors={colors}
             t={t}
@@ -804,7 +809,10 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             setPendingCard={setPendingCard}
           />
           <ChatComposerBar
-        inputRef={composerInputRef}
+            inputRef={composerInputRef}
+            expanded={expandedComposer}
+            setExpanded={setExpandedComposer}
+            mentionPicker={mentionPicker}
             blurTarget={messageBlurTarget}
             insets={insets}
             colors={colors}

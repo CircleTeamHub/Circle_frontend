@@ -4291,7 +4291,7 @@ export default function EditNoteScreen() {
             {cardPickerKind === 'group' ? (
               <Text style={[s.cardPickerHint, d.groupSheetRowMeta]}>
                 {t('notes.edit.groupPickerHint', {
-                  defaultValue: '只显示你是群主的群。选中后，这条笔记会出现在该群设置的「笔记管理」里。',
+                  defaultValue: '可以选择你已加入的群聊。',
                 })}
               </Text>
             ) : null}

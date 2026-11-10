@@ -43,7 +43,6 @@ const standaloneGroup = {
   joinedAt: '2026-10-02T00:00:00.000Z',
   lastMessageAt: null,
 };
-// 只是成员/管理员的群：群名片即绑定，只有群主能绑，不进选择器。
 const memberGroup = {
   id: 'conv-member',
   type: 'GROUP',
@@ -65,7 +64,7 @@ beforeEach(() => {
   jest.mocked(loadChatConversations).mockResolvedValue([]);
 });
 
-test('lists every group chat I own — circle groups and standalone groups — not just circles', async () => {
+test('lists joined group chats for owners, admins, and ordinary members', async () => {
   mockGetChatState.mockReturnValue({
     conversations: [direct, circleGroup, temp, memberGroup, standaloneGroup, adminCircleGroup],
     conversationsSnapshotLoaded: true,
@@ -75,15 +74,14 @@ test('lists every group chat I own — circle groups and standalone groups — n
 
   // 最近加入的在前；圈子群沿用圈子 id，独立群用会话 id。
   expect(groups).toEqual([
+    { id: 'conv-member', name: '我只是成员', avatarUrl: undefined },
     { id: 'conv-standalone', name: '独立群', avatarUrl: 'https://cdn.test/g.png' },
     { id: 'circle-1', name: '圈子群', avatarUrl: undefined },
+    { id: 'circle-2', name: '圈子群', avatarUrl: undefined },
   ]);
   // 单聊、临时会话不是群聊。
   expect(groups.map((group) => group.id)).not.toContain('conv-direct');
   expect(groups.map((group) => group.id)).not.toContain('conv-temp');
-  // 不是群主的群（成员、管理员）不进选择器。
-  expect(groups.map((group) => group.id)).not.toContain('conv-member');
-  expect(groups.map((group) => group.id)).not.toContain('circle-2');
   // 会话列表已在 store 里，不再打网络。
   expect(loadChatConversations).not.toHaveBeenCalled();
 });
@@ -112,7 +110,7 @@ test('a partial store (only a direct chat upserted before bootstrap) is not trus
   expect(groups).toEqual([{ id: 'conv-standalone', name: '独立群', avatarUrl: 'https://cdn.test/g.png' }]);
 });
 
-test('a complete snapshot with no owned groups is authoritative and does not refetch', async () => {
+test('a complete snapshot with no joined groups is authoritative and does not refetch', async () => {
   mockGetChatState.mockReturnValue({ conversations: [direct], conversationsSnapshotLoaded: true } as never);
 
   const groups = await loadNotePickerGroups('account-d');
@@ -121,7 +119,7 @@ test('a complete snapshot with no owned groups is authoritative and does not ref
   expect(loadChatConversations).not.toHaveBeenCalled();
 });
 
-test('cached groups follow ownership changes already present in the authoritative chat snapshot', async () => {
+test('cached groups follow membership changes already present in the authoritative chat snapshot', async () => {
   mockGetChatState.mockReturnValue({
     conversations: [circleGroup],
     conversationsSnapshotLoaded: true,
@@ -129,11 +127,11 @@ test('cached groups follow ownership changes already present in the authoritativ
   await loadNotePickerGroups('account-e');
 
   mockGetChatState.mockReturnValue({
-    conversations: [{ ...memberGroup, myRole: 'OWNER', name: '新群主的群' }],
+    conversations: [memberGroup],
     conversationsSnapshotLoaded: true,
   } as never);
 
   expect(getCachedNotePickerGroups('account-e')).toEqual([
-    { id: 'conv-member', name: '新群主的群', avatarUrl: undefined },
+    { id: 'conv-member', name: '我只是成员', avatarUrl: undefined },
   ]);
 });

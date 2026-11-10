@@ -1,17 +1,18 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import PostSignupsScreen from './PostSignupsScreen';
-import { fetchMyPostSignups, fetchPlazaPost } from '@/services/api/plaza';
-import type { PostSignupItem } from '@/types';
+import { fetchMyPostSignups, fetchMyPlazaPost, updateMyPlazaPost } from '@/services/api/plaza';
+import type { CirclePlazaPost, PostSignupItem } from '@/types';
 
 jest.mock('react-native', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   const actual = jest.requireActual<typeof import('react-native')>('react-native');
   return new Proxy(actual, { get(target, property, receiver) {
     if (property !== 'FlatList') return Reflect.get(target, property, receiver);
-    return ({ onRefresh, refreshing, ListEmptyComponent, data, renderItem }: { onRefresh: () => void; refreshing: boolean; ListEmptyComponent: React.ReactNode; data: PostSignupItem[]; renderItem: (args: { item: PostSignupItem }) => React.ReactNode }) =>
+    return ({ onRefresh, refreshing, ListHeaderComponent, ListEmptyComponent, data, renderItem }: { onRefresh: () => void; refreshing: boolean; ListHeaderComponent: React.ReactNode; ListEmptyComponent: React.ReactNode; data: PostSignupItem[]; renderItem: (args: { item: PostSignupItem }) => React.ReactNode }) =>
       ReactModule.createElement(actual.View, null,
         ReactModule.createElement(actual.Pressable, { testID: 'list-refresh', onPress: onRefresh, accessibilityState: { busy: refreshing } }),
+        ListHeaderComponent,
         ...data.map((item) => ReactModule.createElement(ReactModule.Fragment, { key: item.userId }, renderItem({ item }))),
         data.length === 0 ? ListEmptyComponent : null);
   } });
@@ -36,9 +37,19 @@ jest.mock('@/components/ui/member-name', () => ({ MemberName: ({ name }: { name:
 } }));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/components/ui/user-icon-row', () => ({ UserIconRow: () => null }));
+jest.mock('@/features/discover/components/plaza-post-card', () => ({
+  PlazaPostCard: ({ post, onEdit }: { post: CirclePlazaPost; onEdit: () => void }) => {
+    const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
+    return <><Text>{post.content}</Text><Pressable testID="edit-post" onPress={onEdit} /></>;
+  },
+}));
+jest.mock('@/features/discover/store/use-discover-store', () => ({
+  useDiscoverStore: { getState: () => ({ updatePlazaPostContent: jest.fn() }) },
+}));
 jest.mock('@/services/api/plaza', () => ({
   fetchMyPostSignups: jest.fn(),
-  fetchPlazaPost: jest.fn(),
+  fetchMyPlazaPost: jest.fn(),
+  updateMyPlazaPost: jest.fn(),
   markMyPostSignupsRead: jest.fn(),
   submitPostCollaborationRecognitions: jest.fn(),
 }));
@@ -48,20 +59,39 @@ jest.mock('@/features/chat/store/use-pending-chat-card-store', () => ({
   usePendingChatCardStore: (select: (state: { setPending: () => void }) => unknown) => select({ setPending: jest.fn() }),
 }));
 jest.mock('@/features/notifications/store/use-notification-center-store', () => ({
-  useNotificationCenterStore: { getState: () => ({ markPostSignupsSeenLocal: jest.fn() }) },
+  useNotificationCenterStore: { getState: () => ({ markPostSignupsSeenLocal: jest.fn(), updateSignupPostExcerpt: jest.fn() }) },
 }));
 jest.mock('@/features/notifications/utils/seen-target', () => ({ markMatchingTargetNotificationsRead: jest.fn() }));
 jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: { getState: () => ({ signupUnread: 0, setSignupUnread: jest.fn() }) } }));
+jest.mock('@/stores/authStore', () => ({ useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
 type SignupsResult = Awaited<ReturnType<typeof fetchMyPostSignups>>;
 
 beforeEach(() => {
   jest.mocked(fetchMyPostSignups).mockReset();
-  jest.mocked(fetchPlazaPost).mockReset().mockReturnValue(new Promise(() => {}));
+  jest.mocked(fetchMyPlazaPost).mockReset().mockReturnValue(new Promise(() => {}));
+  jest.mocked(updateMyPlazaPost).mockReset();
 });
 
 const busy = () => screen.getByTestId('list-refresh').props.accessibilityState.busy;
+
+test('shows the authored post above its signers and updates the same post after editing', async () => {
+  jest.mocked(fetchMyPlazaPost).mockResolvedValue({ id: 'post-1', content: 'Original hiking plans' } as CirclePlazaPost);
+  jest.mocked(fetchMyPostSignups).mockResolvedValue({ items: [signup('Alice')], recognitionOpen: false });
+  jest.mocked(updateMyPlazaPost).mockResolvedValue(undefined);
+  render(<PostSignupsScreen />);
+
+  expect(await screen.findByText('Original hiking plans')).toBeTruthy();
+  expect(screen.getByText('Alice')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('edit-post'));
+  fireEvent.changeText(screen.getByDisplayValue('Original hiking plans'), 'Updated hiking plans');
+  fireEvent.press(screen.getByText('common.save'));
+
+  expect(await screen.findByText('Updated hiking plans')).toBeTruthy();
+  expect(updateMyPlazaPost).toHaveBeenCalledWith('post-1', 'Updated hiking plans');
+  expect(screen.getByText('Alice')).toBeTruthy();
+});
 
 // iOS 上把 refreshing 设成 true 会把整张列表往下推一截转圈、加载完再弹回去,
 // 看起来就是「报名名单从下往上弹」。打开页面的自动加载不能驱动下拉刷新控件。
@@ -82,6 +112,7 @@ test('opening the signer list loads without driving the pull-to-refresh control'
 
 test('pulling to refresh the signer list shows the refresh control until it settles', async () => {
   const pulled = deferred<SignupsResult>();
+  jest.mocked(fetchMyPlazaPost).mockResolvedValue({ id: 'post-1', content: 'Hike' } as CirclePlazaPost);
   jest.mocked(fetchMyPostSignups)
     .mockResolvedValueOnce({ items: [signup('Alice')], recognitionOpen: false })
     .mockReturnValueOnce(pulled.promise);
