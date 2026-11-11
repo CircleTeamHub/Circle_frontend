@@ -1,5 +1,4 @@
 import { requireOptionalNativeModule } from 'expo';
-import { Platform } from 'react-native';
 import type { ChatMediaFile } from '@/features/chat/chat-detail/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -30,9 +29,8 @@ export async function prepareChatVideoForUpload(
   contentType: string,
 ): Promise<PreparedChatVideo> {
   const original = { asset, filename, contentType };
-  if (Platform.OS !== 'android') return original;
   const native = requireOptionalNativeModule<ChatVideoCompressorModule>('ChatVideoCompressor');
-  // Existing binaries and Expo Go can still send; the native feature needs a new APK.
+  // Web, Expo Go and binaries built before the module existed still send the original.
   if (!native) return original;
   try {
     const output = await native.compress(asset.uri);
@@ -45,13 +43,13 @@ export async function prepareChatVideoForUpload(
         try {
           await native.release(output.id);
         } catch {
-          reportHandledFailure('chatMedia', 'videoCompressionCleanup', new Error('Android video compression cleanup failed'));
+          reportHandledFailure('chatMedia', 'videoCompressionCleanup', new Error('Video compression cleanup failed'));
         }
       },
     };
   } catch {
     // Native codec errors may contain local private paths. Record only a static diagnostic.
-    reportHandledFailure('chatMedia', 'videoCompression', new Error('Android video compression failed'));
+    reportHandledFailure('chatMedia', 'videoCompression', new Error('Video compression failed'));
     return original;
   }
 }
