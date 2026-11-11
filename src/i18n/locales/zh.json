@@ -401,7 +401,7 @@
       "untitledPost": "（无内容帖子）",
       "row": "{{count}} 人报名",
       "rowWithUnread": "{{count}} 人报名 · {{unread}} 个新",
-      "signersTitle": "报名的人",
+      "signersTitle": "报名列表",
       "signedAt": "报名于 {{time}}",
       "noSigners": "还没有人报名",
       "loadFailed": "报名列表加载失败，请重试",
