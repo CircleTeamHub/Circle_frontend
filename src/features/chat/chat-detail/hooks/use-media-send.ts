@@ -540,10 +540,11 @@ export function useMediaSend({
   const handlePickLibraryMedia = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
-    // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K 视频一分钟几百 MB,
+    // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K/HEVC/HDR 视频一分钟几百 MB,
     // 原样上传既慢又常常超过 100MB 上限发不出去。导出发生在选择器关掉之后、
     // 结果回来之前,长视频要十几秒,期间在顶部提示一下(只选照片时一闪而过)。
-    // 安卓的选择器不转码。
+    // 系统预设不控码率(常在 5Mbps 以上),上传前再由 prepareChatVideoForUpload
+    // 压到与安卓一致的 1.5Mbps。安卓的选择器不转码,全部交给上传前那一步。
     const transcodeOnPick = Platform.OS === 'ios';
     const preparingNotice = transcodeOnPick
       ? showTopNotice({

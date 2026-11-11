@@ -18,7 +18,8 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test('uses Android output dimensions, byte count and MP4 type, then releases only its owned output', async () => {
+test.each(['android', 'ios'] as const)('uses %s output dimensions, byte count and MP4 type, then releases only its owned output', async (os) => {
+  jest.replaceProperty(Platform, 'OS', os);
   const prepared = await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime');
   expect(native.compress).toHaveBeenCalledWith(source.uri);
   expect(prepared).toMatchObject({ asset: { uri: output.uri, width: 720, height: 1280, fileSize: 1_000_000, duration: 8_000 }, filename: 'original.mp4', contentType: 'video/mp4' });
@@ -26,15 +27,10 @@ test('uses Android output dimensions, byte count and MP4 type, then releases onl
   expect(native.release).toHaveBeenCalledWith(output.id);
 });
 
-test.each(['ios', 'web'] as const)('preserves the existing %s pipeline without loading the Android module', async (os) => {
+test.each(['android', 'ios', 'web'] as const)('keeps sending the original on %s when the binary has no native module', async (os) => {
   jest.replaceProperty(Platform, 'OS', os);
-  expect(await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).toEqual({ asset: source, filename: 'original.mov', contentType: 'video/quicktime' });
-  expect(requireOptionalNativeModule).not.toHaveBeenCalled();
-});
-
-test('allows an older binary without the native module to keep sending', async () => {
   jest.mocked(requireOptionalNativeModule).mockReturnValueOnce(null);
-  expect((await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).asset).toBe(source);
+  expect(await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).toEqual({ asset: source, filename: 'original.mov', contentType: 'video/quicktime' });
 });
 
 test('keeps the original when native compression reports no useful size reduction', async () => {
@@ -49,7 +45,7 @@ test('falls back on a codec error without recording the private source or native
   native.compress.mockRejectedValueOnce(new Error('decoder failed at file:///private/account/video.mov'));
   expect((await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).asset).toBe(source);
   expect(reportHandledFailure).toHaveBeenCalledWith('chatMedia', 'videoCompression', expect.any(Error));
-  expect((jest.mocked(reportHandledFailure).mock.calls[0][2] as Error).message).toBe('Android video compression failed');
+  expect((jest.mocked(reportHandledFailure).mock.calls[0][2] as Error).message).toBe('Video compression failed');
 });
 
 test('a cleanup failure does not turn a successful upload into a failed message', async () => {

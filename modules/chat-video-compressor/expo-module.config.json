@@ -1,5 +1,8 @@
 {
-  "platforms": ["android"],
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ChatVideoCompressorModule"]
+  },
   "android": {
     "modules": ["expo.modules.chatvideocompressor.ChatVideoCompressorModule"]
   }
