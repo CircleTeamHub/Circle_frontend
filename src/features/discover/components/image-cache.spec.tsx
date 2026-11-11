@@ -1,5 +1,7 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Spacing } from '@/theme';
 import { ImageGrid } from './image-grid';
 import { MomentMedia } from './moment-media';
 import { NoteCard } from '@/features/notes/components/NoteCard';
@@ -34,6 +36,25 @@ test('feed thumbnails persist on disk without downloading the larger preview as 
   expect(image.props.cachePolicy).toBe('memory-disk');
   expect(image.props.source).toEqual({ uri: 'https://cdn.test/thumb?sig=a', cacheKey: 'photo-thumb' });
   expect(image.props.placeholder).toBeUndefined();
+});
+
+test('plaza cards show a single image as one nine-grid cell instead of a large preview', () => {
+  const cellWidth = Math.floor((400 - Spacing.lg * 2 - Spacing.md * 2 - Spacing.xs * 2) / 3);
+  const cellStyle = () => StyleSheet.flatten(screen.getByRole('imagebutton').props.style);
+  const { rerender } = render(<ImageGrid images={['photo']} />);
+  expect(cellStyle().width).toBeGreaterThan(cellWidth);
+  rerender(<ImageGrid images={['photo']} uniformCells />);
+  expect(cellStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
+});
+
+test('a single plaza video is one nine-grid cell too', () => {
+  const cellWidth = Math.floor((400 - Spacing.lg * 2 - Spacing.md * 2 - Spacing.xs * 2) / 3);
+  const video = [{ type: 'video' as const, key: 'clip', url: 'clip.mp4', posterUrl: 'poster.jpg' }];
+  const tileStyle = () => StyleSheet.flatten(screen.getByLabelText('moment.playVideo').props.style);
+  const { rerender } = render(<MomentMedia images={[]} attachments={video} />);
+  expect(tileStyle().width).toBeGreaterThan(cellWidth);
+  rerender(<MomentMedia images={[]} attachments={video} uniformCells />);
+  expect(tileStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
 });
 
 test('feed preview fallback keeps a distinct stable key when the signed URL refreshes', () => {

@@ -562,6 +562,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
           ...post.images.map((url) => ({ type: 'image' as const, key: url, url })),
           ...post.videos.map((url) => ({ type: 'video' as const, key: url, url })),
         ] : undefined}
+        uniformCells
       />
 
       {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,

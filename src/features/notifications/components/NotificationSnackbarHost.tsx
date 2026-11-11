@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useSegments } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/chat-core/store';
 import { Avatar } from '@/components/ui/avatar';
@@ -33,6 +33,7 @@ import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { isCurrentRoute } from '@/utils/current-route';
 
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
@@ -41,6 +42,8 @@ export function NotificationSnackbarHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
   const { colors } = useTheme();
   const { t } = useTranslation();
   // `current` is the store's queue head; `shown` is what's actually on screen.
@@ -244,12 +247,16 @@ export function NotificationSnackbarHost() {
       router.push({ pathname: '/quick-chat', params: route.params });
       return;
     }
-    if (isUserProfileSnackbarRoute(route)) {
+    // 正看着的就是横幅指向的那一页（如报名列表开着时又来一条报名）：原地换成新的，
+    // 刷出新数据，不再压一层 —— 否则返回时还是这一页。
+    if (isCurrentRoute({ pathname, params }, route)) {
+      router.replace(route);
+    } else if (isUserProfileSnackbarRoute(route)) {
       router.navigate(route);
     } else {
       router.push(route);
     }
-  }, [shown, clearTimer, dismissCurrent, notificationScope, notificationSettings.quickChatSheet, router, segments, t]);
+  }, [shown, clearTimer, dismissCurrent, notificationScope, notificationSettings.quickChatSheet, pathname, params, router, segments, t]);
 
   if (!shown || !row || (shown.kind === 'chat' && shown.conversationID === activeConversationId)) {
     return null;

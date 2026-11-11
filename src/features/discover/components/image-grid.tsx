@@ -15,6 +15,11 @@ interface ImageGridProps {
   onPress?: (index: number) => void;
   /** 外部容器可用宽度（相册行的内容列宽度）。缺省时按 discover 卡片布局计算。 */
   containerWidth?: number;
+  /**
+   * 单图也只占九宫格的一格。圈子动态列表要卡片高度接近，单图放大会让那一条
+   * 比别的帖子高出一截；朋友圈保留单图大图。
+   */
+  uniformCells?: boolean;
 }
 
 interface DisplayImage {
@@ -75,6 +80,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
   media,
   onPress,
   containerWidth: containerWidthProp,
+  uniformCells = false,
 }) => {
   // 桌面网页版里这是居中栏宽（640），不是 1440 的视口宽。
   const availableWidth = useContentColumnWidth();
@@ -89,13 +95,15 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
   const layout = useMemo(() => {
     const count = displayImages.length;
     if (count === 0) return { cols: 0, rows: 0, itemSize: 0 };
-    if (count === 1) return { cols: 1, rows: 1, itemSize: containerWidth * 0.65 };
+    if (count === 1 && !uniformCells) {
+      return { cols: 1, rows: 1, itemSize: containerWidth * 0.65 };
+    }
     return {
       cols: 3,
       rows: Math.ceil(count / 3),
       itemSize: Math.floor((containerWidth - GAP * 2) / 3),
     };
-  }, [displayImages.length, containerWidth]);
+  }, [displayImages.length, containerWidth, uniformCells]);
 
   const handlePress = useCallback(
     (index: number) => {
@@ -119,6 +127,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
         <Pressable
           key={`${item.originalCacheKey ?? item.originalUri}-${i}`}
           onPress={() => handlePress(i)}
+          accessibilityRole="imagebutton"
           style={[
             s.imageWrap,
             {

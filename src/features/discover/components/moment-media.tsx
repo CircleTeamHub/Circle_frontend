@@ -9,18 +9,20 @@ import { Radius, Spacing } from '@/theme';
 import type { ImageMediaVariant, MomentAttachment } from '@/types';
 import { getDisplayImages, ImageGrid } from './image-grid';
 
-export function MomentMedia({ images, media, attachments, containerWidth }: {
+export function MomentMedia({ images, media, attachments, containerWidth, uniformCells = false }: {
   images: string[];
   media?: ImageMediaVariant[];
   attachments?: MomentAttachment[];
   containerWidth?: number;
+  /** 单个图片/视频也只占九宫格一格（圈子动态卡片），见 ImageGrid 同名参数。 */
+  uniformCells?: boolean;
 }) {
   const { t } = useTranslation();
   const availableWidth = useContentColumnWidth();
   const [selected, setSelected] = useState<MomentAttachment | null>(null);
-  if (!attachments?.some((item) => item.type === 'video')) return <ImageGrid images={images} media={media} containerWidth={containerWidth} />;
+  if (!attachments?.some((item) => item.type === 'video')) return <ImageGrid images={images} media={media} containerWidth={containerWidth} uniformCells={uniformCells} />;
   const width = containerWidth ?? availableWidth - Spacing.lg * 2 - Spacing.md * 2;
-  const size = attachments.length === 1 ? width * 0.65 : Math.floor((width - Spacing.xs * 2) / 3);
+  const size = attachments.length === 1 && !uniformCells ? width * 0.65 : Math.floor((width - Spacing.xs * 2) / 3);
   const photos = attachments.filter((item) => item.type === 'image');
   const displayPhotos = getDisplayImages(
     photos.map((item) => item.url),
