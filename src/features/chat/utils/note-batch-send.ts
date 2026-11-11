@@ -50,6 +50,8 @@ export type NoteSendTask =
       /** 秒（消息契约与拍摄上传路径一致：ms 上取整、至少 1s） */
       duration?: number;
       size?: number;
+      /** 发送前现截的封面（自己 chat/ 目录下的 key）；截不到就没有。 */
+      thumbKey?: string;
     }
   | {
       kind: 'location';
@@ -148,6 +150,8 @@ export function buildNoteSendTasks(
   options: NoteSendOptions,
   imported: ImportedNoteChatMedia[],
   location: NoteLocationSection | null | undefined,
+  /** 拷贝后的视频 key → 封面 key。 */
+  posterKeys?: ReadonlyMap<string, string>,
 ): NoteSendTask[] {
   const tasks: NoteSendTask[] = [];
   if (options.card) {
@@ -160,6 +164,7 @@ export function buildNoteSendTasks(
     seenKeys.add(item.key);
     if (item.type === 'VIDEO') {
       const durationMs = finitePositive(item.durationMs);
+      const thumbKey = posterKeys?.get(item.key);
       tasks.push({
         kind: 'video',
         noteId: note.id,
@@ -168,6 +173,7 @@ export function buildNoteSendTasks(
         height: finitePositive(item.height),
         duration: durationMs ? Math.max(1, Math.ceil(durationMs / 1000)) : undefined,
         size: finitePositive(item.size),
+        ...(thumbKey ? { thumbKey } : {}),
       });
     } else {
       tasks.push({

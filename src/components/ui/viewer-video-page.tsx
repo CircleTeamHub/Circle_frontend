@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MediaImage } from '@/components/ui/media-image';
@@ -15,20 +23,190 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography } from '@/theme';
 import { cachedVideoSource } from '@/utils/video-source';
 
-/** 系统播放器底部控件条的高度：暂停时手势层不盖这块，进度条还能拖。 */
-const NATIVE_CONTROL_BAR_HEIGHT = 96;
+const SKIP_SECONDS = 15;
+/** 倍速按钮依次切换的档位；回到 1 倍是一圈。 */
+const PLAYBACK_RATES = [1, 1.25, 1.5, 2, 0.5] as const;
+const TIME_UPDATE_INTERVAL_SECONDS = 0.25;
+const THUMB_SIZE = 14;
+const SCRUBBER_HEIGHT = 32;
+
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+interface ScrubberProps {
+  progress: number;
+  label: string;
+  onScrubStart: () => void;
+  onScrub: (ratio: number) => void;
+  onScrubEnd: (ratio: number | null) => void;
+  onStep: (direction: 1 | -1) => void;
+}
+
+/**
+ * 进度条。直接用 View 的 responder：按下就接管、拒绝让出，拖动时外层翻页和下滑都抢不走。
+ * 轨道和圆点不接触摸，触点永远落在轨道容器上，locationX 才是相对整条轨道的。
+ */
+function Scrubber({ progress, label, onScrubStart, onScrub, onScrubEnd, onStep }: ScrubberProps) {
+  const [width, setWidth] = useState(0);
+  const drag = useRef<{ startRatio: number; startPageX: number } | null>(null);
+  const ratioAt = (event: GestureResponderEvent) => {
+    const start = drag.current;
+    return start && width > 0
+      ? clamp01(start.startRatio + (event.nativeEvent.pageX - start.startPageX) / width)
+      : progress;
+  };
+  const percent = `${clamp01(progress) * 100}%` as const;
+  return (
+    <View
+      testID="viewer-video-scrubber"
+      style={s.scrubber}
+      hitSlop={{ top: 14, bottom: 14 }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onStartShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={(event) => {
+        const startRatio = width > 0 ? clamp01(event.nativeEvent.locationX / width) : clamp01(progress);
+        drag.current = { startRatio, startPageX: event.nativeEvent.pageX };
+        onScrubStart();
+        onScrub(startRatio);
+        // 安卓上返回 true 才能挡住外层原生 ScrollView 接管这次横滑。
+        return true;
+      }}
+      onResponderMove={(event) => onScrub(ratioAt(event))}
+      onResponderRelease={(event) => {
+        const ratio = ratioAt(event);
+        drag.current = null;
+        onScrubEnd(ratio);
+      }}
+      onResponderTerminate={() => {
+        drag.current = null;
+        onScrubEnd(null);
+      }}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(clamp01(progress) * 100) }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={({ nativeEvent }) => onStep(nativeEvent.actionName === 'increment' ? 1 : -1)}
+    >
+      <View style={s.track} pointerEvents="none">
+        <View style={[s.trackFill, { width: percent }]} />
+      </View>
+      <View style={[s.thumb, { left: percent, marginLeft: -THUMB_SIZE / 2 }]} pointerEvents="none" />
+    </View>
+  );
+}
+
+interface VideoControlBarProps {
+  player: VideoPlayer;
+  playing: boolean;
+  canResume: boolean;
+  onTogglePlay: () => void;
+  onScrubbingChange: (scrubbing: boolean) => void;
+}
+
+/** 底部控件条：后退 15 秒、播放/暂停、前进 15 秒、已播时长、进度条、剩余时长、倍速。 */
+function VideoControlBar({ player, playing, canResume, onTogglePlay, onScrubbingChange }: VideoControlBarProps) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [time, setTime] = useState({ current: player.currentTime ?? 0, duration: player.duration ?? 0 });
+  const [scrubRatio, setScrubRatio] = useState<number | null>(null);
+  const [rate, setRate] = useState(1);
+
+  useEffect(() => {
+    // 时间只在控件条里订阅：每 0.25 秒一次的刷新不该带着整页重渲染。
+    player.timeUpdateEventInterval = TIME_UPDATE_INTERVAL_SECONDS;
+    const subscriptions = [
+      player.addListener('timeUpdate', ({ currentTime }) => {
+        setTime({ current: currentTime, duration: player.duration });
+      }),
+      player.addListener('sourceLoad', ({ duration }) => {
+        setTime((previous) => ({ ...previous, duration }));
+      }),
+    ];
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, [player]);
+
+  const duration = time.duration > 0 ? time.duration : 0;
+  const shownTime = scrubRatio !== null ? scrubRatio * duration : Math.min(time.current, duration || time.current);
+  const seekTo = (seconds: number) => {
+    const target = Math.min(Math.max(0, seconds), duration || seconds);
+    player.currentTime = target;
+    // 下一次 timeUpdate 之前先挪过去，松手时圆点不会弹回旧位置。
+    setTime((previous) => ({ ...previous, current: target }));
+  };
+  const skip = (direction: 1 | -1) => seekTo(time.current + direction * SKIP_SECONDS);
+  const cycleRate = () => {
+    const next = PLAYBACK_RATES[(PLAYBACK_RATES.indexOf(rate as (typeof PLAYBACK_RATES)[number]) + 1) % PLAYBACK_RATES.length];
+    player.playbackRate = next;
+    setRate(next);
+  };
+
+  return (
+    <View testID="viewer-video-controls" style={[s.controlBar, { bottom: insets.bottom + Spacing.md }]}>
+      <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(-1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipBack')}>
+        <MaterialCommunityIcons name="rewind-15" size={22} color="#FFFFFF" />
+      </Pressable>
+      <Pressable
+        style={s.controlButton}
+        hitSlop={6}
+        onPress={onTogglePlay}
+        disabled={!playing && !canResume}
+        accessibilityRole="button"
+        accessibilityLabel={t(playing ? 'chat.detail.pauseVideo' : 'chat.detail.playVideo')}
+      >
+        <Ionicons name={playing ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+      </Pressable>
+      <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipForward')}>
+        <MaterialCommunityIcons name="fast-forward-15" size={22} color="#FFFFFF" />
+      </Pressable>
+      <Text style={s.clock}>{formatClock(shownTime)}</Text>
+      <Scrubber
+        progress={duration > 0 ? shownTime / duration : 0}
+        label={t('chat.detail.videoSeek')}
+        onScrubStart={() => onScrubbingChange(true)}
+        onScrub={setScrubRatio}
+        onScrubEnd={(ratio) => {
+          if (ratio !== null && duration > 0) seekTo(ratio * duration);
+          setScrubRatio(null);
+          onScrubbingChange(false);
+        }}
+        onStep={skip}
+      />
+      {/* 已播取整秒、剩余用总时长减它：两边加起来恒等于总时长（开头 00:00 / -00:14）。 */}
+      <Text style={s.clock}>{`-${formatClock(Math.round(duration) - Math.floor(shownTime))}`}</Text>
+      <Pressable
+        style={s.controlButton}
+        hitSlop={6}
+        onPress={cycleRate}
+        accessibilityRole="button"
+        accessibilityLabel={t('chat.detail.videoPlaybackSpeed', { rate })}
+      >
+        {rate === 1 ? (
+          <Ionicons name="speedometer-outline" size={20} color="#FFFFFF" />
+        ) : (
+          <Text style={s.rateText}>{`${rate}x`}</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
 
 interface ViewerVideoPlayerProps {
   videoUrl: string;
   ephemeral: boolean;
   poster: ReactNode;
   onPlayingChange: (playing: boolean) => void;
+  onScrubbingChange: (scrubbing: boolean) => void;
 }
 
 /** 只在这一页开始播放后挂载；useVideoPlayer 卸载时释放解码器。 */
-function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange }: ViewerVideoPlayerProps) {
+function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScrubbingChange }: ViewerVideoPlayerProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const player = useVideoPlayer(null);
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -103,20 +281,30 @@ function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange }: Vie
     }
   };
   const canResume = !loading && !failed;
+  const togglePlay = () => {
+    if (playing) player.pause();
+    else if (canResume) resume();
+  };
 
   return (
     <>
-      {/* 暂停时也不关 nativeControls：系统播放器拖进度条时可能短暂报告暂停，关控件会打断拖动。 */}
-      <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls contentFit="contain" surfaceType="textureView" />
+      {/* 不用系统控件：它的布局由系统决定（iOS 全屏尺寸时把按钮摆在画面正中），也会吃掉所有触摸。 */}
+      <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls={false} contentFit="contain" surfaceType="textureView" />
       {firstFrameShown ? null : poster}
-      {/* 原生控件会吃掉所有触摸；没在播放时盖一层，横滑才轮得到外层列表、下滑才轮得到这一页。 */}
-      {playing ? null : (
-        <Pressable
-          testID="viewer-video-gesture-layer"
-          style={[s.gestureLayer, { bottom: NATIVE_CONTROL_BAR_HEIGHT + insets.bottom }]}
-          onPress={canResume ? resume : undefined}
-          accessibilityRole="button"
-          accessibilityLabel={canResume ? t('chat.detail.playVideo') : undefined}
+      {/* 点画面切换播放/暂停；读屏走控件条上的同名按钮，这层不重复播报。 */}
+      <Pressable
+        testID="viewer-video-gesture-layer"
+        style={StyleSheet.absoluteFill}
+        onPress={togglePlay}
+        accessible={false}
+      />
+      {failed ? null : (
+        <VideoControlBar
+          player={player}
+          playing={playing}
+          canResume={canResume}
+          onTogglePlay={togglePlay}
+          onScrubbingChange={onScrubbingChange}
         />
       )}
       {loading ? (
@@ -171,16 +359,23 @@ export function ViewerVideoPage({
   const [started, setStarted] = useState(autoPlay);
   const [posterLoading, setPosterLoading] = useState(false);
   // 手势回调要同步读这些值；responder 只建一次，重渲染不能清掉正在累计的 dx/dy。
-  const lock = useRef({ playing: false, dragging: false });
+  const lock = useRef({ playing: false, dragging: false, scrubbing: false });
   const callbacks = useRef({ onPagerLockChange, onSwipeDown });
   callbacks.current = { onPagerLockChange, onSwipeDown };
 
   const syncPagerLock = useCallback(() => {
-    callbacks.current.onPagerLockChange(lock.current.playing || lock.current.dragging);
+    const { playing, dragging, scrubbing } = lock.current;
+    callbacks.current.onPagerLockChange(playing || dragging || scrubbing);
   }, []);
 
   const handlePlayingChange = useCallback((playing: boolean) => {
     lock.current.playing = playing;
+    syncPagerLock();
+  }, [syncPagerLock]);
+
+  // 暂停时拖进度条也是横滑：拖动期间锁住翻页，否则外层列表会把这一页翻走。
+  const handleScrubbingChange = useCallback((scrubbing: boolean) => {
+    lock.current.scrubbing = scrubbing;
     syncPagerLock();
   }, [syncPagerLock]);
 
@@ -195,6 +390,7 @@ export function ViewerVideoPage({
     return PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gesture) =>
         !lock.current.playing &&
+        !lock.current.scrubbing &&
         gesture.dy > SWIPE_CLAIM_DISTANCE &&
         gesture.dy > Math.abs(gesture.dx) * 1.5,
       onPanResponderTerminationRequest: () => false,
@@ -237,7 +433,14 @@ export function ViewerVideoPage({
     <View style={[{ width, height }, s.page]} {...panResponder.panHandlers}>
       <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateY }] }]}>
         {started ? (
-          <ViewerVideoPlayer key={videoUrl} videoUrl={videoUrl} ephemeral={ephemeral} poster={poster} onPlayingChange={handlePlayingChange} />
+          <ViewerVideoPlayer
+            key={videoUrl}
+            videoUrl={videoUrl}
+            ephemeral={ephemeral}
+            poster={poster}
+            onPlayingChange={handlePlayingChange}
+            onScrubbingChange={handleScrubbingChange}
+          />
         ) : (
           <>
             {poster}
@@ -257,7 +460,37 @@ export function ViewerVideoPage({
 
 const s = StyleSheet.create({
   page: { overflow: 'hidden' },
-  gestureLayer: { position: 'absolute', top: 0, left: 0, right: 0 },
+  // 深色半透明圆角条，贴底悬浮在画面上（参照系统播放器的内嵌控件条）。
+  controlBar: {
+    position: 'absolute',
+    left: Spacing.md,
+    right: Spacing.md,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(28,28,30,0.82)',
+  },
+  controlButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  clock: {
+    ...Typography.tinyRegular,
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
+  },
+  rateText: { ...Typography.tinyRegular, color: '#FFFFFF', fontWeight: '600' },
+  scrubber: { flex: 1, height: SCRUBBER_HEIGHT, justifyContent: 'center', marginHorizontal: Spacing.xs },
+  track: { height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.3)' },
+  trackFill: { height: 4, backgroundColor: 'rgba(255,255,255,0.85)' },
+  thumb: {
+    position: 'absolute',
+    top: (SCRUBBER_HEIGHT - THUMB_SIZE) / 2,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: THUMB_SIZE / 2,
+    backgroundColor: '#FFFFFF',
+  },
   center: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

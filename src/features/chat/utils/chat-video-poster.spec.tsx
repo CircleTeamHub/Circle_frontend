@@ -24,6 +24,7 @@ const mockUpload = uploadLocalFileToPresignedUrl as jest.Mock;
 
 function mockPlayer(frames: unknown[] | Error) {
   const player = {
+    replaceAsync: jest.fn((): Promise<void> => Promise.resolve()),
     generateThumbnailsAsync: jest.fn(() =>
       frames instanceof Error ? Promise.reject(frames) : Promise.resolve(frames),
     ),
@@ -58,7 +59,8 @@ describe('uploadChatVideoPoster', () => {
       uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov', 'chat', undefined, 'video-delivery'),
     ).resolves.toEqual({ key: 'chat/me/poster.jpg' });
 
-    expect(mockCreateVideoPlayer).toHaveBeenCalledWith('file:///picked/trip.mov');
+    expect(mockCreateVideoPlayer).toHaveBeenCalledWith(null);
+    expect(player.replaceAsync).toHaveBeenCalledWith('file:///picked/trip.mov');
     // 很多视频第一帧是黑的(淡入、相机刚启动)。
     expect(player.generateThumbnailsAsync).toHaveBeenCalledWith(0.5, { maxWidth: 512 });
     expect(mockManipulate).toHaveBeenCalledWith(frame);
@@ -78,6 +80,20 @@ describe('uploadChatVideoPoster', () => {
     );
     // 播放器不跟组件走,用完必须手动释放,否则原生解码器一直占着。
     expect(player.release).toHaveBeenCalled();
+  });
+
+  it('waits for the video to load before grabbing a frame', async () => {
+    // iOS attaches the item in a background task; asking for frames earlier returns [] and the
+    // video goes out with no poster (a black bubble).
+    const player = mockPlayer([{ width: 512, height: 288 }]);
+    let finishLoading!: () => void;
+    player.replaceAsync.mockReturnValueOnce(new Promise<void>((resolve) => { finishLoading = resolve; }));
+    const uploading = uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov');
+    await Promise.resolve();
+    expect(player.generateThumbnailsAsync).not.toHaveBeenCalled();
+    finishLoading();
+    await expect(uploading).resolves.toEqual({ key: 'chat/me/poster.jpg' });
+    expect(player.generateThumbnailsAsync).toHaveBeenCalledTimes(1);
   });
 
   it('uses the very first frame of a clip shorter than a second', async () => {
