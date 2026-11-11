@@ -3480,6 +3480,20 @@
       "disconnected": "通话连接已断开。"
     },
     "groupCallTitle": "群语音通话",
+    "voice": {
+      "connecting": "正在连接…",
+      "waitingPeer": "等待对方接听…",
+      "waitingGroup": "等待群成员加入…",
+      "connected": "通话中",
+      "micOn": "麦克风已开启",
+      "micOff": "麦克风已关闭",
+      "hangUp": "挂断",
+      "speaker": "扬声器",
+      "speakerOn": "扬声器已开启",
+      "speakerUnavailable": "无法切换音频输出",
+      "participantMuted": "已静音",
+      "participantSpeaking": "正在说话"
+    },
     "participantsOnline": "{{count}} 人在线",
     "self": "我",
     "ended": "通话已结束或连接信息已失效",

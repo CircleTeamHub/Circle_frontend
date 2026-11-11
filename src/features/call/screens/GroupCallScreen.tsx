@@ -9,7 +9,9 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { requestJoinToken } from '@/services/api/calls';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { leaveActiveCall } from '@/features/call/call-session-teardown';
@@ -27,6 +29,7 @@ import {
   useCallRoomTelemetry,
   useCallTelemetry,
 } from '@/features/call/use-call-telemetry';
+import { VoiceCallContent, VOICE_CALL_BACKGROUND } from '@/features/call/components/VoiceCallContent';
 
 
 const s = StyleSheet.create({
@@ -36,6 +39,10 @@ const s = StyleSheet.create({
     paddingTop: 72,
     paddingBottom: 40,
     gap: Spacing.xl,
+  },
+  voiceContainer: {
+    flex: 1,
+    backgroundColor: VOICE_CALL_BACKGROUND,
   },
   header: {
     gap: Spacing.sm,
@@ -133,6 +140,9 @@ const s = StyleSheet.create({
   },
   errorBar: {
     gap: Spacing.sm,
+  },
+  voiceErrorBar: {
+    paddingHorizontal: Spacing.lg,
   },
   retryButton: {
     alignSelf: 'flex-start',
@@ -271,25 +281,35 @@ function CallRoomContent({
       callTelemetry.disconnected(CLIENT_INITIATED_DISCONNECT);
       // 通知后端 + 清空本地状态统一走 leaveActiveCall（幂等，内部已吞掉网络错误）。
       await leaveActiveCall();
-      await room.disconnect().catch(() => undefined);
     } finally {
-      // 无论如何都要放用户离开，不能把人卡在一个转圈的挂断按钮上。
       setLeaving(false);
-      router.back();
     }
-  }, [activeCall, callTelemetry, leaving, room]);
+  }, [activeCall, callTelemetry, leaving]);
 
-  // 离开通话屏幕（系统返回手势 / router.back / 通话结束导致 LiveKitRoom 卸载）时：
-  // 1. leaveActiveCall —— 告诉后端我们走了，否则返回手势离开的人会永远挂在成员列表里
-  //    显示为 JOINED。activeCall 已被清空（挂断按钮跑完 / 对端结束通话）时它会自行跳过。
-  // 2. disconnect —— 释放麦克风与 WebRTC 房间，否则 mic 可能仍热、房间在后台常驻，
-  //    造成隐私泄漏与电量 / 内存泄漏。disconnect 幂等，与手动挂断不冲突。
+  // 旧房间卸载时释放媒体资源。重试连接也会换房间，但仍是同一通电话。
   useEffect(() => {
     return () => {
-      void leaveActiveCall();
       room.disconnect().catch(() => undefined);
     };
   }, [room]);
+
+  if (activeCall && !isVideoCall) {
+    return (
+      <VoiceCallContent
+        key={activeCall.id}
+        call={activeCall}
+        participants={participants}
+        localIdentity={localParticipant.identity}
+        connectionState={connectionState}
+        micEnabled={isMicrophoneEnabled}
+        muting={muting}
+        leaving={leaving}
+        onToggleMic={handleToggleMic}
+        onLeave={handleLeave}
+        setSpeakerphone={liveKitModule.setSpeakerphone}
+      />
+    );
+  }
 
   return (
     <>
@@ -437,15 +457,18 @@ function CallRoomContent({
 export default function GroupCallScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const activeCall = useCallStore((state) => state.activeCall);
   const livekit = useCallStore((state) => state.livekit);
   const setLiveKitCredentials = useCallStore((state) => state.setLiveKitCredentials);
+  const activeCallId = activeCall?.id;
   const [connectError, setConnectError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
   // 通话质量遥测：一个 LiveKitRoom（roomVersion）一份。必须在所有提前 return 之前。
   const callTelemetry = useCallTelemetry(roomVersion);
   const mountedRef = useRef(true);
+  const closedScreenRef = useRef(false);
   const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
     LiveKitModule | null | undefined
@@ -458,7 +481,7 @@ export default function GroupCallScreen() {
   }, []);
 
   useEffect(() => {
-    if (liveKitModule !== undefined) return;
+    if (!activeCallId || liveKitModule !== undefined) return;
 
     let cancelled = false;
     loadLiveKitModule().then((module) => {
@@ -470,14 +493,30 @@ export default function GroupCallScreen() {
     return () => {
       cancelled = true;
     };
-  }, [liveKitModule]);
+  }, [activeCallId, liveKitModule]);
+
+  useEffect(() => {
+    if (!activeCallId) return;
+    return () => {
+      if (useCallStore.getState().activeCall?.id === activeCallId) {
+        void leaveActiveCall();
+      }
+    };
+  }, [activeCallId]);
+
+  const hasVoiceRoom = activeCall?.callType === 'AUDIO' && Boolean(livekit);
+  const startVoiceAudioRouting = liveKitModule?.startVoiceAudioRouting;
+
+  useEffect(() => {
+    if (hasVoiceRoom) return startVoiceAudioRouting?.();
+  }, [hasVoiceRoom, startVoiceAudioRouting]);
 
   const handleRetryConnection = useCallback(async () => {
     if (!activeCall || retrying) return;
     setRetrying(true);
     try {
       const response = await requestJoinToken(activeCall.id);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || useCallStore.getState().activeCall?.id !== activeCall.id) return;
       reportedRoomErrorRef.current = false;
       setLiveKitCredentials(response.livekit);
       setConnectError(null);
@@ -491,12 +530,28 @@ export default function GroupCallScreen() {
     }
   }, [activeCall, retrying, setLiveKitCredentials]);
 
-  const handleFallbackBack = useCallback(() => {
-    void leaveActiveCall();
-    router.back();
+  const closeCallScreen = useCallback(() => {
+    if (closedScreenRef.current) return false;
+    closedScreenRef.current = true;
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/messages');
+    return true;
   }, []);
 
-  if (!activeCall || !livekit) {
+  useEffect(() => {
+    if (!activeCallId && closeCallScreen()) {
+      showTopNotice({ title: t('chat.callRecord.ended') });
+    }
+  }, [activeCallId, closeCallScreen, t]);
+
+  const handleFallbackBack = useCallback(() => {
+    void leaveActiveCall();
+    closeCallScreen();
+  }, [closeCallScreen]);
+
+  if (!activeCall) return null;
+
+  if (!livekit) {
     return (
       <View style={[s.missing, { backgroundColor: colors.background }]}>
         <Text style={[s.missingTitle, { color: colors.text }]}>
@@ -550,9 +605,10 @@ export default function GroupCallScreen() {
 
   const LiveKitRoom = liveKitModule.LiveKitRoom;
   const RoomAudioRenderer = liveKitModule.RoomAudioRenderer;
+  const isVideoCall = activeCall.callType === 'VIDEO';
 
   return (
-    <View style={[s.container, { backgroundColor: colors.background }]}>
+    <View style={isVideoCall ? [s.container, { backgroundColor: colors.background }] : s.voiceContainer}>
       <LiveKitRoom
         key={roomVersion}
         serverUrl={livekit.url}
@@ -585,8 +641,11 @@ export default function GroupCallScreen() {
         <CallRoomContent liveKitModule={liveKitModule} callTelemetry={callTelemetry} />
       </LiveKitRoom>
       {connectError ? (
-        <View style={s.errorBar}>
-          <Text style={[Typography.small, { color: colors.error }]}>
+        <View style={[
+          s.errorBar,
+          !isVideoCall && [s.voiceErrorBar, { paddingBottom: insets.bottom + Spacing.md }],
+        ]}>
+          <Text style={[Typography.small, { color: isVideoCall ? colors.error : '#ff8187' }]}>
             {connectError}
           </Text>
           <Pressable

@@ -1,9 +1,10 @@
 import type { ComponentType, PropsWithChildren } from 'react';
 import type { CallRoomEvents } from './use-call-telemetry';
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { reportError } from '@/observability/sentry';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
 
 /**
@@ -62,6 +63,8 @@ export type LiveKitModule = {
   useParticipants: () => {
     identity: string;
     name?: string;
+    isSpeaking?: boolean;
+    isMicrophoneEnabled?: boolean;
   }[];
   useRoomContext: () => CallRoomEvents & {
     disconnect: () => Promise<void>;
@@ -74,6 +77,8 @@ export type LiveKitModule = {
    */
   RoomAudioRenderer: ComponentType<Record<string, never>>;
   registerGlobals?: () => void;
+  setSpeakerphone?: (enabled: boolean) => Promise<void>;
+  startVoiceAudioRouting?: () => () => void;
 };
 
 /** 原生端不需要 DOM 音频载体（AudioSession 已经在放）。 */
@@ -106,10 +111,38 @@ export function loadLiveKitModule(): Promise<LiveKitModule | null> {
   liveKitModulePromise = import('@livekit/react-native')
     .then((module) => {
       const native = module as unknown as Partial<LiveKitModule>;
+      const audioSession = module.AudioSession;
       cachedLiveKitModule = {
         ...(native as LiveKitModule),
         RoomAudioRenderer:
           native.RoomAudioRenderer ?? NativeRoomAudioRenderer,
+        // registerGlobals manages the iOS session. Android's AudioSwitch needs
+        // an explicit session while the voice room is open.
+        ...(audioSession && Platform.OS === 'android' ? {
+          startVoiceAudioRouting: () => {
+            void audioSession.startAudioSession().catch((error) => {
+              reportHandledFailure('call', 'startVoiceAudioRouting', error);
+            });
+            return () => {
+              void audioSession.stopAudioSession().catch((error) => {
+                reportHandledFailure('call', 'stopVoiceAudioRouting', error);
+              });
+            };
+          },
+        } : {}),
+        ...(audioSession ? {
+          setSpeakerphone: async (enabled: boolean) => {
+            if (Platform.OS === 'ios') {
+              await audioSession.selectAudioOutput(enabled ? 'force_speaker' : 'default');
+              return;
+            }
+            const outputs = await audioSession.getAudioOutputs();
+            const preferred = enabled ? ['speaker'] : ['bluetooth', 'headset', 'earpiece'];
+            const output = preferred.find((device) => outputs.includes(device));
+            if (!output) throw new Error('Requested call audio output is unavailable');
+            await audioSession.selectAudioOutput(output);
+          },
+        } : {}),
       };
       if (cachedLiveKitModule.registerGlobals) {
         ensureLiveKitGlobals(cachedLiveKitModule.registerGlobals);

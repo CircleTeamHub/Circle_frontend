@@ -3371,6 +3371,20 @@
       "disconnected": "Llamada desconectada."
     },
     "groupCallTitle": "Llamada de voz grupal",
+    "voice": {
+      "connecting": "Conectando…",
+      "waitingPeer": "Esperando una respuesta…",
+      "waitingGroup": "Esperando a que se unan los miembros…",
+      "connected": "Llamada en curso",
+      "micOn": "Micrófono activado",
+      "micOff": "Micrófono desactivado",
+      "hangUp": "Colgar",
+      "speaker": "Altavoz",
+      "speakerOn": "Altavoz activado",
+      "speakerUnavailable": "No se pudo cambiar la salida de audio",
+      "participantMuted": "En silencio",
+      "participantSpeaking": "Hablando"
+    },
     "participantsOnline": "{{count}} en línea",
     "self": "Yo",
     "ended": "La llamada ha terminado o la información de conexión ha caducado",

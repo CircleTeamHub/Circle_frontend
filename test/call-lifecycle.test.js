@@ -229,7 +229,11 @@ test('GroupCallScreen routes its unmount through leaveActiveCall and disconnects
 
   assert.match(
     src,
-    /useEffect\(\(\)\s*=>\s*\{\s*return\s*\(\)\s*=>\s*\{\s*void leaveActiveCall\(\);\s*room\.disconnect\(\)/,
+    /useEffect\(\(\)\s*=>\s*\{\s*return\s*\(\)\s*=>\s*\{\s*room\.disconnect\(\)/,
+  );
+  assert.match(
+    src,
+    /return\s*\(\)\s*=>\s*\{\s*if \(useCallStore\.getState\(\)\.activeCall\?\.id === activeCallId\) \{\s*void leaveActiveCall\(\);/,
   );
   // 挂断按钮也必须走同一个出口，不能自己再拼一条 leaveCall/cancelCall 路径。
   assert.match(src, /leaveActiveCall\(\)/);
@@ -246,7 +250,7 @@ test('GroupCallScreen fallback exits notify the backend before navigating back',
   assert.doesNotMatch(src, /\bresetCallState\b/);
   assert.match(
     src,
-    /const handleFallbackBack = useCallback\(\(\) => \{\s*void leaveActiveCall\(\);\s*router\.back\(\);\s*\}, \[\]\);/,
+    /const handleFallbackBack = useCallback\(\(\) => \{\s*void leaveActiveCall\(\);\s*closeCallScreen\(\);\s*\}, \[closeCallScreen\]\);/,
   );
   assert.equal(
     (src.match(/onPress=\{handleFallbackBack\}/g) ?? []).length,

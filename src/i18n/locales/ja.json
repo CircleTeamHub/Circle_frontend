@@ -3363,6 +3363,20 @@
       "disconnected": "通話が切断されました。"
     },
     "groupCallTitle": "グループ音声通話",
+    "voice": {
+      "connecting": "接続中…",
+      "waitingPeer": "相手の応答を待っています…",
+      "waitingGroup": "メンバーの参加を待っています…",
+      "connected": "通話中",
+      "micOn": "マイクオン",
+      "micOff": "マイクオフ",
+      "hangUp": "通話を終了",
+      "speaker": "スピーカー",
+      "speakerOn": "スピーカーオン",
+      "speakerUnavailable": "音声出力を切り替えられませんでした",
+      "participantMuted": "ミュート中",
+      "participantSpeaking": "発言中"
+    },
     "participantsOnline": "{{count}} 人がオンライン",
     "self": "自分",
     "ended": "通話が終了したか、接続情報の有効期限が切れています",

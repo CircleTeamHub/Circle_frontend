@@ -3363,6 +3363,20 @@
       "disconnected": "통화가 끊겼습니다."
     },
     "groupCallTitle": "그룹 음성 통화",
+    "voice": {
+      "connecting": "연결 중…",
+      "waitingPeer": "상대방의 응답을 기다리는 중…",
+      "waitingGroup": "멤버가 참여하기를 기다리는 중…",
+      "connected": "통화 중",
+      "micOn": "마이크 켜짐",
+      "micOff": "마이크 꺼짐",
+      "hangUp": "통화 종료",
+      "speaker": "스피커",
+      "speakerOn": "스피커 켜짐",
+      "speakerUnavailable": "오디오 출력을 전환할 수 없어요",
+      "participantMuted": "음소거됨",
+      "participantSpeaking": "말하는 중"
+    },
     "participantsOnline": "{{count}}명 접속 중",
     "self": "나",
     "ended": "통화가 종료되었거나 연결 정보가 만료되었습니다",

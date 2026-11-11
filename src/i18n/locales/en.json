@@ -3488,6 +3488,20 @@
       "disconnected": "Call disconnected."
     },
     "groupCallTitle": "Group voice call",
+    "voice": {
+      "connecting": "Connecting…",
+      "waitingPeer": "Waiting for an answer…",
+      "waitingGroup": "Waiting for members to join…",
+      "connected": "Call in progress",
+      "micOn": "Mic on",
+      "micOff": "Mic off",
+      "hangUp": "Hang up",
+      "speaker": "Speaker",
+      "speakerOn": "Speaker on",
+      "speakerUnavailable": "Could not switch audio output",
+      "participantMuted": "Muted",
+      "participantSpeaking": "Speaking"
+    },
     "participantsOnline": "{{count}} online",
     "self": "Me",
     "ended": "The call has ended or the connection info has expired",
