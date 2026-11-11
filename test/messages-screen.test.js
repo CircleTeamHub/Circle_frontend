@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-test('messages screen renders pinned conversations as compact grouped surfaces without a pin icon', () => {
+test('messages screen renders pinned conversations as full-width strips without a pin icon', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
@@ -22,20 +22,22 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   );
   // 置顶分组形状收在 pinned-layout 工具里,按签名串缓存(见下面的稳定性用例)。
   assert.match(source, /from "@\/features\/messages\/utils\/pinned-layout"/);
-  assert.match(
-    source,
-    /pinnedGroupPosition=\{pinnedLayout\.positions\.get\(item\.id\) \?\? "none"\}/,
-  );
-  assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
-  assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
+  // 通栏:行抵掉列表左右内边距,置顶底色直接铺在行内容层上,不再是带圆角、互相留缝的卡片。
+  assert.match(source, /row: \{\s*marginHorizontal: -Spacing\.lg,/);
+  assert.match(source, /style=\{\[s\.rowSurface, item\.pinned \? pinnedSurfaceStyle : null\]\}/);
   assert.match(source, /pinnedSurfaceStyle=\{d\.pinnedSurface\}/);
-  assert.match(source, /pinnedRowMiddle/);
-  assert.match(source, /pinnedSurfaceMiddle/);
+  assert.doesNotMatch(source, /pinnedSurfaceMiddle|pinnedRowFirst|getPinnedSurfaceStyle/);
   assert.doesNotMatch(source, /name="pin"/);
+  // 一段置顶收尾不画线;置顶之间的线垫置顶底色,色带不断开;线从文字列起画。
   assert.match(
     source,
-    /pinnedLayout\.hiddenSeparatorIds\.has\(leadingItem\.id\) \? null : <Divider \/>/,
+    /pinnedLayout\.hiddenSeparatorIds\.has\(leadingItem\.id\) \? null : \(/,
   );
+  assert.match(
+    source,
+    /pinnedLayout\.pinnedSeparatorIds\.has\(leadingItem\.id\) \? d\.pinnedSurface : null/,
+  );
+  assert.match(source, /paddingLeft: ROW_TEXT_INSET/);
   assert.doesNotMatch(source, /trailingItem/);
   assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
 });

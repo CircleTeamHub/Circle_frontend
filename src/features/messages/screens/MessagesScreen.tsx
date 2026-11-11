@@ -2,7 +2,6 @@ import { Avatar } from "@/components/ui/avatar";
 import { GroupChatAvatar } from "@/components/ui/group-chat-avatar";
 import { MemberName } from "@/components/ui/member-name";
 import { Badge } from "@/components/ui/badge";
-import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
   canSkipConversationFocusReload,
@@ -22,7 +21,6 @@ import { ChatConnectionBanner } from "@/features/chat/components/ChatConnectionB
 import {
   parsePinnedLayoutKey,
   pinnedLayoutKeyOf,
-  type PinnedGroupPosition,
 } from "@/features/messages/utils/pinned-layout";
 import { useComposerDraftStore } from "@/chat-core/composer-drafts";
 import { draftPreviewText } from "@/chat-core/composer-draft-model";
@@ -71,6 +69,10 @@ import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar
 
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
+const ROW_AVATAR_SIZE = 48;
+const ROW_GAP = 12;
+/** 会话文字列的起点：分隔线从这里开始画。 */
+const ROW_TEXT_INSET = Spacing.lg + ROW_AVATAR_SIZE + ROW_GAP;
 const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
 // 桌面分栏时 tabbar 统一居中到整个视口底部；右侧聊天区要留出这段空间，
 // 否则 tabbar 会盖住 ChatComposerBar 的输入框。
@@ -217,42 +219,22 @@ const s = StyleSheet.create({
     // 让箭头更贴近卡片底部，按钮的触控范围仍保持原位置和大小。
     transform: [{ translateY: 6 }],
   },
-  // 单条会话行外层：保留普通列表分隔线和行间距
+  // 单条会话行外层：抵掉列表左右内边距，整行通栏（置顶底色、左滑操作都铺满屏宽）。
   row: {
-    marginHorizontal: -Spacing.sm,
-    paddingVertical: Spacing.xs,
+    marginHorizontal: -Spacing.lg,
     overflow: "hidden",
-  },
-  pinnedRowFirst: {
-    paddingTop: Spacing.xs,
-    paddingBottom: 1,
-  },
-  pinnedRowMiddle: {
-    paddingTop: 1,
-    paddingBottom: 1,
-  },
-  pinnedRowLast: {
-    paddingTop: 1,
-    paddingBottom: Spacing.xs,
-  },
-  pinnedRowSingle: {
-    paddingVertical: Spacing.xs,
   },
   swipeForeground: {
     zIndex: 1,
-    // 桌面分栏的选中高亮铺在这一层:给圆角,方角块在窄栏里太生硬。
-    // 手机端这层是透明的(底色由 rowSurface 给),圆角无副作用。
-    borderRadius: Radius.lg,
   },
   swipeActions: {
     position: "absolute",
-    top: Spacing.xs,
+    top: 0,
     right: 0,
-    bottom: Spacing.xs,
+    bottom: 0,
     width: SWIPE_ACTIONS_WIDTH,
     flexDirection: "row",
     justifyContent: "flex-end",
-    borderRadius: Radius.lg,
     overflow: "hidden",
   },
   swipeAction: {
@@ -265,34 +247,22 @@ const s = StyleSheet.create({
     ...Typography.small,
     fontWeight: "600",
   },
-  // 单条会话内容：头像 + 内容区
+  // 单条会话内容：头像 + 内容区。置顶行在这层铺底色（d.pinnedSurface），通栏、无圆角，
+  // 头像和文字与普通行对齐在同一条竖线上。
   rowSurface: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: Radius.md,
+    gap: ROW_GAP,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.lg,
   },
-  // 置顶会话内层背景：连续置顶时按组收紧间距和圆角
-  pinnedSurface: {
-    marginHorizontal: Spacing.xs,
-    borderRadius: Radius.lg,
-    // backgroundColor 由主题动态注入
+  // 分隔线从文字列起画，头像底下不画；连续置顶之间的那条垫在置顶底色上，色带不断开。
+  rowSeparator: {
+    marginHorizontal: -Spacing.lg,
+    paddingLeft: ROW_TEXT_INSET,
   },
-  pinnedSurfaceFirst: {
-    borderBottomLeftRadius: Radius.sm,
-    borderBottomRightRadius: Radius.sm,
-  },
-  pinnedSurfaceMiddle: {
-    borderRadius: Radius.sm,
-  },
-  pinnedSurfaceLast: {
-    borderTopLeftRadius: Radius.sm,
-    borderTopRightRadius: Radius.sm,
-  },
-  pinnedSurfaceSingle: {
-    borderRadius: Radius.lg,
+  rowSeparatorLine: {
+    height: StyleSheet.hairlineWidth,
   },
   // 名称组合
   nameRow: {
@@ -368,7 +338,6 @@ type ConversationRowLabels = {
 type ConversationRowProps = {
   item: Conversation;
   testID: string;
-  pinnedGroupPosition: PinnedGroupPosition;
   labels: ConversationRowLabels;
   rowBackgroundColor: string;
   nameStyle: object;
@@ -400,7 +369,6 @@ type ConversationRowProps = {
 function ConversationRowImpl({
   item,
   testID,
-  pinnedGroupPosition,
   labels,
   rowBackgroundColor,
   nameStyle,
@@ -436,36 +404,6 @@ function ConversationRowImpl({
       translateX.setValue(0);
     }
   }, [selectionMode, translateX]);
-
-  const getPinnedRowStyle = (position: PinnedGroupPosition) => {
-    switch (position) {
-      case "single":
-        return s.pinnedRowSingle;
-      case "first":
-        return s.pinnedRowFirst;
-      case "middle":
-        return s.pinnedRowMiddle;
-      case "last":
-        return s.pinnedRowLast;
-      default:
-        return null;
-    }
-  };
-
-  const getPinnedSurfaceStyle = (position: PinnedGroupPosition) => {
-    switch (position) {
-      case "single":
-        return s.pinnedSurfaceSingle;
-      case "first":
-        return s.pinnedSurfaceFirst;
-      case "middle":
-        return s.pinnedSurfaceMiddle;
-      case "last":
-        return s.pinnedSurfaceLast;
-      default:
-        return null;
-    }
-  };
 
   const animateTo = useCallback(
     (toValue: number) => {
@@ -629,7 +567,7 @@ function ConversationRowImpl({
     : undefined;
 
   return (
-    <View ref={rowRef} style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
+    <View ref={rowRef} style={s.row}>
       {/* 桌面分栏：选中高亮是半透明色，垫在下面的操作层会透出来；
           手势也已禁用，这层不渲染。 */}
       {swipeEnabled ? renderSwipeActions() : null}
@@ -640,18 +578,7 @@ function ConversationRowImpl({
           { backgroundColor: rowBackgroundColor, transform: [{ translateX }] },
         ]}
       >
-        <View
-          style={[
-            s.rowSurface,
-            item.pinned
-              ? [
-                  s.pinnedSurface,
-                  getPinnedSurfaceStyle(pinnedGroupPosition),
-                  pinnedSurfaceStyle,
-                ]
-              : null,
-          ]}
-        >
+        <View style={[s.rowSurface, item.pinned ? pinnedSurfaceStyle : null]}>
           {selectionMode ? (
             <Pressable
               style={s.selectionCheckbox}
@@ -667,16 +594,16 @@ function ConversationRowImpl({
           ) : null}
           {item.isAssistant ? (
             <Pressable disabled={selectionMode && selectionBusy} onPress={() => selectionMode ? onToggleSelection(item) : onOpenConversation(item)}>
-              <AssistantAvatar size={40} />
+              <AssistantAvatar size={ROW_AVATAR_SIZE} />
             </Pressable>
           ) : item.conversationType === "private" ? (
             <Pressable disabled={selectionMode && selectionBusy} onPress={() => selectionMode ? onToggleSelection(item) : onOpenUserProfile(item)}>
-              <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+              <Avatar size={ROW_AVATAR_SIZE} name={item.name} uri={item.avatarUrl} />
             </Pressable>
           ) : (
             <Pressable disabled={!selectionMode || selectionBusy} onPress={() => onToggleSelection(item)}>
             <GroupChatAvatar
-              size={40}
+              size={ROW_AVATAR_SIZE}
               name={item.name}
               uri={item.avatarUrl}
               temporary={item.isTempChat}
@@ -980,9 +907,11 @@ export default function MessagesScreen() {
 
   // 依赖主题色的动态样式，colors 变化时重新计算
   const d = useMemo(() => {
+    // 名字 16/500、预览 14/常规：两行拉开主次，列表不再一片发重。
     const preview = {
       color: colors.textSecondary,
-      ...Typography.caption,
+      fontSize: 14,
+      fontWeight: "400" as const,
       flex: 1,
       marginRight: Spacing.sm,
     };
@@ -1001,8 +930,8 @@ export default function MessagesScreen() {
       },
       name: {
         color: colors.text,
-        fontSize: 15,
-        fontWeight: "600" as const,
+        fontSize: 16,
+        fontWeight: "500" as const,
         flex: 1,
         marginRight: Spacing.sm,
       },
@@ -1030,6 +959,7 @@ export default function MessagesScreen() {
       pinnedSurface: {
         backgroundColor: colors.pinnedSurface,
       },
+      separatorLine: { backgroundColor: colors.divider },
     };
   }, [colors]);
 
@@ -1519,7 +1449,6 @@ export default function MessagesScreen() {
       <ConversationRow
         item={item}
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
-        pinnedGroupPosition={pinnedLayout.positions.get(item.id) ?? "none"}
         labels={swipeLabels}
         rowBackgroundColor={
           isSplitLayout && embeddedChat?.conversationID === item.id
@@ -1572,7 +1501,6 @@ export default function MessagesScreen() {
       handleToggleSelection,
       isSplitLayout,
       pinnedFoldAnchorIndex,
-      pinnedLayout,
       showAllPinned,
       selecting,
       selectedConversationIds,
@@ -1586,8 +1514,17 @@ export default function MessagesScreen() {
     }: {
       leadingItem?: Conversation;
     }) =>
-      leadingItem && pinnedLayout.hiddenSeparatorIds.has(leadingItem.id) ? null : <Divider />,
-    [pinnedLayout],
+      leadingItem && pinnedLayout.hiddenSeparatorIds.has(leadingItem.id) ? null : (
+        <View
+          style={[
+            s.rowSeparator,
+            leadingItem && pinnedLayout.pinnedSeparatorIds.has(leadingItem.id) ? d.pinnedSurface : null,
+          ]}
+        >
+          <View style={[s.rowSeparatorLine, d.separatorLine]} />
+        </View>
+      ),
+    [d, pinnedLayout],
   );
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
 

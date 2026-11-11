@@ -8,8 +8,10 @@ interface PinnableRow {
 export interface PinnedLayout {
   /** 置顶行在所在分组里的位置;非置顶行不在表里(按 'none' 处理)。 */
   positions: ReadonlyMap<string, PinnedGroupPosition>;
-  /** 后面紧跟着另一条置顶行的置顶行:它们之间不画分隔线,拼成一整块卡片。 */
+  /** 一段置顶的最后一行(last / single):后面不画分隔线,置顶灰切回列表底色本身就是分界。 */
   hiddenSeparatorIds: ReadonlySet<string>;
+  /** 后面还紧跟着置顶行的置顶行(first / middle):分隔线垫置顶底色,通栏色带不断开。 */
+  pinnedSeparatorIds: ReadonlySet<string>;
 }
 
 const ROW_SEPARATOR = '\n';
@@ -46,11 +48,13 @@ export function pinnedLayoutKeyOf(rows: readonly PinnableRow[]): string {
 export function parsePinnedLayoutKey(key: string): PinnedLayout {
   const positions = new Map<string, PinnedGroupPosition>();
   const hiddenSeparatorIds = new Set<string>();
-  if (!key) return { positions, hiddenSeparatorIds };
+  const pinnedSeparatorIds = new Set<string>();
+  if (!key) return { positions, hiddenSeparatorIds, pinnedSeparatorIds };
   for (const entry of key.split(ROW_SEPARATOR)) {
     const [id, position] = entry.split(FIELD_SEPARATOR) as [string, PinnedGroupPosition];
     positions.set(id, position);
-    if (position === 'first' || position === 'middle') hiddenSeparatorIds.add(id);
+    if (position === 'first' || position === 'middle') pinnedSeparatorIds.add(id);
+    else hiddenSeparatorIds.add(id);
   }
-  return { positions, hiddenSeparatorIds };
+  return { positions, hiddenSeparatorIds, pinnedSeparatorIds };
 }

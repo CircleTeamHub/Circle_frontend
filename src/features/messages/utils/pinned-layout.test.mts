@@ -22,11 +22,13 @@ test('positions pinned runs as single / first / middle / last', () => {
   assert.equal(layout.positions.get('x'), undefined);
 });
 
-test('hides the divider only between two adjacent pinned rows', () => {
+test('a pinned run ends without a divider; dividers inside it sit on the pinned colour', () => {
   const layout = parsePinnedLayoutKey(
-    pinnedLayoutKeyOf([row('a', true), row('b', true), row('x'), row('d', true)]),
+    pinnedLayoutKeyOf([row('a', true), row('b', true), row('x'), row('d', true), row('y')]),
   );
-  assert.deepEqual([...layout.hiddenSeparatorIds].sort(), ['a']);
+  // 置顶灰切回列表底色本身就是分界,再画一条线就多余了。
+  assert.deepEqual([...layout.hiddenSeparatorIds].sort(), ['b', 'd']);
+  assert.deepEqual([...layout.pinnedSeparatorIds].sort(), ['a']);
 });
 
 test('the key ignores unpinned rows, so a new message does not invalidate it', () => {
@@ -54,4 +56,5 @@ test('an empty list has an empty layout', () => {
   const layout = parsePinnedLayoutKey(pinnedLayoutKeyOf([]));
   assert.equal(layout.positions.size, 0);
   assert.equal(layout.hiddenSeparatorIds.size, 0);
+  assert.equal(layout.pinnedSeparatorIds.size, 0);
 });
