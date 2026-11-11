@@ -117,6 +117,7 @@ export function useMessageActions({
   [conversationBurnEnabled]);
   const canCollectSelectionMessage = useCallback((message: ChatMessage) =>
     !isLocalMessageId(message.id) && !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
+    !message.mediaExpired &&
     !['date', 'system-notice', 'call-record', 'verification-card'].includes(message.type),
   [conversationBurnEnabled]);
   const canSaveSelectedMessages = selectedMessages.some(canSaveSelectionMessage);
@@ -673,9 +674,11 @@ export function useMessageActions({
     // 收藏把 message.id 交给服务端当引用:还是 local:<d> 的乐观气泡在服务端没有
     // 对应的行,点下去只会吃一个 400,而提示的是「请重试」—— 重试到 ack 回来之前
     // 都不会成功。与隔壁转发对未确认媒体的处理同一条理由:不提供入口。
+    // 过了保留期的媒体对象已删,收藏下来也打不开(服务端回 CHAT_MEDIA_EXPIRED)。
     if (
       !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
-      !isLocalMessageId(message.id)
+      !isLocalMessageId(message.id) &&
+      !message.mediaExpired
     ) {
       // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
       // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。

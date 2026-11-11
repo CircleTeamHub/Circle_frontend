@@ -661,6 +661,20 @@ test('message forward picker only offers media forwarding for confirmed sources'
   );
 });
 
+// 过了保留期的媒体对象已删,服务端会回 CHAT_MEDIA_EXPIRED:端上直接不给转发入口。
+test('expired media cannot be forwarded', () => {
+  const canForwardMessage = loadCanForwardMessage();
+  for (const type of ['image', 'video', 'voice']) {
+    assert.equal(
+      canForwardMessage(
+        { id: 'm-9', type, mediaExpired: true },
+        { id: 'm-9', height: 12 },
+      ),
+      false,
+    );
+  }
+});
+
 // 服务端已经按 CHAT_FORWARD_FORBIDDEN 拒掉焚毁会话里别人发的消息（「短暂性是发送者
 // 对收件人的承诺」）。端上不挡的话，用户点「转发」、挑好目标会话，才在最后一步吃到
 // 那个错误 —— 与 call-record 那个「永远不会成功的重试」是同一个毛病。

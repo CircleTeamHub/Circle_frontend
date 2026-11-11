@@ -205,6 +205,11 @@ export interface ChatMessage {
   locationAddress?: string;
   locationLatitude?: number;
   locationLongitude?: number;
+  /**
+   * 图片 / 视频 / 语音过了服务端保留期(视频 30 天、其余一年):对象已删或即将删除,
+   * 服务端不再签地址。气泡显示「已过期」,不能打开、转发、收藏、保存。
+   */
+  mediaExpired?: boolean;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。

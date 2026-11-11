@@ -356,6 +356,57 @@ test('image prefers server url and falls back to localUri while pending', () => 
   assert.equal(confirmed.imageWidth, 100);
 });
 
+// 服务端对超过保留期的媒体标 expired、不再签地址(对象已删或即将删除):气泡显示
+// 「已过期」,不能拿本机预览或 localUri 冒充,也不留 key 当缓存键。
+test('expired media maps to an expired bubble with layout metadata only', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const image = mapChatMessageDtoToUI(
+    dto({
+      type: 'image',
+      content: { width: 100, height: 80, expired: true, localUri: 'file:///tmp/a.jpg' },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(image.type, 'image');
+  assert.equal(image.mediaExpired, true);
+  assert.equal(image.imageUrl, undefined);
+  assert.equal(image.imageThumbUrl, undefined);
+  assert.equal(image.imageKey, undefined);
+  assert.equal(image.imageWidth, 100);
+  assert.equal(image.imageHeight, 80);
+
+  const video = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: { width: 720, height: 1280, duration: 12, expired: true },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(video.mediaExpired, true);
+  assert.equal(video.videoUrl, undefined);
+  assert.equal(video.videoThumbUrl, undefined);
+  assert.equal(video.videoWidth, 720);
+  assert.equal(video.videoDuration, 12);
+
+  const voice = mapChatMessageDtoToUI(
+    dto({ type: 'voice', content: { duration: 7, expired: true } }),
+    'u1',
+    0,
+  );
+  assert.equal(voice.mediaExpired, true);
+  assert.equal(voice.voiceUrl, undefined);
+  assert.equal(voice.voiceDuration, 7);
+
+  const live = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 'chat/a.jpg', url: 'https://signed/a.jpg' } }),
+    'u1',
+    0,
+  );
+  assert.equal(live.mediaExpired, undefined);
+});
+
 test('image messages keep their object keys as stable cache keys', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const image = mapChatMessageDtoToUI(

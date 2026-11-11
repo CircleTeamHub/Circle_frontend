@@ -46,6 +46,8 @@ export const EXPECTED_CHAT_SEND_ERROR_CODES: ReadonlySet<string> = new Set([
   'CHAT_MESSAGE_NOT_FOUND',
   // 阅后即焚会话里的媒体不可转发:服务端策略,重试同样不会成功。
   'CHAT_FORWARD_FORBIDDEN',
+  // 媒体过了保留期、对象已删:转发不会成功。
+  'CHAT_MEDIA_EXPIRED',
 ]);
 
 /** 敏感词命中判定(替代 OpenIM 73001 的 isSensitiveWordBlockedError)。 */

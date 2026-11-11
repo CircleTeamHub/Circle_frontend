@@ -208,6 +208,18 @@ test('video files are never loaded as image thumbnails', () => {
   );
 });
 
+// 过了保留期的格子没有缩略图可画:写明「已过期」,而不是笼统的「图片」「视频」。
+test('media grid tiles without a thumbnail say when the media expired', () => {
+  const { getChatMediaTileLabelKey } = loadChatHistory();
+  assert.equal(getChatMediaTileLabelKey(mediaMessage({ expired: true })), 'chat.detail.imageExpired');
+  assert.equal(
+    getChatMediaTileLabelKey({ ...mediaMessage({ expired: true }), type: 'video' }),
+    'chat.detail.videoExpired',
+  );
+  assert.equal(getChatMediaTileLabelKey(mediaMessage({})), 'chat.history.image');
+  assert.equal(getChatMediaTileLabelKey({ ...mediaMessage({}), type: 'video' }), 'chat.history.video');
+});
+
 test('media history requests the backend-supported image and video types', () => {
   const screen = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
