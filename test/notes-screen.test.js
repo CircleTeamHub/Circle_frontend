@@ -742,15 +742,14 @@ test('EditNoteScreen: 松手后被拖的行先滑进空位再提交新顺序，�
   assert.doesNotMatch(finish, /composerDragY\.setValue\(0\)/);
 });
 
-// 群名片就是群设置「笔记管理」的绑定：选择器只列我当群主的群；源笔记可改选/移除，
-// 只有收藏副本的来源群名片才锁定。
+// 源笔记可改选或移除群名片，收藏副本的来源群名片锁定。
 test('EditNoteScreen: 源笔记可添加已加入群聊的名片，收藏副本的来源群保留锁定', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   const cache = read('src/features/notes/utils/note-card-picker-cache.ts');
 
   assert.match(src, /setSourceGroupCardLocked\(Boolean\(note\.collectedFrom\?\.group\)\);/);
   assert.doesNotMatch(src, /setSourceGroupCardLocked\(Boolean\(note\.sourceConversationID/);
-  assert.match(src, /t\('notes\.edit\.groupPickerHint'/);
+  assert.doesNotMatch(src, /t\('notes\.edit\.groupPickerHint'/);
   assert.match(cache, /selectGroupConversations\(conversations\)/);
   assert.doesNotMatch(cache, /conversation\.myRole === 'OWNER'/);
 });
