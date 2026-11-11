@@ -112,6 +112,15 @@ export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
 
 
 
+/** 宫格里没有缩略图可画时的文字:过了服务端保留期写明「已过期」。 */
+export function getChatMediaTileLabelKey(message: ChatMessageDto): string {
+  const expired = message.content?.['expired'] === true;
+  if (message.type === 'video') {
+    return expired ? 'chat.detail.videoExpired' : 'chat.history.video';
+  }
+  return expired ? 'chat.detail.imageExpired' : 'chat.history.image';
+}
+
 /**
  * 媒体宫格里某个候选地址对应的存储 key,拿来当图片缓存键:签名地址每小时轮换,
  * 按地址缓存的话每次打开聊天记录都要整页重新下载。本机文件地址不挂 key。

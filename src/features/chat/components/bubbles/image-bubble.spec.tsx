@@ -104,6 +104,33 @@ beforeEach(() => {
   viewerProps.length = 0;
 });
 
+describe('ImageBubble expired media', () => {
+  // 原来没有地址时什么都不画,气泡塌成一行时间。现在按原尺寸占位、写明已过期。
+  it('keeps the image footprint, says it expired and does not open', () => {
+    const onImagePress = jest.fn();
+    render(
+      <ImageBubble
+        message={{
+          id: 'm-expired',
+          type: 'image',
+          mediaExpired: true,
+          imageWidth: 200,
+          imageHeight: 100,
+          time: '10:00',
+        } as unknown as ChatMessage}
+        outgoing={false}
+        onImagePress={onImagePress}
+      />,
+    );
+
+    expect(screen.getByText('chat.detail.imageExpired')).toBeTruthy();
+    expect(screen.getByTestId('chat-media-expired')).toHaveStyle({ width: 220, height: 110 });
+    expect(imageProps).toHaveLength(0);
+    openPreview();
+    expect(onImagePress).not.toHaveBeenCalled();
+  });
+});
+
 describe('ImageBubble ephemeral rendering', () => {
   // 这是本次要修的场景：推送冷启动时会话列表还没到，屏幕级判定读成 false。
   // 消息自己带着焚毁秒数，所以仍然必须按阅后即焚渲染 —— 否则原图落盘、

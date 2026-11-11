@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { setAudioModeAsync, useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { toPlayableUri } from '@/features/chat/utils/media-uri';
@@ -22,6 +23,7 @@ interface VoiceBubbleProps {
 }
 
 const sVoice = StyleSheet.create({
+  bubbleUnavailable: { opacity: 0.64 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -96,7 +98,10 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
-  const voiceSource = message.voiceUrl || message.voicePath || null;
+  const { t } = useTranslation();
+  const expired = message.mediaExpired === true;
+  // 过期的语音连本机录音路径也不播:和对端看到的一致,都是「已过期」。
+  const voiceSource = expired ? null : message.voiceUrl || message.voicePath || null;
   // 裸本地路径要补回 file:// scheme，否则 AVFoundation 打不开（FigFilePlayer err=-12864）。
   // useMemo 稳定 source 引用：每次渲染传新对象会让 expo-audio 反复重建 player。
   const audioSource = useMemo(
@@ -188,12 +193,30 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
 
   const voiceNode = (
     <View style={[sVoice.body, outgoing ? sVoice.bodyOutgoing : null]}>
+      {expired ? (
+        <Pressable
+          testID="chat-media-expired"
+          style={[
+            sVoice.bubble,
+            { backgroundColor: bubbleColor },
+            outgoing ? sVoice.bubbleOutgoing : sVoice.bubbleIncoming,
+          ]}
+          onLongPress={onLongPress}
+          delayLongPress={350}
+          accessibilityLabel={t('chat.detail.voiceExpired')}
+        >
+          <Ionicons name="time-outline" size={22} color={contentColor} />
+          <Text style={[sVoice.timeText, { color: contentColor }]}>
+            {t('chat.detail.voiceExpired')}
+          </Text>
+        </Pressable>
+      ) : (
       <Pressable
         style={[
           sVoice.bubble,
           { backgroundColor: bubbleColor },
           outgoing ? sVoice.bubbleOutgoing : sVoice.bubbleIncoming,
-          !voiceSource ? { opacity: 0.64 } : null,
+          !voiceSource ? sVoice.bubbleUnavailable : null,
         ]}
         onPress={handlePress}
         onLongPress={onLongPress}
@@ -233,6 +256,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
           {displaySeconds}
         </Text>
       </Pressable>
+      )}
       {message.time ? (
         <View style={sVoice.timeRow}>
           <Text
