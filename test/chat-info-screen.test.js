@@ -509,7 +509,7 @@ test('note block editor defers DOM editor imports during web server rendering', 
   assert.match(source, /function canLoadDOMEditor\(\)/);
   assert.match(source, /Platform\.OS !== 'web' \|\| typeof window !== 'undefined'/);
   assert.match(source, /require\('@\/features\/notes\/dom\/NoteBlockEditor\.dom'\)/);
-  assert.match(source, /if \(!canLoadDOMEditor\(\)\) \{\s*return <View style=\{s\.container\} \/>;\s*\}/s);
+  assert.match(source, /if \(!canLoadDOMEditor\(\)\) \{\s*return <View style=\{containerStyle\} \/>;\s*\}/s);
 });
 
 // 契约随自研栈迁移更新(意图不变):pin/mute 仍走 pending 守卫;阅后即焚与

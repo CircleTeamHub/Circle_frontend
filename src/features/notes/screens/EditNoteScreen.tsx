@@ -80,7 +80,6 @@ import {
   MAX_NOTE_TITLE_LENGTH,
   type NoteTextStats,
 } from '@/features/notes/utils/note-text-stats';
-import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
   createPickerPreviewDisposer,
@@ -220,11 +219,13 @@ type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | 'audio' |
 
 const COMPOSER_ACTIONS: readonly {
   kind: NoteComposerBlockKind;
-  icon: keyof typeof Ionicons.glyphMap;
+  // Ionicons has no heading glyph and both of its text icons read as "Aa",
+  // so the title tool draws a serif "T" to stay distinct from body text.
+  icon: keyof typeof Ionicons.glyphMap | { glyph: string };
   translationKey: string;
   defaultLabel: string;
 }[] = [
-  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
+  { kind: 'title', icon: { glyph: 'T' }, translationKey: 'title', defaultLabel: '标题' },
   { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
   { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
   { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
@@ -240,12 +241,6 @@ const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' 
 const COMPOSER_SORT_ROW_HEIGHT = 58;
 // 松手后被拖的行滑进空位的时长：够短不拖沓，又能看清它落到了哪。
 const COMPOSER_DROP_DURATION = 120;
-// 文字块是笔记的主体：默认给到能写十来行的高度，最小也留出 240，
-// 免得扣掉工具栏后只剩两三行可见。
-const DEFAULT_TEXT_EDITOR_HEIGHT = 360;
-const MIN_TEXT_EDITOR_HEIGHT = 240;
-const MAX_TEXT_EDITOR_HEIGHT = 640;
-const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 20;
 
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -549,10 +544,6 @@ export default function EditNoteScreen() {
   // 存字符串就得在加载 effect 里用 t 格式化，t 于是成了 effect 的依赖 —— 切一次
   // 语言就重新拉一遍这篇笔记，把没保存的编辑整个冲掉（见下面的加载 effect）。
   const [createdAtIso, setCreatedAtIso] = useState(() => new Date().toISOString());
-  const dateStr = useMemo(
-    () => formatNoteFullDate(createdAtIso, t),
-    [createdAtIso, t],
-  );
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const uploadInFlightRef = useRef(false);
   const uploadOperationGuardRef = useRef(createNoteMediaUploadOperationGuard());
@@ -620,17 +611,6 @@ export default function EditNoteScreen() {
   // A new note starts as a clean canvas. Blocks are mounted only after the
   // author chooses them from the compact toolbar below.
   const [composerBlocks, setComposerBlocks] = useState<NoteComposerBlock[]>([]);
-  const [textEditorHeights, setTextEditorHeights] = useState<Record<string, number>>({});
-  const textEditorHeightsRef = useRef<Record<string, number>>({});
-  const textEditorHeightValuesRef = useRef(new Map<string, Animated.Value>());
-  const textEditorResizeMetaRef = useRef<{
-    blockId: string;
-    startHeight: number;
-    currentHeight: number;
-  } | null>(null);
-  const textEditorResizeRespondersRef = useRef(
-    new Map<string, ReturnType<typeof PanResponder.create>>(),
-  );
   const composerIdRef = useRef(0);
   const [sortMode, setSortMode] = useState(false);
   const composerBlocksRef = useRef<NoteComposerBlock[]>([]);
@@ -740,85 +720,6 @@ export default function EditNoteScreen() {
   useEffect(() => {
     composerBlocksRef.current = composerBlocks;
   }, [composerBlocks]);
-
-  const setTextEditorHeight = useCallback((blockId: string, height: number) => {
-    const nextHeight = Math.round(height);
-    if (textEditorHeightsRef.current[blockId] === nextHeight) return;
-    textEditorHeightsRef.current = {
-      ...textEditorHeightsRef.current,
-      [blockId]: nextHeight,
-    };
-    setTextEditorHeights((current) => (
-      current[blockId] === nextHeight
-        ? current
-        : { ...current, [blockId]: nextHeight }
-    ));
-  }, []);
-
-  const getTextEditorHeightValue = useCallback((blockId: string, height: number) => {
-    const cached = textEditorHeightValuesRef.current.get(blockId);
-    if (cached) return cached;
-    const value = new Animated.Value(height);
-    textEditorHeightValuesRef.current.set(blockId, value);
-    return value;
-  }, []);
-
-  const finishTextEditorResize = useCallback(() => {
-    const meta = textEditorResizeMetaRef.current;
-    if (meta) {
-      textEditorHeightValuesRef.current.get(meta.blockId)?.stopAnimation();
-      setTextEditorHeight(meta.blockId, meta.currentHeight);
-    }
-    textEditorResizeMetaRef.current = null;
-  }, [setTextEditorHeight]);
-
-  const getTextEditorResizeResponder = useCallback(
-    (blockId: string) => {
-      const cached = textEditorResizeRespondersRef.current.get(blockId);
-      if (cached) return cached;
-
-      const responder = PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponderCapture: () => true,
-        onPanResponderGrant: () => {
-          if (pendingSubmissionRef.current || saveInFlightRef.current) return;
-          const startHeight =
-            textEditorHeightsRef.current[blockId] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
-          textEditorResizeMetaRef.current = {
-            blockId,
-            startHeight,
-            currentHeight: startHeight,
-          };
-        },
-        onPanResponderMove: (_event, gestureState) => {
-          const meta = textEditorResizeMetaRef.current;
-          if (!meta) return;
-          const nextHeight = Math.max(
-            MIN_TEXT_EDITOR_HEIGHT,
-            Math.min(MAX_TEXT_EDITOR_HEIGHT, meta.startHeight + gestureState.dy),
-          );
-          meta.currentHeight = nextHeight;
-          textEditorHeightValuesRef.current.get(meta.blockId)?.setValue(nextHeight);
-        },
-        onPanResponderRelease: finishTextEditorResize,
-        onPanResponderTerminate: finishTextEditorResize,
-        onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
-      });
-
-      textEditorResizeRespondersRef.current.set(blockId, responder);
-      return responder;
-    },
-    [finishTextEditorResize],
-  );
-
-  useEffect(() => () => {
-    finishTextEditorResize();
-    textEditorHeightValuesRef.current.clear();
-    textEditorResizeRespondersRef.current.clear();
-  }, [finishTextEditorResize]);
 
   const finishComposerDrag = useCallback(() => {
     const meta = composerDragMetaRef.current;
@@ -1098,11 +999,6 @@ export default function EditNoteScreen() {
     setPendingSubmission(null);
     setNavigating(false);
     setTitleAdded(false);
-    textEditorResizeMetaRef.current = null;
-    textEditorHeightsRef.current = {};
-    textEditorHeightValuesRef.current.clear();
-    textEditorResizeRespondersRef.current.clear();
-    setTextEditorHeights({});
     return () => {
       groupCreateRequestRef.current += 1;
       if (saveGenerationRef.current === routeGeneration) {
@@ -3030,13 +2926,8 @@ export default function EditNoteScreen() {
       titleInput: { color: colors.text },
       // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
-      dateText: { color: colors.textSecondary },
-      groupButton: {
-        backgroundColor: colors.surfaceMuted,
-        borderColor: 'transparent',
-      },
+      groupButton: { backgroundColor: colors.surfaceMuted },
       groupButtonText: { color: colors.text },
-      groupButtonSummary: { color: colors.textSecondary },
       groupSheetBackdrop: { backgroundColor: colors.overlay },
       groupSheet: { backgroundColor: colors.surface },
       groupSheetHandle: { backgroundColor: colors.surfaceBorder },
@@ -3055,14 +2946,7 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      metaIcon: { backgroundColor: colors.primaryLight },
-      // 分区做成安静的卡片：surface 底 + 细边，取代原来贯穿全宽的分隔线
-      sectionShell: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      editorFrame: { borderColor: colors.surfaceBorder },
-      editorResizeGrip: { backgroundColor: colors.textSecondary },
+      textBar: { backgroundColor: colors.surface },
       sectionHeading: { color: colors.text },
       sectionSubtitle: { color: colors.textSecondary },
       sectionHeaderMeta: { color: colors.textSecondary },
@@ -3162,12 +3046,10 @@ export default function EditNoteScreen() {
       : `${audioItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
   // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
-  // meta 收 ReactNode 而不是 string：正文那一格要放实时字数，它必须是一个能自己
-  // 订阅、自己重渲染的小节点，否则整屏都得跟着每个键击重渲染一次。
   const renderSectionHeader = (
     icon: keyof typeof Ionicons.glyphMap,
     sectionTitle: string,
-    meta?: ReactNode,
+    meta?: string,
     onRemove?: () => void,
   ) => (
     <View style={s.sectionHeader}>
@@ -3361,119 +3243,75 @@ export default function EditNoteScreen() {
               returnKeyType="next"
             />
 
-            <View style={s.metaRow}>
-              <View style={[s.metaIcon, d.metaIcon]}>
-                <Ionicons name="calendar-outline" size={13} color={colors.iconAccent} />
-              </View>
-              <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-            </View>
-
-            <View style={s.groupSection}>
-              <Pressable
-                style={[s.groupButton, d.groupButton]}
-                disabled={isEditingLocked}
-                onPress={() => {
-                  setGroupCreateOpen(false);
-                  setGroupCreateName('');
-                  setGroupCreating(false);
-                  setGroupSheetVisible(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-              >
-                <View style={[s.metaIcon, d.metaIcon]}>
-                  <Ionicons name="folder-open-outline" size={15} color={colors.iconAccent} />
-                </View>
-                <View style={s.groupButtonTextWrap}>
-                  <Text style={[s.groupButtonText, d.groupButtonText]}>
-                    {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-                  </Text>
-                  <Text style={[s.groupButtonSummary, d.groupButtonSummary]} numberOfLines={1}>
-                    {groupSummary}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </Pressable>
-            </View>
+            <Pressable
+              style={[s.groupButton, d.groupButton]}
+              disabled={isEditingLocked}
+              onPress={() => {
+                setGroupCreateOpen(false);
+                setGroupCreateName('');
+                setGroupCreating(false);
+                setGroupSheetVisible(true);
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+              accessibilityValue={{ text: groupSummary }}
+            >
+              <Ionicons name="folder-outline" size={14} color={colors.iconAccent} />
+              <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
+                {selectedGroupNames.length > 0
+                  ? groupSummary
+                  : t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+              </Text>
+              <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
+            </Pressable>
           </View>
         );
-      case 'text': {
-        const textEditorHeight = textEditorHeights[block.id] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
-        const textEditorHeightValue = getTextEditorHeightValue(block.id, textEditorHeight);
-        const textEditorResizeResponder = getTextEditorResizeResponder(block.id);
+      case 'text':
+        // 对齐竞品的单行输入条：只有占位符和右侧删除，随内容自动长高；
+        // 超长时的错误提示仍挂在条下面，「完成」被挡住时作者看得到原因。
         return (
           <>
-        <View style={[s.sectionBlock, s.textSectionBlock, d.sectionShell]}>
-          {renderSectionHeader(
-            'text-outline',
-            t('notes.edit.sections.text', { defaultValue: '文字' }),
-            <NoteTextStatsConsumer store={textStatsStore}>
-              {(stats) =>
-                t('notes.edit.textCount', {
-                  defaultValue: '正文长度 {{count}} / {{max}}',
-                  count: stats.characters,
-                  max: MAX_NOTE_TEXT_LENGTH,
-                })
-              }
-            </NoteTextStatsConsumer>,
-            () => handleRemoveComposerBlock(block),
-          )}
-          <View>
-            <Animated.View
-              style={[
-                s.textEditorFrame,
-                { height: textEditorHeightValue, minHeight: MIN_TEXT_EDITOR_HEIGHT },
-                d.editorFrame,
-              ]}
-            >
-              {editorMounted ? (
-                <NoteBlockEditor
-                  key={isEditingLocked ? 'locked' : 'editing'}
-                  initialContent={textBlocksById[block.id] ?? null}
-                  onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
-                  mediaToolbarEnabled={false}
-                  editable={!isEditingLocked}
-                />
-              ) : null}
-            </Animated.View>
-            {!isEditingLocked ? (
-              <View
-                {...textEditorResizeResponder.panHandlers}
-                style={s.textEditorResizeHandle}
-                accessible
-                accessibilityRole="adjustable"
-                accessibilityLabel={t('notes.edit.resizeTextBlock', {
-                  defaultValue: '调整文字块高度',
-                })}
-                accessibilityValue={{
-                  min: MIN_TEXT_EDITOR_HEIGHT,
-                  max: MAX_TEXT_EDITOR_HEIGHT,
-                  now: textEditorHeight,
-                }}
-              >
-                <View style={[s.textEditorResizeGrip, d.editorResizeGrip]} />
+            <View testID="note-text-section" style={[s.textBar, d.textBar]}>
+              <View style={s.textBarEditor}>
+                {editorMounted ? (
+                  <NoteBlockEditor
+                    key={isEditingLocked ? 'locked' : 'editing'}
+                    initialContent={textBlocksById[block.id] ?? null}
+                    onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
+                    mediaToolbarEnabled={false}
+                    editable={!isEditingLocked}
+                    placeholder={t('notes.edit.textPlaceholder', { defaultValue: '请输入' })}
+                    fitContent
+                  />
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          <NoteTextStatsConsumer store={textStatsStore}>
-            {(stats) => {
-              const textError = getTextError(stats);
-              return textError ? (
-                <Text
-                  accessibilityRole="alert"
-                  accessibilityLiveRegion="polite"
-                  style={[s.sectionSubtitle, d.hintError]}
-                >
-                  {textError}
-                </Text>
-              ) : null;
-            }}
-          </NoteTextStatsConsumer>
-        </View>
-
+              <Pressable
+                style={s.textBarRemoveButton}
+                onPress={() => handleRemoveComposerBlock(block)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${t('notes.edit.sections.text', { defaultValue: '文字' })}`}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </Pressable>
+            </View>
+            <NoteTextStatsConsumer store={textStatsStore}>
+              {(stats) => {
+                const textError = getTextError(stats);
+                return textError ? (
+                  <Text
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    style={[s.textBarError, d.hintError]}
+                  >
+                    {textError}
+                  </Text>
+                ) : null;
+              }}
+            </NoteTextStatsConsumer>
           </>
         );
-      }
       case 'image':
         return (
           <>
@@ -4038,11 +3876,21 @@ export default function EditNoteScreen() {
                 accessibilityLabel={label}
               >
                 <View style={s.composerToolIcon}>
-                  <Ionicons
-                    name={action.icon}
-                    size={21}
-                    color={colors.textSecondary}
-                  />
+                  {typeof action.icon === 'string' ? (
+                    <Ionicons
+                      name={action.icon}
+                      size={21}
+                      color={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text
+                      testID={`composer-tool-glyph-${action.kind}`}
+                      style={[s.composerToolGlyph, { color: colors.textSecondary }]}
+                      allowFontScaling={false}
+                    >
+                      {action.icon.glyph}
+                    </Text>
+                  )}
                 </View>
                 <Text
                   style={[s.composerToolLabel, { color: colors.textSecondary }]}
@@ -4586,40 +4434,20 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 26,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 2,
-    paddingBottom: Spacing.md,
-    gap: Spacing.xs,
-  },
-  dateText: { ...Typography.caption },
-  metaIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-  },
+  // 分组收成标题下的一枚小胶囊：宽度随文字，超长时省略，不再占满一整行。
   groupButton: {
-    minHeight: 56,
-    borderRadius: Radius.md,
-    borderCurve: 'continuous',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.xs,
+    height: 28,
+    marginHorizontal: Spacing.lg,
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: 10,
+    borderRadius: Radius.pill,
   },
-  groupButtonTextWrap: { flex: 1, gap: 2 },
-  groupButtonText: { ...Typography.body, fontWeight: '600' },
-  groupButtonSummary: { ...Typography.small },
+  groupButtonText: { ...Typography.small, fontWeight: '500', flexShrink: 1 },
   groupSheetWrap: { width: '100%', maxHeight: '70%' },
   groupSheet: {
     borderTopLeftRadius: Radius.xl,
@@ -4772,12 +4600,6 @@ const s = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.md,
   },
-  // 文字块把纵向留白收紧到 8：卡片上下、标题与编辑框之间都不需要整档 16，
-  // 省下的高度都给可写区域。
-  textSectionBlock: {
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-  },
   secondarySection: {
     marginHorizontal: Spacing.lg,
     marginBottom: 0,
@@ -4820,27 +4642,31 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: Spacing.xs,
   },
-  textEditorFrame: {
-    height: DEFAULT_TEXT_EDITOR_HEIGHT,
-    minHeight: MIN_TEXT_EDITOR_HEIGHT,
-    // 卡片内边距 + 编辑器内边距叠起来太宽：编辑框向两侧撑出 8pt 贴近卡片边，
-    // 卡片标题行仍与其他区块对齐。
-    marginHorizontal: -Spacing.sm,
-    overflow: 'hidden',
-    borderRadius: Radius.md,
+  // 编辑器自己带 10pt 内边距，条只补 6pt：文字离左边缘 16，和标题对齐。
+  // 上下各留 2pt，WebView 不碰圆角（安卓不一定按父视图圆角裁 WebView），
+  // 单行时整条正好 50 高。
+  textBar: {
+    marginHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingLeft: 6,
+    paddingRight: Spacing.xs,
+    borderRadius: Radius.lg,
     borderCurve: 'continuous',
-    borderWidth: 1,
+    overflow: 'hidden',
   },
-  textEditorResizeHandle: {
-    height: TEXT_EDITOR_RESIZE_HANDLE_HEIGHT,
+  textBarEditor: { flex: 1 },
+  textBarRemoveButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textEditorResizeGrip: {
-    width: 40,
-    height: 4,
-    borderRadius: Radius.full,
-    opacity: 0.45,
+  textBarError: {
+    ...Typography.small,
+    marginHorizontal: Spacing.lg + Spacing.xs,
+    marginTop: Spacing.xs,
   },
   legacyMediaWarning: {
     flexDirection: 'row',
@@ -5062,6 +4888,12 @@ const s = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  composerToolGlyph: {
+    fontSize: 23,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
   },
   composerToolLabel: {
     ...Typography.tinyRegular,

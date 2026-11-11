@@ -329,7 +329,7 @@ test('EditNoteScreen renders a compact group button with a summary', () => {
 test('EditNoteScreen moves group choices into a bottom sheet', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /folder-open-outline/);
+  assert.match(src, /folder-outline/);
   assert.match(src, /groupButton/);
   assert.match(src, /groupSheet/);
   assert.match(src, /groupSheetRow/);
@@ -337,22 +337,23 @@ test('EditNoteScreen moves group choices into a bottom sheet', () => {
   assert.doesNotMatch(src, /groupChipsWrap/);
 });
 
-test('EditNoteScreen leaves breathing room around title date and groups', () => {
+// 标题卡只留标题和一枚分组小胶囊：编辑页不再显示创建日期。
+test('EditNoteScreen title card drops the date line', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /titleInput:\s*\{[\s\S]*paddingBottom:\s*Spacing\.xs/);
   assert.match(src, /titleInput:\s*\{\s*color:\s*colors\.text\s*\}/);
-  assert.match(src, /metaRow:\s*\{[\s\S]*paddingBottom:\s*Spacing\.md/);
-  assert.match(src, /groupSection:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
+  assert.doesNotMatch(src, /calendar-outline|formatNoteFullDate|metaRow|dateStr/);
 });
 
-test('EditNoteScreen group selector button has a compact bordered shape', () => {
+test('EditNoteScreen group selector is a content-width pill, not a full-width row', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  const block = src.match(/groupButton:\s*\{\s*minHeight:\s*56,[^}]*\}/);
+  const block = src.match(/groupButton:\s*\{\s*alignSelf:\s*'flex-start',[^}]*\}/);
   assert.ok(block, 'groupButton style block not found');
-  assert.match(block[0], /borderRadius:\s*Radius\.md/);
-  assert.doesNotMatch(block[0], /Radius\.full/);
+  assert.match(block[0], /height:\s*28/);
+  assert.match(block[0], /borderRadius:\s*Radius\.pill/);
+  assert.doesNotMatch(src, /groupSection:|groupButtonSummary/);
 });
 
 test('EditNoteScreen group rows expose selected state accessibly', () => {
@@ -438,15 +439,16 @@ test('EditNoteScreen presents structured regions with quieter section chrome', (
 
   // 分区从贯穿全宽的分隔线改为安静的卡片（surface 底 + 细边 + 大圆角），
   // 小节头收敛成 眉标 + 右侧计数文本，不再有计数胶囊和解释性副标题。
-  assert.match(src, /sectionShell/);
+  assert.match(src, /secondarySection/);
   assert.match(src, /sectionHeaderMeta/);
   assert.match(
     src,
     /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.xl/,
   );
   assert.doesNotMatch(src, /sectionCountPill/);
-  // 正文那一格的 meta 是实时字数，必须是能自己订阅重渲染的节点而不是 string。
-  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: ReactNode/);
+  // 正文已改成无小节头的输入条，不再有实时字数，小节头的 meta 只剩纯文本。
+  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
+  assert.doesNotMatch(src, /notes\.edit\.textCount/);
   assert.match(src, /flexDirection:\s*'row'/);
 });
 

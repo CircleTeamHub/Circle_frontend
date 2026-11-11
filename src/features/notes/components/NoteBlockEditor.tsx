@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Alert, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
@@ -50,6 +50,12 @@ const DOM_WEBVIEW_PROPS = {
 // the 60s image default before the timeout fires.
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
+// Fit-content mode: one line (8px padding + 30px block) before the DOM has
+// reported, and past ~60% of the window the editor scrolls inside itself so
+// the caret never grows out of reach below the keyboard.
+const FIT_CONTENT_MIN_HEIGHT = 46;
+const FIT_CONTENT_MAX_WINDOW_RATIO = 0.6;
+
 // Silently catches the Expo DOM bridge error that fires when injectJavaScript
 // is called on an already-unmounted WebView (e.g. during navigation teardown).
 class DOMBridgeErrorBoundary extends Component<
@@ -87,6 +93,13 @@ interface Props {
   onMediaUploaded?: (media: CreateNoteMediaInput) => void;
   mediaToolbarEnabled?: boolean;
   editable?: boolean;
+  placeholder?: string;
+  /**
+   * Grow with the content from a single line instead of filling the parent.
+   * This is the chrome-free composer bar: no in-editor toolbar, surface
+   * background to blend into the bar.
+   */
+  fitContent?: boolean;
 }
 
 function NoteBlockEditorImpl({
@@ -95,10 +108,14 @@ function NoteBlockEditorImpl({
   onMediaUploaded,
   mediaToolbarEnabled = true,
   editable = true,
+  placeholder,
+  fitContent = false,
 }: Props) {
   const editableRef = useRef(editable);
   editableRef.current = editable;
-  const { resolvedMode } = useTheme();
+  const { resolvedMode, colors } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const [contentHeight, setContentHeight] = useState(FIT_CONTENT_MIN_HEIGHT);
   const { t, i18n } = useTranslation();
   // BlockNote runs in the DOM bridge realm where i18n can't reach, so resolve
   // the language here and pass it through to localize the editor.
@@ -307,6 +324,11 @@ function NoteBlockEditorImpl({
     setPendingInserts([]);
   }, []);
 
+  const handleContentHeightChange = useCallback((height: number) => {
+    if (!isMounted.current) return;
+    setContentHeight(height);
+  }, []);
+
   // DOM bridge only supports primitives — pass content as JSON string and
   // parse the response back to blocks on the native side.
   const initialContentJson =
@@ -327,15 +349,24 @@ function NoteBlockEditorImpl({
     [onContentChange],
   );
 
+  const containerStyle = fitContent
+    ? {
+        height: Math.min(
+          Math.max(contentHeight, FIT_CONTENT_MIN_HEIGHT),
+          Math.round(windowHeight * FIT_CONTENT_MAX_WINDOW_RATIO),
+        ),
+      }
+    : s.container;
+
   if (!canLoadDOMEditor()) {
-    return <View style={s.container} />;
+    return <View style={containerStyle} />;
   }
 
   const DOMEditor = getNoteBlockEditorDOM();
 
   return (
     <DOMBridgeErrorBoundary>
-      <View style={s.container}>
+      <View testID="note-block-editor-frame" style={containerStyle}>
         <DOMEditor
           dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
@@ -349,6 +380,10 @@ function NoteBlockEditorImpl({
           toolbarLabels={toolbarLabels}
           mediaToolbarEnabled={mediaToolbarEnabled}
           editable={editable}
+          placeholder={placeholder}
+          backgroundColor={fitContent ? colors.surface : undefined}
+          placeholderColor={fitContent ? colors.textSecondary : undefined}
+          onContentHeightChange={fitContent ? handleContentHeightChange : undefined}
         />
       </View>
     </DOMBridgeErrorBoundary>

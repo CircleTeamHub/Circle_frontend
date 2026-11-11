@@ -1951,8 +1951,6 @@ test('a note with real rich text is never overwritten by the legacy content fiel
   ]));
 });
 
-// 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
-// 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
 test('opening a grouping sheet does not rebuild the unchanged note snapshot', async () => {
   const normalize = jest.spyOn(noteSections, 'normalizeNoteMediaSections');
   const view = render(<EditNoteScreen />);
@@ -1966,12 +1964,23 @@ test('opening a grouping sheet does not rebuild the unchanged note snapshot', as
   } finally { view.unmount(); normalize.mockRestore(); }
 });
 
-test('typing in the body updates the live counter without re-rendering the screen', async () => {
-  mockTranslate = (key, options) =>
-    key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
+// 正文是一条和竞品一致的输入条：只有占位符和右侧删除，没有小节头、计数和内框。
+// 正文统计放在屏外的小 store 里：每敲一个字都不能让整屏（分组 chip、媒体/展示
+// 九宫格、地图预览）重渲染，超限提示只在条下那一小格里更新。
+test('the body is a bare auto-height bar and typing never re-renders the screen', async () => {
   render(<EditNoteScreen />);
   pressComposer('text');
   await waitFor(() => expect(mockEditorProps).toBeDefined());
+
+  expect(mockEditorProps).toEqual(expect.objectContaining({
+    placeholder: 'notes.edit.textPlaceholder',
+    fitContent: true,
+    mediaToolbarEnabled: false,
+  }));
+  const bar = screen.getByTestId('note-text-section');
+  expect(within(bar).queryByText('notes.edit.sections.text')).toBeNull();
+  expect(screen.queryByText(/notes\.edit\.textCount/)).toBeNull();
+  expect(screen.queryByRole('adjustable')).toBeNull();
 
   const editorPropsBeforeTyping = mockEditorProps;
   const rendersBeforeTyping = mockEditorRenderCount;
@@ -1980,10 +1989,30 @@ test('typing in the body updates the live counter without re-rendering the scree
       { type: 'paragraph', content: [{ type: 'text', text }] },
     ]));
   }
-
-  expect(screen.getByText('字数:3')).toBeTruthy();
   expect(mockEditorRenderCount).toBe(rendersBeforeTyping);
   expect(mockEditorProps).toBe(editorPropsBeforeTyping);
+
+  fireEvent.press(within(bar).getByRole('button', { name: 'notes.actions.deletenotes.edit.sections.text' }));
+  expect(screen.queryByTestId('note-text-section')).toBeNull();
+});
+
+test('the title card has no date line and groups through a compact chip', () => {
+  render(<EditNoteScreen />);
+  pressComposer('title');
+
+  const chip = screen.getByRole('button', { name: 'notes.edit.groupsLabel' });
+  expect(chip.props.accessibilityValue).toEqual({ text: 'notes.edit.noGroups' });
+  expect(within(chip).getByText('notes.edit.groupsLabel')).toBeTruthy();
+  expect(screen.queryByText('notes.format.fullDate')).toBeNull();
+});
+
+test('the title tool draws a heading glyph so it no longer looks like the text tool', () => {
+  render(<EditNoteScreen />);
+
+  const titleTool = screen.getByRole('button', { name: 'notes.edit.composer.title' });
+  expect(within(titleTool).getByTestId('composer-tool-glyph-title').props.children).toBe('T');
+  const textTool = screen.getByRole('button', { name: 'notes.edit.composer.text' });
+  expect(within(textTool).queryByTestId('composer-tool-glyph-text')).toBeNull();
 });
 
 
