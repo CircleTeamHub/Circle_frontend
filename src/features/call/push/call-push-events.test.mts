@@ -92,6 +92,14 @@ test('maps native and server dismiss reasons onto the store reasons', () => {
   assert.equal(dismissReasonFromNative('reset'), 'ended');
 });
 
+test('preserves valid native invitation generations and rejects malformed ones', () => {
+  const createdAt = '2026-10-26T12:00:00.000Z';
+  assert.deepEqual(parseCallPushEvent({ type: 'end', callId: 'call-1', reason: 'missed', createdAt }), {
+    type: 'end', callId: 'call-1', reason: 'missed', createdAt,
+  });
+  assert.equal(parseCallPushEvent({ type: 'end', callId: 'call-1', createdAt: 'invalid' }), null);
+});
+
 test('rebuilds the invite for a call that still rings for me', () => {
   const invite = inviteFromCurrentCall(current(), now);
 
@@ -118,6 +126,42 @@ test('does not rebuild an invite once I answered, declined, or the ring window c
 
 test('still rebuilds an invite for a group call that went active without me', () => {
   assert.equal(inviteFromCurrentCall(current({ status: 'ACTIVE', sessionType: 'group' }), now)?.callId, 'call-1');
+});
+
+test('restores a later conference invitation using the seat deadline', () => {
+  const snapshot = current({
+    status: 'ACTIVE',
+    sessionType: 'group',
+    invitationMode: 'contacts',
+    expiresAt: '2026-10-26T11:00:45.000Z',
+  });
+  const deadline = '2026-10-26T12:00:50.000Z';
+  const selfParticipant = {
+    ...snapshot.selfParticipant,
+    invitedAt: '2026-10-26T12:00:05.000Z',
+    invitationExpiresAt: deadline,
+  };
+  const invite = inviteFromCurrentCall({ ...snapshot, selfParticipant }, now);
+
+  assert.equal(invite?.expiresAt, deadline);
+  assert.equal(invite?.createdAt, selfParticipant.invitedAt);
+  assert.equal(invite?.invitationMode, 'contacts');
+});
+
+test('does not restore an expired seat when the overall call deadline is newer', () => {
+  const snapshot = current();
+  assert.equal(inviteFromCurrentCall({
+    ...snapshot,
+    selfParticipant: { ...snapshot.selfParticipant, invitationExpiresAt: '2026-10-26T12:00:05.000Z' },
+  }, now), null);
+});
+
+test('does not invent an invitation generation when the server seat timestamp is missing', () => {
+  const snapshot = current();
+  assert.equal(inviteFromCurrentCall({
+    ...snapshot,
+    selfParticipant: { ...snapshot.selfParticipant, invitedAt: null },
+  }, now), null);
 });
 
 test('fans VoIP token changes out to subscribers until they unsubscribe', () => {

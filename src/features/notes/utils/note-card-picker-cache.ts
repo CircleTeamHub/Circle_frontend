@@ -4,8 +4,7 @@ import type { ChatConversationDto } from '@/chat-core/protocol';
 const NOTE_CARD_PICKER_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * 群名片选择器里的一项。群名片挂的是「群聊」，不是圈子：圈子群和独立群都算，
- * 但只列我当群主的群（选中即在群设置「笔记管理」里绑定）。
+ * 群名片选择器里的一项。已加入的圈子群和独立群都可以添加名片。
  * id 沿用笔记里群名片已有的口径——圈子群用圈子 id，独立群用会话 id
  * （收藏笔记时后端写入的来源群名片也是这个口径）。
  */
@@ -43,11 +42,7 @@ function groupsFromConversations(conversations: ChatConversationDto[]): NoteCard
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mapChatConversationToUI } = require('@/chat-core/mappers') as typeof import('@/chat-core/mappers');
   const byId = new Map<string, NoteCardPickerGroup>();
-  // 群名片就是群设置「笔记管理」里的绑定，而只有群主能绑：只列我当群主的群。
-  const ownedGroups = selectGroupConversations(conversations).filter(
-    (conversation) => conversation.myRole === 'OWNER',
-  );
-  for (const conversation of ownedGroups) {
+  for (const conversation of selectGroupConversations(conversations)) {
     const id = conversation.circleId ?? conversation.id;
     if (byId.has(id)) continue;
     const row = mapChatConversationToUI(conversation);

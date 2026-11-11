@@ -23,16 +23,22 @@ import {
 } from './incoming-call-actions';
 
 /** 原生层已经在响的那几通（推送来的）：JS 不必再交给它响一次。 */
-const nativeRinging = new Set<string>();
+const nativeRinging = new Map<string, string | undefined>();
 
 /** 收掉原生振铃 / 系统通话界面的唯一出口：顺带把它从 nativeRinging 里拿掉。 */
 async function endNativeCall(
   callId: string,
   reason: Parameters<CallPushNativeModule['endCall']>[1],
+  createdAt?: string,
 ): Promise<void> {
-  nativeRinging.delete(callId);
+  const ringingGeneration = nativeRinging.get(callId);
+  if (!createdAt || !ringingGeneration || Date.parse(ringingGeneration) <= Date.parse(createdAt)) {
+    nativeRinging.delete(callId);
+  }
   try {
-    await getCallPushModule()?.endCall(callId, reason);
+    const native = getCallPushModule();
+    if (createdAt) await native?.endCall(callId, reason, createdAt);
+    else await native?.endCall(callId, reason);
   } catch (error) {
     reportHandledFailure('call', 'nativeEndCall', error);
   }
@@ -45,6 +51,7 @@ function nativeCall(invite: CallInvitePayload) {
     hasVideo: invite.callType === 'VIDEO',
     isGroup: invite.sessionType === 'group',
     expiresAt: invite.expiresAt,
+    createdAt: invite.createdAt,
   };
 }
 
@@ -59,7 +66,7 @@ function sessionSettled(): boolean {
  */
 async function handleWhileSignedOut(event: CallPushNativeEvent): Promise<void> {
   if (event.type === 'voipToken') return;
-  await endNativeCall(event.callId, 'failed');
+  await endNativeCall(event.callId, 'failed', event.createdAt);
 }
 
 async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
@@ -67,17 +74,22 @@ async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
     await handleWhileSignedOut(event);
     return;
   }
+  if (
+    event.type !== 'voipToken' &&
+    event.createdAt &&
+    Date.parse(event.createdAt) < (useCallStore.getState().inviteGenerations[event.callId] ?? 0)
+  ) return;
   switch (event.type) {
     case 'voipToken':
       notifyVoipTokenChanged();
       return;
     case 'incoming': {
       // 安卓 App 在前台时原生层不弹通知（shown=false），之后切后台要由 JS 补发。
-      if (event.shown) nativeRinging.add(event.callId);
+      if (event.shown) nativeRinging.set(event.callId, event.createdAt);
       // 原生层在响、服务端却说这通早不找我了（冷启动期间主叫取消 / 别处已接）：WS 不会重放
       // 那些事件，看门狗也只盯 store 里的来电 —— 这里不收，CallKit 会白响到超时。
-      if ((await recoverRingingCall(event.callId)) === 'gone') {
-        await endNativeCall(event.callId, 'ended');
+      if ((await recoverRingingCall(event.callId, event.createdAt)) === 'gone') {
+        await endNativeCall(event.callId, 'ended', event.createdAt);
       }
       return;
     }
@@ -88,19 +100,22 @@ async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
     case 'answer': {
       // 推送拉起的冷启动：WS 还没连上，store 里没有这通，先问服务端补上。确定早已结束就
       // 收掉；问不到（网络差）也照样试着接 —— accept 本身会给出结论。
-      if ((await recoverRingingCall(event.callId)) === 'gone') {
-        await endNativeCall(event.callId, 'ended');
+      if ((await recoverRingingCall(event.callId, event.createdAt)) === 'gone') {
+        await endNativeCall(event.callId, 'ended', event.createdAt);
         return;
       }
-      if (!(await answerIncomingCall(event.callId))) {
+      const ringing = useCallStore.getState().incomingCall;
+      const createdAt = event.createdAt ?? (ringing?.callId === event.callId ? ringing.createdAt : undefined);
+      if (!(await answerIncomingCall(event.callId, createdAt))) {
         // store 里没有这通时 store → 原生的同步不会触发：直接收掉系统通话界面。
-        await endNativeCall(event.callId, 'failed');
+        await endNativeCall(event.callId, 'failed', createdAt);
       }
       return;
     }
     case 'decline':
       await declineIncomingCall(event.callId, {
         declinedByNative: event.declinedByNative,
+        createdAt: event.createdAt,
       });
       return;
     case 'hangup':
@@ -112,7 +127,7 @@ async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
       const reason = dismissReasonFromNative(event.reason);
       useCallStore.getState().dismissIncomingCall(event.callId, reason);
       // store 里没有这通时上面什么都不做：仍要让原生层收尾（安卓放开锁屏显示等），幂等。
-      await endNativeCall(event.callId, reason);
+      await endNativeCall(event.callId, reason, event.createdAt);
       return;
     }
   }
@@ -161,15 +176,15 @@ function createEventDrainer(native: CallPushNativeModule) {
  */
 function mirrorStoreToNative(native: CallPushNativeModule): () => void {
   const showNatively = (invite: CallInvitePayload) => {
-    if (nativeRinging.has(invite.callId)) return;
-    nativeRinging.add(invite.callId);
+    if (nativeRinging.has(invite.callId) && nativeRinging.get(invite.callId) === invite.createdAt) return;
+    nativeRinging.set(invite.callId, invite.createdAt);
     void native.showIncomingCall(nativeCall(invite)).catch((error) => {
-      nativeRinging.delete(invite.callId);
+      if (nativeRinging.get(invite.callId) === invite.createdAt) nativeRinging.delete(invite.callId);
       reportHandledFailure('call', 'nativeShowIncoming', error);
     });
   };
-  const endNatively = (callId: string, reason: Parameters<CallPushNativeModule['endCall']>[1]) => {
-    void endNativeCall(callId, reason);
+  const endNatively = (callId: string, reason: Parameters<CallPushNativeModule['endCall']>[1], createdAt?: string) => {
+    void endNativeCall(callId, reason, createdAt);
   };
 
   let previous = useCallStore.getState();
@@ -181,7 +196,7 @@ function mirrorStoreToNative(native: CallPushNativeModule): () => void {
     const live = state.activeCall?.id ?? ringing?.callId ?? null;
     const wasLive = before.activeCall?.id ?? wasRinging?.callId ?? null;
 
-    if (ringing && ringing.callId !== wasRinging?.callId) {
+    if (ringing && (ringing.callId !== wasRinging?.callId || ringing.createdAt !== wasRinging?.createdAt)) {
       if (nativeOwnsIncomingCallUi() || AppState.currentState !== 'active') {
         showNatively(ringing);
       }
@@ -189,10 +204,10 @@ function mirrorStoreToNative(native: CallPushNativeModule): () => void {
     if (wasLive && wasLive !== live) {
       const reason =
         state.lastDismissal?.callId === wasLive ? state.lastDismissal.reason : 'ended';
-      endNatively(wasLive, reason);
+      endNatively(wasLive, reason, state.lastDismissal?.invitationCreatedAt ?? wasRinging?.createdAt);
     } else if (wasRinging && !ringing && wasRinging.callId === live) {
       // 在应用内接通了：停掉还在响的原生振铃，通话继续。
-      endNatively(wasRinging.callId, 'answered');
+      endNatively(wasRinging.callId, 'answered', wasRinging.createdAt);
     }
   });
 

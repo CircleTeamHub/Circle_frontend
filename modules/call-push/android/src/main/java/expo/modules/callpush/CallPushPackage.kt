@@ -47,15 +47,19 @@ class CallPushActivityListener : ReactActivityLifecycleListener {
   private fun handleIntent(activity: Activity, intent: Intent?) {
     val action = intent?.getStringExtra(IncomingCallNotifier.EXTRA_ACTION) ?: return
     val callId = intent.getStringExtra(IncomingCallNotifier.EXTRA_CALL_ID) ?: return
+    val createdAt = intent.getStringExtra(IncomingCallNotifier.EXTRA_CREATED_AT)
     // 用过就清掉：Activity 重建（旋转、回收）时不能再接听一次。
     intent.removeExtra(IncomingCallNotifier.EXTRA_ACTION)
     intent.removeExtra(IncomingCallNotifier.EXTRA_CALL_ID)
+    intent.removeExtra(IncomingCallNotifier.EXTRA_CREATED_AT)
+    val createdAtMs = createdAt?.let { CallPushInvite.parseIsoMillis(it) }
+    if (!CallPushStore.acceptsAction(activity, callId, createdAtMs)) return
     if (action == IncomingCallNotifier.ACTION_ANSWER) {
       showOverLockScreen(activity)
       IncomingCallNotifier.cancel(activity, callId)
-      CallPushEvents.enqueue(mapOf("type" to "answer", "callId" to callId))
+      CallPushEvents.enqueue(mapOf("type" to "answer", "callId" to callId, "createdAt" to createdAt))
     } else {
-      CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to callId, "shown" to true))
+      CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to callId, "shown" to true, "createdAt" to createdAt))
     }
   }
 

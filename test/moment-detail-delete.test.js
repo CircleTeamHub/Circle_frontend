@@ -6,18 +6,10 @@ const path = require('node:path');
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 const SRC = 'src/features/discover/screens/MomentDetailScreen.tsx';
 
-test('MomentDetailScreen wires the delete-moment API and store cleanup', () => {
+test('MomentDetailScreen uses the shared delete action and leaves after deletion', () => {
   const src = read(SRC);
 
-  // API + store deletion helpers are imported and used.
-  assert.match(src, /deleteMoment,\s*\n\s*deleteMomentComment,/);
-  assert.match(src, /storeRemoveMoment\s*=\s*useMomentsStore/);
-  assert.match(src, /storeRemoveComment\s*=\s*useMomentsStore/);
-
-  // Delete handler removes from server + store, then leaves the screen.
-  assert.match(src, /await deleteMoment\(id\)/);
-  assert.match(src, /storeRemoveMoment\(id\)/);
-  assert.match(src, /router\.back\(\)/);
+  assert.match(src, /confirmDeleteMoment\(post, t, \(\) => \{\s*if \(mountedRef.current\) router\.back\(\)/);
 });
 
 test('MomentDetailScreen only shows the delete action to the author', () => {

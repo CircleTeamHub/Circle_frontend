@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,15 +23,13 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { ensureDirectConversation } from '@/chat-core/client';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import { getChatDetailHref, getCircleScopeFromSegments } from '@/features/user/utils/routes';
 import type { CirclePlazaPost } from '@/types';
-
-// 分享入口固定在发现栈（与卡片其余导航一致，均按 'discover' scope）。
-const SCOPE = 'discover' as const;
 
 export default function SharePlazaPostScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const scope = getCircleScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { postId } = useLocalSearchParams<{ postId?: string }>();
@@ -121,7 +119,7 @@ export default function SharePlazaPostScreen() {
         setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
-            SCOPE,
+            scope,
             friend.id,
             friend.nickname,
             friend.avatarUrl ?? undefined,
@@ -140,7 +138,7 @@ export default function SharePlazaPostScreen() {
         if (mountedRef.current) setSendingTo(null);
       }
     },
-    [post, router, setPendingChatCard, t],
+    [post, router, scope, setPendingChatCard, t],
   );
 
   const renderFriend = ({ item }: { item: FriendProfile }) => (

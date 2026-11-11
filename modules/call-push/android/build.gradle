@@ -22,4 +22,5 @@ dependencies {
   compileOnly 'cn.jiguang.sdk:jpush:6.2.0'
   // NotificationCompat.CallStyle 需要 core 1.9+。
   implementation 'androidx.core:core:1.13.1'
+  testImplementation 'junit:junit:4.13.2'
 }

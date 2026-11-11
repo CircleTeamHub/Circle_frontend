@@ -2315,6 +2315,16 @@ test.each([
     expect(StyleSheet.flatten(root.props.style).paddingBottom).toBe(0);
     await emit(true);
     fireEvent.press(screen.getByRole('radio', { name: `Needle ${kind}` }));
+    fireEvent.press(screen.getByTestId('bottom-sheet-backdrop'));
+    expect(screen.queryByPlaceholderText(placeholder)).toBeNull();
+    await emit(false);
+
+    fireEvent.press(screen.getByText(kind === 'contact' ? 'notes.edit.addContact' : 'notes.edit.addGroup'));
+    const reopened = await screen.findByPlaceholderText(placeholder);
+    expect(reopened.props.value).toBe('');
+    const row = await screen.findByRole('radio', { name: `Needle ${kind}` });
+    expect(row.props.accessibilityState.checked).toBe(false);
+    fireEvent.press(row);
     fireEvent.press(screen.getByText('common.done'));
     expect(screen.queryByPlaceholderText(placeholder)).toBeNull();
     expect(screen.getByText(`Needle ${kind}`)).toBeTruthy();
@@ -2385,6 +2395,7 @@ test('the group-card toolbar opens the picker directly and displays and saves th
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.group' }));
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Selected group' })).toBeTruthy());
     expect(mockPickerCircles).toHaveBeenCalledWith('owner-a');
+    expect(screen.queryByText('notes.edit.groupPickerHint')).toBeNull();
     fireEvent.press(screen.getByRole('radio', { name: 'Selected group' }));
     fireEvent.press(screen.getByText('common.done'));
     expect(screen.queryByRole('radio', { name: 'Selected group' })).toBeNull();

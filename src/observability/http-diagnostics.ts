@@ -121,6 +121,7 @@ export const HTTP_ROUTE_TEMPLATES: readonly string[] = [
   "/avatar-frames/me",
   "/calls/:id/accept",
   "/calls/:id/cancel",
+  "/calls/:id/invite",
   "/calls/:id/join-token",
   "/calls/:id/leave",
   "/calls/:id/reject",

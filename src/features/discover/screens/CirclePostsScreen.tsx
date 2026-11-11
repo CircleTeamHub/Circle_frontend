@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -16,7 +16,8 @@ import { PlazaPostCard } from '@/features/discover/components/plaza-post-card';
 import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { fetchPlazaFeed } from '@/services/api/plaza';
+import { fetchPlazaFeed, plazaMutatedSince } from '@/services/api/plaza';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { Spacing, Typography, useTheme } from '@/theme';
 import type { CirclePlazaPost } from '@/types';
 
@@ -55,10 +56,12 @@ export default function CirclePostsScreen() {
   const [membershipRequired, setMembershipRequired] = useState(false);
   // 下拉刷新会顶掉在途的翻页:只认最后一次发出的请求。
   const requestSeqRef = useRef(0);
+  const reloadGate = useFocusReloadGate({ key: circleId, mutatedSince: plazaMutatedSince });
 
   const load = useCallback(
     async (cursor: string | null) => {
       if (!circleId) return;
+      const startedAt = Date.now();
       const seq = ++requestSeqRef.current;
       setLoading(true);
       try {
@@ -68,6 +71,7 @@ export default function CirclePostsScreen() {
           ...(cursor ? { cursor } : {}),
         });
         if (seq !== requestSeqRef.current) return;
+        if (!cursor) reloadGate.markLoaded(startedAt);
         setPosts((current) => (cursor ? [...current, ...page.items] : page.items));
         setNextCursor(page.hasMore ? (page.nextCursor ?? null) : null);
         setError(null);
@@ -86,12 +90,12 @@ export default function CirclePostsScreen() {
         }
       }
     },
-    [circleId],
+    [circleId, reloadGate],
   );
 
-  useEffect(() => {
-    void load(null);
-  }, [load]);
+  useFocusEffect(useCallback(() => {
+    if (!reloadGate.shouldSkip()) void load(null);
+  }, [load, reloadGate]));
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

@@ -155,7 +155,7 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
   ]);
 });
 
-test('fetchPlazaFeed keeps author display badges and normalizes badge media URLs', async () => {
+test('fetchPlazaFeed normalizes video and badge media URLs', async () => {
   const { api, calls } = loadPlazaApi([
     {
       items: [
@@ -163,6 +163,7 @@ test('fetchPlazaFeed keeps author display badges and normalizes badge media URLs
           id: 'post-1',
           content: 'hello',
           images: ['http://localhost:9000/posts/a.jpg'],
+          videos: ['http://localhost:9000/posts/a.mp4', null, { invalid: true }],
           tags: [],
           city: '深圳',
           isHorn: false,
@@ -216,6 +217,7 @@ test('fetchPlazaFeed keeps author display badges and normalizes badge media URLs
   ]);
 
   const result = await api.fetchPlazaFeed({ city: '深圳' });
+  assert.deepEqual([...result.items[0].videos], ['http://192.168.1.65:9000/posts/a.mp4']);
 
   assert.equal(calls[0][0], '/circle-plaza/feed?city=%E6%B7%B1%E5%9C%B3');
   assert.deepEqual(JSON.parse(JSON.stringify(result.items[0].author.displayIcons)), [

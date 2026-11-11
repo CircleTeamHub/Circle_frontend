@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCallActionResponse } from './call-mappers.ts';
+import { normalizeCall, normalizeCallActionResponse } from './call-mappers.ts';
 
 const call = {
   id: 'call-1',
@@ -63,4 +63,25 @@ test('rejects malformed call action responses', () => {
       }),
     /无效通话数据/,
   );
+});
+
+test('keeps conference invitation mode and per-participant invitation deadlines', () => {
+  const deadline = '2026-06-11T04:00:45.000Z';
+  const normalized = normalizeCall({
+    ...call,
+    invitationMode: 'contacts',
+    participants: [{
+      ...call.participants[0],
+      status: 'INVITED',
+      invitedAt: '2026-06-11T04:00:00.000Z',
+      invitationExpiresAt: deadline,
+    }],
+  });
+
+  assert.equal(normalized.invitationMode, 'contacts');
+  assert.equal(normalized.participants[0].invitationExpiresAt, deadline);
+});
+
+test('rejects unknown invitation modes at the API boundary', () => {
+  assert.throws(() => normalizeCall({ ...call, invitationMode: 'everyone' }), /无效通话数据/);
 });

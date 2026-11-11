@@ -20,7 +20,7 @@ for (const file of SCREENS) {
     assert.doesNotMatch(src, /throw new Error\(\s*reason\s*\)/);
     // validation.imageSizeLimit 是头像专用文案（「头像不能超过 10 MB」），与这里的 50MB 判据对不上。
     assert.doesNotMatch(src, /validation\.imageSizeLimit/);
-    assert.match(src, /t\('upload\.errors\.fileTooLarge',\s*\{\s*maxMb: LIMITS\.IMAGE_MAX_SIZE_MB/);
+    assert.match(src, /t\('upload\.errors\.fileTooLarge',\s*\{\s*maxMb:[^\n]*LIMITS\.IMAGE_MAX_SIZE_MB/);
     assert.match(src, /Alert\.alert\([^;]*,\s*reason,?\s*\);\s*return;/);
 
     // 超限是本地校验：在开始上传之前拦下，不进逐图 catch。

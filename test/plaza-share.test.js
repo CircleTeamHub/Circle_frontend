@@ -5,11 +5,10 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('share-post route re-exports the share screen', () => {
-  assert.match(
-    read('app/(tabs)/discover/share-post.tsx'),
-    /SharePlazaPostScreen/,
-  );
+test('share-post stays available in both signup-management stacks', () => {
+  for (const scope of ['discover', 'messages']) {
+    assert.match(read(`app/(tabs)/${scope}/share-post.tsx`), /SharePlazaPostScreen/);
+  }
 });
 
 test('SharePlazaPostScreen sends the post as a chat card to the picked friend', () => {
@@ -28,7 +27,7 @@ test('plaza post card share opens the friend picker, not the OS share sheet', ()
   const src = read(
     'src/features/discover/components/plaza-post-card.tsx',
   );
-  assert.match(src, /pathname: '\/\(tabs\)\/discover\/share-post'/);
+  assert.match(src, /pathname: scope === 'messages' \? '\/\(tabs\)\/messages\/share-post' : '\/\(tabs\)\/discover\/share-post'/);
   assert.doesNotMatch(src, /Share\.share/);
 });
 

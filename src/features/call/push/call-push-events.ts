@@ -13,24 +13,27 @@ export function parseCallPushEvent(value: unknown): CallPushNativeEvent | null {
   if (event.type === 'voipToken') return { type: 'voipToken' };
   const callId = event.callId;
   if (typeof callId !== 'string' || callId.length === 0) return null;
+  const createdAt = event.createdAt;
+  if (createdAt !== undefined && (typeof createdAt !== 'string' || !Number.isFinite(Date.parse(createdAt)))) return null;
+  const call = { callId, ...(createdAt ? { createdAt } : {}) };
   switch (event.type) {
     case 'incoming':
       // 旧版本原生层不带 shown：当作响了（iOS 一律是 CallKit 在响）。
-      return { type: 'incoming', callId, shown: event.shown !== false };
+      return { type: 'incoming', ...call, shown: event.shown !== false };
     case 'unavailable':
     case 'answer':
     case 'hangup':
-      return { type: event.type, callId };
+      return { type: event.type, ...call };
     case 'decline':
       return {
         type: 'decline',
-        callId,
+        ...call,
         declinedByNative: event.declinedByNative === true,
       };
     case 'end':
       return {
         type: 'end',
-        callId,
+        ...call,
         reason: typeof event.reason === 'string' ? event.reason : 'ended',
       };
     default:
@@ -62,21 +65,22 @@ export function inviteFromCurrentCall(
   if (!current || current.selfParticipant?.status !== 'INVITED') return null;
   const { call } = current;
   if (call.status !== 'RINGING' && call.status !== 'ACTIVE') return null;
-  const expiresAt = call.expiresAt ? Date.parse(call.expiresAt) : NaN;
-  if (Number.isNaN(expiresAt) || expiresAt <= now) return null;
+  const invitationDeadline = current.selfParticipant.invitationExpiresAt ?? call.expiresAt;
+  const expiresAt = invitationDeadline ? Date.parse(invitationDeadline) : NaN;
+  const invitedAt = current.selfParticipant.invitedAt;
+  if (!invitedAt || Number.isNaN(Date.parse(invitedAt)) || Number.isNaN(expiresAt) || expiresAt <= now) return null;
   return {
     callId: call.id,
     conversationID: call.conversationID,
     sessionType: call.sessionType,
+    ...(call.invitationMode ? { invitationMode: call.invitationMode } : {}),
     callType: call.callType,
     initiator: call.initiator,
     invitees: call.participants
       .filter((participant) => participant.status === 'INVITED')
       .map((participant) => participant.user),
-    expiresAt: call.expiresAt!,
-    createdAt:
-      call.participants.find((p) => p.user.id === call.initiator.id)?.invitedAt ??
-      new Date(now).toISOString(),
+    expiresAt: invitationDeadline!,
+    createdAt: invitedAt,
   };
 }
 

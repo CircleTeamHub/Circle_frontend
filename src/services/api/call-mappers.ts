@@ -75,6 +75,9 @@ export function normalizeParticipant(value: unknown): CallParticipant {
     user: normalizeUser(value.user),
     status: normalizeParticipantStatus(value.status),
     invitedAt: nullableString(value.invitedAt),
+    ...(value.invitationExpiresAt !== undefined
+      ? { invitationExpiresAt: nullableString(value.invitationExpiresAt) }
+      : {}),
     joinedAt: nullableString(value.joinedAt),
     leftAt: nullableString(value.leftAt),
   };
@@ -91,11 +94,16 @@ export function normalizeCall(value: unknown): CallSession {
   if (sessionType !== 'group' && sessionType !== 'single') {
     throw new Error('无效通话数据: sessionType');
   }
+  const invitationMode = value.invitationMode;
+  if (invitationMode !== undefined && invitationMode !== 'members' && invitationMode !== 'contacts') {
+    throw new Error('无效通话数据: invitationMode');
+  }
 
   return {
     id: requiredString(value.id, 'call.id'),
     conversationID: requiredString(value.conversationID, 'call.conversationID'),
     sessionType,
+    ...(invitationMode ? { invitationMode } : {}),
     callType: normalizeCallType(value.callType),
     status: normalizeCallStatus(value.status),
     initiator: normalizeUser(value.initiator),

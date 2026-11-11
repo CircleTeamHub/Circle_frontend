@@ -4267,167 +4267,152 @@ export default function EditNoteScreen() {
           onClose={() => setPreviewImageViewerVisible(false)}
         />
       ) : null}
-      <Modal
+      <BottomSheetModal
         visible={cardPickerKind !== null && cardPickerSessionRef.current?.userId === (currentUser?.id ?? null) && cardPickerSessionRef.current?.epoch === sessionEpoch}
-        transparent
-        animationType="slide"
-        onRequestClose={closeCardPicker}
-        statusBarTranslucent
+        onClose={closeCardPicker}
+        sheetStyle={[
+          s.cardPickerSheet,
+          d.groupSheet,
+          { paddingBottom: Math.max(insets.bottom, Spacing.lg) },
+        ]}
       >
-        <KeyboardAvoidingContainer style={s.cardPickerBackdrop}>
-          <View
-            style={[
-              s.cardPickerSheet,
-              d.groupSheet,
-              { paddingBottom: Math.max(insets.bottom, Spacing.lg) },
-            ]}
-          >
-            <View style={[s.groupSheetHandle, d.groupSheetHandle]} />
-            <Text style={[s.groupSheetTitle, d.groupSheetTitle]}>
-              {cardPickerKind === 'contact'
-                ? t('notes.edit.contactPickerTitle', { defaultValue: '选择联系人' })
-                : t('notes.edit.groupPickerTitle', { defaultValue: '选择群组' })}
-            </Text>
-            {cardPickerKind === 'group' ? (
-              <Text style={[s.cardPickerHint, d.groupSheetRowMeta]}>
-                {t('notes.edit.groupPickerHint', {
-                  defaultValue: '只显示你是群主的群。选中后，这条笔记会出现在该群设置的「笔记管理」里。',
-                })}
-              </Text>
-            ) : null}
-            <View
-              style={[
-                s.cardPickerSearchWrap,
-                { backgroundColor: colors.background, borderColor: colors.surfaceBorder },
-              ]}
+        <View style={[s.groupSheetHandle, d.groupSheetHandle]} />
+        <Text style={[s.groupSheetTitle, d.groupSheetTitle]}>
+          {cardPickerKind === 'contact'
+            ? t('notes.edit.contactPickerTitle', { defaultValue: '选择联系人' })
+            : t('notes.edit.groupPickerTitle', { defaultValue: '选择群组' })}
+        </Text>
+        <View
+          style={[
+            s.cardPickerSearchWrap,
+            { backgroundColor: colors.background, borderColor: colors.surfaceBorder },
+          ]}
+        >
+          <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+          <TextInput
+            style={[s.cardPickerSearch, { color: colors.text }]}
+            value={cardPickerSearch}
+            onChangeText={setCardPickerSearch}
+            placeholder={cardPickerKind === 'contact'
+              ? t('notes.edit.contactSearchPlaceholder', { defaultValue: '搜索联系人' })
+              : t('notes.edit.groupSearchPlaceholder', { defaultValue: '搜索群组' })}
+            placeholderTextColor={colors.textSecondary}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          {cardPickerSearch ? (
+            <Pressable
+              onPress={() => setCardPickerSearch('')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
             >
-              <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
-              <TextInput
-                style={[s.cardPickerSearch, { color: colors.text }]}
-                value={cardPickerSearch}
-                onChangeText={setCardPickerSearch}
-                placeholder={cardPickerKind === 'contact'
-                  ? t('notes.edit.contactSearchPlaceholder', { defaultValue: '搜索联系人' })
-                  : t('notes.edit.groupSearchPlaceholder', { defaultValue: '搜索群组' })}
-                placeholderTextColor={colors.textSecondary}
-                returnKeyType="search"
-                autoCorrect={false}
-              />
-              {cardPickerSearch ? (
-                <Pressable
-                  onPress={() => setCardPickerSearch('')}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
-                >
-                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-                </Pressable>
-              ) : null}
-            </View>
-            {cardPickerLoading ? (
-              <ActivityIndicator
-                style={s.cardPickerLoading}
-                color={colors.primary}
-              />
+              <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
+        </View>
+        {cardPickerLoading ? (
+          <ActivityIndicator
+            style={s.cardPickerLoading}
+            color={colors.primary}
+          />
+        ) : (
+          <ScrollView
+            style={s.cardPickerList}
+            contentContainerStyle={s.cardPickerListContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {cardPickerKind === 'contact' ? (
+              filteredContactPickerItems.length > 0 ? filteredContactPickerItems.map((item) => {
+                const selected = selectedCardIds.includes(item.id);
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[s.cardPickerRow, d.groupSheetRow]}
+                    // 个人名片一篇笔记只放一张：单选，选另一个人就替换掉当前这张。
+                    onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
+                    accessibilityRole="radio"
+                    accessibilityLabel={item.name}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    {item.avatarUrl ? (
+                      <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+                    ) : (
+                      <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                        <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
+                      </View>
+                    )}
+                    <View style={s.groupSheetRowTextWrap}>
+                      <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
+                      {item.subtitle ? (
+                        <Text style={[s.groupSheetRowMeta, d.groupSheetRowMeta]} numberOfLines={1}>{item.subtitle}</Text>
+                      ) : null}
+                    </View>
+                    <View style={s.cardPickerCheck}>
+                      <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
+                    </View>
+                  </Pressable>
+                );
+              }) : (
+                <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
+                  {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
+                </Text>
+              )
             ) : (
-              <ScrollView
-                style={s.cardPickerList}
-                contentContainerStyle={s.cardPickerListContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {cardPickerKind === 'contact' ? (
-                  filteredContactPickerItems.length > 0 ? filteredContactPickerItems.map((item) => {
-                    const selected = selectedCardIds.includes(item.id);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        style={[s.cardPickerRow, d.groupSheetRow]}
-                        // 个人名片一篇笔记只放一张：单选，选另一个人就替换掉当前这张。
-                        onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
-                        accessibilityRole="radio"
-                        accessibilityLabel={item.name}
-                        accessibilityState={{ checked: selected }}
-                      >
-                        {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                        ) : (
-                          <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                            <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
-                          </View>
-                        )}
-                        <View style={s.groupSheetRowTextWrap}>
-                          <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
-                          {item.subtitle ? (
-                            <Text style={[s.groupSheetRowMeta, d.groupSheetRowMeta]} numberOfLines={1}>{item.subtitle}</Text>
-                          ) : null}
-                        </View>
-                        <View style={s.cardPickerCheck}>
-                          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
-                        </View>
-                      </Pressable>
-                    );
-                  }) : (
-                    <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
-                      {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
-                    </Text>
-                  )
-                ) : (
-                  filteredGroupItems.length > 0 ? filteredGroupItems.map((item) => {
-                    const selected = selectedCardIds.includes(item.id);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        style={[s.cardPickerRow, d.groupSheetRow]}
-                        // 群名片同样一篇只放一张：单选，选另一个群就替换。
-                        onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
-                        accessibilityRole="radio"
-                        accessibilityLabel={item.name}
-                        accessibilityState={{ checked: selected }}
-                      >
-                        {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                        ) : (
-                          <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                            <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
-                          </View>
-                        )}
-                        <View style={s.groupSheetRowTextWrap}>
-                          <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
-                        </View>
-                        <View style={s.cardPickerCheck}>
-                          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
-                        </View>
-                      </Pressable>
-                    );
-                  }) : (
-                    <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
-                      {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
-                    </Text>
-                  )
-                )}
-              </ScrollView>
+              filteredGroupItems.length > 0 ? filteredGroupItems.map((item) => {
+                const selected = selectedCardIds.includes(item.id);
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[s.cardPickerRow, d.groupSheetRow]}
+                    // 群名片同样一篇只放一张：单选，选另一个群就替换。
+                    onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
+                    accessibilityRole="radio"
+                    accessibilityLabel={item.name}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    {item.avatarUrl ? (
+                      <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+                    ) : (
+                      <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                        <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
+                      </View>
+                    )}
+                    <View style={s.groupSheetRowTextWrap}>
+                      <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
+                    </View>
+                    <View style={s.cardPickerCheck}>
+                      <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
+                    </View>
+                  </Pressable>
+                );
+              }) : (
+                <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
+                  {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
+                </Text>
+              )
             )}
-            <View style={s.cardPickerActions}>
-              <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
-                <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  s.composerFooterButton,
-                  s.cardPickerActionButton,
-                  d.composerSortButton,
-                  cardPickerLoading && s.cardPickerActionDisabled,
-                ]}
-                onPress={confirmCardPicker}
-                disabled={cardPickerLoading}
-              >
-                <Text style={[s.composerFooterButtonText, { color: colors.white }]}>{t('common.done', { defaultValue: '完成' })}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingContainer>
-      </Modal>
+          </ScrollView>
+        )}
+        <View style={s.cardPickerActions}>
+          <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
+            <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              s.composerFooterButton,
+              s.cardPickerActionButton,
+              d.composerSortButton,
+              cardPickerLoading && s.cardPickerActionDisabled,
+            ]}
+            onPress={confirmCardPicker}
+            disabled={cardPickerLoading}
+          >
+            <Text style={[s.composerFooterButtonText, { color: colors.white }]}>{t('common.done', { defaultValue: '完成' })}</Text>
+          </Pressable>
+        </View>
+      </BottomSheetModal>
       <BottomSheetModal
         visible={groupSheetVisible}
         onClose={closeGroupSheet}
@@ -4651,7 +4636,6 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
   },
   groupSheetTitle: { ...Typography.h3, fontWeight: '700' },
-  cardPickerHint: { ...Typography.small, lineHeight: 18 },
   groupSheetList: { maxHeight: 360 },
   groupSheetListContent: { gap: Spacing.xs, paddingBottom: Spacing.xs },
   groupSheetRow: {
@@ -4699,13 +4683,7 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   groupCreateButtonText: { ...Typography.bodyRegular, fontWeight: '600' },
-  cardPickerBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
   cardPickerSheet: {
-    flexShrink: 1,
     maxHeight: '84%',
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,

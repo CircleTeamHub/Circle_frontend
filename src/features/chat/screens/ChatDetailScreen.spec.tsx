@@ -1,6 +1,6 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Alert, FlatList, Keyboard, LayoutAnimation, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { Alert, FlatList, Keyboard, LayoutAnimation, PixelRatio, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
 import { router } from 'expo-router';
 import {
   act,
@@ -689,31 +689,71 @@ test.each(['background', 'other-chat', 'signed-out', 'other-user', 'unfocused', 
   },
 );
 
-test('typing then pressing send posts the trimmed text and clears the composer', async () => {
+test('wrapped chat drafts expand into a full-screen editor and keep edits when collapsed', async () => {
   render(<ChatDetailScreen />);
   const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  expect(input).toHaveProp('submitBehavior', 'newline');
+  const expand = 'chat.detail.expandComposer';
+  const lineHeight = 24 * PixelRatio.getFontScale();
+  fireEvent.changeText(input, '你好');
+  fireEvent(input, 'layout', { nativeEvent: { layout: { width: 120, height: 24 + lineHeight } } });
+  expect(screen.queryByRole('button', { name: expand })).toBeNull();
 
-  fireEvent.changeText(input, '  你好呀  ');
-  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('  你好呀  ');
+  const wrapped = '这段草稿超过一行时，可以打开全屏编辑器继续编辑。';
+  fireEvent.changeText(input, wrapped);
+  fireEvent(input, 'layout', { nativeEvent: { layout: { width: 120, height: 24 + 2 * lineHeight } } });
+  fireEvent.press(screen.getByRole('button', { name: expand }));
 
-  await act(async () => {
-    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
-  });
+  const expandedInput = screen.getByTestId('chat-expanded-input');
+  expect(expandedInput).toHaveProp('value', wrapped);
+  fireEvent.changeText(expandedInput, wrapped + '\\n第二段');
+  fireEvent.press(screen.getByRole('button', { name: 'chat.detail.collapseComposer' }));
+  expect(screen.queryByTestId('chat-expanded-input')).toBeNull();
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toHaveProp('value', wrapped + '\\n第二段');
 
-  await waitFor(
-    () =>
-      expect(sendTextMessage).toHaveBeenCalledWith({
-        conversationId: CONVERSATION,
-        text: '你好呀',
-        onCreate: expect.any(Function),
-      }),
-    SETTLE,
-  );
-  await waitFor(
-    () => expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe(''),
-    SETTLE,
-  );
+  fireEvent.changeText(input, '短草稿');
+  fireEvent(input, 'layout', { nativeEvent: { layout: { width: 120, height: 24 + lineHeight } } });
+  expect(screen.queryByRole('button', { name: expand })).toBeNull();
 });
+
+test.each(['inline', 'expanded'] as const)(
+  'sending from the %s composer posts trimmed text and clears the draft',
+  async (mode) => {
+    render(<ChatDetailScreen />);
+    const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+
+    fireEvent.changeText(input, '  你好呀  ');
+    expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('  你好呀  ');
+
+    let sendButtonId: string = E2E_TEST_IDS.chatSend;
+    if (mode === 'expanded') {
+      fireEvent(input, 'layout', {
+        nativeEvent: { layout: { width: 100, height: 24 + 2 * 24 * PixelRatio.getFontScale() } },
+      });
+      fireEvent.press(screen.getByRole('button', { name: 'chat.detail.expandComposer' }));
+      fireEvent.changeText(screen.getByTestId('chat-expanded-input'), '  你好呀  ');
+      sendButtonId = 'chat-expanded-send';
+    }
+    await act(async () => {
+      fireEvent.press(screen.getByTestId(sendButtonId));
+    });
+    expect(screen.queryByTestId('chat-expanded-input')).toBeNull();
+
+    await waitFor(
+      () =>
+        expect(sendTextMessage).toHaveBeenCalledWith({
+          conversationId: CONVERSATION,
+          text: '你好呀',
+          onCreate: expect.any(Function),
+        }),
+      SETTLE,
+    );
+    await waitFor(
+      () => expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe(''),
+      SETTLE,
+    );
+  },
+);
 
 test('a message still waiting for the server does not hold the composer', async () => {
   // 断线时消息在发送队列里等重连:上屏(onCreate)之后输入框就该清空、能接着发下一条。

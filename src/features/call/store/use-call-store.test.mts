@@ -21,6 +21,8 @@ function resetStore() {
     livekit: null,
     answeringCallId: null,
     recentlyEndedCallIds: [],
+    inviteGenerations: {},
+    isMinimized: false,
     lastDismissal: null,
     nativeUiFallbackCallId: null,
   });
@@ -173,6 +175,7 @@ test('stops ringing when this user answered on another device', () => {
   assert.deepEqual(useCallStore.getState().lastDismissal, {
     callId: 'call-1',
     reason: 'answered_elsewhere',
+    invitationCreatedAt: invite.createdAt,
   });
   useCallStore.getState().handleCallInvite(invite);
   assert.equal(useCallStore.getState().incomingCall, null);
@@ -202,6 +205,7 @@ test('dismisses only the ringing call it was asked to', () => {
   assert.deepEqual(useCallStore.getState().lastDismissal, {
     callId: 'call-1',
     reason: 'missed',
+    invitationCreatedAt: invite.createdAt,
   });
 });
 
@@ -220,6 +224,7 @@ test('reports why the active call ended', () => {
   assert.deepEqual(useCallStore.getState().lastDismissal, {
     callId: 'call-1',
     reason: 'canceled',
+    invitationCreatedAt: invite.createdAt,
   });
 });
 
@@ -246,4 +251,62 @@ test('flags a ringing call the system call UI could not take', () => {
   useCallStore.getState().handleCallInvite(invite);
   useCallStore.getState().setNativeUiFallback('call-1');
   assert.equal(useCallStore.getState().nativeUiFallbackCallId, 'call-1');
+});
+
+test('a fresh invitation into the same room rings after a previous attempt was dismissed', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().dismissIncomingCall(invite.callId, 'missed');
+  useCallStore.getState().handleCallInvite(invite);
+  assert.equal(useCallStore.getState().incomingCall, null);
+  const later = { ...invite, createdAt: '2026-06-11T03:01:00.000Z', expiresAt: '2026-06-11T03:01:45.000Z' };
+  useCallStore.getState().handleCallInvite(later);
+  assert.equal(useCallStore.getState().incomingCall?.createdAt, later.createdAt);
+});
+
+test('a call roster update preserves room credentials, minimization, and newer joined events', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  const call = { ...useCallStore.getState().activeCall!, status: 'ACTIVE' as const };
+  const credentials = { url: 'wss://example.test', token: 'room-token', expiresAt: '' };
+  useCallStore.getState().setActiveCall(call, credentials);
+  useCallStore.getState().setMinimized(true);
+  useCallStore.getState().handleCallParticipantJoined({
+    callId: call.id, user: invite.invitees[0], joinedAt: '2026-06-11T03:00:20.000Z', changedAt: '2026-06-11T03:00:20.000Z',
+  });
+  useCallStore.getState().updateActiveCall({ ...call, invitationMode: 'contacts' });
+  assert.equal(useCallStore.getState().livekit, credentials);
+  assert.equal(useCallStore.getState().isMinimized, true);
+  assert.equal(useCallStore.getState().activeCall?.participants[1].status, 'JOINED');
+  useCallStore.getState().updateActiveCall({ ...call, id: 'different' });
+  assert.equal(useCallStore.getState().activeCall?.id, call.id);
+});
+
+test('accepting a call retains this devices invitation generation when other people were invited later', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  const call = useCallStore.getState().activeCall!;
+  useCallStore.getState().setActiveCall({
+    ...call,
+    status: 'ACTIVE',
+    participants: [...call.participants, {
+      user: { id: 'later', nickname: 'Later', avatarUrl: null },
+      status: 'INVITED', invitedAt: '2026-06-11T03:00:20.000Z', joinedAt: null, leftAt: null,
+    }],
+  });
+  assert.equal(useCallStore.getState().inviteGenerations[invite.callId], Date.parse(invite.createdAt));
+});
+
+test('a delayed rejection of the previous generation cannot dismiss a fresh ringing invitation', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  const fresh = { ...invite, createdAt: '2026-06-11T03:01:00.000Z', expiresAt: '2026-06-11T03:01:45.000Z' };
+  useCallStore.getState().handleCallInvite(fresh);
+  const rejectedAt = '2026-06-11T03:00:08.000Z';
+  useCallStore.getState().handleCallParticipantRejected({
+    callId: invite.callId, user: invite.invitees[0], changedAt: rejectedAt,
+  });
+  useCallStore.getState().handleSelfParticipantSettled(invite.callId, 'declined_elsewhere', rejectedAt);
+  assert.equal(useCallStore.getState().incomingCall?.createdAt, fresh.createdAt);
+  assert.equal(useCallStore.getState().activeCall?.participants[1].status, 'INVITED');
 });

@@ -13,6 +13,7 @@ data class CallPushInvite(
   val callerName: String,
   val groupName: String?,
   val expiresAtMs: Long,
+  val createdAtMs: Long?,
   val declineToken: String?,
 ) {
   /** 群通话显示「主叫 · 群名」。 */
@@ -47,9 +48,15 @@ data class CallPushInvite(
         callerName = callerName,
         groupName = extras.optString("groupName").ifEmpty { null },
         expiresAtMs = expiresAtMs,
+        createdAtMs = parseIsoMillis(extras.optString("createdAt")),
         declineToken = extras.optString("declineToken").ifEmpty { null },
       )
     }
+
+    fun formatIsoMillis(value: Long): String =
+      SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+      }.format(java.util.Date(value))
 
     /** 服务端用 Date#toISOString()：固定 yyyy-MM-ddTHH:mm:ss.SSSZ（UTC）。minSdk 24 用不了 java.time。 */
     fun parseIsoMillis(raw: String): Long? {

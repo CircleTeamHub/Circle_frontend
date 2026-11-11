@@ -20,7 +20,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
-import { ImageGrid } from './image-grid';
+import { MomentMedia } from './moment-media';
 import { RestrictionBadge } from './restriction-badge';
 import {
   PlazaPostActionsSheet,
@@ -32,6 +32,9 @@ interface PlazaPostCardProps {
   post: CirclePlazaPost;
   /** 删除成功后通知宿主列表(广场之外的列表不在广场 store 里,要自己移除)。 */
   onDeleted?: (postId: string) => void;
+  onEdit?: () => void;
+  showSignupAction?: boolean;
+  showShareAction?: boolean;
   /**
    * 卡片所在的 tab 栈。圈子帖子页在消息/圈子/探索三个栈都有,点头像、报名管理要留在
    * 进来的那个 tab,不能跨 tab 压栈。广场只在圈子栈,默认 discover。
@@ -155,11 +158,26 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
     borderWidth: 1,
   },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    minHeight: 44,
+  },
 });
 
 export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   post,
   onDeleted,
+  onEdit,
+  showSignupAction = true,
+  showShareAction = true,
   scope = 'discover',
 }) => {
   const { t } = useTranslation();
@@ -224,6 +242,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
 
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isOwnPost = !!currentUserId && currentUserId === post.author.id;
+  const showInlineActions = isOwnPost && !!onEdit;
 
   const hasCondition =
     post.signupRestrictions.vipLevel != null ||
@@ -274,10 +293,10 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   const handleShare = useCallback(() => {
     // 分享到对话：进好友选择页，选中后把帖子作为聊天卡片发到该会话。
     router.push({
-      pathname: '/(tabs)/discover/share-post',
+      pathname: scope === 'messages' ? '/(tabs)/messages/share-post' : '/(tabs)/discover/share-post',
       params: { postId: post.id },
     });
-  }, [router, post.id]);
+  }, [router, post.id, scope]);
 
   const handleReport = useCallback(() => {
     Alert.alert(
@@ -313,16 +332,25 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   }, [post.id, t]);
 
   const postActions = useMemo<PostAction[]>(() => {
-    const actions: PostAction[] = [
-      {
+    const actions: PostAction[] = [];
+    if (showShareAction) {
+      actions.push({
         key: 'share',
         label: t('plaza.actions.share', { defaultValue: '分享' }),
         icon: 'share-outline',
         onPress: handleShare,
-      },
-    ];
+      });
+    }
     // 自己的帖子可删除；别人的帖子可举报。删除从原右上角独立按钮移入此菜单。
     if (isOwnPost) {
+      if (onEdit) {
+        actions.push({
+          key: 'edit',
+          label: t('plaza.actions.editPost'),
+          icon: 'create-outline',
+          onPress: onEdit,
+        });
+      }
       actions.push({
         key: 'delete',
         label: t('common.delete', { defaultValue: '删除' }),
@@ -340,7 +368,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       });
     }
     return actions;
-  }, [t, isOwnPost, handleShare, handleDeletePost, handleReport]);
+  }, [t, isOwnPost, showShareAction, onEdit, handleShare, handleDeletePost, handleReport]);
 
   const buildSignupReasonText = useCallback(
     (): string =>
@@ -498,7 +526,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
           <Ionicons name="megaphone" size={18} color={colors.warning} />
         ) : null}
         {/* 右上角「更多」：分享 / 举报 / 删除（删除已从独立按钮移入此菜单）。 */}
-        <Pressable
+        {!showInlineActions ? <Pressable
           onPress={() => setMenuVisible(true)}
           hitSlop={8}
           accessibilityRole="button"
@@ -509,7 +537,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
             size={18}
             color={colors.textSecondary}
           />
-        </Pressable>
+        </Pressable> : null}
       </View>
 
       {/* Body */}
@@ -527,7 +555,14 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       ) : null}
 
       {/* Images */}
-      <ImageGrid images={post.images} media={post.media} />
+      <MomentMedia
+        images={post.images}
+        media={post.media}
+        attachments={post.videos?.length ? [
+          ...post.images.map((url) => ({ type: 'image' as const, key: url, url })),
+          ...post.videos.map((url) => ({ type: 'video' as const, key: url, url })),
+        ] : undefined}
+      />
 
       {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
           无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}
@@ -547,7 +582,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
             </View>
           )}
         </View>
-        {isOwnPost ? (
+        {showSignupAction && (isOwnPost ? (
           <Pressable
             onPress={handleManageSignups}
             hitSlop={6}
@@ -598,14 +633,33 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
               {signupCount > 0 ? ` ${signupCount}` : ''}
             </Text>
           </Pressable>
-        )}
+        ))}
       </View>
 
-      <PlazaPostActionsSheet
-        visible={menuVisible}
-        actions={postActions}
-        onClose={() => setMenuVisible(false)}
-      />
+      {showInlineActions ? (
+        <View style={[s.actionRow, { borderTopColor: colors.surfaceBorder }]}>
+          {postActions.map((action) => {
+            const color = action.destructive ? colors.error : colors.iconAccent;
+            return (
+              <Pressable
+                key={action.key}
+                accessibilityRole="button"
+                onPress={action.onPress}
+                style={s.actionButton}
+              >
+                <Ionicons name={action.icon} size={18} color={color} />
+                <Text style={{ color }}>{action.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <PlazaPostActionsSheet
+          visible={menuVisible}
+          actions={postActions}
+          onClose={() => setMenuVisible(false)}
+        />
+      )}
     </View>
   );
 };

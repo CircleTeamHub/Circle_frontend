@@ -53,6 +53,8 @@ export type LiveKitModule = {
   useParticipants: () => {
     identity: string;
     name?: string;
+    isSpeaking?: boolean;
+    isMicrophoneEnabled?: boolean;
   }[];
   useRoomContext: () => CallRoomEvents & {
     disconnect: () => Promise<void>;
@@ -60,6 +62,8 @@ export type LiveKitModule = {
   /** 见原生档注释：web 上少了它远端就是哑的。 */
   RoomAudioRenderer: ComponentType<Record<string, never>>;
   registerGlobals?: () => void;
+  setSpeakerphone?: (enabled: boolean) => Promise<void>;
+  startVoiceAudioRouting?: () => () => void;
 };
 
 let cachedLiveKitModule: LiveKitModule | null | undefined;

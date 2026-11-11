@@ -435,6 +435,7 @@ export interface CirclePlazaPost {
   id: string;
   content: string;
   images: string[];
+  videos?: string[];
   media?: ImageMediaVariant[];
   tags: string[];
   city: string | null;
@@ -477,6 +478,7 @@ export interface CirclePlazaPost {
 export interface CreatePlazaPostInput {
   content: string;
   images: string[];
+  videos?: string[];
   tags: string[];
   circleIds: string[];
   cities: string[];

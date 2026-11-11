@@ -30,16 +30,18 @@ export async function createGroupCall(input: CreateGroupCallInput) {
   return normalizeCallActionResponse(response);
 }
 
-export async function acceptCall(callId: string) {
+export async function acceptCall(callId: string, invitationCreatedAt?: string) {
   const response = await apiClient<unknown>(`/calls/${callId}/accept`, {
     method: 'POST',
+    ...(invitationCreatedAt ? { headers: { 'X-Call-Invite-Created-At': invitationCreatedAt } } : {}),
   });
   return normalizeCallActionResponse(response);
 }
 
-export async function rejectCall(callId: string) {
+export async function rejectCall(callId: string, invitationCreatedAt?: string) {
   return apiClient<void>(`/calls/${callId}/reject`, {
     method: 'POST',
+    ...(invitationCreatedAt ? { headers: { 'X-Call-Invite-Created-At': invitationCreatedAt } } : {}),
   });
 }
 
@@ -62,6 +64,19 @@ export async function requestJoinToken(callId: string) {
     method: 'POST',
   });
   return normalizeCallActionResponse(response);
+}
+
+export async function inviteCallParticipants(
+  callId: string,
+  inviteeIDs: string[],
+  { idempotencyKey }: { idempotencyKey: string },
+): Promise<CallSession> {
+  const response = await apiClient<{ call: unknown }>(`/calls/${callId}/invite`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: { inviteeIDs },
+  });
+  return normalizeCall(response?.call);
 }
 
 export type CreateDirectCallInput = {

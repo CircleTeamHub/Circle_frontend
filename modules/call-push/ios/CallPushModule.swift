@@ -6,6 +6,7 @@ struct IncomingCallOptions: Record {
   @Field var hasVideo: Bool = false
   @Field var isGroup: Bool = false
   @Field var expiresAt: String = ""
+  @Field var createdAt: String? = nil
 }
 
 public class CallPushModule: Module {
@@ -42,12 +43,13 @@ public class CallPushModule: Module {
         callerName: options.callerName,
         hasVideo: options.hasVideo,
         isGroup: options.isGroup,
-        expiresAt: options.expiresAt
+        expiresAt: options.expiresAt,
+        createdAt: options.createdAt
       )
     }.runOnQueue(.main)
 
-    AsyncFunction("endCall") { (callId: String, reason: String) in
-      CallPushCenter.shared.endCall(callId: callId, reason: reason)
+    AsyncFunction("endCall") { (callId: String, reason: String, createdAt: String?) in
+      CallPushCenter.shared.endCall(callId: callId, reason: reason, createdAt: createdAt)
     }.runOnQueue(.main)
 
     // iOS 没有「全屏来电」权限一说：CallKit 永远是系统来电界面。
