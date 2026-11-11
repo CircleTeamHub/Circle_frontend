@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react-n
 import { StyleSheet } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
 import { signupForPost } from '@/services/api/plaza';
+import { ImageViewer } from '@/components/ui/image-viewer';
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
 import type { CirclePlazaPost } from '@/types';
@@ -16,6 +17,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), navigate: jest.fn() }) }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: (selector: (s: { user: { id: string } }) => unknown) => selector({ user: { id: mockUserId } }),
 }));
@@ -36,7 +38,8 @@ jest.mock('@/components/ui/member-name', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return { MemberName: ({ name }: { name: string }) => <Text>{name}</Text> };
 });
-jest.mock('./image-grid', () => ({ ImageGrid: () => null }));
+jest.mock('./image-grid', () => ({ ...jest.requireActual('./image-grid'), ImageGrid: () => null }));
+jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
 jest.mock('./plaza-post-actions-sheet', () => ({ PlazaPostActionsSheet: () => null }));
 
 const noLimits = { vipLevel: null, creditScore: null, fancyNumber: false };
@@ -72,6 +75,31 @@ const post: CirclePlazaPost = {
 
 beforeEach(() => {
   mockUserId = 'me';
+});
+
+test('opens a video-only circle post in the media viewer', () => {
+  const videoUrl = 'https://cdn.test/posts/me/clip.mp4';
+  render(<PlazaPostCard post={{ ...post, videos: [videoUrl] }} />);
+
+  fireEvent.press(screen.getByRole('button', { name: '播放视频' }));
+
+  expect(jest.mocked(ImageViewer).mock.lastCall?.[0]).toMatchObject({
+    videos: [videoUrl],
+    autoPlayInitialVideo: true,
+    initialIndex: 0,
+  });
+});
+
+test('an authored post in signup management shows its actions inline', () => {
+  mockUserId = 'author';
+  const edit = jest.fn();
+  render(<PlazaPostCard post={post} onEdit={edit} showSignupAction={false} />);
+
+  expect(screen.getByRole('button', { name: '分享' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '删除' })).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'plaza.actions.editPost' }));
+  expect(edit).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('0 人报名')).toBeNull();
 });
 
 // 报名条件只有短短一截、报名按钮也只有一截,各占一行时右边全空着:合成一行,卡片矮一截。

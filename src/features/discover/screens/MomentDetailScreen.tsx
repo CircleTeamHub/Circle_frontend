@@ -34,10 +34,10 @@ import {
 import {
   addMomentComment,
   fetchMomentById,
-  deleteMoment,
   deleteMomentComment,
 } from '@/services/api/moments';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { confirmDeleteMoment } from '@/features/discover/utils/confirm-delete-moment';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { useAuthStore } from '@/stores/authStore';
 import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
@@ -177,7 +177,6 @@ function MomentDetailContent() {
   );
   const storeToggleLike = useMomentsStore((s) => s.toggleLike);
   const storeAddComment = useMomentsStore((s) => s.addComment);
-  const storeRemoveMoment = useMomentsStore((s) => s.removeMoment);
   const storeRemoveComment = useMomentsStore((s) => s.removeComment);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
@@ -429,36 +428,11 @@ function MomentDetailContent() {
     !!currentUserId && !!post && currentUserId === post.author.id;
 
   const handleDeleteMoment = useCallback(() => {
-    Alert.alert(
-      t('moment.deleteTitle', { defaultValue: '删除动态' }),
-      t('moment.deleteMessage', {
-        defaultValue: '删除后无法恢复，确定删除吗？',
-      }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('common.delete', { defaultValue: '删除' }),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteMoment(id);
-              if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-              storeRemoveMoment(id);
-              router.back();
-            } catch (error) {
-              Alert.alert(
-                t('moment.deleteFailedTitle', { defaultValue: '删除失败' }),
-                getApiErrorMessage(
-                  error,
-                  t('moment.deleteFailedMessage', { defaultValue: '请稍后重试' }),
-                ),
-              );
-            }
-          },
-        },
-      ],
-    );
-  }, [id, router, sessionEpoch, storeRemoveMoment, t]);
+    if (!post) return;
+    confirmDeleteMoment(post, t, () => {
+      if (mountedRef.current) router.back();
+    });
+  }, [post, router, t]);
 
   const handleDeleteComment = useCallback(
     (commentId: string) => {

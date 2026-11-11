@@ -22,6 +22,8 @@ import {
   fetchNewMomentsCount,
 } from '@/services/api/moments';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useAuthStore } from '@/stores/authStore';
+import { confirmDeleteMoment } from '@/features/discover/utils/confirm-delete-moment';
 import { toggleMomentLikeOnce } from '@/features/discover/utils/moment-like';
 import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
@@ -79,6 +81,7 @@ export const MomentsFeed: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  const currentUserId = useAuthStore((s) => s.user?.id);
   // 详情、作者资料都开在当前 tab 栈里：探索页的朋友圈不能把人甩去圈子 tab。
   const scope = getUserProfileScopeFromSegments(useSegments());
   const {
@@ -276,6 +279,8 @@ export const MomentsFeed: React.FC = () => {
     [commentKeys, commentTarget, storeAddComment, t],
   );
 
+  const handleDelete = useCallback((post: MomentPost) => confirmDeleteMoment(post, t), [t]);
+
   const renderItem = useCallback(
     ({ item }: { item: MomentPost }) => (
       <MomentCard
@@ -285,9 +290,10 @@ export const MomentsFeed: React.FC = () => {
         onPress={handlePress}
         onComment={handleComment}
         onReplyComment={handleReplyComment}
+        onDelete={currentUserId && currentUserId === item.author.id ? handleDelete : undefined}
       />
     ),
-    [handleLike, handlePress, handleComment, handleReplyComment, scope],
+    [currentUserId, handleLike, handlePress, handleComment, handleReplyComment, handleDelete, scope],
   );
 
   const keyExtractor = useCallback((item: MomentPost) => item.id, []);

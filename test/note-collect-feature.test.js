@@ -65,7 +65,7 @@ test('chat page disables its keyboard padding while the collect sheet is open', 
   // enabled while it is mounted lifts the sheet by the composer height on iOS.
   assert.match(hook, /noteCollectVisible: noteCollectTarget !== null \|\| noteCollectOpening/);
   // 半屏快捷聊天(sheet)的键盘避让交给外层容器,这里同样关掉。
-  assert.match(screen, /enabled=\{!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen\}/);
+  assert.match(screen, /enabled=\{!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen && !expandedComposer\}/);
 });
 
 test('collect waits for the chat keyboard window to settle before presenting the sheet', () => {

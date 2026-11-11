@@ -418,6 +418,15 @@ export function mapChatMessageDtoToUI(
       };
     }
     case 'image':
+      if (content['expired'] === true) {
+        return {
+          ...base,
+          type: 'image',
+          mediaExpired: true,
+          imageWidth: num(content['width']),
+          imageHeight: num(content['height']),
+        };
+      }
       return {
         ...base,
         type: 'image',
@@ -431,6 +440,16 @@ export function mapChatMessageDtoToUI(
         imageHeight: num(content['height']),
       };
     case 'video':
+      if (content['expired'] === true) {
+        return {
+          ...base,
+          type: 'video',
+          mediaExpired: true,
+          videoWidth: num(content['width']),
+          videoHeight: num(content['height']),
+          videoDuration: num(content['duration']),
+        };
+      }
       return {
         ...base,
         type: 'video',
@@ -444,6 +463,14 @@ export function mapChatMessageDtoToUI(
         videoSize: num(content['size']),
       };
     case 'voice':
+      if (content['expired'] === true) {
+        return {
+          ...base,
+          type: 'voice',
+          mediaExpired: true,
+          voiceDuration: num(content['duration']),
+        };
+      }
       return {
         ...base,
         type: 'voice',

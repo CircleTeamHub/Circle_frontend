@@ -26,6 +26,7 @@ interface MomentCardProps {
   scope: UserProfileScope;
   onLike: (postId: string) => void;
   onPress: (postId: string) => void;
+  onDelete?: (post: MomentPost) => void;
   /** 点评论按钮：就地评论（缺省时退回跳详情）。 */
   onComment?: (postId: string) => void;
   /** 点已有评论：就地回复该评论（缺省时退回跳详情）。 */
@@ -100,6 +101,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   scope,
   onLike,
   onPress,
+  onDelete,
   onComment,
   onReplyComment,
 }) => {
@@ -233,6 +235,17 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                 </Text>
               ) : null}
             </Pressable>
+            {onDelete ? (
+              <Pressable
+                style={s.actionBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('moment.deleteTitle')}
+                onPress={() => onDelete(post)}
+              >
+                <Ionicons name="trash-outline" size={22} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
 

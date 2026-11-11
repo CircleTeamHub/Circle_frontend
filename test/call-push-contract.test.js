@@ -43,7 +43,7 @@ test(
     const kotlin = read(
       'modules/call-push/android/src/main/java/expo/modules/callpush/CallPushInvite.kt',
     );
-    for (const field of ['callId', 'callType', 'sessionType', 'callerName', 'groupName', 'expiresAt', 'declineToken']) {
+    for (const field of ['callId', 'callType', 'sessionType', 'callerName', 'groupName', 'createdAt', 'expiresAt', 'declineToken']) {
       assert.match(backend, new RegExp(`\\b${field}\\b`), `backend sends ${field}`);
       assert.match(swift, new RegExp(`call\\["${field}"\\]`), `iOS parses ${field}`);
       assert.match(kotlin, new RegExp(`optString\\("${field}"\\)`), `Android parses ${field}`);
@@ -69,3 +69,24 @@ test(
     assert.match(read('modules/call-push/ios/CallPushNotificationCenter.swift'), /"call:\\\(callId\)"/);
   },
 );
+
+test('native invitations and terminal actions keep the invitation generation across the bridge', () => {
+  const androidRoot = 'modules/call-push/android/src/main/java/expo/modules/callpush/';
+  const module = read(androidRoot + 'CallPushModule.kt');
+  const receiver = read(androidRoot + 'CallPushReceivers.kt');
+  const notifier = read(androidRoot + 'IncomingCallNotifier.kt');
+  const swift = read('modules/call-push/ios/CallPushCenter.swift');
+  assert.match(module, /options\.createdAt/);
+  assert.match(module, /markDismissed\(context, callId, createdAtMs\)/);
+  assert.match(receiver, /acceptInvite\(context, invite, nowMs\)/);
+  assert.match(receiver, /markDismissed\(context, callId, createdAtMs, nowMs\)/);
+  assert.match(notifier, /EXTRA_CREATED_AT/);
+  assert.match(swift, /isRecentlyEnded\(backendId, createdAt: invite\.createdAt\)/);
+  assert.match(swift, /cutoff < activeGeneration/);
+  assert.match(swift, /calls\.first \{ \$0\.value\.callId == invite\.callId \}\?\.key \?\? invite\.systemUUID/);
+  assert.match(swift, /createdAt <= cutoff/);
+  const support = read('modules/call-push/ios/CallPushSupport.swift');
+  assert.match(support, /SHA256\.hash\(data: Data\(key\.utf8\)\)/);
+  assert.match(support, /Self\.formatDate\(createdAt\)/);
+  assert.match(swift, /call\.createdAt == createdAt, !call\.answered/);
+});

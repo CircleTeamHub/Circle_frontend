@@ -264,6 +264,25 @@ test.each(['session', 'conversation', 'revoke', 'blur'] as const)('batch save re
   if (change === 'blur') expect([...result.current.selectedMessageIds!]).toEqual(['next']);
 });
 
+// 过了保留期的媒体:对象已删,收藏、保存都不会成功,只留删除、引用这类不碰对象的操作。
+test.each(['image', 'video', 'voice'] as const)('an expired %s offers no collect or save', (type) => {
+  const { result } = renderHook(() => useMessageActions(params));
+  const message = { id: 'expired', type, sendStatus: 2, mediaExpired: true } as ChatMessage;
+  act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+  const keys = result.current.messageActions.map((action) => action.key);
+  expect(keys).not.toContain('collect');
+  expect(keys).not.toContain('save');
+  expect(keys).not.toContain('save-sticker');
+  expect(keys).toContain('delete');
+});
+
+test('multi-select does not count expired media as collectable', () => {
+  params.messages = [{ id: 'expired', type: 'video', mediaExpired: true }];
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  expect(result.current.canCollectSelectedMessages).toBe(false);
+});
+
 test('batch collection awaits each result, skips protected messages and retains failures', async () => {
   params.messages = [
     { id: 'failed', type: 'received', text: 'later' },

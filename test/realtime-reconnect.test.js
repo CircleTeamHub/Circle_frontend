@@ -91,6 +91,8 @@ function loadRealtimeHarness(options = {}) {
   const clearedSessions = [];
   const sentryReports = [];
   const stubStore = (state) => ({ getState: () => state });
+  const { useCallStore } = loadTsModule('src/features/call/store/use-call-store.ts');
+  const callMappers = loadTsModule('src/services/api/call-mappers.ts');
 
   const circleNotifications = loadCircleNotificationStore();
   circleNotifications.useCircleNotificationStore.setState({
@@ -202,7 +204,9 @@ function loadRealtimeHarness(options = {}) {
         case '@/features/discover/store/use-circle-notification-store':
           return circleNotifications;
         case '@/features/call/store/use-call-store':
-          return { useCallStore: stubStore({}) };
+          return { useCallStore };
+        case '@/services/api/call-mappers':
+          return callMappers;
         case '@/features/call/realtime-guards':
           return {
             isCallInvitePayload: () => false,
@@ -291,6 +295,7 @@ function loadRealtimeHarness(options = {}) {
     announcementChangeCount: () => announcementChanges,
     badgeState,
     circleNotifications,
+    useCallStore,
     latestSocket: () => sockets[sockets.length - 1],
     pendingDelay: () => pendingTimer()?.[1].delay ?? null,
     hasPendingReconnect: () => pendingTimer() !== null,
@@ -347,6 +352,94 @@ test('schema-invalid known realtime frames are reported as malformed payloads', 
     { ...harness.sentryReports[0].context },
     { operation: 'realtime', kind: 'malformedPayload', traceId: traceIdOf(harness.latestSocket()) },
   );
+});
+
+function callSnapshot(overrides = {}) {
+  return {
+    id: 'call-current',
+    conversationID: 'direct:me:peer',
+    sessionType: 'single',
+    callType: 'AUDIO',
+    status: 'ACTIVE',
+    initiator: { id: 'me', nickname: 'Me', avatarUrl: null },
+    startedAt: '2026-11-10T12:00:00.000Z',
+    endedAt: null,
+    expiresAt: null,
+    durationSeconds: null,
+    endReason: null,
+    participants: [{
+      user: { id: 'me', nickname: 'Me', avatarUrl: null },
+      status: 'JOINED',
+      invitedAt: '2026-11-10T12:00:00.000Z',
+      joinedAt: '2026-11-10T12:00:00.000Z',
+      leftAt: null,
+    }],
+    ...overrides,
+  };
+}
+
+test('call.updated dispatch promotes the current room while preserving credentials and minimized state', () => {
+  const harness = loadRealtimeHarness();
+  const credentials = { url: 'wss://livekit.test', token: 'current-token', expiresAt: '' };
+  harness.useCallStore.getState().setActiveCall(callSnapshot(), credentials);
+  harness.useCallStore.getState().setMinimized(true);
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  const updated = callSnapshot({
+    sessionType: 'group',
+    invitationMode: 'contacts',
+    conversationID: 'conference:call-current',
+    participants: [...callSnapshot().participants, {
+      user: { id: 'invited', nickname: 'Invited friend', avatarUrl: null },
+      status: 'INVITED',
+      invitedAt: '2026-11-10T12:05:00.000Z',
+      invitationExpiresAt: '2026-11-10T12:05:45.000Z',
+      joinedAt: null,
+      leftAt: null,
+    }],
+  });
+
+  harness.latestSocket().onmessage({ data: JSON.stringify({ type: 'call.updated', payload: { call: updated } }) });
+
+  const state = harness.useCallStore.getState();
+  assert.equal(state.activeCall.id, 'call-current');
+  assert.equal(state.activeCall.sessionType, 'group');
+  assert.equal(state.activeCall.invitationMode, 'contacts');
+  assert.equal(state.activeCall.participants[1].invitationExpiresAt, '2026-11-10T12:05:45.000Z');
+  assert.equal(state.livekit, credentials);
+  assert.equal(state.isMinimized, true);
+  assert.equal(harness.sentryReports.length, 0);
+});
+
+test('call.updated rejects a malformed snapshot before mutating the current room', () => {
+  const harness = loadRealtimeHarness();
+  const current = callSnapshot();
+  harness.useCallStore.getState().setActiveCall(current);
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.updated', payload: { call: { id: 'call-current' } } }),
+  });
+
+  assert.equal(harness.useCallStore.getState().activeCall, current);
+  assert.equal(harness.sentryReports.length, 1);
+  assert.equal(harness.sentryReports[0].context.kind, 'malformedPayload');
+});
+
+test('call.updated leaves the current room alone when the snapshot belongs to another call', () => {
+  const harness = loadRealtimeHarness();
+  const current = callSnapshot();
+  harness.useCallStore.getState().setActiveCall(current);
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.updated', payload: { call: callSnapshot({ id: 'another-call' }) } }),
+  });
+
+  assert.equal(harness.useCallStore.getState().activeCall, current);
+  assert.equal(harness.sentryReports.length, 0);
 });
 
 test('an auth-frame send failure never marks the socket connected and still retries after close', () => {

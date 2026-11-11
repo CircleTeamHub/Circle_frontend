@@ -1,5 +1,6 @@
 import {
   LayoutAnimation,
+  Modal,
   type NativeSyntheticEvent,
   type PanResponderInstance,
   Platform,
@@ -7,6 +8,7 @@ import {
   Text,
   TextInput,
   type TextInputKeyPressEventData,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
@@ -17,11 +19,17 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
 import { type TFunction } from 'i18next';
-import { type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { MODAL_INPUT_NATIVE_AUTO_FOCUS, useModalInputAutoFocus } from '@/hooks/use-modal-input-auto-focus';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 import { type PlazaPostCardData } from '@/types';
+
+const COMPOSER_LINE_HEIGHT = 24;
+const COMPOSER_VERTICAL_PADDING = 12;
+const INLINE_COMPOSER_MAX_LINES = 4;
 
 export interface ChatComposerBarProps {
   insets: EdgeInsets;
@@ -29,7 +37,10 @@ export interface ChatComposerBarProps {
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
   draft: string;
-  inputRef?: RefObject<TextInput | null>;
+  inputRef: RefObject<TextInput | null>;
+  expanded: boolean;
+  setExpanded: (expanded: boolean) => void;
+  mentionPicker: ReactNode;
   setMentionPickerVisible: Dispatch<SetStateAction<boolean>>;
   selfSilenced: boolean;
   composerLocked: boolean;
@@ -66,6 +77,9 @@ export function ChatComposerBar({
   t,
   draft,
   inputRef,
+  expanded,
+  setExpanded,
+  mentionPicker,
   setMentionPickerVisible,
   selfSilenced,
   composerLocked,
@@ -93,6 +107,34 @@ export function ChatComposerBar({
 }: ChatComposerBarProps) {
   const { resolvedMode } = useTheme();
   const dark = resolvedMode === 'dark';
+  const { fontScale } = useWindowDimensions();
+  const lineHeight = COMPOSER_LINE_HEIGHT * fontScale;
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+  const [inputWidth, setInputWidth] = useState(0);
+  const expandedInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(expandedInputRef, expanded);
+
+  // RN Web's content size includes the textarea viewport. Measure at zero
+  // height so a draft also shrinks when lines are removed or the pane widens.
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !inputWidth || voiceInputMode) return;
+    const node = inputRef.current as unknown as HTMLTextAreaElement | null;
+    if (!node) return;
+    const height = node.style.height;
+    node.style.height = '0px';
+    const measured = node.scrollHeight;
+    node.style.height = height;
+    setMeasuredHeight(measured);
+  }, [draft, inputRef, inputWidth, voiceInputMode]);
+
+  const canEdit = !isPreviewMode && !composerLocked;
+  const inputPadding = COMPOSER_VERTICAL_PADDING * 2;
+  const singleLineHeight = lineHeight + inputPadding;
+  const textHeight = draft ? Math.max(singleLineHeight, measuredHeight) : singleLineHeight;
+  const maxInputHeight = lineHeight * INLINE_COMPOSER_MAX_LINES + inputPadding;
+  const multiLineDraft = !voiceInputMode && textHeight > singleLineHeight + lineHeight / 2;
+  const canExpand = multiLineDraft && canEdit;
+  const closeExpanded = () => setExpanded(false);
   const hasContent = Boolean(draft.trim() || pendingCard);
   const compactButton = hasContent ? { width: 44, height: 44, borderRadius: 22 } : undefined;
   const mutedInk = withAlpha(colors.text, dark ? 0.5 : 0.55);
@@ -119,6 +161,7 @@ export function ChatComposerBar({
         radius={35}
         style={[
           s.composerShell,
+          multiLineDraft && s.multilineComposerShell,
           {
             gap: hasContent ? 4 : 10,
             borderColor: withAlpha(colors.text, dark ? 0.12 : 0.1),
@@ -181,11 +224,29 @@ export function ChatComposerBar({
           </View>
         ) : (
           <TextInput
-              ref={inputRef}
+            ref={inputRef}
             key="text-input"
             testID={E2E_TEST_IDS.chatInput}
             accessibilityLabel={t('chat.detail.inputPlaceholder')}
-            style={[s.composerInput, d.composerInput]}
+            style={[
+              s.composerInput,
+              d.composerInput,
+              {
+                minHeight: singleLineHeight,
+                maxHeight: maxInputHeight,
+                // Native text inputs measure their own text as part of layout.
+                height: Platform.OS === 'web' ? Math.min(textHeight, maxInputHeight) : undefined,
+                lineHeight: COMPOSER_LINE_HEIGHT,
+                paddingVertical: COMPOSER_VERTICAL_PADDING,
+              },
+            ]}
+            multiline
+            submitBehavior="newline"
+            scrollEnabled={textHeight >= maxInputHeight}
+            onLayout={({ nativeEvent: { layout } }) => {
+              if (Platform.OS === 'web') setInputWidth(layout.width);
+              else setMeasuredHeight(layout.height);
+            }}
             placeholder={
               composerLocked
                 ? selfSilenced
@@ -202,11 +263,7 @@ export function ChatComposerBar({
             onChangeText={handleDraftChange}
             selection={selection}
             onSelectionChange={handleSelectionChange}
-            onSubmitEditing={handleSend}
-            // Web：Enter 发送。onKeyPress 在 RNW 内部先于它自己的 submit 分支
-            // 执行，我们 preventDefault 之后那条分支就不会再走（它带
-            // !isDefaultPrevented 判断），因此不会重复发送。
-            // 原生端保持 undefined、行为不变。
+            // Web：Enter 发送，Shift+Enter 换行。原生键盘的回车始终换行。
             onKeyPress={
               Platform.OS === 'web'
                 ? (
@@ -215,8 +272,8 @@ export function ChatComposerBar({
                     // DOM 的 KeyboardEvent 带这两个字段，RN 的类型里没有。
                     const native = event.nativeEvent as
                       & TextInputKeyPressEventData
-                      & { isComposing?: boolean; keyCode?: number };
-                    if (native.key !== 'Enter') return;
+                      & { isComposing?: boolean; keyCode?: number; shiftKey?: boolean };
+                    if (native.key !== 'Enter' || native.shiftKey) return;
                     // 中日韩输入法「回车确认候选词」也会发一个 Enter —— 不挡住的话
                     // 每选一次词就把半截草稿发出去，中文用户几乎每句话都中招。
                     // 判据与 RNW 内部的 isEventComposing 一致（见 TextInput：
@@ -237,6 +294,21 @@ export function ChatComposerBar({
             editable={!isPreviewMode && !composerLocked}
           />
         )}
+
+        {canExpand ? (
+          <Pressable
+            style={[s.circleBtn, s.expandComposerButton]}
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.detail.expandComposer')}
+            onPress={() => {
+              setAttachmentOpen(false);
+              setEmojiOpen(false);
+              setExpanded(true);
+            }}
+          >
+            <Ionicons name="expand-outline" size={20} color={mutedInk} />
+          </Pressable>
+        ) : null}
 
         {/* 右侧依次为表情、附件；发送入口按草稿显示在最右边。 */}
         <Pressable
@@ -281,6 +353,60 @@ export function ChatComposerBar({
           </Pressable>
         ) : null}
       </GlassSurface>
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={closeExpanded}
+      >
+        <KeyboardAvoidingContainer
+          style={[s.expandedComposer, { backgroundColor: colors.surface, paddingTop: insets.top }]}
+        >
+          <View style={s.expandedComposerHeader}>
+            <Text style={[s.expandedComposerTitle, { color: colors.text }]}>{t('chat.detail.expandedComposerTitle')}</Text>
+            <Pressable
+              style={s.circleBtn}
+              onPress={closeExpanded}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.detail.collapseComposer')}
+            >
+              <Ionicons name="contract-outline" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+          <TextInput
+            ref={expandedInputRef}
+            testID="chat-expanded-input"
+            accessibilityLabel={t('chat.detail.inputPlaceholder')}
+            autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
+            style={[s.expandedComposerInput, d.composerInput, { lineHeight: COMPOSER_LINE_HEIGHT }]}
+            multiline
+            submitBehavior="newline"
+            editable={canEdit}
+            value={draft}
+            onChangeText={handleDraftChange}
+            selection={selection}
+            onSelectionChange={handleSelectionChange}
+          />
+          {expanded ? mentionPicker : null}
+          <View style={[s.expandedComposerFooter, { paddingBottom: keyboardVisible ? Spacing.sm : Math.max(insets.bottom, Spacing.sm) }]}>
+            <Pressable
+              style={[s.circleBtn, { backgroundColor: colors.primary, opacity: hasContent && canEdit ? 1 : 0.45 }]}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.send')}
+              testID="chat-expanded-send"
+              disabled={!hasContent || sending || !canEdit}
+              onPress={() => {
+                closeExpanded();
+                void handleSend();
+              }}
+            >
+              <Ionicons name="send" size={22} color={colors.white} />
+            </Pressable>
+          </View>
+        </KeyboardAvoidingContainer>
+      </Modal>
     </View>
   );
 }

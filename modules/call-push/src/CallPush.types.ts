@@ -1,5 +1,5 @@
 /** 原生层排队给 JS 的事件（JS 收到 onCallEventsAvailable 后用 consumeEvents 一次取走）。 */
-export type CallPushNativeEvent =
+export type CallPushNativeEvent = (
   /** iOS：PushKit token 变了（新发 / 作废），JS 重新登记。 */
   | { type: 'voipToken' }
   /**
@@ -18,7 +18,8 @@ export type CallPushNativeEvent =
   /** iOS：接通后在系统通话界面上挂断。 */
   | { type: 'hangup'; callId: string }
   /** 原生层自己收掉了振铃：到期、系统重置、被撤销推送收掉。 */
-  | { type: 'end'; callId: string; reason: string };
+  | { type: 'end'; callId: string; reason: string }
+) & { createdAt?: string };
 
 export type VoipPushToken = {
   token: string;
@@ -32,6 +33,7 @@ export type NativeIncomingCall = {
   hasVideo: boolean;
   isGroup: boolean;
   expiresAt: string;
+  createdAt?: string;
 };
 
 /**
@@ -56,7 +58,7 @@ export interface CallPushNativeModule {
   /** 让原生层为一通 JS 已知的来电响铃（iOS 报 CallKit，安卓发全屏来电通知）。 */
   showIncomingCall(call: NativeIncomingCall): Promise<void>;
   /** 收掉这通电话的原生振铃 / 系统通话界面；不认识的 callId 什么都不做。 */
-  endCall(callId: string, reason: NativeCallEndReason): Promise<void>;
+  endCall(callId: string, reason: NativeCallEndReason, createdAt?: string): Promise<void>;
   /** 安卓 14+：系统是否允许全屏来电（被收回时只能横幅提醒）。iOS 恒为 true。 */
   canUseFullScreenIntent(): boolean;
   openFullScreenIntentSettings(): Promise<void>;

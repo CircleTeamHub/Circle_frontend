@@ -117,3 +117,16 @@ test('a failed refresh retains the cached cursor and permits pagination', async 
   expect(mockFetch).toHaveBeenLastCalledWith({ cursor: 'next', limit: 20 });
   expect(useMomentsStore.getState().moments.map((item) => item.id)).toEqual(['cached', 'older']);
 });
+
+test('a response started before deletion does not restore the deleted post', async () => {
+  const request = deferred<PaginatedResponse<MomentPost>>();
+  mockFetch.mockReturnValueOnce(request.promise);
+  const refresh = useMomentsStore.getState().fetchMoments(true);
+  useMomentsStore.getState().removeMoment('deleted');
+
+  request.resolve(page(['deleted', 'remaining'], true));
+  await refresh;
+
+  expect(useMomentsStore.getState().moments.map((item) => item.id)).toEqual(['remaining']);
+  expect(useMomentsStore.getState().cursor).toBe('next');
+});

@@ -1,3 +1,4 @@
+import { normalizeCall } from '@/services/api/call-mappers';
 import { randomUUID } from 'expo-crypto';
 import { useAnnouncementSignalStore } from '@/features/profile/store-announcement-signal';
 import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
@@ -137,6 +138,10 @@ type RealtimeEvent =
   | {
       type: 'auth.login.challenge.resolved';
       payload?: { challengeId?: string; status?: string };
+    }
+  | {
+      type: 'call.updated';
+      payload?: { call?: unknown };
     }
   | {
       type: 'call.invite';
@@ -693,6 +698,13 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       loginChallengeListener?.({ type: 'resolved', challengeId, status });
       return;
     }
+    case 'call.updated':
+      try {
+        callStore.updateActiveCall(normalizeCall(message.payload?.call));
+      } catch {
+        reportRealtimeFailureOnce('malformedPayload');
+      }
+      return;
     case 'call.invite':
       if (!isCallInvitePayload(message.payload)) {
         reportRealtimeFailureOnce('malformedPayload');
@@ -711,6 +723,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         callStore.handleSelfParticipantSettled(
           message.payload.callId,
           'answered_elsewhere',
+          message.payload.changedAt,
         );
       }
       return;
@@ -731,6 +744,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         callStore.handleSelfParticipantSettled(
           message.payload.callId,
           'declined_elsewhere',
+          message.payload.changedAt,
         );
       }
       return;

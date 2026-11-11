@@ -87,6 +87,8 @@ export function canForwardMessage(
     message.type === 'video' ||
     message.type === 'voice'
   ) {
+    // 过了保留期:对象已删,服务端会回 CHAT_MEDIA_EXPIRED。
+    if (message.mediaExpired) return false;
     return dto !== undefined && dto.height > 0;
   }
   return true;

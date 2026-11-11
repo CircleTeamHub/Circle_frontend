@@ -102,7 +102,7 @@ export default function NotificationCenterScreen() {
   const signupPosts = useNotificationCenterStore((s) => s.signupPosts);
   const store = useNotificationCenterStore.getState;
 
-  const [tab, setTab] = useState<NotificationTabKey>('notifications');
+  const [tab, setTab] = useState<NotificationTabKey>(domain === 'circle' ? 'signups' : 'notifications');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);

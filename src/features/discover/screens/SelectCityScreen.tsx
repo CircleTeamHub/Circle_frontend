@@ -45,6 +45,8 @@ interface CitySection {
   data: string[];
 }
 
+const POPULAR_CITIES = ['北京', '上海', '广州', '深圳', '杭州', '成都', '重庆', '武汉', '南京', '西安'];
+
 const s = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: Spacing.lg,
@@ -100,6 +102,14 @@ const s = StyleSheet.create({
   },
   sectionTitle: {
     ...Typography.h3,
+  },
+  popularChip: {
+    minHeight: 40,
+    minWidth: 60,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   row: {
     flexDirection: 'row',
@@ -374,6 +384,38 @@ export default function SelectCityScreen() {
         sections={sections}
         keyExtractor={(item, index) => `${item}-${index}`}
         {...keyboardDismissOnDragProps}
+        ListHeaderComponent={!search.trim() ? (
+          <>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionTitle, { color: colors.text }]}>
+                {t('city.popularCities')}
+              </Text>
+            </View>
+            <View style={s.selectedBar}>
+              {POPULAR_CITIES.map((city) => {
+                const isSelected = selected.includes(city);
+                return (
+                  <Pressable
+                    key={city}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    disabled={isNationwide}
+                    onPress={() => toggleCity(city)}
+                    style={[
+                      s.popularChip,
+                      { backgroundColor: isSelected ? colors.primary : colors.surface },
+                      isNationwide && { opacity: 0.3 },
+                    ]}
+                  >
+                    <Text style={[s.cityText, { color: isSelected ? colors.white : colors.text }]}>
+                      {city}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
         renderSectionHeader={({ section }) => (
           <View style={[s.sectionHeader, { backgroundColor: colors.background }]}>
             <Text style={[s.sectionTitle, { color: colors.text }]}>

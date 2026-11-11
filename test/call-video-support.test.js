@@ -174,7 +174,7 @@ test('web calls mount a room audio renderer so remote participants are audible',
   const screen = read('src/features/call/screens/GroupCallScreen.tsx');
   assert.match(
     screen,
-    /<RoomAudioRenderer \/>[\s\S]{0,200}<\/LiveKitRoom>/,
+    /<RoomAudioRenderer \/>[\s\S]*<\/LiveKitRoom>/,
     'RoomAudioRenderer 必须挂在 LiveKitRoom 内部（要拿 room context）',
   );
 

@@ -1,4 +1,5 @@
 import AVFAudio
+import CryptoKit
 import Foundation
 
 /// 推送载荷 v1（circle_be src/call/call-push.service.ts）：全是字符串。
@@ -10,6 +11,7 @@ struct CallPushInvite {
   let callerName: String
   let groupName: String?
   let expiresAt: Date
+  let createdAt: Date?
   let declineToken: String?
 
   init(
@@ -20,6 +22,7 @@ struct CallPushInvite {
     callerName: String,
     groupName: String?,
     expiresAt: Date,
+    createdAt: Date?,
     declineToken: String?
   ) {
     self.callId = callId
@@ -29,6 +32,7 @@ struct CallPushInvite {
     self.callerName = callerName
     self.groupName = groupName
     self.expiresAt = expiresAt
+    self.createdAt = createdAt
     self.declineToken = declineToken
   }
 
@@ -52,8 +56,22 @@ struct CallPushInvite {
       callerName: callerName,
       groupName: (call["groupName"] as? String).flatMap { $0.isEmpty ? nil : $0 },
       expiresAt: expiresAt,
+      createdAt: (call["createdAt"] as? String).flatMap(Self.parseDate),
       declineToken: call["declineToken"] as? String
     )
+  }
+
+  var systemUUID: UUID {
+    guard let createdAt else { return UUID(uuidString: callId) ?? UUID() }
+    let key = "\(callId):\(Self.formatDate(createdAt))"
+    let bytes = Array(SHA256.hash(data: Data(key.utf8)).prefix(16))
+    return NSUUID(uuidBytes: bytes) as UUID
+  }
+
+  static func formatDate(_ value: Date) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: value)
   }
 
   static func parseDate(_ raw: String) -> Date? {

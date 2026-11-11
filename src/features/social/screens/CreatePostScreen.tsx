@@ -43,6 +43,7 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { LIMITS } from '@/constants/config';
 import { mapWithConcurrency } from '@/utils/concurrency';
 
@@ -50,6 +51,7 @@ import { mapWithConcurrency } from '@/utils/concurrency';
 // 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
 const VIP_VALUES: (number | null)[] = [null, 1, 2, 3, 4, 5];
 const CREDIT_VALUES: (number | null)[] = [null, 60, 70, 80, 90];
+const POST_VIDEO_MAX_SIZE_MB = 100;
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -75,6 +77,10 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.md,
+  },
+  videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeBtn: {
     position: 'absolute',
@@ -159,7 +165,7 @@ export default function CreatePostScreen() {
   const resetForm = usePostFormStore((s) => s.reset);
 
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [hornEnabled, setHornEnabled] = useState(false);
   const [postTags, setPostTags] = useState<string[]>([]);
   const [postTagInput, setPostTagInput] = useState('');
@@ -180,7 +186,7 @@ export default function CreatePostScreen() {
   // 重试同一条帖子沿用同一个幂等键(超时那次可能已经发出去了)。已传好的图片按所选
   // 条目记住、重试不再上传:每次重传 URL 都不同,请求体一变就成了「另一条帖子」。
   const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
-  const uploadedImagesRef = useRef(new Map<ImagePicker.ImagePickerAsset, string>());
+  const uploadedMediaRef = useRef(new WeakMap<ImagePicker.ImagePickerAsset, { url: string; isVideo: boolean }>());
   const { t } = useTranslation();
 
   const d = useMemo(
@@ -204,22 +210,26 @@ export default function CreatePostScreen() {
     [colors],
   );
 
-  const handlePickImages = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: 9 - images.length,
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    setImages((prev) => [
-      ...prev,
-      ...result.assets.slice(0, 9 - prev.length),
-    ]);
-  }, [images.length]);
+  const handlePickMedia = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+        selectionLimit: LIMITS.POST_MAX_MEDIA - media.length,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      setMedia((prev) => [
+        ...prev,
+        ...result.assets.slice(0, LIMITS.POST_MAX_MEDIA - prev.length),
+      ]);
+    } catch {
+      Alert.alert(t('plaza.create.pickerFailed'), t('validation.albumPermission'));
+    }
+  }, [media.length, t]);
 
-  const handleRemoveImage = useCallback((index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveMedia = useCallback((index: number) => {
+    setMedia((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const handleSelectCircle = useCallback(() => {
@@ -305,18 +315,26 @@ export default function CreatePostScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const hasOversizedImage = images.some(
-        (asset) =>
-          typeof asset.fileSize === 'number' &&
-          asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024,
-      );
-      if (hasOversizedImage) {
+      const oversizedAsset = media.find((asset) => {
+        const maxMb = asset.type === 'video' ? POST_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB;
+        return (asset.fileSize ?? 0) > maxMb * 1024 * 1024;
+      });
+      if (oversizedAsset) {
         Alert.alert(
           t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
           t('upload.errors.fileTooLarge', {
-            maxMb: LIMITS.IMAGE_MAX_SIZE_MB,
+            maxMb: oversizedAsset.type === 'video' ? POST_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB,
           }),
         );
+        return;
+      }
+      if (media.some((asset) =>
+        asset.type === 'video' && !resolveUploadContentType({
+          mimeType: asset.mimeType,
+          fileName: asset.fileName || asset.uri.split('/').pop(),
+        })?.startsWith('video/'),
+      )) {
+        Alert.alert(t('plaza.create.failedTitle'), t('chat.detail.videoUnsupported'));
         return;
       }
 
@@ -351,23 +369,25 @@ export default function CreatePostScreen() {
         }
       }
 
-      const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
-        const uploadedUrl = uploadedImagesRef.current.get(asset);
-        if (uploadedUrl) return uploadedUrl;
+      const outcomes = await mapWithConcurrency(media, 3, async (asset) => {
+        const uploaded = uploadedMediaRef.current.get(asset);
+        if (uploaded) return uploaded;
         try {
-          const fileName = asset.uri.split('/').pop() || 'photo.jpg';
+          const isVideo = asset.type === 'video';
+          const fileName = asset.fileName || asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg');
           const contentType =
             resolveUploadContentType({
               mimeType: asset.mimeType,
               fileName,
-            }) ?? 'image/jpeg';
-          const prepared = await prepareChatImageForUpload({
+            }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+          const source = {
             uri: asset.uri,
             width: asset.width,
             height: asset.height,
             contentType,
             filename: fileName,
-          });
+          };
+          const prepared = isVideo ? source : await prepareChatImageForUpload(source);
           const presign = await requestUploadPresign({
             filename: sanitizeUploadFilename(prepared.filename),
             contentType: prepared.contentType,
@@ -379,28 +399,28 @@ export default function CreatePostScreen() {
             prepared.contentType,
             prepared.uri,
             presign.requiredHeaders,
+            isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
-          uploadedImagesRef.current.set(asset, presign.fileUrl);
-          return presign.fileUrl;
+          const result = { url: presign.fileUrl, isVideo };
+          uploadedMediaRef.current.set(asset, result);
+          return result;
         } catch (uploadError) {
-          reportHandledFailure('createPost', 'imageUpload', uploadError);
+          reportHandledFailure('createPost', 'mediaUpload', uploadError);
           return null;
         }
       });
-      const uploadedUrls = outcomes.filter(
-        (url): url is string => typeof url === 'string',
-      );
-      const failedUploads = images.length - uploadedUrls.length;
+      const uploaded = outcomes.filter((item) => item !== null);
+      const failedUploads = media.length - uploaded.length;
 
       if (failedUploads > 0) {
         const reason =
-          failedUploads === images.length
+          failedUploads === media.length
             ? t('plaza.create.allUploadsFailed', {
-                defaultValue: '图片上传失败，请检查网络后重试',
+                defaultValue: '媒体上传失败，请检查网络后重试',
               })
             : t('plaza.create.partialUploadsFailed', {
                 count: failedUploads,
-                defaultValue: `有${failedUploads}张图片上传失败，请重试`,
+                defaultValue: `有 ${failedUploads} 个文件上传失败，请重试`,
               });
         Alert.alert(
           t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
@@ -409,9 +429,11 @@ export default function CreatePostScreen() {
         return;
       }
 
+      const videos = uploaded.filter((item) => item.isVideo).map((item) => item.url);
       const input = {
         content: content.trim(),
-        images: uploadedUrls,
+        images: uploaded.filter((item) => !item.isVideo).map((item) => item.url),
+        ...(videos.length > 0 ? { videos } : {}),
         tags: postTags,
         circleIds: selectedCircles.map((c) => c.id),
         cities: selectedCities,
@@ -452,7 +474,7 @@ export default function CreatePostScreen() {
     selectedCircles,
     setSelectedCircles,
     fetchMyCircles,
-    images,
+    media,
     content,
     postTags,
     resetForm,
@@ -491,27 +513,35 @@ export default function CreatePostScreen() {
           />
           <View style={s.inputSpacer} />
 
-          {/* Image picker */}
+          {/* Media picker */}
           <View style={s.photoRow}>
-            {images.map((asset, i) => (
+            {media.map((asset, i) => (
               <View key={`${asset.uri}-${i}`}>
-                <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
+                {asset.type === 'video' ? (
+                  <View style={[s.photoThumb, s.videoThumb, { backgroundColor: colors.textSecondary }]}>
+                    <Ionicons name="videocam" size={28} color={colors.white} />
+                  </View>
+                ) : (
+                  <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
+                )}
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
-                  onPress={() => handleRemoveImage(i)}
+                  onPress={() => handleRemoveMedia(i)}
+                  accessibilityLabel={t('moment.removeMedia')}
                 >
                   <Ionicons name="close" size={12} color={colors.white} />
                 </Pressable>
               </View>
             ))}
-            {images.length < 9 ? (
+            {media.length < LIMITS.POST_MAX_MEDIA ? (
               <Pressable
                 style={[s.photoBtn, d.photoBtn]}
-                onPress={handlePickImages}
+                onPress={handlePickMedia}
+                accessibilityLabel={t('moment.selectMedia')}
               >
                 <Ionicons name="add" size={24} color={colors.textSecondary} />
                 <Text style={[s.photoCount, d.photoCount]}>
-                  {images.length} / 9
+                  {media.length} / {LIMITS.POST_MAX_MEDIA}
                 </Text>
               </Pressable>
             ) : null}

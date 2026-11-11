@@ -101,7 +101,7 @@ export function CallInviteHost() {
     if (!incomingCall || busyAction) return;
     setBusyAction('accept');
     try {
-      await answerIncomingCall(incomingCall.callId);
+      await answerIncomingCall(incomingCall.callId, incomingCall.createdAt);
     } finally {
       setBusyAction(null);
     }
@@ -111,7 +111,7 @@ export function CallInviteHost() {
     if (!incomingCall || busyAction) return;
     setBusyAction('reject');
     try {
-      await declineIncomingCall(incomingCall.callId);
+      await declineIncomingCall(incomingCall.callId, { createdAt: incomingCall.createdAt });
     } finally {
       setBusyAction(null);
     }

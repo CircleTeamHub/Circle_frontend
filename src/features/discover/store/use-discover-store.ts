@@ -33,6 +33,7 @@ interface DiscoverState {
   setPlazaFilter: (circleId: string | null, city: string | null) => void;
   prependPlazaPost: (post: CirclePlazaPost) => void;
   removePlazaPost: (id: string) => void;
+  updatePlazaPostContent: (id: string, content: string) => void;
   reset: () => void;
 }
 
@@ -181,6 +182,11 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
   removePlazaPost: (id) =>
     set((s) => ({ plazaPosts: s.plazaPosts.filter((p) => p.id !== id) })),
+
+  updatePlazaPostContent: (id, content) =>
+    set((s) => ({
+      plazaPosts: s.plazaPosts.map((post) => post.id === id ? { ...post, content } : post),
+    })),
 
   reset: () => {
     hydratedScope = '';

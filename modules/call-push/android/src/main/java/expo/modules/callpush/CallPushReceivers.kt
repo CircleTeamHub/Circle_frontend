@@ -31,20 +31,24 @@ object CallPushHandler {
     when (extras.optString("type")) {
       "call.invite" -> {
         val invite = CallPushInvite.fromExtras(extras) ?: return
-        if (invite.isExpired(nowMs) || CallPushStore.isDismissed(context, invite.callId, nowMs)) return
+        if (invite.isExpired(nowMs) || !CallPushStore.acceptInvite(context, invite, nowMs)) return
         // App 在前台时 WS 会送到同一通邀请，应用内弹窗负责；后台 / 没在跑才由原生层响铃。
         // shown 告诉 JS 原生层有没有真的响：前台没响的，切到后台时要由 JS 补发。
         val shown = !AppVisibility.foreground
         if (shown) IncomingCallNotifier.show(context, invite)
-        CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to invite.callId, "shown" to shown))
+        CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to invite.callId, "shown" to shown,
+            "createdAt" to invite.createdAtMs?.let { CallPushInvite.formatIsoMillis(it) }))
       }
       "call.dismiss" -> {
         val callId = extras.optString("callId").ifEmpty { return }
-        CallPushStore.markDismissed(context, callId, nowMs)
+        val createdAt = extras.optString("createdAt").ifEmpty { null }
+        val createdAtMs = createdAt?.let { CallPushInvite.parseIsoMillis(it) }
+        if (!CallPushStore.markDismissed(context, callId, createdAtMs, nowMs)) return
         IncomingCallNotifier.cancel(context, callId)
         CallPushActivityListener.releaseLockScreen()
         CallPushEvents.enqueue(
-          mapOf("type" to "end", "callId" to callId, "reason" to extras.optString("reason", "ended")),
+          mapOf("type" to "end", "callId" to callId, "reason" to extras.optString("reason", "ended"),
+            "createdAt" to createdAt),
         )
       }
     }
@@ -56,14 +60,17 @@ class CallActionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action != IncomingCallNotifier.ACTION_DECLINE) return
     val callId = intent.getStringExtra(IncomingCallNotifier.EXTRA_CALL_ID) ?: return
+    val createdAt = intent.getStringExtra(IncomingCallNotifier.EXTRA_CREATED_AT)
+    val createdAtMs = createdAt?.let { CallPushInvite.parseIsoMillis(it) }
+    if (!CallPushStore.markDismissed(context, callId, createdAtMs)) return
     val token = intent.getStringExtra(IncomingCallNotifier.EXTRA_DECLINE_TOKEN)
     val baseUrl = CallPushStore.apiBaseUrl(context)
     IncomingCallNotifier.cancel(context, callId)
-    CallPushStore.markDismissed(context, callId)
     CallPushActivityListener.releaseLockScreen()
     val declinedByNative = token != null && baseUrl != null
     CallPushEvents.enqueue(
-      mapOf("type" to "decline", "callId" to callId, "declinedByNative" to declinedByNative),
+      mapOf("type" to "decline", "callId" to callId, "declinedByNative" to declinedByNative,
+        "createdAt" to createdAt),
     )
     if (!declinedByNative) return
     val pending = goAsync()

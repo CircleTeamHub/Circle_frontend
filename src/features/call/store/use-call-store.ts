@@ -22,13 +22,17 @@ const RECENT_ENDED_LIMIT = 20;
 
 type CallStoreState = {
   incomingCall: CallInvitePayload | null;
+  isMinimized: boolean;
+  setMinimized: (minimized: boolean) => void;
+  updateActiveCall: (call: CallSession) => void;
   activeCall: CallSession | null;
   livekit: CallLiveKitCredentials | null;
   /** 本机正在接听（accept 请求在路上）的那通：WS 先送到「本人已加入」时别把它当成别处接听。 */
   answeringCallId: string | null;
   recentlyEndedCallIds: string[];
+  inviteGenerations: Record<string, number>;
   /** 最近一次收掉振铃的原因；原生层据此给 CallKit 报对应的结束原因。 */
-  lastDismissal: { callId: string; reason: CallDismissReason } | null;
+  lastDismissal: { callId: string; reason: CallDismissReason; invitationCreatedAt?: string } | null;
   /**
    * 系统来电界面没能接下的那通（iOS 上 CallKit 报错，例如勿扰过滤）：应用内弹窗兜底，
    * 别让它悄悄消失、主叫白响 45 秒。
@@ -42,6 +46,7 @@ type CallStoreState = {
   handleSelfParticipantSettled: (
     callId: string,
     reason: Extract<CallDismissReason, 'answered_elsewhere' | 'declined_elsewhere'>,
+    changedAt?: string,
   ) => void;
   /**
    * 收掉一通还在振铃的来电（原生层拒接 / 到期 / 撤销推送 / 对账）；已接通的不动。
@@ -64,6 +69,22 @@ type CallStoreState = {
 
 function rememberEnded(ids: string[], callId: string): string[] {
   return [...ids.filter((id) => id !== callId), callId].slice(-RECENT_ENDED_LIMIT);
+}
+
+function rememberInviteGeneration(generations: Record<string, number>, callId: string, createdAt: number) {
+  return Object.fromEntries([
+    ...Object.entries(generations).filter(([id]) => id !== callId),
+    [callId, createdAt],
+  ].slice(-RECENT_ENDED_LIMIT));
+}
+
+function callDismissal(generations: Record<string, number>, callId: string, reason: CallDismissReason) {
+  const generation = generations[callId];
+  return {
+    callId,
+    reason,
+    ...(generation > 0 ? { invitationCreatedAt: new Date(generation).toISOString() } : {}),
+  };
 }
 
 function reasonForStatus(status: CallStatePayload['status']): CallDismissReason {
@@ -92,6 +113,7 @@ function callFromInvite(payload: CallInvitePayload): CallSession {
     id: payload.callId,
     conversationID: payload.conversationID,
     sessionType: payload.sessionType,
+    invitationMode: payload.invitationMode,
     callType: payload.callType,
     status: 'RINGING',
     initiator: payload.initiator,
@@ -103,7 +125,7 @@ function callFromInvite(payload: CallInvitePayload): CallSession {
     participants: [
       participantFromInvite(payload.initiator, 'JOINED', payload.createdAt),
       ...payload.invitees.map((user) =>
-        participantFromInvite(user, 'INVITED', payload.createdAt),
+        ({ ...participantFromInvite(user, 'INVITED', payload.createdAt), invitationExpiresAt: payload.expiresAt }),
       ),
     ],
   };
@@ -140,6 +162,10 @@ function upsertParticipantJoined(
   ];
 }
 
+function predatesInvitation(changedAt: string | undefined, invitedAt: string | null | undefined): boolean {
+  return !!changedAt && !!invitedAt && Date.parse(changedAt) < Date.parse(invitedAt);
+}
+
 function updateParticipantStatus(
   participants: CallParticipant[],
   payload: CallParticipantPayload,
@@ -151,7 +177,7 @@ function updateParticipantStatus(
       : payload.leftAt ?? payload.changedAt;
 
   return participants.map((participant) =>
-    participant.user.id === payload.user.id
+    participant.user.id === payload.user.id && !predatesInvitation(payload.changedAt, participant.invitedAt)
       ? {
           ...participant,
           status,
@@ -163,47 +189,81 @@ function updateParticipantStatus(
 
 export const useCallStore = create<CallStoreState>((set) => ({
   incomingCall: null,
+  isMinimized: false,
   activeCall: null,
   livekit: null,
   answeringCallId: null,
   recentlyEndedCallIds: [],
+  inviteGenerations: {},
   lastDismissal: null,
   nativeUiFallbackCallId: null,
+  setMinimized: (isMinimized) => set({ isMinimized }),
+  updateActiveCall: (call) => set((state) => {
+    if (state.incomingCall || state.activeCall?.id !== call.id) return state;
+    const current = new Map(state.activeCall.participants.map((participant) => [participant.user.id, participant]));
+    return {
+      activeCall: {
+        ...call,
+        participants: call.participants.map((participant) => {
+          const prior = current.get(participant.user.id);
+          if (!prior) return participant;
+          const latestPrior = Math.max(...[prior.invitedAt, prior.joinedAt, prior.leftAt].map((time) => time ? Date.parse(time) : 0));
+          const latestIncoming = Math.max(...[participant.invitedAt, participant.joinedAt, participant.leftAt].map((time) => time ? Date.parse(time) : 0));
+          return latestPrior > latestIncoming ? prior : participant;
+        }),
+      },
+    };
+  }),
   setActiveCall: (call, livekit = null) =>
-    set({
+    set((state) => ({
       activeCall: call,
+      isMinimized: false,
       incomingCall: null,
       livekit,
       answeringCallId: null,
-    }),
+      inviteGenerations: call ? rememberInviteGeneration(
+        state.inviteGenerations,
+        call.id,
+        state.inviteGenerations[call.id] ?? Math.max(0, ...call.participants.map(({ invitedAt }) => Date.parse(invitedAt ?? '') || 0)),
+      ) : state.inviteGenerations,
+    })),
   setLiveKitCredentials: (livekit) => set({ livekit }),
   setAnsweringCallId: (answeringCallId) => set({ answeringCallId }),
   setNativeUiFallback: (callId) =>
     set((state) =>
       state.incomingCall?.callId === callId ? { nativeUiFallbackCallId: callId } : state,
     ),
-  // 同一通邀请可能从 WS、推送（原生层）、回前台对账三条路各来一次：按 callId 去重；
-  // 已经结束的、本机已接通的，都不再弹。
+  // A later invitation into the same ongoing room is a new ringing attempt.
+  // Keep its generation so delayed deliveries of the old attempt stay dismissed.
   handleCallInvite: (payload) =>
     set((state) => {
+      const generation = Date.parse(payload.createdAt);
+      const newerInvite = generation > (state.inviteGenerations[payload.callId] ?? Infinity);
       if (
-        state.recentlyEndedCallIds.includes(payload.callId) ||
-        state.incomingCall?.callId === payload.callId ||
-        (state.activeCall?.id === payload.callId &&
+        (state.recentlyEndedCallIds.includes(payload.callId) && !newerInvite) ||
+        (state.incomingCall?.callId === payload.callId && !newerInvite) ||
+        (state.activeCall?.id === payload.callId && !state.incomingCall &&
           state.activeCall.status !== 'RINGING')
       ) {
         return state;
       }
       return {
         incomingCall: payload,
+        nativeUiFallbackCallId: null,
+        inviteGenerations: rememberInviteGeneration(state.inviteGenerations, payload.callId, generation),
+        recentlyEndedCallIds: state.recentlyEndedCallIds.filter((id) => id !== payload.callId),
         activeCall: callFromInvite(payload),
         livekit: null,
         answeringCallId: null,
       };
     }),
-  handleSelfParticipantSettled: (callId, reason) =>
+  handleSelfParticipantSettled: (callId, reason, changedAt) =>
     set((state) => {
-      if (state.incomingCall?.callId !== callId || state.answeringCallId === callId) {
+      if (
+        state.incomingCall?.callId !== callId ||
+        state.answeringCallId === callId ||
+        predatesInvitation(changedAt, state.incomingCall.createdAt)
+      ) {
         return state;
       }
       return {
@@ -211,7 +271,7 @@ export const useCallStore = create<CallStoreState>((set) => ({
         activeCall: state.activeCall?.id === callId ? null : state.activeCall,
         livekit: state.activeCall?.id === callId ? null : state.livekit,
         recentlyEndedCallIds: rememberEnded(state.recentlyEndedCallIds, callId),
-        lastDismissal: { callId, reason },
+        lastDismissal: callDismissal(state.inviteGenerations, callId, reason),
       };
     }),
   dismissIncomingCall: (callId, reason) =>
@@ -228,7 +288,7 @@ export const useCallStore = create<CallStoreState>((set) => ({
         livekit: state.activeCall?.id === callId ? null : state.livekit,
         answeringCallId: state.answeringCallId === callId ? null : state.answeringCallId,
         recentlyEndedCallIds: rememberEnded(state.recentlyEndedCallIds, callId),
-        lastDismissal: { callId, reason },
+        lastDismissal: callDismissal(state.inviteGenerations, callId, reason),
       };
     }),
   handleCallParticipantJoined: (payload) =>
@@ -236,6 +296,8 @@ export const useCallStore = create<CallStoreState>((set) => ({
       if (!state.activeCall || state.activeCall.id !== payload.callId) {
         return state;
       }
+      const current = state.activeCall.participants.find(({ user }) => user.id === payload.user.id);
+      if (predatesInvitation(payload.changedAt, current?.invitedAt)) return state;
       return {
         activeCall: {
           ...state.activeCall,
@@ -294,10 +356,7 @@ export const useCallStore = create<CallStoreState>((set) => ({
         livekit: null,
         answeringCallId: null,
         recentlyEndedCallIds,
-        lastDismissal: {
-          callId: payload.callId,
-          reason: reasonForStatus(payload.status),
-        },
+        lastDismissal: callDismissal(state.inviteGenerations, payload.callId, reasonForStatus(payload.status)),
       };
     }),
   resetCallState: () =>
@@ -311,7 +370,7 @@ export const useCallStore = create<CallStoreState>((set) => ({
         recentlyEndedCallIds: current
           ? rememberEnded(state.recentlyEndedCallIds, current)
           : state.recentlyEndedCallIds,
-        lastDismissal: current ? { callId: current, reason: 'ended' } : null,
+        lastDismissal: current ? callDismissal(state.inviteGenerations, current, 'ended') : null,
       };
     }),
 }));

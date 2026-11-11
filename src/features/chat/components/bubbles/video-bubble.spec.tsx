@@ -98,6 +98,27 @@ test('an unavailable video cannot be opened', () => {
   expect(screen.getByText('chat.detail.videoUnavailable')).toBeTruthy();
 });
 
+// 过了保留期:服务端不再签地址,对象已删。说清楚是「已过期」,不是黑框或「不可用」;
+// 长按菜单(删除、引用)照常。
+test('an expired video says it expired and keeps its long-press menu', () => {
+  const onVideoPress = jest.fn();
+  const onLongPress = jest.fn();
+  render(
+    <VideoBubble
+      message={{ ...video, videoUrl: undefined, mediaExpired: true }}
+      outgoing={false}
+      onVideoPress={onVideoPress}
+      onLongPress={onLongPress}
+    />,
+  );
+  expect(screen.getByText('chat.detail.videoExpired')).toBeTruthy();
+  expect(screen.queryByText('chat.detail.videoUnavailable')).toBeNull();
+  expect(screen.queryByLabelText('chat.detail.playVideo')).toBeNull();
+  fireEvent(screen.getByTestId('chat-media-expired'), 'longPress');
+  expect(onLongPress).toHaveBeenCalled();
+  expect(onVideoPress).not.toHaveBeenCalled();
+});
+
 describe('VideoBubble poster', () => {
   it('keeps the play badge from covering the central poster download progress', () => {
     render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);

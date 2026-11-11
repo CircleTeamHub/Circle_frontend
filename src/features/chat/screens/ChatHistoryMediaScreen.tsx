@@ -18,6 +18,7 @@ import {
   formatChatHistoryMonth,
   getChatMediaThumbnailCacheKey,
   getChatMediaThumbnailUris,
+  getChatMediaTileLabelKey,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
 import { searchChatMessages } from '@/chat-core/api';
@@ -178,7 +179,7 @@ function MediaTile({
       ) : (
         <View style={s.fallback}>
           <Text style={fallbackTextStyle}>
-            {isVideo ? t('chat.history.video') : t('chat.history.image')}
+            {t(getChatMediaTileLabelKey(item))}
           </Text>
         </View>
       )}

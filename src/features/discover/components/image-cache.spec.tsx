@@ -47,6 +47,16 @@ test('plaza cards show a single image as one nine-grid cell instead of a large p
   expect(cellStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
 });
 
+test('a single plaza video is one nine-grid cell too', () => {
+  const cellWidth = Math.floor((400 - Spacing.lg * 2 - Spacing.md * 2 - Spacing.xs * 2) / 3);
+  const video = [{ type: 'video' as const, key: 'clip', url: 'clip.mp4', posterUrl: 'poster.jpg' }];
+  const tileStyle = () => StyleSheet.flatten(screen.getByLabelText('moment.playVideo').props.style);
+  const { rerender } = render(<MomentMedia images={[]} attachments={video} />);
+  expect(tileStyle().width).toBeGreaterThan(cellWidth);
+  rerender(<MomentMedia images={[]} attachments={video} uniformCells />);
+  expect(tileStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
+});
+
 test('feed preview fallback keeps a distinct stable key when the signed URL refreshes', () => {
   const { rerender } = render(<ImageGrid images={['original']} media={[{ key: 'photo', previewUrl: 'preview?sig=a', previewKey: 'photo-preview' }]} />);
   expect(screen.getByTestId('cached-image').props.source.cacheKey).toBe('photo-preview');

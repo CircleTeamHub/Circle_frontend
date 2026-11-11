@@ -10,6 +10,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { MediaUploadProgress } from './media-upload-progress';
+import { ExpiredMediaPlaceholder } from './expired-media-placeholder';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -180,7 +181,9 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
           onLongPress={onLongPress}
           delayLongPress={350}
         >
-          {displayUri ? (
+          {message.mediaExpired ? (
+            <ExpiredMediaPlaceholder kind="image" style={dimensions} />
+          ) : displayUri ? (
             <MediaImage
               source={
                 displayCacheKey

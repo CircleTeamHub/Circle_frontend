@@ -15,6 +15,7 @@ import type { ChatMessage } from '@/types';
 import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { BubbleStatusText, MessageAvatar } from './shared';
 import { MediaUploadProgress } from './media-upload-progress';
+import { ExpiredMediaPlaceholder } from './expired-media-placeholder';
 
 interface VideoBubbleProps {
   message: ChatMessage;
@@ -50,6 +51,8 @@ const s = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: '#000',
   },
+  // 已过期的占位自带浅底,不透出播放器的黑框。
+  frameExpired: { backgroundColor: 'transparent' },
   poster: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -144,7 +147,7 @@ export function VideoBubble({
   );
   const body = (
     <View style={[s.body, outgoing ? s.bodyOutgoing : null]}>
-      <View style={s.frame}>
+      <View style={[s.frame, message.mediaExpired ? s.frameExpired : null]}>
         <Pressable
           onPress={videoUrl ? () => onVideoPress(message) : undefined}
           onLongPress={onLongPress}
@@ -186,6 +189,8 @@ export function VideoBubble({
                 ) : null}
               </View>}
             </View>
+          ) : message.mediaExpired ? (
+            <ExpiredMediaPlaceholder kind="video" style={{ aspectRatio }} />
           ) : (
             <View style={s.unavailable}>
               <Ionicons name="videocam-off-outline" size={30} color={colors.textSecondary} />
