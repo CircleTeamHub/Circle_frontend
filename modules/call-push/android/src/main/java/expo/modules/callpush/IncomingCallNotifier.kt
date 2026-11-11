@@ -23,6 +23,7 @@ import androidx.core.app.Person
 object IncomingCallNotifier {
   const val CHANNEL_ID = "incoming_call_v1"
   const val EXTRA_ACTION = "expo.modules.callpush.ACTION"
+  const val EXTRA_CREATED_AT = "expo.modules.callpush.CREATED_AT"
   const val EXTRA_CALL_ID = "expo.modules.callpush.CALL_ID"
   const val EXTRA_DECLINE_TOKEN = "expo.modules.callpush.DECLINE_TOKEN"
   const val ACTION_ANSWER = "answer"
@@ -37,8 +38,8 @@ object IncomingCallNotifier {
     if (!manager.areNotificationsEnabled()) return
     ensureChannel(context)
 
-    val open = activityIntent(context, invite.callId, ACTION_OPEN)
-    val answer = activityIntent(context, invite.callId, ACTION_ANSWER)
+    val open = activityIntent(context, invite, ACTION_OPEN)
+    val answer = activityIntent(context, invite, ACTION_ANSWER)
     val decline = declineIntent(context, invite)
     val caller = Person.Builder().setName(invite.displayName).setImportant(true).build()
     val ringMs = (invite.expiresAtMs - System.currentTimeMillis()).coerceIn(MIN_RING_MS, MAX_RING_MS)
@@ -124,18 +125,19 @@ object IncomingCallNotifier {
     manager.createNotificationChannel(channel)
   }
 
-  private fun activityIntent(context: Context, callId: String, action: String): PendingIntent {
+  private fun activityIntent(context: Context, invite: CallPushInvite, action: String): PendingIntent {
     val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
       ?: Intent().setPackage(context.packageName)
     launch.apply {
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
       putExtra(EXTRA_ACTION, action)
-      putExtra(EXTRA_CALL_ID, callId)
+      putExtra(EXTRA_CALL_ID, invite.callId)
+      invite.createdAtMs?.let { putExtra(EXTRA_CREATED_AT, CallPushInvite.formatIsoMillis(it)) }
     }
     // 安卓 12 起不许从广播接收端跳转界面：接听必须直接是一个 Activity 的 PendingIntent。
     return PendingIntent.getActivity(
       context,
-      requestCode(callId, action),
+      requestCode(invite.callId, action),
       launch,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
@@ -145,6 +147,7 @@ object IncomingCallNotifier {
     val intent = Intent(context, CallActionReceiver::class.java).apply {
       action = ACTION_DECLINE
       putExtra(EXTRA_CALL_ID, invite.callId)
+      invite.createdAtMs?.let { putExtra(EXTRA_CREATED_AT, CallPushInvite.formatIsoMillis(it)) }
       invite.declineToken?.let { putExtra(EXTRA_DECLINE_TOKEN, it) }
     }
     return PendingIntent.getBroadcast(

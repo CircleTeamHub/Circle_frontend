@@ -3363,6 +3363,10 @@
       "disconnected": "通話が切断されました。"
     },
     "groupCallTitle": "グループ音声通話",
+    "window": {
+      "minimize": "通話を最小化",
+      "restore": "通話に戻る"
+    },
     "voice": {
       "connecting": "接続中…",
       "waitingPeer": "相手の応答を待っています…",
@@ -3389,6 +3393,16 @@
     "accept": "応答",
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
+      "addTitle": "通話に招待",
+      "searchPlaceholder": "名前またはアカウントで検索",
+      "submit": "招待（{{count}}）",
+      "sent": "招待を送信しました",
+      "failed": "招待できませんでした。再試行してください",
+      "loadFailed": "一覧を読み込めませんでした。再試行してください",
+      "empty": "招待できる人がいません",
+      "alreadyJoined": "通話中",
+      "alreadyInvited": "招待済み",
+      "selectionLimit": "一度に招待できるのは{{count}}人までです",
       "inviteeCount": "{{count}} 人を招待",
       "groupMember": "グループメンバー",
       "friend": "友だち",

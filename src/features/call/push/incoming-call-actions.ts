@@ -22,12 +22,16 @@ export type RecoverResult = 'ringing' | 'gone' | 'unknown';
  * 原生层已经在为某通电话响铃（推送来的），但 store 里还没有它 —— App 被推送 / 接听拉起时
  * WS 还没连上，或邀请走 WS 时 App 不在线。问服务端要一份当前通话，补进 store。
  */
-export async function recoverRingingCall(callId?: string): Promise<RecoverResult> {
+export async function recoverRingingCall(callId?: string, createdAt?: string): Promise<RecoverResult> {
   const state = useCallStore.getState();
-  if (state.incomingCall && (!callId || state.incomingCall.callId === callId)) {
+  if (
+    state.incomingCall &&
+    (!callId || state.incomingCall.callId === callId) &&
+    (!createdAt || state.incomingCall.createdAt === createdAt) &&
+    Date.parse(state.incomingCall.expiresAt) > Date.now()
+  ) {
     return 'ringing';
   }
-  if (callId && state.recentlyEndedCallIds.includes(callId)) return 'gone';
   try {
     const invite = inviteFromCurrentCall(await fetchCurrentCall());
     if (!invite || (callId && invite.callId !== callId)) return 'gone';
@@ -41,25 +45,39 @@ export async function recoverRingingCall(callId?: string): Promise<RecoverResult
   }
 }
 
+function currentInviteCreatedAt(callId: string): string | undefined {
+  const incoming = useCallStore.getState().incomingCall;
+  return incoming?.callId === callId ? incoming.createdAt : undefined;
+}
+
+function isStaleInvitation(callId: string, createdAt?: string): boolean {
+  return Boolean(createdAt && Date.parse(createdAt) < (useCallStore.getState().inviteGenerations[callId] ?? 0));
+}
+
 /** 接听：accept 拿 LiveKit 凭据，进通话页。失败时收掉这通并提示。返回是否进了通话。 */
-export async function answerIncomingCall(callId: string): Promise<boolean> {
+export async function answerIncomingCall(callId: string, createdAt?: string): Promise<boolean> {
+  const invitationCreatedAt = createdAt ?? currentInviteCreatedAt(callId);
+  if (isStaleInvitation(callId, invitationCreatedAt)) return false;
   const store = useCallStore.getState();
   store.setAnsweringCallId(callId);
   try {
-    const response = await acceptCall(callId);
+    const response = await acceptCall(callId, invitationCreatedAt);
+    if (isStaleInvitation(callId, invitationCreatedAt)) return false;
     useCallStore.getState().setActiveCall(response.call, response.livekit);
     router.push('/(chat)/group-call' as never);
     return true;
   } catch (error) {
-    useCallStore.getState().dismissIncomingCall(callId, 'failed');
-    Alert.alert(
-      i18n.t('common.errorOccurred'),
-      getApiErrorMessage(error, i18n.t('common.errorOccurred')),
-    );
+    if (!isStaleInvitation(callId, invitationCreatedAt)) {
+      useCallStore.getState().dismissIncomingCall(callId, 'failed');
+      Alert.alert(
+        i18n.t('common.errorOccurred'),
+        getApiErrorMessage(error, i18n.t('common.errorOccurred')),
+      );
+    }
     reportHandledFailure('call', 'accept', error);
     return false;
   } finally {
-    if (useCallStore.getState().answeringCallId === callId) {
+    if (useCallStore.getState().answeringCallId === callId && !isStaleInvitation(callId, invitationCreatedAt)) {
       useCallStore.getState().setAnsweringCallId(null);
     }
   }
@@ -71,12 +89,14 @@ export async function answerIncomingCall(callId: string): Promise<boolean> {
  */
 export async function declineIncomingCall(
   callId: string,
-  options: { declinedByNative?: boolean } = {},
+  options: { declinedByNative?: boolean; createdAt?: string } = {},
 ): Promise<void> {
+  const invitationCreatedAt = options.createdAt ?? currentInviteCreatedAt(callId);
+  if (isStaleInvitation(callId, invitationCreatedAt)) return;
   useCallStore.getState().dismissIncomingCall(callId, 'ended');
   if (options.declinedByNative) return;
   try {
-    await rejectCall(callId);
+    await rejectCall(callId, invitationCreatedAt);
   } catch (error) {
     reportHandledFailure('call', 'reject', error);
   }
@@ -90,10 +110,16 @@ export async function declineIncomingCall(
 export function handleCallNotification(data: Record<string, unknown>): boolean {
   const callId = typeof data.callId === 'string' ? data.callId : '';
   if (data.type === 'call.invite' && callId) {
-    void recoverRingingCall(callId);
+    void recoverRingingCall(callId, typeof data.createdAt === 'string' ? data.createdAt : undefined);
     return true;
   }
   if (data.type === 'call.dismiss' && callId) {
+    const incoming = useCallStore.getState().incomingCall;
+    if (
+      typeof data.createdAt === 'string' &&
+      incoming?.callId === callId &&
+      Date.parse(data.createdAt) < Date.parse(incoming.createdAt)
+    ) return true;
     useCallStore
       .getState()
       .dismissIncomingCall(

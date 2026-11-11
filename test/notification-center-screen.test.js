@@ -71,7 +71,7 @@ test('notification center keeps the bell badges in sync when interactive items a
   assert.doesNotMatch(source, /systemUnread/i);
 });
 
-test('circle bell lists signup management first; the other entries keep notifications first', () => {
+test('circle bell puts signup management first and opens it by default', () => {
   const { orderNotificationTabs } = loadTsModule(
     'src/features/notifications/utils/notification-tabs.ts',
   );
@@ -96,6 +96,5 @@ test('circle bell lists signup management first; the other entries keep notifica
   );
   assert.match(source, /if \(!showSignupTab\) return \[primary\];/);
   assert.doesNotMatch(source, /\[signups, primary\]/);
-  // 默认选中项有意保持「圈子动态」：#238 只调顺序，不改落地页。
-  assert.match(source, /useState<NotificationTabKey>\('notifications'\)/);
+  assert.match(source, /useState<NotificationTabKey>\(domain === 'circle' \? 'signups' : 'notifications'\)/);
 });

@@ -22,6 +22,8 @@ final class CallPushCenter: NSObject {
 
   private struct RingingCall {
     let callId: String
+    let backendId: UUID
+    let createdAt: Date?
     let declineToken: String?
     var answered: Bool
     var expiryTimer: Timer?
@@ -42,7 +44,11 @@ final class CallPushCenter: NSObject {
   private var registry: PKPushRegistry?
   private lazy var provider: CXProvider = makeProvider()
   private var calls: [UUID: RingingCall] = [:]
-  private var recentlyEnded: [UUID: Date] = [:]
+  private struct EndedInvitation {
+    let createdAt: Date?
+    let rememberedAt: Date
+  }
+  private var recentlyEnded: [UUID: EndedInvitation] = [:]
   private var pendingEvents: [[String: Any]] = []
   var onEventsAvailable: (() -> Void)?
 
@@ -75,7 +81,7 @@ final class CallPushCenter: NSObject {
   }
 
   /// JS 从 WS 拿到的来电：没有拒接令牌（JS 活着，拒接由 JS 调接口）。
-  func reportFromJs(callId: String, callerName: String, hasVideo: Bool, isGroup: Bool, expiresAt: String) {
+  func reportFromJs(callId: String, callerName: String, hasVideo: Bool, isGroup: Bool, expiresAt: String, createdAt: String?) {
     let invite = CallPushInvite(
       callId: callId,
       callType: hasVideo ? "VIDEO" : "AUDIO",
@@ -84,6 +90,7 @@ final class CallPushCenter: NSObject {
       callerName: callerName,
       groupName: nil,
       expiresAt: CallPushInvite.parseDate(expiresAt) ?? Date().addingTimeInterval(45),
+      createdAt: createdAt.flatMap(CallPushInvite.parseDate),
       declineToken: nil
     )
     reportIncoming(invite, completion: nil)
@@ -91,12 +98,16 @@ final class CallPushCenter: NSObject {
 
   /// 不是用户在系统界面上操作的结束（对方取消、超时、在别的设备接听、App 内挂断）：
   /// 直接 reportCall，不经 CXEndCallAction，就不会被当成「用户拒接」再调一次接口。
-  func endCall(callId: String, reason: String) {
+  func endCall(callId: String, reason: String, createdAt: String?) {
     // 接通了：CallKit 那通电话继续（它就是通话本身），不结束。
     guard reason != "answered" else { return }
-    guard let uuid = UUID(uuidString: callId) else { return }
-    rememberEnded(uuid)
-    guard let call = calls.removeValue(forKey: uuid) else { return }
+    guard let backendId = UUID(uuidString: callId) else { return }
+    let uuid = calls.first { $0.value.callId == callId }?.key
+    let current = uuid.flatMap { calls[$0] }
+    let cutoff = createdAt.flatMap(CallPushInvite.parseDate) ?? current?.createdAt
+    if let cutoff, let activeGeneration = current?.createdAt, cutoff < activeGeneration { return }
+    rememberEnded(backendId, createdAt: cutoff)
+    guard let uuid, let call = calls.removeValue(forKey: uuid) else { return }
     call.expiryTimer?.invalidate()
     provider.reportCall(with: uuid, endedAt: nil, reason: Self.endedReason(reason))
   }
@@ -120,11 +131,11 @@ final class CallPushCenter: NSObject {
     let now = Date()
     guard
       let invite,
-      let uuid = UUID(uuidString: invite.callId),
+      let backendId = UUID(uuidString: invite.callId),
       invite.expiresAt.timeIntervalSince(now) > -Self.clockSkewTolerance
     else {
       // 载荷坏了或早已过期：规则仍要求上报一通来电，报完立刻结束。
-      let uuid = invite.flatMap { UUID(uuidString: $0.callId) } ?? UUID()
+      let uuid = calls.first { $0.value.callId == invite?.callId }?.key ?? UUID()
       if calls[uuid] != nil {
         // 这通已经在响 / 已接通（迟到的重复推送）：照样上报一次（CallKit 回
         // callUUIDAlreadyExists），但绝不能把正在进行的这通结束掉。
@@ -134,35 +145,57 @@ final class CallPushCenter: NSObject {
         return
       }
       provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { [weak self] _ in
-        self?.provider.reportCall(with: uuid, endedAt: nil, reason: .failed)
+        if self?.calls[uuid] == nil {
+          self?.provider.reportCall(with: uuid, endedAt: nil, reason: .failed)
+        }
         completion?()
       }
       return
     }
 
+    // CallKit IDs identify system calls. A later invitation to the same
+    // backend call receives a fresh system ID once the previous call has ended.
+    let uuid = calls.first { $0.value.callId == invite.callId }?.key ?? invite.systemUUID
     if var existing = calls[uuid] {
-      // 同一通电话已经在响（WS 与推送都到了）：再报一次满足 Apple 的规则，CallKit
-      // 会回 callUUIDAlreadyExists，现有的振铃保持不动。JS 先报的那份没有拒接令牌，
-      // 推送带来的补上 —— 锁屏拒接才不用等 JS 醒来。
-      if existing.declineToken == nil, let token = invite.declineToken {
+      if let incoming = invite.createdAt, let current = existing.createdAt, incoming > current, !existing.answered {
+        existing.expiryTimer?.invalidate()
+        existing = RingingCall(
+          callId: invite.callId,
+          backendId: backendId,
+          createdAt: invite.createdAt,
+          declineToken: invite.declineToken,
+          answered: false,
+          expiryTimer: nil
+        )
+        calls[uuid] = existing
+        scheduleExpiry(uuid, createdAt: invite.createdAt, at: invite.expiresAt)
+        provider.reportCall(with: uuid, updated: Self.update(for: invite))
+        enqueue(event("incoming", call: existing, fields: ["shown": true]))
+      } else if existing.createdAt == invite.createdAt,
+                existing.declineToken == nil, let token = invite.declineToken {
         existing = RingingCall(
           callId: existing.callId,
+          backendId: existing.backendId,
+          createdAt: existing.createdAt,
           declineToken: token,
           answered: existing.answered,
           expiryTimer: existing.expiryTimer
         )
         calls[uuid] = existing
       }
+      // Every VoIP delivery must be reported, including a duplicate of a live call.
       provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { _ in
         completion?()
       }
       return
     }
 
-    if isRecentlyEnded(uuid) {
+    if isRecentlyEnded(backendId, createdAt: invite.createdAt) {
       // 本机已经收掉过这通（拒接 / 对方取消 / 别处接听）：规则要求上报，报完立刻结束。
       provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { [weak self] _ in
-        self?.provider.reportCall(with: uuid, endedAt: nil, reason: .remoteEnded)
+        if self?.calls[uuid] == nil {
+          self?.provider.reportCall(with: uuid, endedAt: nil, reason: .remoteEnded)
+        }
         completion?()
       }
       return
@@ -170,51 +203,66 @@ final class CallPushCenter: NSObject {
 
     calls[uuid] = RingingCall(
       callId: invite.callId,
+      backendId: backendId,
+      createdAt: invite.createdAt,
       declineToken: invite.declineToken,
       answered: false,
       expiryTimer: nil
     )
     provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { [weak self] error in
       defer { completion?() }
-      guard let self else { return }
+      guard let self, let call = self.calls[uuid], call.createdAt == invite.createdAt else { return }
       if let error = error as NSError?,
          !(error.domain == CXErrorDomainIncomingCall
            && error.code == CXErrorCodeIncomingCallError.callUUIDAlreadyExists.rawValue) {
         // 勿扰 / 屏蔽名单等：系统没让它响。别把来电从 JS 那边抹掉 —— App 在前台时
         // 应用内弹窗兜底，否则主叫白响到超时。
         self.calls.removeValue(forKey: uuid)
-        self.enqueue(["type": "unavailable", "callId": invite.callId])
+        self.enqueue(self.event("unavailable", call: call))
         return
       }
-      self.scheduleExpiry(uuid, at: invite.expiresAt)
-      self.enqueue(["type": "incoming", "callId": invite.callId, "shown": true])
+      self.scheduleExpiry(uuid, createdAt: invite.createdAt, at: invite.expiresAt)
+      self.enqueue(self.event("incoming", call: call, fields: ["shown": true]))
     }
   }
 
-  private func scheduleExpiry(_ uuid: UUID, at expiresAt: Date) {
+  private func scheduleExpiry(_ uuid: UUID, createdAt: Date?, at expiresAt: Date) {
     let delay = min(
       max(expiresAt.timeIntervalSinceNow, Self.minRingSeconds),
       Self.maxRingSeconds
     )
     let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-      guard let self, let call = self.calls[uuid], !call.answered else { return }
+      guard let self, let call = self.calls[uuid], call.createdAt == createdAt, !call.answered else { return }
       self.calls.removeValue(forKey: uuid)
-      self.rememberEnded(uuid)
+      self.rememberEnded(call.backendId, createdAt: call.createdAt)
       self.provider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
-      self.enqueue(["type": "end", "callId": call.callId, "reason": "missed"])
+      self.enqueue(self.event("end", call: call, fields: ["reason": "missed"]))
     }
     calls[uuid]?.expiryTimer = timer
   }
 
-  private func rememberEnded(_ uuid: UUID) {
+  private func rememberEnded(_ uuid: UUID, createdAt: Date?) {
     let now = Date()
-    recentlyEnded = recentlyEnded.filter { now.timeIntervalSince($0.value) < Self.recentlyEndedTtl }
-    recentlyEnded[uuid] = now
+    recentlyEnded = recentlyEnded.filter { now.timeIntervalSince($0.value.rememberedAt) < Self.recentlyEndedTtl }
+    let cutoff = [recentlyEnded[uuid]?.createdAt, createdAt].compactMap { $0 }.max()
+    recentlyEnded[uuid] = EndedInvitation(createdAt: cutoff, rememberedAt: now)
   }
 
-  private func isRecentlyEnded(_ uuid: UUID) -> Bool {
-    guard let endedAt = recentlyEnded[uuid] else { return false }
-    return Date().timeIntervalSince(endedAt) < Self.recentlyEndedTtl
+  private func isRecentlyEnded(_ uuid: UUID, createdAt: Date?) -> Bool {
+    guard let ended = recentlyEnded[uuid],
+          Date().timeIntervalSince(ended.rememberedAt) < Self.recentlyEndedTtl else { return false }
+    guard let createdAt else { return true }
+    // Unversioned old builds cannot identify this new invitation generation.
+    guard let cutoff = ended.createdAt else { return false }
+    return createdAt <= cutoff
+  }
+
+  private func event(_ type: String, call: RingingCall, fields: [String: Any] = [:]) -> [String: Any] {
+    var result = fields
+    result["type"] = type
+    result["callId"] = call.callId
+    if let createdAt = call.createdAt { result["createdAt"] = CallPushInvite.formatDate(createdAt) }
+    return result
   }
 
   private func enqueue(_ event: [String: Any]) {
@@ -313,8 +361,8 @@ extension CallPushCenter: CXProviderDelegate {
   func providerDidReset(_ provider: CXProvider) {
     for (uuid, call) in calls {
       call.expiryTimer?.invalidate()
-      rememberEnded(uuid)
-      enqueue(["type": "end", "callId": call.callId, "reason": "failed"])
+      rememberEnded(call.backendId, createdAt: call.createdAt)
+      enqueue(event("end", call: call, fields: ["reason": "failed"]))
     }
     calls.removeAll()
   }
@@ -328,7 +376,7 @@ extension CallPushCenter: CXProviderDelegate {
     call.expiryTimer?.invalidate()
     call.expiryTimer = nil
     calls[action.callUUID] = call
-    enqueue(["type": "answer", "callId": call.callId])
+    enqueue(event("answer", call: call))
     action.fulfill()
   }
 
@@ -338,12 +386,12 @@ extension CallPushCenter: CXProviderDelegate {
       return
     }
     call.expiryTimer?.invalidate()
-    rememberEnded(action.callUUID)
+    rememberEnded(call.backendId, createdAt: call.createdAt)
     if call.answered {
-      enqueue(["type": "hangup", "callId": call.callId])
+      enqueue(event("hangup", call: call))
     } else {
       let declinedByNative = declineNatively(call)
-      enqueue(["type": "decline", "callId": call.callId, "declinedByNative": declinedByNative])
+      enqueue(event("decline", call: call, fields: ["declinedByNative": declinedByNative]))
     }
     action.fulfill()
   }

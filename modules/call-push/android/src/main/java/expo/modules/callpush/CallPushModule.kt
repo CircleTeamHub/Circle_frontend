@@ -18,6 +18,7 @@ class IncomingCallOptions : Record {
   @Field val hasVideo: Boolean = false
   @Field val isGroup: Boolean = false
   @Field val expiresAt: String = ""
+  @Field val createdAt: String? = null
 }
 
 class CallPushModule : Module() {
@@ -60,18 +61,20 @@ class CallPushModule : Module() {
         callerName = options.callerName,
         groupName = null,
         expiresAtMs = expiresAtMs,
+        createdAtMs = options.createdAt?.let { CallPushInvite.parseIsoMillis(it) },
         declineToken = null,
       )
       val now = System.currentTimeMillis()
-      if (invite.isExpired(now) || CallPushStore.isDismissed(context, invite.callId, now)) {
+      if (invite.isExpired(now) || !CallPushStore.acceptInvite(context, invite, now)) {
         return@AsyncFunction
       }
       IncomingCallNotifier.show(context, invite)
     }
 
     /** 这通电话不再响了（接通 / 结束 / 被收掉）：收通知，记成已撤销，放开锁屏显示。 */
-    AsyncFunction("endCall") { callId: String, reason: String ->
-      CallPushStore.markDismissed(context, callId)
+    AsyncFunction("endCall") { callId: String, reason: String, createdAt: String? ->
+      val createdAtMs = createdAt?.let { CallPushInvite.parseIsoMillis(it) }
+      if (!CallPushStore.markDismissed(context, callId, createdAtMs)) return@AsyncFunction
       IncomingCallNotifier.cancel(context, callId)
       // 接通了还要留在锁屏之上（通话页盖在锁屏上）；其余情况放开。
       if (reason != "answered") CallPushActivityListener.releaseLockScreen()

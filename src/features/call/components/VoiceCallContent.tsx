@@ -31,12 +31,15 @@ interface VoiceCallContentProps {
   leaving: boolean;
   onToggleMic: () => void;
   onLeave: () => void;
+  minimized: boolean;
+  onMinimize: () => void;
+  onInvite: () => void;
   setSpeakerphone?: LiveKitModule['setSpeakerphone'];
 }
 
 export function VoiceCallContent({
   call, participants, localIdentity, connectionState, micEnabled, muting,
-  leaving, onToggleMic, onLeave, setSpeakerphone,
+  leaving, onToggleMic, onLeave, minimized, onMinimize, onInvite, setSpeakerphone,
 }: VoiceCallContentProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -92,7 +95,7 @@ export function VoiceCallContent({
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 38 }]}>
-      <StatusBar style="light" />
+      {!minimized ? <StatusBar style="light" /> : null}
       {avatar ? (
         <>
           <Image
@@ -108,6 +111,14 @@ export function VoiceCallContent({
         </>
       ) : null}
 
+      <View style={styles.topActions}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('call.window.minimize')} onPress={onMinimize} style={styles.topAction}>
+          <Ionicons name="copy-outline" size={25} color={WHITE} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('call.invite.addTitle')} accessibilityState={{ disabled: call.status !== 'ACTIVE' }} disabled={call.status !== 'ACTIVE'} onPress={onInvite} style={[styles.topAction, call.status !== 'ACTIVE' && styles.disabledButton]}>
+          <Ionicons name="add" size={30} color={WHITE} />
+        </Pressable>
+      </View>
       {group ? (
         <FlatList
           data={online}
@@ -237,6 +248,8 @@ function VoiceControl({
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', paddingHorizontal: Spacing.lg },
+  topActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   backdrop: { ...StyleSheet.absoluteFillObject, transform: [{ scale: 1.15 }] },
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 13, 17, 0.48)' },
   privateBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 58, gap: Spacing.md },

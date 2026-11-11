@@ -41,6 +41,7 @@ import { NotificationSnackbarHost } from '@/features/notifications/components/No
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
+import { ActiveCallHost } from '@/features/call/screens/GroupCallScreen';
 import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
 import {
   registerDeviceIdProvider,
@@ -412,6 +413,7 @@ function RootLayout() {
           <AppBlurTarget>
           <View style={{ flex: 1 }}>
             <RootStack />
+            <ActiveCallHost />
             {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
                 商店包不多出无标签可访问元素、也不暴露 API origin。 */}
             {E2E_TARGET_MARKER_ENABLED ? (

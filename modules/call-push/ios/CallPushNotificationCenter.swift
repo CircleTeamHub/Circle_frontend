@@ -30,9 +30,9 @@ final class CallPushCenter: NSObject {
   }
 
   /// 没有系统来电界面：前台由应用内弹窗负责。
-  func reportFromJs(callId: String, callerName: String, hasVideo: Bool, isGroup: Bool, expiresAt: String) {}
+  func reportFromJs(callId: String, callerName: String, hasVideo: Bool, isGroup: Bool, expiresAt: String, createdAt: String?) {}
 
-  func endCall(callId: String, reason: String) {
+  func endCall(callId: String, reason: String, createdAt: String?) {
     UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["call:\(callId)"])
   }
 }

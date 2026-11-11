@@ -3371,6 +3371,10 @@
       "disconnected": "Llamada desconectada."
     },
     "groupCallTitle": "Llamada de voz grupal",
+    "window": {
+      "minimize": "Minimizar llamada",
+      "restore": "Volver a la llamada"
+    },
     "voice": {
       "connecting": "Conectando…",
       "waitingPeer": "Esperando una respuesta…",
@@ -3397,6 +3401,16 @@
     "accept": "Aceptar",
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
+      "addTitle": "Invitar a la llamada",
+      "searchPlaceholder": "Buscar por nombre o cuenta",
+      "submit": "Invitar ({{count}})",
+      "sent": "Invitación enviada",
+      "failed": "No se pudo invitar. Inténtalo de nuevo.",
+      "loadFailed": "No se pudo cargar la lista. Inténtalo de nuevo.",
+      "empty": "No hay personas para invitar",
+      "alreadyJoined": "En la llamada",
+      "alreadyInvited": "Invitado",
+      "selectionLimit": "Puedes invitar a {{count}} personas a la vez",
       "inviteeCount": "{{count}} invitados",
       "groupMember": "Miembro del grupo",
       "friend": "Amigo",

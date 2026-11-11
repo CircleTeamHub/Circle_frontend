@@ -18,6 +18,7 @@ export type CallParticipant = {
   user: CallUserLite;
   status: CallParticipantStatus;
   invitedAt: string | null;
+  invitationExpiresAt?: string | null;
   joinedAt: string | null;
   leftAt: string | null;
 };
@@ -26,6 +27,7 @@ export type CallSession = {
   id: string;
   conversationID: string;
   sessionType: 'group' | 'single';
+  invitationMode?: 'members' | 'contacts';
   callType: CallType;
   status: CallStatus;
   initiator: CallUserLite;
@@ -41,6 +43,7 @@ export type CallInvitePayload = {
   callId: string;
   conversationID: string;
   sessionType: 'group' | 'single';
+  invitationMode?: 'members' | 'contacts';
   callType: CallType;
   initiator: CallUserLite;
   invitees: CallUserLite[];

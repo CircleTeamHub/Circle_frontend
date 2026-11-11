@@ -104,6 +104,7 @@ function resetStore() {
     livekit: null,
     answeringCallId: null,
     recentlyEndedCallIds: [],
+    inviteGenerations: {},
     lastDismissal: null,
     nativeUiFallbackCallId: null,
   });
@@ -128,7 +129,7 @@ function ringingOnServer(callId = 'call-1') {
     selfParticipant: {
       user: bob,
       status: 'INVITED' as const,
-      invitedAt: null,
+      invitedAt: new Date(Date.now() - 1_000).toISOString(),
       joinedAt: null,
       leftAt: null,
     },
@@ -161,7 +162,7 @@ describe('useCallPushBridge', () => {
 
     expect(mockNative.configure).toHaveBeenCalledWith('https://api.test/api/v1');
     await waitFor(() => expect(router.push).toHaveBeenCalledWith('/(chat)/group-call'));
-    expect(acceptCall).toHaveBeenCalledWith('call-1');
+    expect(acceptCall).toHaveBeenCalledWith('call-1', expect.any(String));
     expect(useCallStore.getState().livekit?.token).toBe('lk-token');
     expect(useCallStore.getState().incomingCall).toBeNull();
   });
@@ -182,14 +183,16 @@ describe('useCallPushBridge', () => {
         endReason: null,
         participants: [],
       },
-      selfParticipant: { user: bob, status: 'INVITED', invitedAt: null, joinedAt: null, leftAt: null },
+      selfParticipant: {
+        user: bob, status: 'INVITED', invitedAt: new Date(Date.now() - 1_000).toISOString(), joinedAt: null, leftAt: null,
+      },
     });
     jest.mocked(acceptCall).mockImplementation(async () => acceptedResponse());
     renderHook(() => useCallPushBridge());
 
     await emitNative({ type: 'answer', callId: 'call-1' });
 
-    await waitFor(() => expect(acceptCall).toHaveBeenCalledWith('call-1'));
+    await waitFor(() => expect(acceptCall).toHaveBeenCalledWith('call-1', expect.any(String)));
   });
 
   test('ends the native call instead of answering one that is already over', async () => {
@@ -208,7 +211,7 @@ describe('useCallPushBridge', () => {
 
     useCallStore.getState().handleCallInvite(invite());
     await emitNative({ type: 'decline', callId: 'call-1', declinedByNative: false });
-    await waitFor(() => expect(rejectCall).toHaveBeenCalledWith('call-1'));
+    await waitFor(() => expect(rejectCall).toHaveBeenCalledWith('call-1', expect.any(String)));
     expect(useCallStore.getState().incomingCall).toBeNull();
 
     useCallStore.getState().handleCallInvite(invite({ callId: 'call-2' }));
@@ -229,6 +232,7 @@ describe('useCallPushBridge', () => {
       hasVideo: true,
       isGroup: false,
       expiresAt: expect.any(String),
+      createdAt: expect.any(String),
     });
 
     act(() => {
@@ -240,7 +244,7 @@ describe('useCallPushBridge', () => {
         changedAt: new Date().toISOString(),
       });
     });
-    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'canceled');
+    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'canceled', expect.any(String));
   });
 
   test('stops native ringing for another device answering', async () => {
@@ -250,7 +254,7 @@ describe('useCallPushBridge', () => {
       useCallStore.getState().handleSelfParticipantSettled('call-1', 'answered_elsewhere');
     });
 
-    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'answered_elsewhere');
+    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'answered_elsewhere', expect.any(String));
   });
 
   test('keeps the system call going once it is answered in the app', async () => {
@@ -263,7 +267,7 @@ describe('useCallPushBridge', () => {
       useCallStore.getState().setActiveCall(acceptedResponse().call, acceptedResponse().livekit);
     });
 
-    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'answered');
+    expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'answered', expect.any(String));
     expect(mockNative.endCall).not.toHaveBeenCalledWith('call-1', 'ended');
   });
 
@@ -285,7 +289,79 @@ describe('useCallPushBridge', () => {
     await emitNative({ type: 'end', callId: 'call-1', reason: 'missed' });
 
     await waitFor(() => expect(useCallStore.getState().incomingCall).toBeNull());
-    expect(useCallStore.getState().lastDismissal).toEqual({ callId: 'call-1', reason: 'missed' });
+    expect(useCallStore.getState().lastDismissal).toMatchObject({ callId: 'call-1', reason: 'missed' });
+  });
+
+  test('recovers a fresh invitation to the same call after declining the previous invitation', async () => {
+    const first = new Date(Date.now() - 5_000).toISOString();
+    const fresh = new Date(Date.now() - 1_000).toISOString();
+    renderHook(() => useCallPushBridge());
+    act(() => {
+      useCallStore.getState().handleCallInvite(invite({ createdAt: first }));
+      useCallStore.getState().dismissIncomingCall('call-1', 'ended');
+    });
+    const snapshot = ringingOnServer();
+    jest.mocked(fetchCurrentCall).mockResolvedValue({
+      ...snapshot,
+      selfParticipant: { ...snapshot.selfParticipant, invitedAt: fresh },
+    });
+
+    handleCallNotification({ type: 'call.invite', callId: 'call-1', createdAt: fresh });
+
+    await waitFor(() => expect(useCallStore.getState().incomingCall?.createdAt).toBe(fresh));
+    expect(mockNative.showIncomingCall).toHaveBeenLastCalledWith(expect.objectContaining({ createdAt: fresh }));
+  });
+
+  test.each(['end', 'decline', 'answer'])('ignores an old native %s event after a fresh invitation', async (type) => {
+    const first = new Date(Date.now() - 5_000).toISOString();
+    const fresh = new Date(Date.now() - 1_000).toISOString();
+    renderHook(() => useCallPushBridge());
+    act(() => useCallStore.getState().handleCallInvite(invite({ createdAt: fresh })));
+
+    await emitNative({
+      type, callId: 'call-1', createdAt: first, reason: 'missed', declinedByNative: false,
+    });
+
+    expect(useCallStore.getState().incomingCall?.createdAt).toBe(fresh);
+    expect(acceptCall).not.toHaveBeenCalled();
+    expect(rejectCall).not.toHaveBeenCalled();
+  });
+
+  test('forwards the native generation when declining before the call is restored', async () => {
+    const createdAt = new Date().toISOString();
+    renderHook(() => useCallPushBridge());
+
+    await emitNative({ type: 'decline', callId: 'call-1', createdAt, declinedByNative: false });
+
+    expect(rejectCall).toHaveBeenCalledWith('call-1', createdAt);
+  });
+
+  test.each([true, false])('an old answer failure keeps a newer invitation (native timestamp: %s)', async (versioned) => {
+    const first = new Date(Date.now() - 5_000).toISOString();
+    const fresh = new Date(Date.now() - 1_000).toISOString();
+    let rejectAnswer: ((error: Error) => void) | undefined;
+    jest.mocked(acceptCall).mockReturnValueOnce(new Promise((_, reject) => { rejectAnswer = reject; }));
+    renderHook(() => useCallPushBridge());
+    act(() => useCallStore.getState().handleCallInvite(invite({ createdAt: first })));
+
+    await emitNative({ type: 'answer', callId: 'call-1', createdAt: versioned ? first : undefined });
+    expect(acceptCall).toHaveBeenCalledWith('call-1', first);
+    act(() => useCallStore.getState().handleCallInvite(invite({ createdAt: fresh })));
+    await act(async () => rejectAnswer?.(new Error('stale invitation')));
+
+    expect(useCallStore.getState().incomingCall?.createdAt).toBe(fresh);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(mockNative.endCall).toHaveBeenLastCalledWith('call-1', 'failed', first);
+  });
+
+  test('ignores an earlier ordinary dismiss notification for a fresh invitation', () => {
+    const first = new Date(Date.now() - 5_000).toISOString();
+    const fresh = new Date(Date.now() - 1_000).toISOString();
+    useCallStore.getState().handleCallInvite(invite({ createdAt: fresh }));
+
+    handleCallNotification({ type: 'call.dismiss', callId: 'call-1', createdAt: first });
+    expect(useCallStore.getState().incomingCall?.createdAt).toBe(fresh);
   });
 
   test('stops CallKit ringing for a call the server already let go during cold start', async () => {
@@ -316,7 +392,7 @@ describe('useCallPushBridge', () => {
     await emitNative({ type: 'answer', callId: 'call-1' });
 
     await waitFor(() => expect(mockNative.endCall).toHaveBeenCalledWith('call-1', 'failed'));
-    expect(acceptCall).toHaveBeenCalledWith('call-1');
+    expect(acceptCall).toHaveBeenCalledWith('call-1', undefined);
   });
 
   test('ends native calls that arrive while signed out instead of leaving CallKit connected', async () => {
@@ -412,7 +488,7 @@ describe('useCallPushBridge', () => {
         handleCallNotification({ type: 'call.dismiss', callId: 'call-alert', reason: 'canceled' }),
       ).toBe(true);
       expect(useCallStore.getState().incomingCall).toBeNull();
-      expect(useCallStore.getState().lastDismissal).toEqual({
+      expect(useCallStore.getState().lastDismissal).toMatchObject({
         callId: 'call-alert',
         reason: 'canceled',
       });

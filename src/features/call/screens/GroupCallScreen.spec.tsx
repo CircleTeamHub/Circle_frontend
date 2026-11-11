@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import GroupCallScreen from './GroupCallScreen';
+import GroupCallScreen, { ActiveCallHost } from './GroupCallScreen';
 import { showTopNotice } from '@/components/app/top-notice-store';
 import { requestJoinToken } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -14,6 +14,7 @@ const mockDisconnect = jest.fn(async () => undefined);
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
 const mockSetSpeakerphone = jest.fn(async () => undefined);
 const mockStopVoiceAudioRouting = jest.fn();
 const mockStartVoiceAudioRouting = jest.fn(() => mockStopVoiceAudioRouting);
@@ -25,11 +26,18 @@ const mockParticipants = [
 ];
 const mockRoom = { disconnect: mockDisconnect };
 
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('@/features/call/components/CallInvitePicker', () => ({ CallInvitePicker: () => null }));
 jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => (() => void) | void) => {
+    const ReactModule = jest.requireActual<typeof import('react')>('react');
+    ReactModule.useEffect(effect, [effect]);
+  },
   router: {
     back: () => mockBack(),
     canGoBack: () => mockCanGoBack(),
     replace: (path: string) => mockReplace(path),
+    navigate: (path: string) => mockNavigate(path),
   },
 }));
 jest.mock('@/components/app/top-notice-store', () => ({ showTopNotice: jest.fn() }));
@@ -98,6 +106,10 @@ jest.mock('@/features/call/livekit-module', () => ({
   }),
 }));
 
+function TestCallScreen({ routeVisible = true }: { routeVisible?: boolean }) {
+  return <><ActiveCallHost />{routeVisible ? <GroupCallScreen /> : null}</>;
+}
+
 function renderCall(
   sessionType: CallSession['sessionType'],
   status: CallSession['status'] = 'ACTIVE',
@@ -118,7 +130,7 @@ function renderCall(
     },
     withCredentials ? { url: 'wss://livekit.test', token: 'token', expiresAt: '' } : null,
   );
-  return render(<GroupCallScreen />);
+  return render(<TestCallScreen />);
 }
 
 beforeEach(() => {
@@ -234,4 +246,30 @@ test('voice calls start the audio route on entry and release it on exit', () => 
   expect(mockStopVoiceAudioRouting).not.toHaveBeenCalled();
   unmount();
   expect(mockStopVoiceAudioRouting).toHaveBeenCalledTimes(1);
+});
+
+test('minimizing and restoring preserves the connected room and microphone session', () => {
+  renderCall('single');
+  fireEvent.press(screen.getByRole('button', { name: 'call.window.minimize' }));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockLeave).not.toHaveBeenCalled();
+  expect(mockDisconnect).not.toHaveBeenCalled();
+  expect(mockStopVoiceAudioRouting).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: 'call.window.restore' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/(chat)/group-call');
+  expect(screen.queryByTestId('mini-call-window')).toBeNull();
+  expect(mockDisconnect).not.toHaveBeenCalled();
+});
+
+test('leaving the route minimizes the same room while global controls stay available', () => {
+  const view = renderCall('single');
+  view.rerender(<TestCallScreen routeVisible={false} />);
+  expect(screen.getByTestId('mini-call-window')).toBeTruthy();
+  expect(mockLeave).not.toHaveBeenCalled();
+  expect(mockDisconnect).not.toHaveBeenCalled();
+  act(() => useCallStore.getState().resetCallState());
+  expect(screen.queryByTestId('mini-call-window')).toBeNull();
+  expect(showTopNotice).toHaveBeenCalledTimes(1);
+  expect(mockBack).not.toHaveBeenCalled();
+  expect(mockDisconnect).toHaveBeenCalledTimes(1);
 });

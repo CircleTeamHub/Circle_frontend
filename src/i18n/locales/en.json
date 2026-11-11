@@ -3488,6 +3488,10 @@
       "disconnected": "Call disconnected."
     },
     "groupCallTitle": "Group voice call",
+    "window": {
+      "minimize": "Minimize call",
+      "restore": "Return to call"
+    },
     "voice": {
       "connecting": "Connecting…",
       "waitingPeer": "Waiting for an answer…",
@@ -3514,6 +3518,16 @@
     "accept": "Accept",
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
+      "addTitle": "Invite to call",
+      "searchPlaceholder": "Search names or accounts",
+      "submit": "Invite ({{count}})",
+      "sent": "Invitation sent",
+      "failed": "Could not invite participants. Please try again.",
+      "loadFailed": "Could not load people. Please try again.",
+      "empty": "No people to invite",
+      "alreadyJoined": "In call",
+      "alreadyInvited": "Invited",
+      "selectionLimit": "Invite up to {{count}} people at a time",
       "inviteeCount": "{{count}} invited",
       "groupMember": "Group member",
       "friend": "Friend",

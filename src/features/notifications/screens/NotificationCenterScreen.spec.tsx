@@ -104,6 +104,7 @@ test('a failed notification page shows its retry only on the notifications tab',
     .mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce({ items: [], nextCursor: null });
   render(<NotificationCenterScreen />);
+  fireEvent.press(screen.getByTestId('notifications-tab'));
   await act(async () => { await Promise.resolve(); });
   fireEvent.press(screen.getByTestId('list-end'));
   await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeTruthy());
@@ -125,6 +126,7 @@ test.each(['success', 'failure'] as const)('a pending notification page and its 
     .mockResolvedValueOnce({ items: [], nextCursor: 'cursor-1' })
     .mockReturnValueOnce(page.promise);
   render(<NotificationCenterScreen />);
+  fireEvent.press(screen.getByTestId('notifications-tab'));
   await act(async () => { await Promise.resolve(); });
   fireEvent.press(screen.getByTestId('list-end'));
   expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
@@ -156,6 +158,7 @@ test('an old notification page finally cannot clear a new page spinner after sig
     .mockResolvedValueOnce({ items: [], nextCursor: 'fresh-cursor' })
     .mockReturnValueOnce(current.promise);
   render(<NotificationCenterScreen />);
+  fireEvent.press(screen.getByTestId('notifications-tab'));
   await act(async () => { await Promise.resolve(); });
   fireEvent.press(screen.getByTestId('list-end'));
   fireEvent.press(screen.getByTestId('signup-tab'));
@@ -350,7 +353,6 @@ test('old signup mark-all rejection cannot restore posts or badges into a new ac
     .mockResolvedValueOnce([post('b-post')]);
   render(<NotificationCenterScreen />);
   await act(async () => { await Promise.resolve(); });
-  fireEvent.press(screen.getByTestId('signup-tab'));
   await waitFor(() => expect(screen.getByText('a-private-post')).toBeTruthy());
   mockBadges.signupUnread = 2;
   fireEvent.press(screen.getByTestId('mark-all'));

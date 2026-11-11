@@ -3480,6 +3480,10 @@
       "disconnected": "通话连接已断开。"
     },
     "groupCallTitle": "群语音通话",
+    "window": {
+      "minimize": "缩小通话",
+      "restore": "返回通话"
+    },
     "voice": {
       "connecting": "正在连接…",
       "waitingPeer": "等待对方接听…",
@@ -3506,6 +3510,16 @@
     "accept": "接听",
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
+      "addTitle": "邀请加入通话",
+      "searchPlaceholder": "搜索姓名或账号",
+      "submit": "邀请（{{count}}）",
+      "sent": "邀请已发送",
+      "failed": "邀请失败，请稍后重试",
+      "loadFailed": "列表加载失败，请重试",
+      "empty": "暂无可邀请的人",
+      "alreadyJoined": "通话中",
+      "alreadyInvited": "已邀请",
+      "selectionLimit": "每次最多邀请 {{count}} 人",
       "inviteeCount": "{{count}} 人被邀请",
       "groupMember": "群成员",
       "friend": "好友",

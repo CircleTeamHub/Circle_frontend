@@ -6,7 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,9 +31,16 @@ import {
   useCallTelemetry,
 } from '@/features/call/use-call-telemetry';
 import { VoiceCallContent, VOICE_CALL_BACKGROUND } from '@/features/call/components/VoiceCallContent';
+import { MiniCallWindow } from '@/features/call/components/MiniCallWindow';
+import { CallInvitePicker } from '@/features/call/components/CallInvitePicker';
 
 
 const s = StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 100 },
+  callBody: { flex: 1, gap: Spacing.xl },
+  hidden: { display: 'none' },
+  videoTopActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   container: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
@@ -172,9 +180,17 @@ function initials(name: string) {
 function CallRoomContent({
   liveKitModule,
   callTelemetry,
+  minimized,
+  onMinimize,
+  onRestore,
+  onInvite,
 }: {
   liveKitModule: LiveKitModule;
   callTelemetry: CallTelemetry;
+  minimized: boolean;
+  onMinimize: () => void;
+  onRestore: () => void;
+  onInvite: () => void;
 }) {
   const {
     useConnectionState,
@@ -293,26 +309,47 @@ function CallRoomContent({
     };
   }, [room]);
 
+  const miniWindow = minimized && activeCall ? (
+    <MiniCallWindow call={activeCall} connectionState={connectionState} leaving={leaving} onRestore={onRestore} onLeave={handleLeave} />
+  ) : null;
+
   if (activeCall && !isVideoCall) {
     return (
-      <VoiceCallContent
-        key={activeCall.id}
-        call={activeCall}
-        participants={participants}
-        localIdentity={localParticipant.identity}
-        connectionState={connectionState}
-        micEnabled={isMicrophoneEnabled}
-        muting={muting}
-        leaving={leaving}
-        onToggleMic={handleToggleMic}
-        onLeave={handleLeave}
-        setSpeakerphone={liveKitModule.setSpeakerphone}
-      />
+      <>
+        <View style={minimized ? s.hidden : s.callBody}>
+          <VoiceCallContent
+            key={activeCall.id}
+            call={activeCall}
+            participants={participants}
+            localIdentity={localParticipant.identity}
+            connectionState={connectionState}
+            micEnabled={isMicrophoneEnabled}
+            muting={muting}
+            leaving={leaving}
+            onToggleMic={handleToggleMic}
+            onLeave={handleLeave}
+            minimized={minimized}
+            onMinimize={onMinimize}
+            onInvite={onInvite}
+            setSpeakerphone={liveKitModule.setSpeakerphone}
+          />
+        </View>
+        {miniWindow}
+      </>
     );
   }
 
   return (
     <>
+      <View style={minimized ? s.hidden : s.callBody}>
+      <View style={s.videoTopActions}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('call.window.minimize')} onPress={onMinimize} style={s.topAction}>
+          <Ionicons name="copy-outline" size={25} color={colors.text} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('call.invite.addTitle')} disabled={activeCall?.status !== 'ACTIVE'} onPress={onInvite} style={s.topAction}>
+          <Ionicons name="add" size={30} color={colors.text} />
+        </Pressable>
+      </View>
       <View style={s.header}>
         <Text style={[s.eyebrow, { color: colors.primary }]}>
           {isVideoCall
@@ -450,11 +487,13 @@ function CallRoomContent({
           )}
         </Pressable>
       </View>
+      </View>
+      {miniWindow}
     </>
   );
 }
 
-export default function GroupCallScreen() {
+function ActiveCallSession() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -462,13 +501,16 @@ export default function GroupCallScreen() {
   const livekit = useCallStore((state) => state.livekit);
   const setLiveKitCredentials = useCallStore((state) => state.setLiveKitCredentials);
   const activeCallId = activeCall?.id;
+  const minimized = useCallStore((state) => state.isMinimized);
+  const setMinimized = useCallStore((state) => state.setMinimized);
+  const updateActiveCall = useCallStore((state) => state.updateActiveCall);
+  const [inviteVisible, setInviteVisible] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
   // 通话质量遥测：一个 LiveKitRoom（roomVersion）一份。必须在所有提前 return 之前。
   const callTelemetry = useCallTelemetry(roomVersion);
   const mountedRef = useRef(true);
-  const closedScreenRef = useRef(false);
   const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
     LiveKitModule | null | undefined
@@ -530,30 +572,26 @@ export default function GroupCallScreen() {
     }
   }, [activeCall, retrying, setLiveKitCredentials]);
 
-  const closeCallScreen = useCallback(() => {
-    if (closedScreenRef.current) return false;
-    closedScreenRef.current = true;
+  const minimize = useCallback(() => {
+    setMinimized(true);
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/messages');
-    return true;
-  }, []);
+  }, [setMinimized]);
 
-  useEffect(() => {
-    if (!activeCallId && closeCallScreen()) {
-      showTopNotice({ title: t('chat.callRecord.ended') });
-    }
-  }, [activeCallId, closeCallScreen, t]);
+  const restore = useCallback(() => {
+    setMinimized(false);
+    router.navigate('/(chat)/group-call');
+  }, [setMinimized]);
 
   const handleFallbackBack = useCallback(() => {
     void leaveActiveCall();
-    closeCallScreen();
-  }, [closeCallScreen]);
+  }, []);
 
   if (!activeCall) return null;
 
   if (!livekit) {
     return (
-      <View style={[s.missing, { backgroundColor: colors.background }]}>
+      <View style={[s.overlay, s.missing, { backgroundColor: colors.background }]}>
         <Text style={[s.missingTitle, { color: colors.text }]}>
           {t('call.ended', { defaultValue: '通话已结束或连接信息已失效' })}
         </Text>
@@ -571,7 +609,7 @@ export default function GroupCallScreen() {
 
   if (liveKitModule === undefined) {
     return (
-      <View style={[s.missing, { backgroundColor: colors.background }]}>
+      <View style={[s.overlay, s.missing, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
         <Text style={[s.missingTitle, { color: colors.text }]}>
           {t('call.preparing', { defaultValue: '正在准备通话组件...' })}
@@ -582,7 +620,7 @@ export default function GroupCallScreen() {
 
   if (!liveKitModule) {
     return (
-      <View style={[s.missing, { backgroundColor: colors.background }]}>
+      <View style={[s.overlay, s.missing, { backgroundColor: colors.background }]}>
         <Text style={[s.missingTitle, { color: colors.text }]}>
           {t('call.unavailable', { defaultValue: 'LiveKit 通话组件不可用' })}
         </Text>
@@ -608,7 +646,10 @@ export default function GroupCallScreen() {
   const isVideoCall = activeCall.callType === 'VIDEO';
 
   return (
-    <View style={isVideoCall ? [s.container, { backgroundColor: colors.background }] : s.voiceContainer}>
+    <View pointerEvents={minimized ? 'box-none' : 'auto'} style={[
+      s.overlay,
+      !minimized && (isVideoCall ? [s.container, { backgroundColor: colors.background }] : s.voiceContainer),
+    ]}>
       <LiveKitRoom
         key={roomVersion}
         serverUrl={livekit.url}
@@ -638,9 +679,17 @@ export default function GroupCallScreen() {
       >
         {/* 必须在 Room 内：远端音轨的播放载体（web 是 <audio>，原生 no-op）。 */}
         <RoomAudioRenderer />
-        <CallRoomContent liveKitModule={liveKitModule} callTelemetry={callTelemetry} />
+        <CallRoomContent
+          liveKitModule={liveKitModule}
+          callTelemetry={callTelemetry}
+          minimized={minimized}
+          onMinimize={minimize}
+          onRestore={restore}
+          onInvite={() => setInviteVisible(true)}
+        />
       </LiveKitRoom>
-      {connectError ? (
+      <CallInvitePicker visible={inviteVisible} call={activeCall} onClose={() => setInviteVisible(false)} onInvited={updateActiveCall} />
+      {connectError && !minimized ? (
         <View style={[
           s.errorBar,
           !isVideoCall && [s.voiceErrorBar, { paddingBottom: insets.bottom + Spacing.md }],
@@ -665,4 +714,46 @@ export default function GroupCallScreen() {
       ) : null}
     </View>
   );
+}
+
+/** A room belongs to the app session so navigating away cannot stop its audio. */
+export function ActiveCallHost() {
+  const { t } = useTranslation();
+  const activeCall = useCallStore((state) => state.activeCall);
+  const incomingCall = useCallStore((state) => state.incomingCall);
+  const minimized = useCallStore((state) => state.isMinimized);
+  const previous = useRef<{ id: string; minimized: boolean } | null>(null);
+
+  useEffect(() => {
+    if (previous.current && !activeCall && previous.current.minimized) {
+      showTopNotice({ title: t('chat.callRecord.ended') });
+    }
+    previous.current = activeCall && !incomingCall ? { id: activeCall.id, minimized } : null;
+  }, [activeCall, incomingCall, minimized, t]);
+
+  return activeCall && !incomingCall ? <ActiveCallSession key={activeCall.id} /> : null;
+}
+
+/** The route presents the globally hosted room. Back navigation minimizes it. */
+export default function GroupCallScreen() {
+  const { t } = useTranslation();
+  const callId = useCallStore((state) => state.activeCall?.id);
+  const setMinimized = useCallStore((state) => state.setMinimized);
+  const focused = useIsFocused();
+  const closed = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    setMinimized(false);
+    return () => setMinimized(true);
+  }, [setMinimized]));
+
+  useEffect(() => {
+    if (callId || !focused || closed.current) return;
+    closed.current = true;
+    showTopNotice({ title: t('chat.callRecord.ended') });
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/messages');
+  }, [callId, focused, t]);
+
+  return null;
 }

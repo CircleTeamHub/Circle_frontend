@@ -3363,6 +3363,10 @@
       "disconnected": "통화가 끊겼습니다."
     },
     "groupCallTitle": "그룹 음성 통화",
+    "window": {
+      "minimize": "통화 최소화",
+      "restore": "통화로 돌아가기"
+    },
     "voice": {
       "connecting": "연결 중…",
       "waitingPeer": "상대방의 응답을 기다리는 중…",
@@ -3389,6 +3393,16 @@
     "accept": "수락",
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
+      "addTitle": "통화에 초대",
+      "searchPlaceholder": "이름 또는 계정 검색",
+      "submit": "초대 ({{count}})",
+      "sent": "초대를 보냈어요",
+      "failed": "초대하지 못했어요. 다시 시도하세요",
+      "loadFailed": "목록을 불러오지 못했어요. 다시 시도하세요",
+      "empty": "초대할 사람이 없어요",
+      "alreadyJoined": "통화 중",
+      "alreadyInvited": "초대됨",
+      "selectionLimit": "한 번에 최대 {{count}}명까지 초대할 수 있어요",
       "inviteeCount": "{{count}}명 초대됨",
       "groupMember": "그룹 멤버",
       "friend": "친구",
