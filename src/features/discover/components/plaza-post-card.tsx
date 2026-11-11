@@ -527,7 +527,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       ) : null}
 
       {/* Images */}
-      <ImageGrid images={post.images} media={post.media} />
+      <ImageGrid images={post.images} media={post.media} uniformCells />
 
       {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
           无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}

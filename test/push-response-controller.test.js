@@ -688,39 +688,32 @@ test('reports remote read failure without blocking navigation', async () => {
   ]);
 });
 
-test('recognizes encoded profile user target for replace navigation', () => {
-  const { isAlreadyOnPushTarget } = load(
-    'src/features/notifications/utils/push-response-controller.ts',
-  );
-
-  assert.equal(
-    isAlreadyOnPushTarget('/messages/user/user%20%2F%208', {
-      pathname: '/(tabs)/messages/user/[id]',
-      params: { id: 'user / 8' },
-    }),
-    true,
-  );
-  assert.equal(
-    isAlreadyOnPushTarget('/messages/user/someone-else', {
-      pathname: '/(tabs)/messages/user/[id]',
-      params: { id: 'user / 8' },
-    }),
-    false,
-  );
-});
-
-test('recognizes the explore moment detail as an already-open push target', () => {
-  const { isAlreadyOnPushTarget } = load(
-    'src/features/notifications/utils/push-response-controller.ts',
-  );
+test('push targets already on screen are recognized together with their params', () => {
+  const { isCurrentRoute } = load('src/utils/current-route.ts');
   const momentPush = {
     pathname: '/(tabs)/explore/moment/[id]',
     params: { id: 'trace-1' },
   };
 
   // 朋友圈推送落在探索 tab;已经开着同一条动态时不能再压一层详情页。
-  assert.equal(isAlreadyOnPushTarget('/explore/moment/trace-1', momentPush), true);
-  assert.equal(isAlreadyOnPushTarget('/explore/moment/trace-2', momentPush), false);
+  assert.equal(
+    isCurrentRoute({ pathname: '/explore/moment/trace-1', params: { id: 'trace-1' } }, momentPush),
+    true,
+  );
+  assert.equal(
+    isCurrentRoute({ pathname: '/explore/moment/trace-2', params: { id: 'trace-2' } }, momentPush),
+    false,
+  );
+
+  // 原来只比路径:开着 A 帖子的报名列表时点 B 帖子的推送,会把 A 原地换成 B,返回回不到 A。
+  const signupPush = {
+    pathname: '/(tabs)/messages/post-signups',
+    params: { postId: 'post-b', title: '' },
+  };
+  assert.equal(
+    isCurrentRoute({ pathname: '/messages/post-signups', params: { postId: 'post-a' } }, signupPush),
+    false,
+  );
 });
 
 test('registers the listener before reading and clearing the last response', () => {

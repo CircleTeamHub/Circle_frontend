@@ -3,6 +3,7 @@ import { Animated } from 'react-native';
 import { NotificationSnackbarHost } from './NotificationSnackbarHost';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { appSettingsDefaults, useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import type { NotificationItem } from '@/types';
 
 // 同一个会话的新消息替换正在显示的横幅:只换内容 —— 不重新进场、不再响一次、
 // 不重新计时(否则一个活跃的群就能让横幅一直挂着,别的会话也轮不到)。
@@ -17,9 +18,14 @@ jest.mock('@/storage', () => ({ mmkvJsonStorage: { getItem: () => null, setItem:
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 0, left: 0, right: 0 }),
 }));
+const mockRouter = { push: mockPush, navigate: jest.fn(), replace: jest.fn() };
+let mockPathname = '/messages';
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush, navigate: jest.fn() }),
+  useRouter: () => mockRouter,
   useSegments: () => mockSegments,
+  usePathname: () => mockPathname,
+  useGlobalSearchParams: () => mockParams,
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -69,10 +75,28 @@ function chat(id: string, summary: string, conversationID = 'group-a') {
   };
 }
 
+function signup(id: string, postId: string): NotificationItem {
+  return {
+    id,
+    type: 'CIRCLE_POST_SIGNUP_CREATED',
+    content: '报名了你的活动',
+    read: true,
+    createdAt: '2026-11-10T00:00:00Z',
+    fromUser: { id: 'signer', nickname: '小王', avatarUrl: null },
+    fromTrace: null,
+    fromReply: null,
+    fromCircle: null,
+    fromCirclePost: { id: postId, excerpt: '周末徒步', firstImage: null },
+    fromInvitation: null,
+  };
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   mockNotify.mockClear();
-  mockPush.mockClear();
+  Object.values(mockRouter).forEach((fn) => fn.mockClear());
+  mockPathname = '/messages';
+  mockParams = {};
   mockActiveConversationId = null;
   mockSegments = [];
   useNotificationSnackbarStore.getState().reset();
@@ -234,4 +258,27 @@ it('tapping a chat banner opens the half-screen quick chat on top of the current
     pathname: '/quick-chat',
     params: expect.objectContaining({ conversationID: 'group-a', sourceID: 'group-a', searchedMsgID: 'm1' }),
   });
+});
+
+// 报名列表开着时又来一条同一帖子的报名横幅:点进去不能再压一层报名列表,
+// 否则返回时还是这一页(实机反馈)。换成别的帖子仍然正常进新的一页。
+it.each([
+  ['the post already open', 'post-1', 'replace', 'push'],
+  ['another post', 'post-2', 'push', 'replace'],
+] as const)('a signup banner for %s does not stack a duplicate page', (_label, postId, used, unused) => {
+  mockSegments = ['(tabs)', 'messages', 'post-signups'];
+  mockPathname = '/messages/post-signups';
+  mockParams = { postId: 'post-1', title: '周末徒步' };
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueNotification(signup('n1', postId));
+  });
+
+  fireEvent.press(screen.getByRole('button'));
+
+  expect(mockRouter[used]).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/post-signups',
+    params: { postId, title: '周末徒步' },
+  });
+  expect(mockRouter[unused]).not.toHaveBeenCalled();
 });

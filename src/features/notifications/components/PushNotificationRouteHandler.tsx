@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import {
+  useGlobalSearchParams,
   usePathname,
   useRootNavigationState,
   useRouter,
@@ -8,10 +9,8 @@ import {
 } from 'expo-router';
 import { resolvePushNotificationRoute } from '@/features/notifications/utils/push-notification-route';
 import { handleCallNotification } from '@/features/call/push/incoming-call-actions';
-import {
-  createPushResponseController,
-  isAlreadyOnPushTarget,
-} from '@/features/notifications/utils/push-response-controller';
+import { createPushResponseController } from '@/features/notifications/utils/push-response-controller';
+import { isCurrentRoute } from '@/utils/current-route';
 import { initializePushResponseListener } from '@/features/notifications/utils/push-response-listener';
 import { pushTelemetry } from '@/features/notifications/utils/push-telemetry';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
@@ -32,6 +31,7 @@ import {
 export function PushNotificationRouteHandler() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useGlobalSearchParams();
   const navState = useRootNavigationState();
   const navReady = Boolean(navState?.key);
   const authenticatedUserId = useAuthStore((state) =>
@@ -39,9 +39,9 @@ export function PushNotificationRouteHandler() {
   );
 
   const routerRef = useRef(router);
-  const pathnameRef = useRef(pathname);
+  const currentRouteRef = useRef({ pathname, params });
   routerRef.current = router;
-  pathnameRef.current = pathname;
+  currentRouteRef.current = { pathname, params };
 
   const controllerRef = useRef<ReturnType<
     typeof createPushResponseController
@@ -50,7 +50,8 @@ export function PushNotificationRouteHandler() {
     controllerRef.current = createPushResponseController({
       resolveRoute: resolvePushNotificationRoute,
       navigate: (route: Href) => {
-        if (isAlreadyOnPushTarget(pathnameRef.current, route)) {
+        // 正开着的就是这一页：原地换成新的（刷新数据、带上新锚点），不再压一层。
+        if (isCurrentRoute(currentRouteRef.current, route)) {
           routerRef.current.replace(route);
         } else {
           routerRef.current.push(route);

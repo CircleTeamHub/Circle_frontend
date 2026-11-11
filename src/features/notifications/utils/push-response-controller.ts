@@ -62,55 +62,6 @@ function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-function routeParam(route: Href, key: string) {
-  if (typeof route === 'string') return '';
-  // 先坍成普通 Record 再索引:直接在 Href 巨型联合的 params 上做索引表达式,
-  // 路由每多几条就可能再次触发 TS2590(联合过大),与 scan-result.ts 同款规避。
-  const params = route.params as Record<string, unknown> | undefined;
-  const value = params?.[key];
-  return typeof value === 'string' ? value : '';
-}
-
-export function isAlreadyOnPushTarget(pathname: string, route: Href) {
-  const target =
-    typeof route === 'string'
-      ? route
-      : (route as { pathname: string }).pathname;
-  if (target === '/(tabs)/messages') return pathname === '/messages';
-  if (target === '/(tabs)/contacts/new-friends') {
-    return pathname === '/contacts/new-friends';
-  }
-  if (target === '/(tabs)/messages/notifications') {
-    return pathname === '/messages/notifications';
-  }
-  if (target === '/(tabs)/messages/post-signups') {
-    return pathname === '/messages/post-signups';
-  }
-  if (target === '/(tabs)/profile/system-announcements') {
-    return pathname === '/profile/system-announcements';
-  }
-  if (target === '/(tabs)/messages/chat-detail') {
-    return pathname === '/messages/chat-detail';
-  }
-  if (target === '/(tabs)/messages/user/[id]') {
-    return pathname === `/messages/user/${encodeURIComponent(routeParam(route, 'id'))}`;
-  }
-  if (target === '/(tabs)/discover/moment/[id]') {
-    return pathname === `/discover/moment/${encodeURIComponent(routeParam(route, 'id'))}`;
-  }
-  // 朋友圈推送现在落在探索 tab;旧的 discover 目标留给仍指向那里的深链。
-  if (target === '/(tabs)/explore/moment/[id]') {
-    return pathname === `/explore/moment/${encodeURIComponent(routeParam(route, 'id'))}`;
-  }
-  if (target === '/(tabs)/discover/verification/[id]') {
-    return pathname === `/discover/verification/${encodeURIComponent(routeParam(route, 'id'))}`;
-  }
-  if (target === '/(tabs)/discover/invitation/[id]') {
-    return pathname === `/discover/invitation/${encodeURIComponent(routeParam(route, 'id'))}`;
-  }
-  return false;
-}
-
 export function createPushResponseController(deps: ControllerDependencies) {
   const handledIds = new Set<string>();
   const queuedIds = new Set<string>();

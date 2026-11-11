@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ActivityIndicator } from 'react-native';
 import NotificationCenterScreen from './NotificationCenterScreen';
-import { fetchNotificationsPage, markAllNotificationsRead } from '@/services/api/notifications';
+import { fetchNotificationsPage, markAllNotificationsRead, markNotificationRead } from '@/services/api/notifications';
 import { fetchAllMyCirclePosts, markMyPostSignupsRead } from '@/services/api/plaza';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
@@ -25,7 +25,8 @@ jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual('zustand');
   return { useAuthStore: create(() => ({ user: { id: 'account-a' }, isAuthenticated: true, sessionEpoch: 1 })) };
 });
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: jest.fn(), push: jest.fn() }), useSegments: () => mockSegments, useLocalSearchParams: () => ({ domain: mockDomain }) }));
+const mockRouter = { back: jest.fn(), push: jest.fn(), navigate: jest.fn() };
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useSegments: () => mockSegments, usePathname: () => '/messages/notifications', useLocalSearchParams: () => ({ domain: mockDomain }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('react-native', () => {
@@ -59,9 +60,9 @@ jest.mock('@/features/notifications/components/ReadFilterBar', () => ({ ReadFilt
   const { Pressable } = jest.requireActual('react-native');
   return <Pressable testID="mark-all" onPress={onMarkAll} />;
 } }));
-jest.mock('@/features/notifications/components/NotificationRow', () => ({ NotificationRow: ({ data }: { data: { id: string } }) => {
+jest.mock('@/features/notifications/components/NotificationRow', () => ({ NotificationRow: ({ data, onPress }: { data: { id: string }; onPress: () => void }) => {
   const { Text } = jest.requireActual('react-native');
-  return <Text>{data.id}</Text>;
+  return <Text onPress={onPress}>{data.id}</Text>;
 } }));
 jest.mock('@/features/notifications/components/NotificationEmptyState', () => ({ NotificationEmptyState: () => null }));
 jest.mock('@/services/api/notifications', () => ({ fetchNotificationsPage: jest.fn(), markAllNotificationsRead: jest.fn(), markNotificationRead: jest.fn() }));
@@ -377,4 +378,24 @@ test('unmounted mark-all rejection neither rolls back nor reports', async () => 
   expect(useNotificationCenterStore.getState().interactive[0].read).toBe(true);
   expect(reportHandledFailure).not.toHaveBeenCalled();
   expect(fetchNotificationsPage).toHaveBeenCalledTimes(1);
+});
+
+// 没有专属落点的通知兜底回通知列表 —— 也就是正开着的这一页,只标已读,不再叠一层列表。
+test('a notification without its own destination does not stack another notification list', async () => {
+  jest.mocked(markNotificationRead).mockResolvedValue(undefined);
+  jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [notification('no-target')], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  fireEvent.press(await screen.findByText('no-target'));
+  expect(markNotificationRead).toHaveBeenCalledWith('no-target');
+  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+});
+
+test('a notification with its own destination still opens it', async () => {
+  jest.mocked(markNotificationRead).mockResolvedValue(undefined);
+  const liked = { ...notification('liked'), fromTrace: { id: 'trace-1', excerpt: 'x', firstImage: null } };
+  jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [liked], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  fireEvent.press(await screen.findByText('liked'));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/explore/moment/[id]', params: { id: 'trace-1' } });
 });

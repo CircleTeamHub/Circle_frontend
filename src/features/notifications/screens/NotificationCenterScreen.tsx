@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
@@ -35,6 +35,7 @@ import {
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
+import { isCurrentRoute } from '@/utils/current-route';
 import {
   NotificationTabBar,
   type NotificationTabItem,
@@ -63,7 +64,9 @@ export default function NotificationCenterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
-  const { domain: domainParam } = useLocalSearchParams<{ domain?: string }>();
+  const pathname = usePathname();
+  const params = useLocalSearchParams<{ domain?: string }>();
+  const domainParam = params.domain;
   const { colors } = useTheme();
   const { t } = useTranslation();
   const ownerId = useAuthStore((state) =>
@@ -369,6 +372,9 @@ export default function NotificationCenterScreen() {
             scope: notificationScope,
           },
         );
+        // 没有专属落点的通知会兜底回通知列表 —— 也就是这一页本身，标记已读就够了，
+        // 再 push 会叠出第二个通知列表。
+        if (isCurrentRoute({ pathname, params }, route)) return;
         if (isUserProfileSnackbarRoute(route)) {
           router.navigate(route);
         } else {
@@ -387,7 +393,7 @@ export default function NotificationCenterScreen() {
         params: { postId: raw.id, title: view.title },
       });
     },
-    [store, router, t, notificationScope, decrementUnreadBadges, isCurrentSession],
+    [store, router, t, notificationScope, pathname, params, decrementUnreadBadges, isCurrentSession],
   );
 
   return (
