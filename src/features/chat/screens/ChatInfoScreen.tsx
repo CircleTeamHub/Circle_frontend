@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -138,9 +139,10 @@ const s = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.md,
   },
-  // 成员宫格所在的卡片：左右内边距沿用 section，上下再留白。
+  // 成员宫格所在的卡片：格子自己居中留白，左右内边距收窄到 sm，窄屏才放得下五列头像。
   groupMemberSection: {
     paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
   },
   groupMemberGrid: {
     flexDirection: 'row',
@@ -153,7 +155,7 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   groupMemberName: {
-    maxWidth: 64,
+    maxWidth: '100%',
     textAlign: 'center',
   },
   addMemberBox: {
@@ -217,6 +219,7 @@ const initialActionPending = {
 };
 const GROUP_MEMBER_COLUMNS = 5;
 const COLLAPSED_GROUP_MEMBER_ROWS = 4;
+const GROUP_MEMBER_AVATAR_SIZE = 56;
 
 type ConversationActionKey = keyof typeof initialActionPending;
 type OptimisticConversationState = {
@@ -240,6 +243,7 @@ function shortRowValue(value: string | null | undefined): string {
 
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
@@ -453,6 +457,12 @@ export default function ChatInfoScreen() {
   // 全群清空仅限群主；阅后即焚由每个成员管理自己的新消息。
   const canClearGroupForEveryone = isOwner;
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
+  // 每格宽 = (屏宽 - 页面和卡片的左右内边距) / 列数。头像不超过格宽、两边各留一点缝；
+  // 固定 56 时折叠屏外屏（约 344dp）一格只有 ~53dp，相邻头像会叠在一起。
+  const groupMemberAvatarSize = Math.min(
+    GROUP_MEMBER_AVATAR_SIZE,
+    Math.floor((windowWidth - 2 * (Spacing.lg + Spacing.sm)) / GROUP_MEMBER_COLUMNS) - Spacing.sm,
+  );
   const visibleGroupMembers = useMemo(
     () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
     [collapsedGroupMemberLimit, groupMembers, groupMembersExpanded],
@@ -1884,7 +1894,12 @@ export default function ChatInfoScreen() {
                     onLongPress={hasMemberActions ? () => handleMemberActions(member) : undefined}
                     disabled={!canViewMemberDirectory || standaloneDirectoryAccess === 'failed' || groupAdmin.pendingUserID === member.userId}
                   >
-                    <Avatar size={56} shape="square" name={memberName} uri={member.avatarUrl ?? undefined} />
+                    <Avatar
+                      size={groupMemberAvatarSize}
+                      shape="square"
+                      name={memberName}
+                      uri={member.avatarUrl ?? undefined}
+                    />
                     <Text style={[s.groupMemberName, d.groupMemberName]} numberOfLines={1}>
                       {memberName}
                     </Text>
@@ -1903,7 +1918,13 @@ export default function ChatInfoScreen() {
               })}
               {canInviteGroupMembers ? (
                 <Pressable style={s.groupMemberCell} onPress={handleOpenInviteGroupMembers}>
-                  <View style={[s.addMemberBox, d.addMemberBox, { width: 56, height: 56 }]}>
+                  <View
+                    style={[
+                      s.addMemberBox,
+                      d.addMemberBox,
+                      { width: groupMemberAvatarSize, height: groupMemberAvatarSize },
+                    ]}
+                  >
                     <Ionicons name="add" size={30} color={colors.textSecondary} />
                   </View>
                 </Pressable>
