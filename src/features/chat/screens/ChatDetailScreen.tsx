@@ -18,7 +18,7 @@ import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recordin
 import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
 import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet';
 import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
-import { clearDirectChatHistory } from '@/features/chat/utils/clear-direct-history';
+import { clearDirectChatHistory, confirmClearChatHistory } from '@/features/chat/utils/clear-chat-history';
 import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
 import { MediaGalleryPicker } from '@/features/chat/components/media-gallery-picker';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
@@ -88,7 +88,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const messageBlurTarget = useRef<View>(null);
   // 首帧估值（输入行 + 快捷键行），挂载后由 onLayout 量准。
   const [composerDockHeight, setComposerDockHeight] = useState(110 + Math.max(insets.bottom, 12));
-  const [clearDialogVisible, setClearDialogVisible] = useState(false);
+  // 私聊清空确认框：「清除聊天记录」打开时不勾双向，「双向清空」打开时预先勾上。
+  const [clearDialog, setClearDialog] = useState<{ bothSides: boolean } | null>(null);
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -614,6 +615,20 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
 
   const { handleSendSticker } = useStickerSend({ t, inFlightRef, setSendError, mountedRef, sourceID, conversationID, isTempChat, composerLocked, isPreviewMode });
 
+  // 输入栏的「清除聊天记录」：和聊天信息页同一套确认流程。群主判据与会话列表左滑删除
+  // 一致（服务端实时算的 myRole，ownerId 兜底旧 DTO），点的时候才读 store。
+  const handleClearHistory = useCallback(() => {
+    if (!conversationID) return;
+    const raw = useChatStore.getState().conversations.find((item) => item.id === conversationID);
+    confirmClearChatHistory({
+      conversationId: conversationID,
+      isGroupConversation: isGroupChat,
+      canClearGroupForEveryone: raw?.myRole === 'OWNER' || raw?.ownerId === currentUserID,
+      t,
+      openDirectDialog: () => setClearDialog({ bothSides: false }),
+    });
+  }, [conversationID, currentUserID, isGroupChat, t]);
+
   const {
     handleAttachmentAction,
     handlePickFriend,
@@ -838,7 +853,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             handleAttachmentToggle={handleAttachmentToggle}
             handleEmojiToggle={handleEmojiToggle}
             handleAttachmentAction={handleAttachmentAction}
-            onClearHistory={isGroupChat || !conversationID ? undefined : () => setClearDialogVisible(true)}
+            onClearHistory={handleClearHistory}
+            onClearBothSides={isGroupChat || !conversationID ? undefined : () => setClearDialog({ bothSides: true })}
             selection={selection}
             handleSelectionChange={handleSelectionChange}
             handleDraftChange={handleDraftChange}
@@ -890,11 +906,11 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       />
 
       <ClearHistoryDialog
-        visible={clearDialogVisible}
-        defaultBothSides
-        onCancel={() => setClearDialogVisible(false)}
+        visible={clearDialog !== null}
+        defaultBothSides={clearDialog?.bothSides ?? false}
+        onCancel={() => setClearDialog(null)}
         onConfirm={(bothSides) => {
-          setClearDialogVisible(false);
+          setClearDialog(null);
           if (conversationID) void clearDirectChatHistory(conversationID, bothSides, t);
         }}
       />

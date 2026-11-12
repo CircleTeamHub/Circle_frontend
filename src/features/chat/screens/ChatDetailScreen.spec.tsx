@@ -964,6 +964,7 @@ test('the input keeps only the send button; the shortcut row below holds every o
     'icon:document-text-outline',
     'icon:location-outline',
     'icon:trash-outline',
+    'icon:swap-horizontal-outline',
     'icon:happy-outline',
     'icon:add-circle-outline',
   ];
@@ -1006,6 +1007,30 @@ test('group chats have no two-way clear shortcut', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
   expect(screen.queryByLabelText('chat.clearHistoryBothSides')).toBeNull();
+});
+
+test('the clear-history shortcut opens the same unticked dialog as chat info in a direct chat', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+  expect(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' })).not.toBeChecked();
+  expect(clearChatConversationHistory).not.toHaveBeenCalled();
+});
+
+test('the clear-history shortcut lets a group member clear only their own copy', async () => {
+  mockParams = { conversationID: GROUP, sourceID: GROUP, title: 'Group', conversationType: 'group', conversationKind: 'group' };
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+
+  const [title, message, buttons] = alert.mock.calls.at(-1)!;
+  expect([title, message]).toEqual(['chat.clearHistory', 'chat.clearHistoryConfirm']);
+  // Not the owner: no "delete for everyone" option.
+  expect(buttons!.map((button) => button.text)).toEqual(['common.cancel', 'chat.clearHistory']);
+  await act(async () => { buttons![1].onPress!(); });
+  expect(clearChatConversationHistory).toHaveBeenCalledWith(GROUP, { forEveryone: false });
+  alert.mockRestore();
 });
 
 test('the white emoji button switches from voice mode back to an editable draft', async () => {

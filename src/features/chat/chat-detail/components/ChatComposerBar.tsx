@@ -55,8 +55,10 @@ export interface ChatComposerBarProps {
   handleEmojiToggle: () => void;
   /** 快捷键直达「+」面板里的同名入口（多媒体 / 笔记 / 位置）。 */
   handleAttachmentAction: (id: AttachmentId) => void;
+  /** 清除聊天记录快捷键，和聊天信息页的「清空聊天记录」同一套流程。 */
+  onClearHistory: () => void;
   /** 双向清空快捷键；不传就不显示（群聊没有双向清空）。 */
-  onClearHistory?: () => void;
+  onClearBothSides?: () => void;
   selection: { start: number; end: number; } | undefined;
   handleSelectionChange: (event: { nativeEvent: { selection: { start: number; end: number; }; }; }) => void;
   handleDraftChange: (next: string) => void;
@@ -73,7 +75,7 @@ export interface ChatComposerBarProps {
 
 /**
  * 输入栏玻璃卡片:上面是输入框(语音模式换成按住说话条)+ 发送按钮;下面一排快捷键:
- * 语音、多媒体、笔记、位置、双向清空(仅私聊)、表情、「+」面板。
+ * 语音、多媒体、笔记、位置、清除聊天记录、双向清空(仅私聊)、表情、「+」面板。
  */
 export function ChatComposerBar({
   insets,
@@ -99,6 +101,7 @@ export function ChatComposerBar({
   handleEmojiToggle,
   handleAttachmentAction,
   onClearHistory,
+  onClearBothSides,
   selection,
   handleSelectionChange,
   handleDraftChange,
@@ -185,12 +188,19 @@ export function ChatComposerBar({
       onPress: () => handleAttachmentAction('location'),
       disabled: toolDisabled,
     },
-    ...(onClearHistory
+    {
+      key: 'clear-history',
+      icon: 'trash-outline',
+      label: t('chat.clearHistory'),
+      onPress: onClearHistory,
+      disabled: isPreviewMode,
+    },
+    ...(onClearBothSides
       ? [{
           key: 'clear-both-sides',
-          icon: 'trash-outline' as const,
+          icon: 'swap-horizontal-outline' as const,
           label: t('chat.clearHistoryBothSides', { defaultValue: '双向清空' }),
-          onPress: onClearHistory,
+          onPress: onClearBothSides,
           disabled: isPreviewMode,
         }]
       : []),

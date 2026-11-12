@@ -317,13 +317,16 @@ test('only the group owner gets two-way clear while every member controls their 
   assert.match(screen, /const canClearGroupForEveryone = isOwner;/);
   // 焚毁入口:原来只认 canManageGroup,独立群聊的群主永远看不到它。
   assert.match(screen, /onPress=\{handleOpenBurnOptions\}/);
+  // 确认流程在共用函数里(输入栏的清除快捷键也用它),这里把群主判据传进去。
+  assert.match(screen, /confirmClearChatHistory\(\{[\s\S]*?canClearGroupForEveryone,/);
+  const flow = read('src/features/chat/utils/clear-chat-history.ts');
   // 普通成员那条分支:先于双选对话框返回,只留一个「只清我这份」的动作。
   assert.match(
-    screen,
+    flow,
     /if \(!canClearGroupForEveryone\) \{[\s\S]*?clearHistory\(false\)[\s\S]*?return;\s*\n\s*\}/,
   );
-  const memberBranch = screen.slice(
-    screen.indexOf('if (!canClearGroupForEveryone) {'),
+  const memberBranch = flow.slice(
+    flow.indexOf('if (!canClearGroupForEveryone) {'),
   );
   const memberBranchBody = memberBranch.slice(0, memberBranch.indexOf('return;'));
   assert.doesNotMatch(
@@ -332,7 +335,7 @@ test('only the group owner gets two-way clear while every member controls their 
     'member branch must never offer a delete-for-everyone action',
   );
   // 群主的对话框文案要说清两个按钮的区别。
-  assert.match(screen, /t\('chat\.clearHistoryConfirmGroupOwner'\)/);
+  assert.match(flow, /t\('chat\.clearHistoryConfirmGroupOwner'\)/);
 
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));

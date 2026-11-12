@@ -32,7 +32,6 @@ import {
   setGroupChatAvatar,
   setMyGroupChatAlias,
   setMyGroupChatRemark,
-  clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
   refreshChatConversation,
@@ -116,7 +115,7 @@ import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
-import { clearDirectChatHistory } from '@/features/chat/utils/clear-direct-history';
+import { clearDirectChatHistory, confirmClearChatHistory } from '@/features/chat/utils/clear-chat-history';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -1733,63 +1732,14 @@ export default function ChatInfoScreen() {
 
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
-
-    const clearHistory = (forEveryone: boolean) => {
-      void clearChatConversationHistory(resolvedConversationID, {
-        forEveryone,
-      })
-        .then(() => {
-          Alert.alert(
-            forEveryone
-              ? t('chat.clearHistoryDoneDirect', {
-                  defaultValue: '双方聊天记录已删除',
-                })
-              : t('chat.clearHistoryDone'),
-          );
-        })
-        .catch((error: unknown) => {
-          Alert.alert(
-            t('chat.clearHistory'),
-            getApiErrorMessage(error, t('common.networkError')),
-          );
-        });
-    };
-
-    if (isGroupConversation) {
-      // 非群主只能清自己那份,不展示会被服务端拒绝的全群操作。
-      if (!canClearGroupForEveryone) {
-        Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('chat.clearHistory'),
-            style: 'destructive',
-            onPress: () => clearHistory(false),
-          },
-        ]);
-        return;
-      }
-
-      Alert.alert(
-        t('chat.clearHistory'),
-        t('chat.clearHistoryConfirmGroupOwner'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('chat.clearHistoryForMe', { defaultValue: '仅删除我的记录' }),
-            onPress: () => clearHistory(false),
-          },
-          {
-            text: t('chat.clearHistoryForEveryone', { defaultValue: '删除所有人的记录' }),
-            style: 'destructive',
-            onPress: () => clearHistory(true),
-          },
-        ],
-      );
-      return;
-    }
-
-    // 私聊:默认只清自己的;勾「双向清空」再请对方授权清对方那份。
-    setClearDialogVisible(true);
+    // 与输入栏的「清除聊天记录」快捷键共用同一套确认流程。
+    confirmClearChatHistory({
+      conversationId: resolvedConversationID,
+      isGroupConversation,
+      canClearGroupForEveryone,
+      t,
+      openDirectDialog: () => setClearDialogVisible(true),
+    });
   }, [
     canClearGroupForEveryone,
     isGroupConversation,
