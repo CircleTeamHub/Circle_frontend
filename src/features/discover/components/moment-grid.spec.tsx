@@ -33,19 +33,25 @@ test.each([2, 3, 4, 9].flatMap(count => ['images', 'mixed'].map(kind => ({ count
       ...(kind === 'mixed' ? { attachments } : {}),
     } as MomentPost;
     render(<MomentCard post={post} scope="discover" onLike={jest.fn()} onPress={jest.fn()} />);
-    const hosts: { props: { style?: StyleProp<ViewStyle> } }[] = screen.UNSAFE_root.findAll(
-      (item: { type: unknown; props: { accessible?: boolean } }) => typeof item.type === 'string' && item.props.accessible === true,
-    );
-    const widths = hosts.flatMap(item => {
-      const style = StyleSheet.flatten(item.props.style);
-      return typeof style?.width === 'number' && style.width === style.height ? [style.width] : [];
-    });
-    expect(widths).toHaveLength(count);
-    // 390px screen - 48px page padding - 40px avatar - 10px avatar gap.
-    const bodyWidth = 292;
-    for (const width of widths) {
-      expect(width * 3 + 4 * 2).toBeLessThanOrEqual(bodyWidth);
-      expect(width * 4 + 4 * 3).toBeGreaterThan(bodyWidth);
-    }
+    const tiles = screen.UNSAFE_root
+      .findAll((item: Host) => typeof item.type === 'string' && item.props.accessible === true)
+      .filter((item: Host) => hostAncestor(item, (style) => style.aspectRatio === 1));
+    expect(tiles).toHaveLength(count);
+    // Cells share their row's real width instead of a pixel size guessed from the screen.
+    const cells = tiles.map((tile: Host) => hostAncestor(tile, (style) => style.aspectRatio === 1)!);
+    for (const cell of cells) expect(StyleSheet.flatten(cell.props.style)).toMatchObject({ flex: 1 });
+    const rows: (Host | null)[] = cells.map((cell: Host) => hostAncestor(cell, (style) => style.flexDirection === 'row'));
+    expect(new Set(rows).size).toBe(Math.ceil(count / 3));
+    for (const row of new Set(rows)) expect(rows.filter((item) => item === row).length).toBeLessThanOrEqual(3);
   },
 );
+
+type Host = { type: unknown; parent: Host | null; props: { accessible?: boolean; style?: StyleProp<ViewStyle> } };
+
+function hostAncestor(node: Host, match: (style: ViewStyle) => boolean): Host | null {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    const style = StyleSheet.flatten(parent.props.style);
+    if (typeof parent.type === 'string' && style && match(style)) return parent;
+  }
+  return null;
+}

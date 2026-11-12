@@ -1,18 +1,20 @@
 import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import {
   Animated,
   FlatList,
   Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
+  TextInput,
   View,
   type FlatListProps,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
+  type TextInputProps,
   type PanResponderGestureState,
+  type ScrollViewProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -29,6 +31,11 @@ interface BottomSheetModalProps {
   closeOnBackdropPress?: boolean;
   statusBarTranslucent?: boolean;
   avoidKeyboard?: boolean;
+  /**
+   * iOS only (React Native's Modal never fires it on Android): called once the sheet has
+   * fully closed. iOS cannot present another Modal while this one is still dismissing.
+   */
+  onDismiss?: () => void;
 }
 
 // 下拉关闭的判定：拖过面板高度的三成（且至少 120pt）才关；快速下甩要同时
@@ -40,42 +47,97 @@ const DISMISS_FLING_MIN_DISTANCE = 48;
 const DISMISS_DURATION = 180;
 // 判定为下拉手势前要走过的竖向距离，太小会把列表的正常滚动误判成拖面板。
 const DRAG_ACTIVATION_DISTANCE = 10;
-// 下滑关闭默认只认从面板顶部（拖拽条 + 标题行）开始的手势。面板正文里常有
-// ScrollView / 长列表，从正文开始的下拉必须留给它们滚动，不能把整个面板关掉。
+// 顶部把手区（拖拽条 + 标题行）里开始的下拉，任何时候都能拖面板。
 const DISMISS_HANDLE_ZONE = 56;
 // 列表偏移在这个范围内都算「到顶」，吸收 iOS 惯性停靠的亚像素误差。
 const SCROLL_TOP_TOLERANCE = 1;
 
 type BottomSheetScrollContextValue = {
-  onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-  registerScrollable: () => () => void;
+  register: () => number;
+  unregister: (id: number) => void;
+  setOffset: (id: number, offsetY: number) => void;
 };
 
 const BottomSheetScrollContext = createContext<BottomSheetScrollContextValue | null>(null);
 
+type VerticalScrollEvent = { nativeEvent: { contentOffset: { y: number } } };
+
 /**
- * 面板里的列表用它代替 FlatList，面板据此判断列表是否在顶部：
- * 列表没到顶时下滑只滚列表；到顶后从正文任意位置下滑，列表钉住不动、改为拖面板。
- * 没有接入它的面板仍然只能从顶部把手区域拖动关闭。
+ * 面板正文里每个能竖向滚动的东西（列表、ScrollView、多行输入框）都要用它接入：
+ * 返回的 onScroll 挂上去，面板就知道它滚到了哪。只要还有一个没回到顶，正文下拉
+ * 就留给它滚；全部到顶后，从正文任意位置下拉才改为拖面板。没接入的面板正文
+ * 没有可滚的内容，从哪里都能下拉关闭 —— 所以漏接一个列表，它就再也滚不回顶部。
+ * 不在面板里时什么都不做。
+ */
+export function useBottomSheetScrollHandler<E extends VerticalScrollEvent>(
+  onScroll?: (event: E) => void,
+) {
+  const sheet = useContext(BottomSheetScrollContext);
+  const idRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sheet) return;
+    const id = sheet.register();
+    idRef.current = id;
+    return () => {
+      sheet.unregister(id);
+      idRef.current = null;
+    };
+  }, [sheet]);
+  const handleScroll = useCallback((event: E) => {
+    if (sheet && idRef.current !== null) {
+      sheet.setOffset(idRef.current, event.nativeEvent.contentOffset.y);
+    }
+    onScroll?.(event);
+  }, [onScroll, sheet]);
+  return { handleScroll, inSheet: sheet !== null };
+}
+
+/**
+ * 面板里的列表用它代替 FlatList（见 useBottomSheetScrollHandler）。
  * 顶部回弹关掉，否则 iOS 上列表回弹和面板位移会叠在一起往下跑。
  */
 export function BottomSheetFlatList<ItemT>({ onScroll, ...props }: FlatListProps<ItemT>) {
-  const sheetScroll = useContext(BottomSheetScrollContext);
-  useEffect(() => sheetScroll?.registerScrollable(), [sheetScroll]);
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    sheetScroll?.onScroll(event);
-    onScroll?.(event);
-  }, [onScroll, sheetScroll]);
+  const { handleScroll, inSheet } = useBottomSheetScrollHandler(onScroll ?? undefined);
 
   return (
     <FlatList
       {...props}
       onScroll={handleScroll}
-      scrollEventThrottle={sheetScroll ? 16 : props.scrollEventThrottle}
-      bounces={sheetScroll ? false : props.bounces}
-      overScrollMode={sheetScroll ? 'never' : props.overScrollMode}
+      scrollEventThrottle={inSheet ? 16 : props.scrollEventThrottle}
+      bounces={inSheet ? false : props.bounces}
+      overScrollMode={inSheet ? 'never' : props.overScrollMode}
     />
   );
+}
+
+/** 面板里的 ScrollView 用它代替（见 useBottomSheetScrollHandler）。 */
+export function BottomSheetScrollView({
+  onScroll,
+  ref,
+  ...props
+}: ScrollViewProps & { ref?: Ref<ScrollView> }) {
+  const { handleScroll, inSheet } = useBottomSheetScrollHandler(onScroll ?? undefined);
+
+  return (
+    <ScrollView
+      {...props}
+      ref={ref}
+      onScroll={handleScroll}
+      scrollEventThrottle={inSheet ? 16 : props.scrollEventThrottle}
+      bounces={inSheet ? false : props.bounces}
+      overScrollMode={inSheet ? 'never' : props.overScrollMode}
+    />
+  );
+}
+
+/** 面板里的多行输入框用它代替 TextInput：内容超出框高后它自己也会滚（见 useBottomSheetScrollHandler）。 */
+export function BottomSheetTextInput({
+  onScroll,
+  ref,
+  ...props
+}: TextInputProps & { ref?: Ref<TextInput> }) {
+  const { handleScroll } = useBottomSheetScrollHandler(onScroll ?? undefined);
+  return <TextInput {...props} ref={ref} onScroll={handleScroll} />;
 }
 
 const s = StyleSheet.create({
@@ -102,6 +164,7 @@ export function BottomSheetModal({
   closeOnBackdropPress = true,
   statusBarTranslucent = true,
   avoidKeyboard = true,
+  onDismiss,
 }: BottomSheetModalProps) {
   const { colors } = useTheme();
   // 默认就压暗背后的页面:面板常和页面同底色,没有蒙层两者分不出边界。
@@ -117,17 +180,20 @@ export function BottomSheetModal({
   // 位置而不是起点，判断手势从哪开始只能在按下时自己记。
   const touchStartYRef = useRef(0);
   const sheetHeightRef = useRef(0);
-  const scrollOffsetRef = useRef(0);
-  const scrollableCountRef = useRef(0);
+  // 正文里接入的每个可滚内容当前的竖向偏移。
+  const scrollOffsetsRef = useRef(new Map<number, number>());
+  const nextScrollableIdRef = useRef(0);
 
   const canDragFromTouchStart = () => {
     const sheetTop = sheetTopRef.current;
     const startsInHandleZone =
       sheetTop !== null && touchStartYRef.current - sheetTop <= DISMISS_HANDLE_ZONE;
-    // 正文里的列表已接入且滚到顶时，正文下拉也归面板。
-    const listAtTop =
-      scrollableCountRef.current > 0 && scrollOffsetRef.current <= SCROLL_TOP_TOLERANCE;
-    return startsInHandleZone || listAtTop;
+    // 正文里没有可滚内容，或者全都在顶：正文任意位置下拉都归面板。只要有一个还没
+    // 到顶，下拉就留给它滚回去（多个列表时分不清手指在哪个上，宁可只认把手区）。
+    const everyScrollableAtTop = [...scrollOffsetsRef.current.values()].every(
+      (offsetY) => offsetY <= SCROLL_TOP_TOLERANCE,
+    );
+    return startsInHandleZone || everyScrollableAtTop;
   };
   const shouldClaim = (gesture: PanResponderGestureState) =>
     canDragFromTouchStart() &&
@@ -135,14 +201,16 @@ export function BottomSheetModal({
     Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5;
 
   const scrollContext = useMemo<BottomSheetScrollContextValue>(() => ({
-    onScroll: (event) => {
-      scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+    register: () => {
+      nextScrollableIdRef.current += 1;
+      scrollOffsetsRef.current.set(nextScrollableIdRef.current, 0);
+      return nextScrollableIdRef.current;
     },
-    registerScrollable: () => {
-      scrollableCountRef.current += 1;
-      return () => {
-        scrollableCountRef.current -= 1;
-      };
+    unregister: (id) => {
+      scrollOffsetsRef.current.delete(id);
+    },
+    setOffset: (id, offsetY) => {
+      if (scrollOffsetsRef.current.has(id)) scrollOffsetsRef.current.set(id, offsetY);
     },
   }), []);
 
@@ -205,7 +273,6 @@ export function BottomSheetModal({
     if (!visible) return;
 
     dragY.setValue(0);
-    scrollOffsetRef.current = 0;
     progress.setValue(1);
     Animated.timing(progress, {
       toValue: 0,
@@ -248,6 +315,7 @@ export function BottomSheetModal({
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      onDismiss={onDismiss}
       statusBarTranslucent={statusBarTranslucent}
     >
       <View style={s.root}>

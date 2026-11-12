@@ -17,10 +17,46 @@ import {
 } from '@/chat-core/client';
 import { startChatSend } from '@/chat-core/send-handle';
 import { reportChatSendFailure } from '@/chat-core/send-errors';
-import type { NoteSummary } from '@/features/notes/types';
+import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
+import type { NoteDetail, NoteSummary } from '@/features/notes/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { fetchNoteDetail, importNoteChatMedia } from '@/services/api/notes';
 import { devWarn } from '@/utils/dev-log';
+
+/**
+ * 服务端拷进聊天的笔记视频不带封面(笔记里本来也没存),直接发出去气泡是一块黑。
+ * 按拷贝结果里的笔记媒体 id 找到笔记里这条视频的签名地址,截一帧传到自己的 chat/
+ * 目录当封面。封面可有可无:拉不到详情或截帧失败,视频照常发,只是没有封面。
+ * 返回 拷贝后的视频 key → 封面 key。
+ */
+async function uploadImportedVideoPosters(
+  noteId: string,
+  imported: readonly ImportedNoteChatMedia[],
+  detail: NoteDetail | null | undefined,
+): Promise<Map<string, string>> {
+  const posterKeys = new Map<string, string>();
+  const videos = imported.filter((item) => item.type === 'VIDEO');
+  if (videos.length === 0 || detail === null) return posterKeys;
+  let source = detail;
+  if (!source) {
+    try {
+      source = await fetchNoteDetail(noteId);
+    } catch (error) {
+      reportHandledFailure('chatDetail', 'fetchNoteVideoPosterSource', error);
+      return posterKeys;
+    }
+  }
+  const urlById = new Map(source.media.map((media) => [media.id, media.url]));
+  // 逐条截:每次都要起一个解码器,并发起来手机吃不消。
+  for (const video of videos) {
+    const url = urlById.get(video.id);
+    if (!url) continue;
+    const durationSeconds = typeof video.durationMs === 'number' ? video.durationMs / 1000 : undefined;
+    const poster = await uploadChatVideoPoster(url, durationSeconds, video.key.split('/').pop() ?? 'video', 'chat');
+    if (poster) posterKeys.set(video.key, poster.key);
+  }
+  return posterKeys;
+}
 
 export interface SendNotesToConversationInput {
   conversationId: string;
@@ -77,6 +113,8 @@ export async function sendNotesToConversation({
       }
     }
     let location = note.sections?.location ?? null;
+    // undefined = 没拉过,null = 拉失败了(别为封面再撞一次同一个错误)。
+    let detail: NoteDetail | null | undefined;
     if (
       options.location &&
       !resolveSendableNoteLocation(location) &&
@@ -84,17 +122,20 @@ export async function sendNotesToConversation({
       note.hasLocation !== false
     ) {
       try {
-        location = (await fetchNoteDetail(note.id)).sections?.location ?? null;
+        detail = await fetchNoteDetail(note.id);
+        location = detail.sections?.location ?? null;
       } catch (error) {
         // 拉不到详情=这条的地址发不出去。必须计入失败,否则「只勾了地址,
         // 网络一抖」会变成什么都没发还零提示的静默丢失。
+        detail = null;
         failures += 1;
         firstError ??= error;
         location = null;
         reportHandledFailure('chatDetail', 'fetchNoteLocation', error);
       }
     }
-    perNote.push(buildNoteSendTasks(note, options, imported, location));
+    const posterKeys = await uploadImportedVideoPosters(note.id, imported, detail);
+    perNote.push(buildNoteSendTasks(note, options, imported, location, posterKeys));
   }
 
   const tasks = perNote.flat();
@@ -148,6 +189,7 @@ export async function sendNotesToConversation({
           return sendVideoMessage({
             conversationId,
             key: task.key,
+            thumbKey: task.thumbKey,
             width: task.width,
             height: task.height,
             duration: task.duration,

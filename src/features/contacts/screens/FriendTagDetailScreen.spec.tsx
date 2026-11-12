@@ -88,10 +88,11 @@ jest.mock('@/components/ui/nav-header', () => {
 });
 jest.mock('@/components/ui/bottom-sheet-modal', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { View, FlatList } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     BottomSheetModal: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
       visible ? ReactModule.createElement(View, null, children) : null,
+    BottomSheetFlatList: FlatList,
   };
 });
 jest.mock('@/components/ui/keyboard-dismiss', () => ({ keyboardDismissOnDragProps: {} }));

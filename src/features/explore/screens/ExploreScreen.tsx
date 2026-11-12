@@ -1,6 +1,6 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExploreTile } from '@/features/explore/components/explore-tile';
@@ -11,6 +11,13 @@ import {
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Gradients, Spacing, Typography, useTheme } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { useNavigationLock } from '@/hooks/use-navigation-lock';
+import { fetchAssistantBootstrap } from '@/services/api/assistant';
+import { getAssistantChatHref, opensAssistantChatDirectly } from '@/features/assistant/assistant-entry';
+import { useChatStore } from '@/chat-core/store';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
+import type { AssistantBootstrapResponse } from '@/features/assistant/types';
 
 const s = StyleSheet.create({
   // tab 根屏头部：大标题，没有返回箭头（对齐圈子广场 / 联系人）。
@@ -58,9 +65,55 @@ export default function ExploreScreen() {
     router.push('/(tabs)/explore/moments');
   }, [router]);
 
-  const handleOpenAssistant = useCallback(() => {
+  // 小助手要先问清楚去哪(已有订阅直接进聊天,否则走订阅引导)再跳一次。以前总是先推
+  // 引导页、加载完再 replace 成聊天页,看到两次进入动画。这个问题的答案在页面一露面就
+  // 去后台问好,点的时候直接跳;点了才问的话每次都要干等一个请求(约 1 秒)。
+  // 按会话代际记:换账号后不会拿上一个账号的答案。
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const assistantBootstrapRef = useRef<{
+    epoch: number;
+    request: Promise<AssistantBootstrapResponse>;
+    result?: AssistantBootstrapResponse;
+  } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const previous = assistantBootstrapRef.current;
+      const entry = {
+        epoch: sessionEpoch,
+        request: fetchAssistantBootstrap(),
+        // 刷新期间先用同一会话上次的答案,点了照样马上跳。
+        result: previous?.epoch === sessionEpoch ? previous.result : undefined,
+      };
+      entry.request.then(
+        (result) => {
+          entry.result = result;
+        },
+        // 预取失败不打扰:点的时候会再等这个请求、失败了落到引导页。
+        () => undefined,
+      );
+      assistantBootstrapRef.current = entry;
+    }, [sessionEpoch]),
+  );
+
+  // 偶尔还要等那个请求(刚进页面就点),所以用回到本页才解锁的锁防连点。
+  const assistantLock = useNavigationLock();
+  const handleOpenAssistant = useCallback(async () => {
+    if (!assistantLock.tryLock()) return;
+    const cached =
+      assistantBootstrapRef.current?.epoch === sessionEpoch ? assistantBootstrapRef.current : null;
+    try {
+      const bootstrap = cached?.result ?? (await (cached?.request ?? fetchAssistantBootstrap()));
+      if (opensAssistantChatDirectly(bootstrap)) {
+        useChatStore.getState().mergeConversationSnapshot(bootstrap.conversation);
+        router.push(getAssistantChatHref('explore', bootstrap));
+        return;
+      }
+    } catch (error) {
+      // 拉不到就交给引导页：它会自己重试并显示错误。
+      reportHandledFailure('assistant', 'exploreBootstrap', error);
+    }
     router.push('/(tabs)/explore/assistant');
-  }, [router]);
+  }, [assistantLock, router, sessionEpoch]);
 
   const momentsTitle = t('discover.moments');
   const assistantTitle = t('assistant.name');

@@ -17,7 +17,11 @@ async function generateChatVideoPoster(
 ): Promise<{ uri: string } | null> {
   let player: VideoPlayer | null = null;
   try {
-    player = createVideoPlayer(uri);
+    // Load the item before grabbing a frame. iOS `createVideoPlayer(uri)` attaches the item in
+    // a background task; asking for thumbnails before it lands returns [] (no currentItem), so
+    // every iOS video went out without a poster and showed as a black bubble.
+    player = createVideoPlayer(null);
+    await player.replaceAsync(uri);
     const at =
       typeof durationSeconds === 'number' && durationSeconds > 1
         ? POSTER_FRAME_SECONDS

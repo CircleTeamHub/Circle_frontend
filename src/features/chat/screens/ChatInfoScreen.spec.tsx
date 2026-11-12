@@ -6,7 +6,9 @@ import ChatInfoScreen from './ChatInfoScreen';
 import { createCircleChatConversation, fetchChatMembers, refreshChatConversation } from '@/chat-core/api';
 import type { ChatConversationDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
+import { Spacing } from '@/theme/tokens';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { readGroupInfoCache, writeGroupInfoCache } from '@/features/chat/group-info-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -41,13 +43,28 @@ jest.mock('react-i18next', () => ({
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/theme', () => ({
-  Radius: {}, Spacing: {}, Typography: {},
+  Radius: {}, Spacing: jest.requireActual('@/theme/tokens').Spacing, Typography: {},
   useTheme: () => ({ colors: {} }),
 }));
-jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/ui/avatar', () => ({ Avatar: jest.fn(() => null) }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: jest.fn(() => null) }));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
-jest.mock('@/components/ui/menu-row', () => ({ MenuRow: () => null }));
+// Group and direct info pages both use MenuRow: render what a user sees and can tap.
+jest.mock('@/components/ui/menu-row', () => {
+  const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    MenuRow: ({ label, subtitle, rightText, rightElement, onPress }: {
+      label: string; subtitle?: string; rightText?: string; rightElement?: React.ReactNode; onPress?: () => void;
+    }) => (
+      <Pressable onPress={onPress} disabled={!onPress}>
+        <Text>{label}</Text>
+        {subtitle ? <Text>{subtitle}</Text> : null}
+        {rightText ? <Text>{rightText}</Text> : null}
+        {rightElement}
+      </Pressable>
+    ),
+  };
+});
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/components/ui/option-picker-sheet', () => ({ OptionPickerSheet: () => null }));
 jest.mock('@/components/ui/themed-switch', () => ({ ThemedSwitch: () => null }));
@@ -313,4 +330,22 @@ test('warmed members remain hidden when the current roster policy forbids them',
   writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
   render(<ChatInfoScreen />);
   expect(screen.queryByText('Live member')).toBeNull();
+});
+
+test('member avatars fit inside their cells on a narrow folding-phone cover screen', () => {
+  const native = jest.requireActual<typeof import('react-native')>('react-native');
+  jest.spyOn(native, 'useWindowDimensions').mockReturnValue({ width: 344, height: 882, scale: 2.625, fontScale: 1 });
+  useChatStore.setState({ conversations: [standaloneConversation] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  expect(screen.getByText('Live member')).toBeTruthy();
+
+  // Five columns share the card's inner width: page padding (lg) plus card padding (sm) per side.
+  const cellWidth = (344 - 2 * (Spacing.lg + Spacing.sm)) / 5;
+  const sizes = jest.mocked(Avatar).mock.calls
+    .filter(([props]) => props.shape === 'square')
+    .map(([props]) => props.size ?? 0);
+  expect(sizes.length).toBeGreaterThan(0);
+  // A fixed 56pt avatar used to be wider than its ~53pt cell there, so neighbours overlapped.
+  for (const size of sizes) expect(size).toBeLessThan(cellWidth);
 });

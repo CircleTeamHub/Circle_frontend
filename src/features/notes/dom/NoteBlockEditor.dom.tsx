@@ -8,6 +8,7 @@ import {
   buildPendingEditorBlocks,
   resolveMediaInsertAnchor,
 } from '../utils/note-media-upload';
+import { routeMultilineTextInputToPaste } from '../utils/note-editor-text-input';
 import {
   BlockNoteViewRaw,
   useCreateBlockNote,
@@ -49,6 +50,13 @@ interface Props {
   toolbarLabels: NoteEditorToolbarLabels;
   mediaToolbarEnabled?: boolean;
   editable?: boolean;
+  backgroundColor?: string;
+  /**
+   * Reports the rendered content height so the native side can size the
+   * WebView to its content. When set, the editor lays out in normal flow
+   * instead of filling a fixed-height viewport.
+   */
+  onContentHeightChange?: (height: number) => void;
 }
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
@@ -82,6 +90,8 @@ export default function NoteBlockEditor({
   toolbarLabels,
   mediaToolbarEnabled = true,
   editable = true,
+  backgroundColor,
+  onContentHeightChange,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
     if (!initialContent) return undefined;
@@ -113,8 +123,7 @@ export default function NoteBlockEditor({
     dictionary: language === 'zh' ? zh : en,
     // The slash menu is intentionally disabled below because the DOM bridge
     // does not provide BlockNote's ComponentsContext. Keep every editor
-    // placeholder empty so the text area stays visually quiet; formatting
-    // uses the native H/T/list controls.
+    // placeholder empty so the text area stays visually quiet.
     placeholders: {
       default: '',
       emptyDocument: '',
@@ -188,6 +197,39 @@ export default function NoteBlockEditor({
     };
   }, []);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Capture phase on the wrapper runs before ProseMirror sees the event, so a
+  // multi-line IME commit is cancelled before Chromium splits the DOM.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const handleBeforeInput = (event: InputEvent) => {
+      routeMultilineTextInputToPaste(event, (text) => editor.pasteText(text));
+    };
+    root.addEventListener('beforeinput', handleBeforeInput, true);
+    return () => root.removeEventListener('beforeinput', handleBeforeInput, true);
+  }, [editor]);
+
+  // Bridge function props are re-proxied on every native render; read the
+  // latest through a ref so the observer is set up once.
+  const onContentHeightChangeRef = useRef(onContentHeightChange);
+  onContentHeightChangeRef.current = onContentHeightChange;
+  const fitsContent = onContentHeightChange != null;
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!fitsContent || !root) return;
+    let reportedHeight = -1;
+    const observer = new ResizeObserver(() => {
+      const height = Math.ceil(root.getBoundingClientRect().height);
+      if (height === reportedHeight) return;
+      reportedHeight = height;
+      onContentHeightChangeRef.current?.(height);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [fitsContent]);
+
   // A batch is inserted in one call so every item stays anchored after the
   // original cursor block in the same order the picker returned it.
   useEffect(() => {
@@ -212,7 +254,7 @@ export default function NoteBlockEditor({
   }
 
   const isDark = theme === 'dark';
-  const bg = isDark ? '#000000' : '#ffffff';
+  const bg = backgroundColor ?? (isDark ? '#000000' : '#ffffff');
   const border = isDark ? '#48484A' : '#E5E7EB';
   const toolbarBg = isDark ? '#000000' : '#ffffff';
   const iconColor = isDark ? '#FFFFFF' : '#6B7280';
@@ -227,21 +269,32 @@ export default function NoteBlockEditor({
 
   return (
     <div
+      ref={rootRef}
       className="note-editor"
-      style={{
-        // Expo DOM mounts this content with no html/body/#root height, so a
-        // `height: 100%` here can't resolve and the flex column collapses to
-        // content size (the editor shrinks into a small box). Pin to the
-        // WebView viewport instead so it always fills the available area.
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        backgroundColor: bg,
-      }}
+      style={
+        fitsContent
+          ? // Normal flow so the root's height is the content height that
+            // gets reported; past the native cap the page itself scrolls.
+            { display: 'flex', flexDirection: 'column', backgroundColor: bg }
+          : {
+              // Expo DOM mounts this content with no html/body/#root height, so a
+              // `height: 100%` here can't resolve and the flex column collapses to
+              // content size (the editor shrinks into a small box). Pin to the
+              // WebView viewport instead so it always fills the available area.
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              backgroundColor: bg,
+            }
+      }
     >
       <style>{`
+        html, body {
+          margin: 0;
+          background-color: ${bg};
+        }
         .note-editor .bn-container {
           flex: 1;
           display: flex;
@@ -258,15 +311,19 @@ export default function NoteBlockEditor({
         }
       `}</style>
       {/* Editor scroll area */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
-        overflowY: 'auto',
-        overscrollBehaviorY: 'contain',
-        WebkitOverflowScrolling: 'touch',
-      }}>
+      <div style={
+        fitsContent
+          ? { display: 'flex', flexDirection: 'column' }
+          : {
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              overflowY: 'auto',
+              overscrollBehaviorY: 'contain',
+              WebkitOverflowScrolling: 'touch',
+            }
+      }>
         <BlockNoteViewRaw
           editor={editor}
           editable={editable}
@@ -287,122 +344,125 @@ export default function NoteBlockEditor({
         />
       </div>
 
-      {/* Custom bottom toolbar */}
-      <div
-        style={{
-          pointerEvents: editable ? 'auto' : 'none',
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          borderTop: `1px solid ${border}`,
-          padding: '4px 8px',
-          gap: 4,
-          backgroundColor: toolbarBg,
-          flexShrink: 0,
-        }}
-      >
-        {TYPES.map((item) => {
-          const isActive = activeType === item.type;
-          return (
-            <button
-              disabled={!editable}
-              key={item.type}
-              onClick={() => applyType(item.type)}
-              title={item.title}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: 700,
-                fontFamily: 'system-ui, sans-serif',
-                background: isActive ? activeColor : 'transparent',
-                color: isActive ? '#ffffff' : iconColor,
-                transition: 'background 0.15s',
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-
-        {mediaToolbarEnabled ? (
-          <>
-            {/* Image — triggers native picker. Uses an SVG icon rather than a CJK
-                glyph so it renders consistently regardless of the WebView's font
-                fallback (a '图' label showed as tofu on some devices). */}
-            <button
-              onClick={onImageRequest}
-              disabled={!editable}
-              title={toolbarLabels.imageTitle}
-              aria-label={toolbarLabels.imageTitle}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '6px 12px',
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                background: 'transparent',
-                color: iconColor,
-              }}
-            >
-              <svg
-                width={18}
-                height={18}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+      {/* Custom bottom toolbar. The fit-to-content variant is the compact
+          composer bar and carries no chrome. */}
+      {fitsContent ? null : (
+        <div
+          style={{
+            pointerEvents: editable ? 'auto' : 'none',
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderTop: `1px solid ${border}`,
+            padding: '4px 8px',
+            gap: 4,
+            backgroundColor: toolbarBg,
+            flexShrink: 0,
+          }}
+        >
+          {TYPES.map((item) => {
+            const isActive = activeType === item.type;
+            return (
+              <button
+                disabled={!editable}
+                key={item.type}
+                onClick={() => applyType(item.type)}
+                title={item.title}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: 'system-ui, sans-serif',
+                  background: isActive ? activeColor : 'transparent',
+                  color: isActive ? '#ffffff' : iconColor,
+                  transition: 'background 0.15s',
+                }}
               >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </button>
+                {item.label}
+              </button>
+            );
+          })}
 
-            {/* Video — triggers native picker, mirrors the image flow. */}
-            <button
-              onClick={onVideoRequest}
-              disabled={!editable}
-              title={toolbarLabels.videoTitle}
-              aria-label={toolbarLabels.videoTitle}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '6px 12px',
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                background: 'transparent',
-                color: iconColor,
-              }}
-            >
-              <svg
-                width={18}
-                height={18}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          {mediaToolbarEnabled ? (
+            <>
+              {/* Image — triggers native picker. Uses an SVG icon rather than a CJK
+                  glyph so it renders consistently regardless of the WebView's font
+                  fallback (a '图' label showed as tofu on some devices). */}
+              <button
+                onClick={onImageRequest}
+                disabled={!editable}
+                title={toolbarLabels.imageTitle}
+                aria-label={toolbarLabels.imageTitle}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  color: iconColor,
+                }}
               >
-                <path d="M23 7l-7 5 7 5V7z" />
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
-            </button>
-          </>
-        ) : null}
+                <svg
+                  width={18}
+                  height={18}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              </button>
 
-      </div>
+              {/* Video — triggers native picker, mirrors the image flow. */}
+              <button
+                onClick={onVideoRequest}
+                disabled={!editable}
+                title={toolbarLabels.videoTitle}
+                aria-label={toolbarLabels.videoTitle}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  color: iconColor,
+                }}
+              >
+                <svg
+                  width={18}
+                  height={18}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M23 7l-7 5 7 5V7z" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+              </button>
+            </>
+          ) : null}
+
+        </div>
+      )}
     </div>
   );
 }

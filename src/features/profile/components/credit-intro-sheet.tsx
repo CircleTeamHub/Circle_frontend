@@ -1,4 +1,4 @@
-import { BottomSheetModal } from "@/components/ui/bottom-sheet-modal";
+import { BottomSheetModal, BottomSheetScrollView } from "@/components/ui/bottom-sheet-modal";
 import {
   CREDIT_TIERS,
   getCreditTierRange,
@@ -10,7 +10,6 @@ import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -211,7 +210,7 @@ export function CreditIntroSheet({ visible, currentTier, onClose }: CreditIntroS
             <Ionicons name="close" size={18} color={d.colors.textSecondary} />
           </Pressable>
         </View>
-        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+        <BottomSheetScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
           <View style={s.body}>
             {/* 放在最前面：打开就能看到，不必滚动。 */}
             <View style={[s.note, d.note]}>
@@ -252,7 +251,7 @@ export function CreditIntroSheet({ visible, currentTier, onClose }: CreditIntroS
               </IntroSection>
             ))}
           </View>
-        </ScrollView>
+        </BottomSheetScrollView>
       </View>
     </BottomSheetModal>
   );

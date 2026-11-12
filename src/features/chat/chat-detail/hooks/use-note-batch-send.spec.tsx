@@ -1,7 +1,8 @@
 import { startChatSend } from '@/chat-core/send-handle';
-import { sendCardMessage, sendLocationMessage } from '@/chat-core/client';
+import { sendCardMessage, sendLocationMessage, sendVideoMessage } from '@/chat-core/client';
 import { fetchNoteDetail, getCachedNoteDetail, importNoteChatMedia } from '@/services/api/notes';
 import { showTopNotice } from '@/components/app/top-notice-store';
+import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import type { NoteCardData } from '@/types';
 import { act, renderHook } from '@testing-library/react-native';
 import type { NoteSummary } from '@/features/notes/types';
@@ -24,6 +25,7 @@ jest.mock('@/chat-core/send-handle', () => ({
   startChatSend: jest.fn(),
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('@/features/chat/utils/chat-video-poster', () => ({ uploadChatVideoPoster: jest.fn() }));
 jest.mock('@/chat-core/send-errors', () => ({
   getChatSendErrorMessage: jest.fn((_error: unknown, fallback: string) => fallback),
   reportChatSendFailure: jest.fn(),
@@ -67,7 +69,7 @@ const create = (conversationID: string) => renderHook(() => useNoteBatchSend({
   conversationID,
   isPreviewMode: false,
 }));
-const cardOnly = { card: true, media: false, showcase: false, location: false };
+const cardOnly = { card: true, showcase: false, location: false };
 
 test('a closed or off-shelf note is sent straight away without a status warning', async () => {
   const hook = create('conversation-a');
@@ -193,6 +195,63 @@ describe('handleSendNoteSection', () => {
     jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
     await act(async () => { await hook.result.current.handleSendNoteSection(card, 'media'); });
     expect(importNoteChatMedia).toHaveBeenCalledTimes(2);
+  });
+
+  describe('videos copied from the note', () => {
+    const copied = {
+      items: [{ id: 'media-1', section: 'showcase', type: 'VIDEO', key: 'chat/me/note-import/abc.mp4', durationMs: 14000 }],
+    };
+    const withVideo = {
+      ...note,
+      media: [{ id: 'media-1', type: 'VIDEO', objectKey: 'notes/me/clip.mp4', url: 'https://cdn.test/notes/clip.mp4?sig=1' }],
+    };
+    const send = async (setSendError = jest.fn()) => {
+      const hook = renderHook(() => useNoteBatchSend({
+        t: ((key: string) => key) as never,
+        authUser: null,
+        setSendError,
+        mountedRef: { current: true },
+        sourceID: 'source-a',
+        conversationID: 'conversation-a',
+        isPreviewMode: false,
+      }));
+      await act(async () => { await hook.result.current.handleSendNoteSection(card, 'showcase'); });
+    };
+
+    // 服务端拷贝不带封面,不现截一帧的话气泡就是一块黑。
+    test('get a poster captured from the note\'s own copy of the video', async () => {
+      jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
+      jest.mocked(fetchNoteDetail).mockResolvedValueOnce(withVideo as never);
+      jest.mocked(uploadChatVideoPoster).mockResolvedValueOnce({ key: 'chat/me/poster-abc.jpg' });
+      await send();
+      expect(fetchNoteDetail).toHaveBeenCalledTimes(1);
+      expect(uploadChatVideoPoster).toHaveBeenCalledWith('https://cdn.test/notes/clip.mp4?sig=1', 14, 'abc.mp4', 'chat');
+      expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({
+        key: 'chat/me/note-import/abc.mp4',
+        thumbKey: 'chat/me/poster-abc.jpg',
+      }));
+    });
+
+    test('still go out, just without a poster, when the note cannot be loaded', async () => {
+      jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
+      jest.mocked(fetchNoteDetail).mockRejectedValueOnce(new Error('offline'));
+      const setSendError = jest.fn();
+      await send(setSendError);
+      expect(uploadChatVideoPoster).not.toHaveBeenCalled();
+      expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({
+        key: 'chat/me/note-import/abc.mp4',
+        thumbKey: undefined,
+      }));
+      expect(setSendError).not.toHaveBeenCalled();
+    });
+
+    test('still go out without a poster when no frame can be captured', async () => {
+      jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
+      jest.mocked(fetchNoteDetail).mockResolvedValueOnce(withVideo as never);
+      jest.mocked(uploadChatVideoPoster).mockResolvedValueOnce(null);
+      await send();
+      expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({ thumbKey: undefined }));
+    });
   });
 
   test('a note that cannot be loaded for its location reports a send error and sends nothing', async () => {

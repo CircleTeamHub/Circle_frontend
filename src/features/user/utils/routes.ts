@@ -478,6 +478,14 @@ export function getChatBackgroundHref(
   };
 }
 
+/** 群公告详情页(只读;群主/管理员在页里再进编辑页)。公告正文按会话 id 从 store 实时读。 */
+export function getGroupNoticeHref(scope: UserProfileScope, conversationID: string): Href {
+  return {
+    pathname: `/(tabs)/${scope}/group-notice`,
+    params: { conversationID },
+  } as unknown as Href;
+}
+
 export function getEditGroupNoticeHref(
   scope: UserProfileScope,
   params: {

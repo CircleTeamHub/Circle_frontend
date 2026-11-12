@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
-import { prepareChatVideoForUpload } from './chat-video-compress';
+import { isChatVideoCompressionAvailable, prepareChatVideoForUpload } from './chat-video-compress';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 jest.mock('expo', () => ({ requireOptionalNativeModule: jest.fn() }));
@@ -18,8 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test.each(['android', 'ios'] as const)('uses %s output dimensions, byte count and MP4 type, then releases only its owned output', async (os) => {
-  jest.replaceProperty(Platform, 'OS', os);
+test('uses Android output dimensions, byte count and MP4 type, then releases only its owned output', async () => {
   const prepared = await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime');
   expect(native.compress).toHaveBeenCalledWith(source.uri);
   expect(prepared).toMatchObject({ asset: { uri: output.uri, width: 720, height: 1280, fileSize: 1_000_000, duration: 8_000 }, filename: 'original.mp4', contentType: 'video/mp4' });
@@ -27,10 +26,25 @@ test.each(['android', 'ios'] as const)('uses %s output dimensions, byte count an
   expect(native.release).toHaveBeenCalledWith(output.id);
 });
 
-test.each(['android', 'ios', 'web'] as const)('keeps sending the original on %s when the binary has no native module', async (os) => {
-  jest.replaceProperty(Platform, 'OS', os);
-  jest.mocked(requireOptionalNativeModule).mockReturnValueOnce(null);
+test('compresses on iOS through the same native contract', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  const prepared = await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime');
+  expect(native.compress).toHaveBeenCalledWith(source.uri);
+  expect(prepared).toMatchObject({ asset: { uri: output.uri }, filename: 'original.mp4', contentType: 'video/mp4' });
+  expect(isChatVideoCompressionAvailable()).toBe(true);
+});
+
+test('preserves the existing web pipeline without loading a native module', async () => {
+  jest.replaceProperty(Platform, 'OS', 'web');
   expect(await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).toEqual({ asset: source, filename: 'original.mov', contentType: 'video/quicktime' });
+  expect(isChatVideoCompressionAvailable()).toBe(false);
+  expect(requireOptionalNativeModule).not.toHaveBeenCalled();
+});
+
+test('allows an older binary without the native module to keep sending', async () => {
+  jest.mocked(requireOptionalNativeModule).mockReturnValue(null);
+  expect((await prepareChatVideoForUpload(source, 'original.mov', 'video/quicktime')).asset).toBe(source);
+  expect(isChatVideoCompressionAvailable()).toBe(false);
 });
 
 test('keeps the original when native compression reports no useful size reduction', async () => {

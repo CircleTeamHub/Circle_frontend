@@ -1,0 +1,31 @@
+diff --git a/node_modules/expo-blur/android/src/main/java/expo/modules/blur/ExpoBlurTargetView.kt b/node_modules/expo-blur/android/src/main/java/expo/modules/blur/ExpoBlurTargetView.kt
+index 0ebcd94..f3b83f3 100644
+--- a/node_modules/expo-blur/android/src/main/java/expo/modules/blur/ExpoBlurTargetView.kt
++++ b/node_modules/expo-blur/android/src/main/java/expo/modules/blur/ExpoBlurTargetView.kt
+@@ -91,6 +91,26 @@ class ExpoBlurTargetView(context: Context, appContext: AppContext) : ExpoView(co
+
+   override fun removeAllViewsInLayout() = blurTargetView.removeAllViewsInLayout()
+
++  // react-native-screens keeps a leaving screen drawn by calling startViewTransition on every
++  // child it sees through getChildAt. Those children really live in blurTargetView, so the
++  // mark must land there too; otherwise Fabric's removeViewAt (forwarded above) drops them at
++  // once and the content goes blank for the whole back animation.
++  override fun startViewTransition(view: View?) {
++    if (view === blurTargetView) {
++      super.startViewTransition(view)
++      return
++    }
++    blurTargetView.startViewTransition(view)
++  }
++
++  override fun endViewTransition(view: View?) {
++    if (view === blurTargetView) {
++      super.endViewTransition(view)
++      return
++    }
++    blurTargetView.endViewTransition(view)
++  }
++
+   override fun getChildCount(): Int = blurTargetView.childCount
+
+   override fun getChildAt(index: Int): View? = blurTargetView.getChildAt(index)

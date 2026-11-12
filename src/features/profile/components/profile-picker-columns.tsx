@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { CITY_PROVINCES } from '@/features/profile/city-options';
@@ -49,7 +50,7 @@ function PickerColumnInner<T extends string | number>({
   const { colors } = useTheme();
   return (
     <View style={s.column}>
-      <ScrollView
+      <BottomSheetScrollView
         style={[s.list, { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceBorder }]}
         nestedScrollEnabled
       >
@@ -76,7 +77,7 @@ function PickerColumnInner<T extends string | number>({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </BottomSheetScrollView>
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useMediaSend, type MediaSendParams } from './use-media-send';
 import { requestUploadPresign, uploadLocalFileToPresignedUrl } from '@/services/api/upload';
-import { assertMediaSendSessionCurrent, sendImageMessage, sendVideoMessage } from '@/chat-core/client';
+import { assertMediaSendSessionCurrent, failMediaSend, sendImageMessage, sendVideoMessage } from '@/chat-core/client';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
@@ -20,7 +20,10 @@ jest.mock('@/services/api/upload', () => ({
 jest.mock('@/features/chat/utils/image-thumbnail', () => ({ uploadChatImageThumbnail: jest.fn(async () => null) }));
 jest.mock('@/features/chat/utils/chat-image-compress', () => ({ prepareChatImageForUpload: jest.fn(async (asset: object) => asset) }));
 jest.mock('@/features/chat/utils/chat-video-poster', () => ({ uploadChatVideoPoster: jest.fn(async () => null) }));
-jest.mock('@/features/chat/utils/chat-video-compress', () => ({ prepareChatVideoForUpload: jest.fn() }));
+jest.mock('@/features/chat/utils/chat-video-compress', () => ({
+  isChatVideoCompressionAvailable: jest.fn(() => true),
+  prepareChatVideoForUpload: jest.fn(),
+}));
 jest.mock('@/components/app/top-notice-store', () => ({ hideTopNotice: jest.fn(), showTopNotice: jest.fn() }));
 jest.mock('@/chat-core/client', () => ({
   assertMediaSendSessionCurrent: jest.fn(),
@@ -171,6 +174,20 @@ test('rechecks the session after compression and cleans the output without start
   expect(requestUploadPresign).not.toHaveBeenCalled();
   expect(uploadLocalFileToPresignedUrl).not.toHaveBeenCalled();
   expect(sendVideoMessage).not.toHaveBeenCalled();
+  expect(cleanup).toHaveBeenCalledTimes(1);
+});
+
+test('a video still over the limit after compression fails before upload with a specific message', async () => {
+  const cleanup = jest.fn(async () => undefined);
+  const oversized = { ...compressedAsset, fileSize: 100 * 1024 * 1024 + 1 };
+  jest.mocked(prepareChatVideoForUpload).mockResolvedValueOnce({ asset: oversized, filename: 'original.mp4', contentType: 'video/mp4', cleanup });
+  renderHook(() => useMediaSend(params));
+  await act(async () => params.reuploadPendingMediaRef.current!(retryVideo as never));
+  expect(requestUploadPresign).not.toHaveBeenCalled();
+  expect(uploadLocalFileToPresignedUrl).not.toHaveBeenCalled();
+  expect(sendVideoMessage).not.toHaveBeenCalled();
+  expect(failMediaSend).toHaveBeenCalledWith('conversation', retryVideo.deliveryId);
+  expect(params.setSendError).toHaveBeenCalledWith('chat.detail.videoTooLarge');
   expect(cleanup).toHaveBeenCalledTimes(1);
 });
 

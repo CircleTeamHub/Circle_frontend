@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCheck, Search } from 'lucide-react-native';
+import { Blend, CheckCheck, Search } from 'lucide-react-native';
 import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
@@ -56,7 +56,7 @@ jest.mock('@/hooks/use-desktop-split-layout', () => ({ useDesktopSplitLayout: ()
 jest.mock('@/features/messages/store/use-message-groups-store', () => ({ useMessageGroupsStore: (selector: (state: unknown) => unknown) => selector({ groups: [], filterOrder: [] }) }));
 jest.mock('@/features/profile/store/use-app-settings-store', () => ({ useAppSettingsStore: (selector: (state: unknown) => unknown) => selector({ pinnedFoldCount: mockPinnedFoldCount }) }));
 jest.mock('@/stores/splitPaneStore', () => ({ useSplitPaneStore: (selector: (state: unknown) => unknown) => selector({ listPaneWidth: 320 }) }));
-jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: (selector: (state: unknown) => unknown) => selector({ setMessagesUnread: mockSetUnread }) }));
+jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: (selector: (state: unknown) => unknown) => selector({ setMessagesUnread: mockSetUnread, circleUnread: 2, signupUnread: 1 }) }));
 jest.mock('@/features/chat/screens/ChatDetailScreen', () => () => null);
 jest.mock('@/features/chat/components/ChatConnectionBanner', () => ({ ChatConnectionBanner: () => null }));
 jest.mock('@/components/app/split-pane-resizer', () => ({ SplitPaneResizer: () => null }));
@@ -206,6 +206,15 @@ test('switching accounts exits selection and restores tab navigation', () => {
   view.rerender(<MessagesScreen />);
   expect(screen.queryByRole('checkbox')).toBeNull();
   expect(mockSetTabOptions).toHaveBeenLastCalledWith({ tabBarStyle: undefined });
+});
+
+test('the header circle button opens circle notifications inside the messages tab', () => {
+  render(<MessagesScreen />);
+  // Same size and stroke as the neighbouring double-check icon.
+  expect(screen.UNSAFE_getByType(Blend).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
+  fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
+  // Stays in the messages stack so back returns here, not to the circle tab.
+  expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });
 });
 
 test('header double check enters selection without reading chats or navigating', () => {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,7 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -191,7 +190,7 @@ export default function CreateTempChatModal({
       backdropStyle={d.backdrop}
       sheetStyle={[s.card, d.card]}
     >
-      <ScrollView
+      <BottomSheetScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
@@ -256,7 +255,7 @@ export default function CreateTempChatModal({
             <Text style={d.submitText}>{t('tempChats.submit')}</Text>
           )}
         </Pressable>
-      </ScrollView>
+      </BottomSheetScrollView>
     </BottomSheetModal>
   );
 }

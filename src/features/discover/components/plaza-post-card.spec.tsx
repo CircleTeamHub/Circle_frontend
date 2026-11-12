@@ -2,7 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
-import { signupForPost } from '@/services/api/plaza';
+import { cancelSignup, signupForPost } from '@/services/api/plaza';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
@@ -16,7 +17,14 @@ jest.mock('react-i18next', () => ({
       (options?.defaultValue ?? key).replace('{{count}}', String(options?.count ?? '')),
   }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), navigate: jest.fn() }) }));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, navigate: jest.fn() }),
+  // The card's screen never regains focus in these tests, so a navigation lock stays held.
+  useFocusEffect: jest.fn(),
+}));
+jest.mock('@/chat-core/client', () => ({ ensureDirectConversation: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: (selector: (s: { user: { id: string } }) => unknown) => selector({ user: { id: mockUserId } }),
@@ -75,6 +83,45 @@ const post: CirclePlazaPost = {
 
 beforeEach(() => {
   mockUserId = 'me';
+  mockPush.mockReset();
+  jest.mocked(ensureDirectConversation).mockReset().mockResolvedValue({ conversationID: 'dm-author' } as never);
+  jest.mocked(signupForPost).mockReset();
+  jest.mocked(cancelSignup).mockReset();
+});
+
+const pressSignup = async () => {
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('plaza-card-signup'));
+  });
+};
+
+test('signing up opens the chat with the poster in the same tab stack', async () => {
+  jest.mocked(signupForPost).mockResolvedValueOnce({ signed: true, signupCount: 1 });
+  render(<PlazaPostCard post={post} scope="discover" />);
+  await pressSignup();
+  expect(ensureDirectConversation).toHaveBeenCalledWith('author');
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/discover/chat-detail',
+    params: { sourceID: 'author', conversationType: 'private', title: '丁哥只认钱', conversationID: 'dm-author' },
+  });
+});
+
+test('a tap during the jump to the chat does not cancel the fresh signup', async () => {
+  jest.mocked(signupForPost).mockResolvedValueOnce({ signed: true, signupCount: 1 });
+  render(<PlazaPostCard post={post} />);
+  await pressSignup();
+  await pressSignup();
+  expect(cancelSignup).not.toHaveBeenCalled();
+  expect(mockPush).toHaveBeenCalledTimes(1);
+});
+
+test('cancelling a signup stays on the post', async () => {
+  jest.mocked(cancelSignup).mockResolvedValueOnce({ signed: false, signupCount: 0 });
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  await pressSignup();
+  expect(cancelSignup).toHaveBeenCalledWith('p1');
+  expect(ensureDirectConversation).not.toHaveBeenCalled();
+  expect(mockPush).not.toHaveBeenCalled();
 });
 
 test('opens a video-only circle post in the media viewer', () => {

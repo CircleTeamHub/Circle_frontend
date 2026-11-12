@@ -83,9 +83,12 @@ test('group chat offers local and two-sided deletion plus management log access'
   const logRoute = read('app/(tabs)/messages/group-log.tsx');
   const api = read('src/chat-core/api.ts');
 
-  assert.match(info, /clearHistoryForMe/);
-  assert.match(info, /clearHistoryForEveryone/);
-  assert.match(info, /forEveryone/);
+  // 确认流程在聊天信息页和输入栏快捷键共用的函数里。
+  assert.match(info, /confirmClearChatHistory\(/);
+  const clearFlow = read('src/features/chat/utils/clear-chat-history.ts');
+  assert.match(clearFlow, /clearHistoryForMe/);
+  assert.match(clearFlow, /clearHistoryForEveryone/);
+  assert.match(clearFlow, /forEveryone/);
   assert.match(api, /pendingHistoryClears/);
   assert.match(api, /targetHeight/);
   // 本地水位未知时必须**不带** targetHeight：服务端对 undefined 退到会话顶端，

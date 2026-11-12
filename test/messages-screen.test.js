@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-test('messages screen renders pinned conversations as compact grouped surfaces without a pin icon', () => {
+test('messages screen renders pinned conversations as full-width strips without a pin icon', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
@@ -12,32 +12,25 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /pinnedSurface/);
-  const pinnedLayoutSource = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/messages/utils/pinned-layout.ts'),
-    'utf8',
-  );
-  assert.match(
-    pinnedLayoutSource,
-    /type PinnedGroupPosition = 'single' \| 'first' \| 'middle' \| 'last' \| 'none'/,
-  );
-  // 置顶分组形状收在 pinned-layout 工具里,按签名串缓存(见下面的稳定性用例)。
+  // 哪些行不画分隔线收在 pinned-layout 工具里,按签名串缓存(规则和稳定性见 pinned-layout.test.mts)。
   assert.match(source, /from "@\/features\/messages\/utils\/pinned-layout"/);
-  assert.match(
-    source,
-    /pinnedGroupPosition=\{pinnedLayout\.positions\.get\(item\.id\) \?\? "none"\}/,
-  );
-  assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
-  assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
+  // 通栏:行抵掉列表左右内边距,置顶底色直接铺在行内容层上,不再是带圆角、互相留缝的卡片。
+  assert.match(source, /row: \{\s*marginHorizontal: -Spacing\.lg,/);
+  assert.match(source, /style=\{\[s\.rowSurface, item\.pinned \? pinnedSurfaceStyle : null\]\}/);
   assert.match(source, /pinnedSurfaceStyle=\{d\.pinnedSurface\}/);
-  assert.match(source, /pinnedRowMiddle/);
-  assert.match(source, /pinnedSurfaceMiddle/);
+  assert.doesNotMatch(source, /pinnedSurfaceMiddle|pinnedRowFirst|getPinnedSurfaceStyle/);
   assert.doesNotMatch(source, /name="pin"/);
-  assert.match(
-    source,
-    /pinnedLayout\.hiddenSeparatorIds\.has\(leadingItem\.id\) \? null : <Divider \/>/,
-  );
-  assert.doesNotMatch(source, /trailingItem/);
-  assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
+  // 安卓把相邻两行分别取整,会差出 1px(真机上:深色置顶区里一道横贯整屏的黑缝,
+  // 以及被下一行盖掉的分隔线)。所以:不夹单独的分隔线视图;线画在本行顶边(后画的行在
+  // 上层,盖不住自己的线);每行往上叠一根发丝线,取整只会重叠、不会留缝。
+  assert.doesNotMatch(source, /ItemSeparatorComponent|renderSeparator/);
+  assert.match(source, /row: \{\s*marginHorizontal: -Spacing\.lg,\s*marginTop: -StyleSheet\.hairlineWidth,/);
+  // 线从屏幕最左画到最右(头像底下也画)。
+  assert.match(source, /rowDivider: \{\s*position: "absolute",\s*left: 0,\s*right: 0,\s*top: 0,/);
+  assert.match(source, /\{showDivider \? <View style=\{\[s\.rowDivider, dividerStyle\]\}/);
+  assert.match(source, /showDivider=\{!dividerlessRowIds\.has\(item\.id\)\}/);
+  // 置顶行最底层也是置顶灰,内层差 1px 也不会漏出黑/白缝。
+  assert.match(source, /: item\.pinned\s*\? colors\.pinnedSurface\s*: colors\.background/);
 });
 
 test('pinned fold toggle sits in the threshold conversation card and folds both ways', () => {
@@ -71,13 +64,6 @@ test('pinned fold toggle sits in the threshold conversation card and folds both 
   // 箭头与未读数共享右下角尾部区域，点击箭头不能冒泡进入会话。
   assert.match(source, /rowBottomTrailing/);
   assert.match(source, /event\.stopPropagation\(\)/);
-  assert.match(
-    fs.readFileSync(
-      path.join(process.cwd(), 'src/features/messages/utils/pinned-layout.ts'),
-      'utf8',
-    ),
-    /const nextPinned = Boolean\(rows\[index \+ 1\]\?\.pinned\)/,
-  );
 });
 
 test('conversation row keeps mute, unread, and pinned-fold indicators in one non-overlapping trailing lane', () => {
@@ -227,17 +213,27 @@ test('messages screen only offers group-wide clear to the group owner', () => {
   assert.match(source, /canClearGroupForEveryone\(conversation\)/);
 });
 
-test('messages screen no longer exposes the notification bell entry', () => {
+test('messages screen has only the circle-notification entry, not the old all-notifications bell', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
+  // The old generic bell (every notification domain, discover unread badge) stays removed.
   assert.doesNotMatch(source, /handleOpenNotifications/);
-  assert.doesNotMatch(source, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.doesNotMatch(source, /name="notifications-outline"/);
   assert.doesNotMatch(source, /<Badge count=\{discoverUnread\} \/>/);
+  // The header's circle button opens the circle domain only, mirroring the bell on 圈子动态.
+  assert.match(
+    source,
+    /pathname: "\/\(tabs\)\/messages\/notifications", params: \{ domain: "circle" \}/,
+  );
+  assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
+  // 和已读 / 搜索同一套粗描边 lucide 图标;Orbit 的小卫星点在 4px 描边下糊成一团,
+  // 铃铛用户不要。两个相交的圆(Blend)代表「圈子」,形状简单。
+  assert.match(source, /<Blend size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
+  assert.doesNotMatch(source, /<Orbit |<Bell /);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {
@@ -486,7 +482,6 @@ test('conversation row callbacks and renderItem do not depend on whole lists', (
     depsOf('renderItem'),
     /displayedConversations|visibleConversations|conversations\b/,
   );
-  assert.doesNotMatch(depsOf('renderSeparator'), /displayedConversations/);
   assert.doesNotMatch(depsOf('handleMarkConversationRead'), /visibleConversations|rawConversations/);
 });
 

@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -28,7 +27,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
-import { SEND_CAPTION_MAX_LENGTH } from '@/features/chat/components/send-confirm-dialog';
 import { FreePhotoCropper } from '@/features/chat/components/free-photo-cropper';
 import {
   PhotoMarkupEditor,
@@ -40,8 +38,8 @@ import type { PhotoMarkupTool } from '@/features/chat/utils/photo-markup';
 interface PhotoEditorModalProps {
   asset: ImagePickerAsset | null;
   onCancel: () => void;
-  /** caption 已去掉首尾空白,没填时是空字符串。 */
-  onSend: (asset: ImagePickerAsset, caption: string) => Promise<boolean>;
+  /** 描述在选图时已经填好(见 MediaGalleryPicker),编辑器只管照片本身。 */
+  onSend: (asset: ImagePickerAsset) => Promise<boolean>;
 }
 
 interface EditTool {
@@ -111,21 +109,6 @@ const s = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-  },
-  captionInput: {
-    ...Typography.body,
-    color: '#FFFFFF',
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    minHeight: 44,
-    maxHeight: 96,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    lineHeight: 20,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   busyOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -247,7 +230,6 @@ export function PhotoEditorModal({
   const [drawColor, setDrawColor] = useState(DRAW_COLORS[2]);
   const [markupCanUndo, setMarkupCanUndo] = useState(false);
   const [markupReady, setMarkupReady] = useState(false);
-  const [caption, setCaption] = useState('');
   const markupRef = useRef<PhotoMarkupEditorHandle>(null);
   const submitLockRef = useRef(false);
 
@@ -260,7 +242,6 @@ export function PhotoEditorModal({
     setMarkupMode(null);
     setMarkupCanUndo(false);
     setMarkupReady(false);
-    setCaption('');
     submitLockRef.current = false;
   }, [asset]);
 
@@ -460,12 +441,12 @@ export function PhotoEditorModal({
     setSubmitting(true);
     vibrate();
     try {
-      await onSend(workingAsset, caption.trim());
+      await onSend(workingAsset);
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
     }
-  }, [busy, caption, onSend, submitting, vibrate, workingAsset]);
+  }, [busy, onSend, submitting, vibrate, workingAsset]);
 
   const editorLocked = busy || submitting;
   // asset 从 null 切到已选照片后的第一帧，effect 尚未同步 workingAsset；直接回退到
@@ -696,49 +677,35 @@ export function PhotoEditorModal({
               </View>
             </View>
           ) : (
-            <>
-              <TextInput
-                style={s.captionInput}
-                value={caption}
-                onChangeText={setCaption}
-                placeholder={t('chat.mediaSend.captionPlaceholder', {
-                  defaultValue: '添加描述（可选）',
-                })}
-                placeholderTextColor="rgba(255,255,255,0.55)"
-                maxLength={SEND_CAPTION_MAX_LENGTH}
-                multiline
-                editable={!editorLocked}
-              />
-              <ScrollView
-                horizontal
-                bounces={false}
-                showsHorizontalScrollIndicator={false}
-                style={s.toolsViewport}
-                contentContainerStyle={s.tools}
-              >
-                {tools.map((tool) => {
-                  const disabled = editorLocked || tool.disabled;
-                  return (
-                    <Pressable
-                      key={tool.id}
-                      style={[s.tool, disabled && { opacity: 0.4 }]}
-                      onPress={tool.onPress}
-                      disabled={disabled}
-                      accessibilityRole="button"
-                      accessibilityLabel={tool.label}
-                      accessibilityState={{ disabled }}
-                    >
-                      <View style={s.toolIcon}>
-                        <Ionicons name={tool.icon} size={23} color="#FFFFFF" />
-                      </View>
-                      <Text style={s.toolLabel} numberOfLines={2}>
-                        {tool.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </>
+            <ScrollView
+              horizontal
+              bounces={false}
+              showsHorizontalScrollIndicator={false}
+              style={s.toolsViewport}
+              contentContainerStyle={s.tools}
+            >
+              {tools.map((tool) => {
+                const disabled = editorLocked || tool.disabled;
+                return (
+                  <Pressable
+                    key={tool.id}
+                    style={[s.tool, disabled && { opacity: 0.4 }]}
+                    onPress={tool.onPress}
+                    disabled={disabled}
+                    accessibilityRole="button"
+                    accessibilityLabel={tool.label}
+                    accessibilityState={{ disabled }}
+                  >
+                    <View style={s.toolIcon}>
+                      <Ionicons name={tool.icon} size={23} color="#FFFFFF" />
+                    </View>
+                    <Text style={s.toolLabel} numberOfLines={2}>
+                      {tool.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           )}
           <UploadProgressHost />
         </View>

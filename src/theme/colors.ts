@@ -116,7 +116,8 @@ export const lightColors: ThemeColors = {
   workingFill: '#22C55E',
   closedFill: '#FFA500',
   offShelfFill: '#8E8E93',
-  onStatusFill: '#1C1C1E',
+  // 开工/打烊/下架标签上的字和图标：按产品要求两套主题都用白字。
+  onStatusFill: '#FFFFFF',
   // 白底上 #FB8C00 只有约 2.4:1；文字和图标用深一档的琥珀色（约 5:1）。
   warningText: '#B45309',
   orange: '#F97316',

@@ -17,8 +17,10 @@ import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
 import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
 import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet';
+import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
+import { clearDirectChatHistory, confirmClearChatHistory } from '@/features/chat/utils/clear-chat-history';
 import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
-import { MediaSendConfirmDialog } from '@/features/chat/components/media-send-confirm-dialog';
+import { MediaGalleryPicker } from '@/features/chat/components/media-gallery-picker';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { type PendingMediaUpload } from '@/chat-core/client';
@@ -84,7 +86,10 @@ interface ChatDetailScreenProps {
 export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const messageBlurTarget = useRef<View>(null);
-  const [composerDockHeight, setComposerDockHeight] = useState(80 + Math.max(insets.bottom, 12));
+  // 首帧估值（输入行 + 快捷键行），挂载后由 onLayout 量准。
+  const [composerDockHeight, setComposerDockHeight] = useState(110 + Math.max(insets.bottom, 12));
+  // 私聊清空确认框（和聊天信息页同一个，可勾「双向清空」）。
+  const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -583,13 +588,16 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const {
     mediaSourceSheetVisible,
     setMediaSourceSheetVisible,
+    handleMediaSourceSelect,
+    handleMediaSourceSheetDismiss,
+    galleryMode,
+    setGalleryMode,
+    handleGalleryConfirm,
+    handleGalleryDismiss,
+    handlePickFromSystem,
     photoEditorAsset,
     setPhotoEditorAsset,
     handleSendEditedPhoto,
-    pendingMediaAssets,
-    setPendingMediaAssets,
-    handleSendPendingMedia,
-    handleMediaSourceSelect,
   } = useMediaSend({
     t,
     inFlightRef,
@@ -606,6 +614,20 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   });
 
   const { handleSendSticker } = useStickerSend({ t, inFlightRef, setSendError, mountedRef, sourceID, conversationID, isTempChat, composerLocked, isPreviewMode });
+
+  // 输入栏的「清除聊天记录」：和聊天信息页同一套确认流程。群主判据与会话列表左滑删除
+  // 一致（服务端实时算的 myRole，ownerId 兜底旧 DTO），点的时候才读 store。
+  const handleClearHistory = useCallback(() => {
+    if (!conversationID) return;
+    const raw = useChatStore.getState().conversations.find((item) => item.id === conversationID);
+    confirmClearChatHistory({
+      conversationId: conversationID,
+      isGroupConversation: isGroupChat,
+      canClearGroupForEveryone: raw?.myRole === 'OWNER' || raw?.ownerId === currentUserID,
+      t,
+      openDirectDialog: () => setClearDialogVisible(true),
+    });
+  }, [conversationID, currentUserID, isGroupChat, t]);
 
   const {
     handleAttachmentAction,
@@ -706,7 +728,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         d={d}
       />
       {isAssistantConversation ? null : <Divider />}
-      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} /> : null}
+      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} scope={scope} /> : null}
       <PinnedMessageBanner conversationID={conversationID} onJump={jumpToMessage} />
       {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
       {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
@@ -830,6 +852,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             setEmojiOpen={setEmojiOpen}
             handleAttachmentToggle={handleAttachmentToggle}
             handleEmojiToggle={handleEmojiToggle}
+            handleAttachmentAction={handleAttachmentAction}
+            onClearHistory={handleClearHistory}
             selection={selection}
             handleSelectionChange={handleSelectionChange}
             handleDraftChange={handleDraftChange}
@@ -880,10 +904,20 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         onDismiss={() => setActionMenu(null)}
       />
 
+      <ClearHistoryDialog
+        visible={clearDialogVisible}
+        onCancel={() => setClearDialogVisible(false)}
+        onConfirm={(bothSides) => {
+          setClearDialogVisible(false);
+          if (conversationID) void clearDirectChatHistory(conversationID, bothSides, t);
+        }}
+      />
+
       <MediaSourceSheet
         visible={mediaSourceSheetVisible}
         onSelect={handleMediaSourceSelect}
         onClose={() => setMediaSourceSheetVisible(false)}
+        onDismiss={handleMediaSourceSheetDismiss}
       />
 
       <ReactionPickerSheet
@@ -898,10 +932,12 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         onSend={handleSendEditedPhoto}
       />
 
-      <MediaSendConfirmDialog
-        assets={pendingMediaAssets}
-        onCancel={() => setPendingMediaAssets(null)}
-        onSend={handleSendPendingMedia}
+      <MediaGalleryPicker
+        mode={galleryMode}
+        onCancel={() => setGalleryMode(null)}
+        onConfirm={handleGalleryConfirm}
+        onPickFromSystem={(caption) => void handlePickFromSystem(caption)}
+        onDismiss={handleGalleryDismiss}
       />
 
       {noteCollectSheet}

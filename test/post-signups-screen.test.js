@@ -35,43 +35,49 @@ test('post signups screen only marks signups read after a successful list fetch'
   assert.doesNotMatch(source, /void markMyPostSignupsRead\(postId\)/);
 });
 
-test('post signups screen uses a ref guard to prevent duplicate chat opens', () => {
+test('post signups screen locks chat opens until it is focused again', () => {
   const source = readScreen();
 
-  assert.match(source, /const openingChatRef = useRef\(false\)/);
-  assert.match(source, /if \(openingChatRef\.current\) return/);
-  assert.match(source, /openingChatRef\.current = true/);
-  assert.match(source, /openingChatRef\.current = false/);
+  // 跳转后一直锁到回到本页(转场途中再点不会再压一层),失败时当场解锁。
+  assert.match(source, /const chatLock = useNavigationLock\(\)/);
+  assert.match(source, /if \(!chatLock\.tryLock\(\)\) return/);
+  assert.match(source, /chatLock\.release\(\)/);
+  // 以前在 finally 里立刻解锁,挡不住转场那几百毫秒。
+  assert.doesNotMatch(source, /openingChatRef/);
 });
 
-test('post signups screen supports searching and submitting up to three collaboration recognitions', () => {
+const readRecognitionPicker = () =>
+  fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'src/features/notifications/components/RecognitionPickerModal.tsx',
+    ),
+    'utf8',
+  );
+
+test('collaboration recognition is searched and picked in its own sheet, up to three people', () => {
   const source = readScreen();
+  const picker = readRecognitionPicker();
 
   assert.match(source, /submitPostCollaborationRecognitions/);
-  assert.match(source, /const \[searchQuery, setSearchQuery\]/);
-  assert.match(source, /const \[selectedRecognitionIds, setSelectedRecognitionIds\]/);
-  assert.match(source, /const filteredSignups =/);
   // 选择上限由「3 - 已认可数」推导，而非硬编码 3，避免重复认可超额。
   assert.match(source, /RECOGNITION_LIMIT = 3/);
-  assert.match(source, /current\.size >= remainingSlots/);
-  assert.match(source, /Array\.from\(selectedRecognitionIds\)/);
-  assert.match(source, /collaboration-recognition-submit/);
+  assert.match(source, /<RecognitionPickerModal/);
+  assert.match(picker, /const \[query, setQuery\]/);
+  assert.match(picker, /const visibleSignups =/);
+  assert.match(picker, /selected\.size >= remainingSlots/);
+  assert.match(picker, /Array\.from\(selected\)/);
+  assert.match(picker, /collaboration-recognition-submit/);
 });
 
-test('post signups screen uses recognition selection instead of chat when recognition is open', () => {
+test('the signer list is only a chat list; recognition sits behind its own button', () => {
   const source = readScreen();
 
-  assert.match(source, /const showRecognition = recognitionOpen/);
-  assert.match(source, /showRecognition \? null : \(/);
-  assert.match(source, /chatbubble-ellipses-outline/);
-  assert.match(source, /onPress=\{\s*rowDisabled \? undefined : \(\) => toggleRecognitionSelection\(item\)\s*\}/);
-});
-
-test('post signups screen rounds the selected recognition row background', () => {
-  const source = readScreen();
-
-  assert.match(source, /selected \? \[s\.selectedRow, \{ backgroundColor: colors\.primaryLight \}\] : null/);
-  assert.match(source, /selectedRow:\s*\{[^}]*borderRadius:\s*18/s);
+  // Rows read like the messages list: the whole row opens the chat, recognition or not.
+  assert.match(source, /onPress=\{\(\) => void openChat\(item\)\}/);
+  assert.match(source, /chatBySigner/);
+  assert.match(source, /collaboration-recognition-open/);
+  assert.doesNotMatch(source, /toggleRecognitionSelection|selectedRecognitionIds|showRecognition/);
 });
 
 test('post signups screen opens signer profile from the avatar in the current stack', () => {

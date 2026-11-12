@@ -73,17 +73,19 @@ function makeNote(overrides: Partial<NoteSummary> = {}): NoteSummary {
 }
 
 function options(overrides: Partial<NoteSendOptions> = {}): NoteSendOptions {
-  return { card: false, media: false, showcase: false, location: false, ...overrides };
+  return { card: false, showcase: false, location: false, ...overrides };
 }
 
 test('sectionsToImport maps only media/showcase toggles', () => {
   assert.deepEqual(sectionsToImport(options({ media: true })), ['media']);
   assert.deepEqual(sectionsToImport(options({ showcase: true })), ['showcase']);
-  assert.deepEqual(sectionsToImport(options({ media: true, showcase: true })), [
-    'media',
-    'showcase',
-  ]);
   assert.deepEqual(sectionsToImport(options({ card: true, location: true })), []);
+});
+
+test('the send bar\'s 三连 no longer includes the photo/video section', () => {
+  const allOn = withAllNoteSendOptions(options(), true);
+  assert.equal(isAllNoteSendOptions(allOn), true);
+  assert.deepEqual(sectionsToImport(allOn), ['showcase']);
 });
 
 test('hasAnyNoteSendOption is false only when everything is off', () => {
@@ -92,10 +94,10 @@ test('hasAnyNoteSendOption is false only when everything is off', () => {
   assert.equal(hasAnyNoteSendOption(options({ card: true })), true);
 });
 
-test('withAllNoteSendOptions toggles all four without mutating the input', () => {
+test('withAllNoteSendOptions toggles all three without mutating the input', () => {
   const original = options({ card: true });
   const allOn = withAllNoteSendOptions(original, true);
-  assert.deepEqual(allOn, { card: true, media: true, showcase: true, location: true });
+  assert.deepEqual(allOn, { card: true, showcase: true, location: true });
   assert.deepEqual(original, options({ card: true }));
 
   const allOff = withAllNoteSendOptions(allOn, false);
@@ -176,7 +178,7 @@ test('buildNoteSendTasks orders card, then imported media, then location', () =>
   ];
   const tasks = buildNoteSendTasks(
     note,
-    options({ card: true, media: true, showcase: true, location: true }),
+    options({ card: true, showcase: true, location: true }),
     imported,
     { latitude: 1, longitude: 2, title: 'T', address: null },
   );
@@ -221,6 +223,18 @@ test('buildNoteSendTasks video duration is ceiled seconds with a 1s floor', () =
   assert.equal(tasks[0].kind, 'video');
   assert.equal(tasks[0].kind === 'video' ? tasks[0].duration : null, 1);
   assert.equal(tasks[1].kind === 'video' ? tasks[1].duration : -1, undefined);
+});
+
+test('buildNoteSendTasks gives each video the poster captured for it, and none when capture failed', () => {
+  const note = makeNote();
+  const imported: ImportedNoteChatMedia[] = [
+    { id: 'm-1', section: 'showcase', type: 'VIDEO', key: 'chat/me/a.mp4' },
+    { id: 'm-2', section: 'showcase', type: 'VIDEO', key: 'chat/me/b.mp4' },
+  ];
+  const posters = new Map([['chat/me/a.mp4', 'chat/me/poster-a.jpg']]);
+  const tasks = buildNoteSendTasks(note, options({ showcase: true }), imported, null, posters);
+  assert.equal(tasks[0].kind === 'video' ? tasks[0].thumbKey : null, 'chat/me/poster-a.jpg');
+  assert.equal(tasks[1].kind === 'video' && 'thumbKey' in tasks[1], false);
 });
 
 test('buildNoteSendTasks skips location when unchecked or invalid', () => {

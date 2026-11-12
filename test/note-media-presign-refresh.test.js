@@ -45,9 +45,10 @@ test('note block renderer forwards video player errors to its caller', () => {
   const src = read('src/features/notes/components/NoteBlockRenderer.tsx');
   const viewer = read('src/features/notes/components/NoteVideoViewer.tsx');
   assert.match(src, /<NoteVideoViewer[\s\S]*onMediaError=\{onMediaError\}/);
+  assert.match(viewer, /<ViewerVideoPage[\s\S]*onMediaError=\{onMediaError\}/);
   assert.match(
-    viewer,
-    /player.addListener\('statusChange',[\s\S]*status === 'error'[\s\S]*onMediaError\?\.\(\)/,
+    read('src/components/ui/viewer-video-page.tsx'),
+    /player.addListener\('statusChange',[\s\S]*status === 'error'[\s\S]*onMediaErrorRef\.current\?\.\(\)/,
   );
   assert.match(
     src,

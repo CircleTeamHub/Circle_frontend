@@ -25,7 +25,7 @@ test('video bubble creates no player and the viewer loads the source only on pla
 // 签名 URL 过期后读路径会换发一条新的；播放器还钉着旧 URL 的话，
 // 用户看到的是一条永远转圈的视频。
 test('viewer replaces playback when the signed url changes', () => {
-  assert.match(viewerSource, /<ViewerVideoPlayer key=\{videoUrl\} videoUrl=\{videoUrl\}/);
+  assert.match(viewerSource, /<ViewerVideoPlayer\s+key=\{videoUrl\}\s+videoUrl=\{videoUrl\}/);
 });
 
 // 气泡文案跟着应用语言走，不能硬编码中文（i18n 五语种齐平测试覆盖键，

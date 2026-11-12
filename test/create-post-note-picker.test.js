@@ -91,15 +91,17 @@ test('share note picker sends through the inline always-visible options row', ()
   // 选择上限来自纯 util(与批量消息量约束联动),不许在屏幕里写死数字。
   assert.match(src, /MAX_NOTE_BATCH_SELECTION/);
   assert.doesNotMatch(src, /prev\.length >= 9\b/);
-  // 五个选项常驻底栏(发送键上方一行横排 icon+短标签),不再点发送后弹确认 sheet。
+  // 四个选项常驻底栏(发送键上方一行横排 icon+短标签),不再点发送后弹确认 sheet。
   // 这一行已抽成共享组件 NoteSendOptionsRow(笔记页多选底栏也用它)。
   assert.match(src, /<NoteSendOptionsRow value=\{sendOptions\} onChange=\{setSendOptions\} \/>/);
   const row = read('src/features/chat/components/note-send-options-row.tsx');
-  for (const key of ['optionCard', 'optionMedia', 'optionShowcase', 'optionLocation', 'optionAll']) {
+  for (const key of ['optionCard', 'optionShowcase', 'optionLocation', 'optionAll']) {
     assert.match(row, new RegExp(`share\\.noteBatch\\.${key}`));
   }
+  // 「图片视频」已从发送底栏拿掉,「三连」= 笔记 + 展示 + 地址。
+  assert.doesNotMatch(row, /optionMedia/);
   assert.match(row, /NOTE_OPTION_CHIPS/);
-  // 五个开关共用一个 chip 组件（含常驻对号：选中实心/未选空心），不许再复制粘贴。
+  // 四个开关共用一个 chip 组件（含常驻对号：选中实心/未选空心），不许再复制粘贴。
   assert.match(row, /function NoteOptionChip/);
   assert.match(row, /checked \? 'checkmark-circle' : 'ellipse-outline'/);
   assert.doesNotMatch(src, /BottomSheetModal/);
