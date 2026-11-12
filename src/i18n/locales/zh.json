@@ -620,6 +620,7 @@
     "searchGroupMembersNoMatches": "没有匹配的群成员",
     "groupName": "群聊名称",
     "groupNotice": "群公告",
+    "groupNoticeEdit": "编辑",
     "noticePinned": "置顶播报",
     "noticePinnedHint": "在群聊顶部滚动显示公告",
     "noGroupNotice": "暂无群公告",

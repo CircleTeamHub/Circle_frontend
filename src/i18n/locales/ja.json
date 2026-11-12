@@ -549,6 +549,7 @@
     "searchGroupMembersNoMatches": "一致するグループメンバーはいません",
     "groupName": "グループ名",
     "groupNotice": "グループのお知らせ",
+    "groupNoticeEdit": "編集",
     "noticePinned": "お知らせを上部に表示",
     "noticePinnedHint": "グループチャット上部でお知らせをスクロール表示します",
     "noGroupNotice": "グループのお知らせはありません",

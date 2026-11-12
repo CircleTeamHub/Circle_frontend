@@ -623,6 +623,7 @@
     "searchGroupMembersNoMatches": "No matching group members",
     "groupName": "Group Name",
     "groupNotice": "Group Notice",
+    "groupNoticeEdit": "Edit",
     "noticePinned": "Pin announcement banner",
     "noticePinnedHint": "Scroll the announcement at the top of the group chat",
     "noGroupNotice": "No group notice",

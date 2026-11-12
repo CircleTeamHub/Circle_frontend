@@ -552,6 +552,7 @@
     "searchGroupMembersNoMatches": "No hay miembros coincidentes",
     "groupName": "Nombre del grupo",
     "groupNotice": "Aviso del grupo",
+    "groupNoticeEdit": "Editar",
     "noticePinned": "Fijar aviso en un banner",
     "noticePinnedHint": "Mostrar el aviso desplazándose arriba del chat grupal",
     "noGroupNotice": "No hay aviso del grupo",

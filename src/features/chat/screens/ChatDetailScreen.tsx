@@ -728,7 +728,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         d={d}
       />
       {isAssistantConversation ? null : <Divider />}
-      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} /> : null}
+      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} scope={scope} /> : null}
       <PinnedMessageBanner conversationID={conversationID} onJump={jumpToMessage} />
       {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
       {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}

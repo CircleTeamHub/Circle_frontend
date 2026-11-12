@@ -343,7 +343,7 @@ function standaloneGroup(): ChatConversationDto {
   } as ChatConversationDto;
 }
 
-test('a shared pinned group notice appears below the header and disappears when turned off', async () => {
+test('a shared pinned group notice appears below the header, opens its detail page and disappears when turned off', async () => {
   const group = { ...standaloneGroup(), notice: '完整群公告第一行\n第二行', noticePinned: true };
   mockParams = { conversationID: GROUP, sourceID: GROUP, title: group.name!, conversationType: 'group', conversationKind: 'group' };
   useChatStore.getState().upsertConversation(group);
@@ -352,7 +352,12 @@ test('a shared pinned group notice appears below the header and disappears when 
     render(<ChatDetailScreen />);
     expect(await screen.findByTestId('group-notice-banner')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: '完整群公告第一行 第二行' }));
-    expect(alert).toHaveBeenCalledWith(expect.any(String), group.notice);
+    // A page in the same stack, not a dialog.
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/(tabs)/messages/group-notice',
+      params: { conversationID: GROUP },
+    });
+    expect(alert).not.toHaveBeenCalled();
     act(() => useChatStore.getState().upsertConversation({ ...group, noticePinned: false }));
     expect(screen.queryByTestId('group-notice-banner')).toBeNull();
   } finally { alert.mockRestore(); }

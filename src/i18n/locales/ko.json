@@ -549,6 +549,7 @@
     "searchGroupMembersNoMatches": "일치하는 그룹 멤버가 없습니다",
     "groupName": "그룹 이름",
     "groupNotice": "그룹 공지",
+    "groupNoticeEdit": "편집",
     "noticePinned": "공지 배너 고정",
     "noticePinnedHint": "그룹 채팅 상단에 공지를 스크롤하여 표시합니다",
     "noGroupNotice": "그룹 공지가 없습니다",
