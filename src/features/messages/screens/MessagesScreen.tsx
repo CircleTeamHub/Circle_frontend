@@ -19,8 +19,8 @@ import ChatDetailScreen, {
 import { selectFailedConversationKey } from "@/features/messages/utils/failed-preview";
 import { ChatConnectionBanner } from "@/features/chat/components/ChatConnectionBanner";
 import {
-  parsePinnedLayoutKey,
-  pinnedLayoutKeyOf,
+  dividerlessRowsKeyOf,
+  parseDividerlessRowsKey,
 } from "@/features/messages/utils/pinned-layout";
 import { useComposerDraftStore } from "@/chat-core/composer-drafts";
 import { draftPreviewText } from "@/chat-core/composer-draft-model";
@@ -38,11 +38,11 @@ import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { fetchFriends, friendsMutatedSince } from '@/services/api/friends';
-import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { CheckCheck, Orbit, Search } from 'lucide-react-native';
+import { Bell, CheckCheck, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -71,8 +71,6 @@ const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
 const ROW_AVATAR_SIZE = 48;
 const ROW_GAP = 12;
-/** 会话文字列的起点：分隔线从这里开始画。 */
-const ROW_TEXT_INSET = Spacing.lg + ROW_AVATAR_SIZE + ROW_GAP;
 const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
 // 桌面分栏时 tabbar 统一居中到整个视口底部；右侧聊天区要留出这段空间，
 // 否则 tabbar 会盖住 ChatComposerBar 的输入框。
@@ -225,8 +223,11 @@ const s = StyleSheet.create({
     transform: [{ translateY: 6 }],
   },
   // 单条会话行外层：抵掉列表左右内边距，整行通栏（置顶底色、左滑操作都铺满屏宽）。
+  // 每行往上叠一根发丝线：安卓把相邻两行分别取整，可能差出 1px 的缝（露出页面底色，
+  // 深色下是一道黑缝）；叠上去之后最多是重叠，不会再有缝。
   row: {
     marginHorizontal: -Spacing.lg,
+    marginTop: -StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   swipeForeground: {
@@ -261,12 +262,14 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: Spacing.lg,
   },
-  // 分隔线从文字列起画，头像底下不画；连续置顶之间的那条垫在置顶底色上，色带不断开。
-  rowSeparator: {
-    marginHorizontal: -Spacing.lg,
-    paddingLeft: ROW_TEXT_INSET,
-  },
-  rowSeparatorLine: {
+  // 分隔线画在本行顶边，从屏幕最左到最右。不用夹在两行之间的分隔线视图，
+  // 也不画在上一行底边：安卓取整后下一行可能压住上一行最后一排像素，底边的线会被盖掉；
+  // 后画的行在上层，画在自己顶边的线谁也盖不住。
+  rowDivider: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
     height: StyleSheet.hairlineWidth,
   },
   // 名称组合
@@ -353,6 +356,9 @@ type ConversationRowProps = {
   pinnedTimeStyle: object;
   pinnedPreviewStyle: object;
   draftPrefixStyle: object;
+  /** 顶边分隔线：列表第一行、置顶与非置顶交界的那一行不画（后者靠底色切换分界）。 */
+  showDivider: boolean;
+  dividerStyle: object;
   onOpenConversation: (conversation: Conversation) => void;
   onOpenUserProfile: (conversation: Conversation) => void;
   onTogglePinned: (conversation: Conversation) => void;
@@ -383,6 +389,8 @@ function ConversationRowImpl({
   pinnedTimeStyle,
   pinnedPreviewStyle,
   draftPrefixStyle,
+  showDivider,
+  dividerStyle,
   onOpenConversation,
   onOpenUserProfile,
   onTogglePinned,
@@ -688,6 +696,7 @@ function ConversationRowImpl({
             </View>
           </Pressable>
         </View>
+        {showDivider ? <View style={[s.rowDivider, dividerStyle]} pointerEvents="none" /> : null}
       </Animated.View>
     </View>
   );
@@ -964,7 +973,9 @@ export default function MessagesScreen() {
       pinnedSurface: {
         backgroundColor: colors.pinnedSurface,
       },
-      separatorLine: { backgroundColor: colors.divider },
+      // 半透明的正文色：叠在置顶灰和列表底色上都只比底色深一点点，两种主题都不刺眼
+      // （原来的 divider 偏蓝偏深，压在置顶灰上像黑线，深色下又像白线）。
+      rowDivider: { backgroundColor: withAlpha(colors.text, 0.08) },
     };
   }, [colors]);
 
@@ -1443,15 +1454,15 @@ export default function MessagesScreen() {
     [router],
   );
 
-  // 置顶分组的形状只随置顶/筛选/折叠变化;新消息只会挪动非置顶行。用签名串当依赖,
-  // renderItem 与分隔线才不会每来一条消息都换引用(换了 FlatList 会把可见行全过一遍)。
-  const pinnedLayoutKey = useMemo(
-    () => pinnedLayoutKeyOf(displayedConversations),
+  // 不画分隔线的行只随置顶/筛选/折叠和交界处的会话变化;新消息在非置顶区内部挪动时不变。
+  // 用签名串当依赖,renderItem 才不会每来一条消息都换引用(换了 FlatList 会把可见行全过一遍)。
+  const dividerlessRowsKey = useMemo(
+    () => dividerlessRowsKeyOf(displayedConversations),
     [displayedConversations],
   );
-  const pinnedLayout = useMemo(
-    () => parsePinnedLayoutKey(pinnedLayoutKey),
-    [pinnedLayoutKey],
+  const dividerlessRowIds = useMemo(
+    () => parseDividerlessRowsKey(dividerlessRowsKey),
+    [dividerlessRowsKey],
   );
 
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
@@ -1461,11 +1472,16 @@ export default function MessagesScreen() {
         item={item}
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
         labels={swipeLabels}
+        // 置顶行最底层也铺置顶灰：哪怕内层差 1px，露出来的也是同色，不会是一道黑/白缝。
         rowBackgroundColor={
           isSplitLayout && embeddedChat?.conversationID === item.id
             ? colors.primaryLight
-            : colors.background
+            : item.pinned
+              ? colors.pinnedSurface
+              : colors.background
         }
+        showDivider={!dividerlessRowIds.has(item.id)}
+        dividerStyle={d.rowDivider}
         nameStyle={d.name}
         timeStyle={d.time}
         previewStyle={d.preview}
@@ -1499,6 +1515,7 @@ export default function MessagesScreen() {
       collapsedPinnedCount,
       batchDeleting,
       colors.background,
+      colors.pinnedSurface,
       colors.primaryLight,
       d,
       embeddedChat?.conversationID,
@@ -1511,31 +1528,13 @@ export default function MessagesScreen() {
       handleTogglePinnedFold,
       handleToggleSelection,
       isSplitLayout,
+      dividerlessRowIds,
       pinnedFoldAnchorIndex,
       showAllPinned,
       selecting,
       selectedConversationIds,
       swipeLabels,
     ],
-  );
-
-  const renderSeparator = useCallback(
-    ({
-      leadingItem,
-    }: {
-      leadingItem?: Conversation;
-    }) =>
-      leadingItem && pinnedLayout.hiddenSeparatorIds.has(leadingItem.id) ? null : (
-        <View
-          style={[
-            s.rowSeparator,
-            leadingItem && pinnedLayout.pinnedSeparatorIds.has(leadingItem.id) ? d.pinnedSurface : null,
-          ]}
-        >
-          <View style={[s.rowSeparatorLine, d.separatorLine]} />
-        </View>
-      ),
-    [d, pinnedLayout],
   );
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
@@ -1569,7 +1568,8 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            <Orbit size={23} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            {/* 和右边的已读 / 搜索 / + 同一套粗描边线性图标；入口只开圈子通知，和圈子动态页的铃铛一致。 */}
+            <Bell size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
             <View style={s.circleBellBadge}>
               <Badge count={circleBellUnread} />
             </View>
@@ -1654,7 +1654,6 @@ export default function MessagesScreen() {
         data={displayedConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        ItemSeparatorComponent={renderSeparator}
         ListHeaderComponent={selecting ? null : ListHeader}
         ListEmptyComponent={
           !conversationsSnapshotLoaded && !cachedListKnown && !connectionError && conversations.length === 0 ? (
