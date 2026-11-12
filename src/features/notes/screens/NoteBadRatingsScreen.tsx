@@ -198,7 +198,12 @@ export default function NoteBadRatingsScreen() {
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top + 8 }]}>
       <View style={s.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back', { defaultValue: '返回' })}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       </View>

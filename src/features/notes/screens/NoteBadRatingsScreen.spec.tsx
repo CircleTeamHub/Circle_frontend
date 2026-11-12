@@ -97,6 +97,10 @@ test('lists reason, text, status and appeal results without any rater', async ()
   expect(screen.getByTestId('note-bad-ratings-quota')).toHaveTextContent('notes.rating.badList.appealsRemaining:3');
   expect(screen.getByTestId('note-bad-rating-appeal-button-a')).toBeTruthy();
   expect(screen.queryByTestId('note-bad-rating-appeal-button-b')).toBeNull();
+
+  // The icon-only back button is announced as "back" and goes up one level.
+  fireEvent.press(screen.getByLabelText('common.back'));
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
 });
 
 test('appeals a bad rating once and shows it as pending', async () => {
