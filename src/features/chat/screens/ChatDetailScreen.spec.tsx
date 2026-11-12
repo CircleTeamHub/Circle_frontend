@@ -16,7 +16,7 @@ import {
   sendTextMessage,
   sendQuoteMessage,
 } from '@/chat-core/client';
-import { fetchChatMembers } from '@/chat-core/api';
+import { clearChatConversationHistory, fetchChatMembers, requestChatHistoryClear } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useComposerDraftStore } from '@/chat-core/composer-drafts';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
@@ -949,17 +949,63 @@ test.each([
   }
 });
 
-test('with a draft the send button sits at the far right, after the emoji button', async () => {
+test('the input keeps only the send button; the shortcut row below holds every other tool', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  const send = () => screen.getByTestId(E2E_TEST_IDS.chatSend);
+  expect(send()).toBeDisabled();
   fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
+  expect(send()).toBeEnabled();
 
-  const composerIcons = ['icon:mic-outline', 'icon:happy-outline', 'icon:add', 'icon:arrow-up'];
+  const composerIcons = [
+    'icon:arrow-up',
+    'icon:mic-outline',
+    'icon:image-outline',
+    'icon:document-text-outline',
+    'icon:location-outline',
+    'icon:trash-outline',
+    'icon:happy-outline',
+    'icon:add-circle-outline',
+  ];
   const order = screen
     .getAllByText(/^icon:/)
     .map((node) => String(node.props.children))
     .filter((name) => composerIcons.includes(name));
   expect(order).toEqual(composerIcons);
+});
+
+test('the notes shortcut opens the note picker straight from the composer', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.attachments.notes')));
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/share-picker',
+    params: { type: 'note', sourceID: PEER },
+  });
+});
+
+test('the two-way clear shortcut asks first, with two-way already ticked, then clears and requests the peer', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(clearChatConversationHistory).mockResolvedValueOnce(42);
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistoryBothSides')));
+  expect(clearChatConversationHistory).not.toHaveBeenCalled();
+  expect(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' })).toBeChecked();
+
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: 'common.confirm' })));
+  await waitFor(() => expect(requestChatHistoryClear).toHaveBeenCalledWith(CONVERSATION, 42), SETTLE);
+  expect(clearChatConversationHistory).toHaveBeenCalledWith(CONVERSATION, { forEveryone: false });
+  expect(alert).toHaveBeenCalledWith('chat.clearHistoryRequestSent');
+  alert.mockRestore();
+});
+
+test('group chats have no two-way clear shortcut', async () => {
+  mockParams = { conversationID: GROUP, sourceID: GROUP, title: 'Group', conversationType: 'group', conversationKind: 'group' };
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  expect(screen.queryByLabelText('chat.clearHistoryBothSides')).toBeNull();
 });
 
 test('the white emoji button switches from voice mode back to an editable draft', async () => {

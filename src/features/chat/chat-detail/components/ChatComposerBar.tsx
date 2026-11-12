@@ -16,7 +16,7 @@ import { GlassSurface } from '@/components/ui/glass-surface';
 import { Spacing, useTheme, withAlpha, type ThemeColors } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
-import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
+import { PANEL_LAYOUT_ANIM, type AttachmentId } from '@/features/chat/chat-detail/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
 import { type TFunction } from 'i18next';
 import { useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react';
@@ -53,6 +53,10 @@ export interface ChatComposerBarProps {
   setEmojiOpen: Dispatch<SetStateAction<boolean>>;
   handleAttachmentToggle: () => void;
   handleEmojiToggle: () => void;
+  /** 快捷键直达「+」面板里的同名入口（多媒体 / 笔记 / 位置）。 */
+  handleAttachmentAction: (id: AttachmentId) => void;
+  /** 双向清空快捷键；不传就不显示（群聊没有双向清空）。 */
+  onClearHistory?: () => void;
   selection: { start: number; end: number; } | undefined;
   handleSelectionChange: (event: { nativeEvent: { selection: { start: number; end: number; }; }; }) => void;
   handleDraftChange: (next: string) => void;
@@ -68,7 +72,8 @@ export interface ChatComposerBarProps {
 }
 
 /**
- * 输入栏:语音/文字切换、输入框(或按住说话条)、表情与「+」面板开关、发送按钮。
+ * 输入栏玻璃卡片:上面是输入框(语音模式换成按住说话条)+ 发送按钮;下面一排快捷键:
+ * 语音、多媒体、笔记、位置、双向清空(仅私聊)、表情、「+」面板。
  */
 export function ChatComposerBar({
   insets,
@@ -92,6 +97,8 @@ export function ChatComposerBar({
   setEmojiOpen,
   handleAttachmentToggle,
   handleEmojiToggle,
+  handleAttachmentAction,
+  onClearHistory,
   selection,
   handleSelectionChange,
   handleDraftChange,
@@ -136,9 +143,77 @@ export function ChatComposerBar({
   const canExpand = multiLineDraft && canEdit;
   const closeExpanded = () => setExpanded(false);
   const hasContent = Boolean(draft.trim() || pendingCard);
-  const compactButton = hasContent ? { width: 44, height: 44, borderRadius: 22 } : undefined;
   const mutedInk = withAlpha(colors.text, dark ? 0.5 : 0.55);
   const buttonFill = withAlpha(colors.text, dark ? 0.09 : 0.05);
+  const toolDisabled = isPreviewMode || isVoiceRecording || composerLocked;
+  // 输入框下面的快捷键行。表情 / 「+」开关各自的面板；其余直达「+」面板里的同名入口。
+  const shortcuts: {
+    key: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+    disabled: boolean;
+    active?: boolean;
+  }[] = [
+    {
+      key: 'voice',
+      icon: voiceInputMode ? 'keypad-outline' : 'mic-outline',
+      label: t('chat.detail.voiceInputLabel'),
+      onPress: toggleVoiceInputMode,
+      // 网页端的 webm/opus 语音尚不能跨端播放，仅展示入口；App 保留原录音流程。
+      disabled: Platform.OS === 'web' || toolDisabled,
+      active: voiceInputMode,
+    },
+    {
+      key: 'media',
+      icon: 'image-outline',
+      label: t('chat.attachments.mediaHub', { defaultValue: '多媒体' }),
+      onPress: () => handleAttachmentAction('media'),
+      disabled: toolDisabled,
+    },
+    {
+      key: 'notes',
+      icon: 'document-text-outline',
+      label: t('chat.attachments.notes', { defaultValue: '笔记' }),
+      onPress: () => handleAttachmentAction('notes'),
+      disabled: toolDisabled,
+    },
+    {
+      key: 'location',
+      icon: 'location-outline',
+      label: t('chat.attachments.location', { defaultValue: '位置' }),
+      onPress: () => handleAttachmentAction('location'),
+      disabled: toolDisabled,
+    },
+    ...(onClearHistory
+      ? [{
+          key: 'clear-both-sides',
+          icon: 'trash-outline' as const,
+          label: t('chat.clearHistoryBothSides', { defaultValue: '双向清空' }),
+          onPress: onClearHistory,
+          disabled: isPreviewMode,
+        }]
+      : []),
+    {
+      key: 'emoji',
+      icon: 'happy-outline',
+      label: t('chat.detail.emojiPanelLabel'),
+      onPress: () => {
+        if (voiceInputMode) toggleVoiceInputMode();
+        handleEmojiToggle();
+      },
+      disabled: toolDisabled,
+      active: emojiOpen,
+    },
+    {
+      key: 'more',
+      icon: 'add-circle-outline',
+      label: t('chat.detail.attachmentPanelLabel', { defaultValue: '打开附件面板' }),
+      onPress: handleAttachmentToggle,
+      disabled: toolDisabled,
+      active: attachmentOpen,
+    },
+  ];
   return (
     <View
       pointerEvents="box-none"
@@ -158,12 +233,10 @@ export function ChatComposerBar({
       <GlassSurface
         material="composer"
         blurTarget={blurTarget}
-        radius={35}
+        radius={28}
         style={[
           s.composerShell,
-          multiLineDraft && s.multilineComposerShell,
           {
-            gap: hasContent ? 4 : 10,
             borderColor: withAlpha(colors.text, dark ? 0.12 : 0.1),
             boxShadow: `0 6px 18px ${withAlpha(colors.black, 0.12)}, inset 0 1px 4px ${withAlpha(colors.white, dark ? 0.12 : 0.7)}`,
           },
@@ -179,179 +252,159 @@ export function ChatComposerBar({
             },
           ]}
         />
-        <Pressable
-          key="voice"
-          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-          onPress={toggleVoiceInputMode}
-          // 网页端的 webm/opus 语音尚不能跨端播放，仅展示入口；App 保留原录音流程。
-          disabled={Platform.OS === 'web' || isPreviewMode || isVoiceRecording || composerLocked}
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.voiceInputLabel')}
-          accessibilityState={{ selected: voiceInputMode }}
-        >
-          <Ionicons name={voiceInputMode ? 'keypad-outline' : 'mic-outline'} size={24} color={mutedInk} />
-        </Pressable>
-
-        {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
-        {voiceInputMode ? (
-          <View
-            key="voice-hold-bar"
-            style={[
-              s.voiceHoldBar,
-              isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
-            ]}
-            {...voicePanResponder.panHandlers}
-          >
-            <Text
+        {/* 上一行：输入框（语音模式换成按住说话条，gesture 元素全程保持挂载）+ 发送。 */}
+        <View style={[s.composerInputRow, multiLineDraft && s.composerInputRowMultiline]}>
+          {voiceInputMode ? (
+            <View
+              key="voice-hold-bar"
               style={[
-                s.voiceHoldText,
-                { color: isVoiceRecording ? colors.white : colors.text },
+                s.voiceHoldBar,
+                isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
               ]}
+              {...voicePanResponder.panHandlers}
             >
-              {isVoiceRecording
-                ? cancelArmed
-                  ? t('chat.detail.voiceReleaseCancel', {
-                      defaultValue: '松开 取消',
-                    })
-                  : t('chat.detail.voiceReleaseSend', {
-                      defaultValue: '松开发送 {{seconds}}"',
-                      seconds: voiceElapsedSeconds,
-                    })
-                : t('chat.detail.voiceHoldToTalk', {
-                    defaultValue: '按住 说话',
-                  })}
-            </Text>
-          </View>
-        ) : (
-          <TextInput
-            ref={inputRef}
-            key="text-input"
-            testID={E2E_TEST_IDS.chatInput}
-            accessibilityLabel={t('chat.detail.inputPlaceholder')}
-            style={[
-              s.composerInput,
-              d.composerInput,
-              {
-                minHeight: singleLineHeight,
-                maxHeight: maxInputHeight,
-                // Native text inputs measure their own text as part of layout.
-                height: Platform.OS === 'web' ? Math.min(textHeight, maxInputHeight) : undefined,
-                lineHeight: COMPOSER_LINE_HEIGHT,
-                paddingVertical: COMPOSER_VERTICAL_PADDING,
-              },
-            ]}
-            multiline
-            submitBehavior="newline"
-            scrollEnabled={textHeight >= maxInputHeight}
-            onLayout={({ nativeEvent: { layout } }) => {
-              if (Platform.OS === 'web') setInputWidth(layout.width);
-              else setMeasuredHeight(layout.height);
-            }}
-            placeholder={
-              composerLocked
-                ? selfSilenced
-                  ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
-                  : t('chat.muteAll', { defaultValue: '全员禁言' })
-                : isPreviewMode
-                  ? t('chat.detail.previewPlaceholder', {
-                      defaultValue: '连接尚未完成',
-                    })
-                  : ''
-            }
-            placeholderTextColor={mutedInk}
-            value={draft}
-            onChangeText={handleDraftChange}
-            selection={selection}
-            onSelectionChange={handleSelectionChange}
-            // Web：Enter 发送，Shift+Enter 换行。原生键盘的回车始终换行。
-            onKeyPress={
-              Platform.OS === 'web'
-                ? (
-                    event: NativeSyntheticEvent<TextInputKeyPressEventData>,
-                  ) => {
-                    // DOM 的 KeyboardEvent 带这两个字段，RN 的类型里没有。
-                    const native = event.nativeEvent as
-                      & TextInputKeyPressEventData
-                      & { isComposing?: boolean; keyCode?: number; shiftKey?: boolean };
-                    if (native.key !== 'Enter' || native.shiftKey) return;
-                    // 中日韩输入法「回车确认候选词」也会发一个 Enter —— 不挡住的话
-                    // 每选一次词就把半截草稿发出去，中文用户几乎每句话都中招。
-                    // 判据与 RNW 内部的 isEventComposing 一致（见 TextInput：
-                    // isComposing || keyCode === 229），它自己的 submit 分支
-                    // 也是这么挡的，我们别把它绕过去。
-                    if (native.isComposing || native.keyCode === 229) return;
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                : undefined
-            }
-            onFocus={() => {
-              LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
-              setAttachmentOpen(false);
-              setEmojiOpen(false);
-              setMentionPickerVisible(false);
-            }}
-            editable={!isPreviewMode && !composerLocked}
-          />
-        )}
+              <Text
+                style={[
+                  s.voiceHoldText,
+                  { color: isVoiceRecording ? colors.white : colors.text },
+                ]}
+              >
+                {isVoiceRecording
+                  ? cancelArmed
+                    ? t('chat.detail.voiceReleaseCancel', {
+                        defaultValue: '松开 取消',
+                      })
+                    : t('chat.detail.voiceReleaseSend', {
+                        defaultValue: '松开发送 {{seconds}}"',
+                        seconds: voiceElapsedSeconds,
+                      })
+                  : t('chat.detail.voiceHoldToTalk', {
+                      defaultValue: '按住 说话',
+                    })}
+              </Text>
+            </View>
+          ) : (
+            <TextInput
+              ref={inputRef}
+              key="text-input"
+              testID={E2E_TEST_IDS.chatInput}
+              accessibilityLabel={t('chat.detail.inputPlaceholder')}
+              style={[
+                s.composerInput,
+                d.composerInput,
+                {
+                  minHeight: singleLineHeight,
+                  maxHeight: maxInputHeight,
+                  // Native text inputs measure their own text as part of layout.
+                  height: Platform.OS === 'web' ? Math.min(textHeight, maxInputHeight) : undefined,
+                  lineHeight: COMPOSER_LINE_HEIGHT,
+                  paddingVertical: COMPOSER_VERTICAL_PADDING,
+                },
+              ]}
+              multiline
+              submitBehavior="newline"
+              scrollEnabled={textHeight >= maxInputHeight}
+              onLayout={({ nativeEvent: { layout } }) => {
+                if (Platform.OS === 'web') setInputWidth(layout.width);
+                else setMeasuredHeight(layout.height);
+              }}
+              placeholder={
+                composerLocked
+                  ? selfSilenced
+                    ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                    : t('chat.muteAll', { defaultValue: '全员禁言' })
+                  : isPreviewMode
+                    ? t('chat.detail.previewPlaceholder', {
+                        defaultValue: '连接尚未完成',
+                      })
+                    : ''
+              }
+              placeholderTextColor={mutedInk}
+              value={draft}
+              onChangeText={handleDraftChange}
+              selection={selection}
+              onSelectionChange={handleSelectionChange}
+              // Web：Enter 发送，Shift+Enter 换行。原生键盘的回车始终换行。
+              onKeyPress={
+                Platform.OS === 'web'
+                  ? (
+                      event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+                    ) => {
+                      // DOM 的 KeyboardEvent 带这两个字段，RN 的类型里没有。
+                      const native = event.nativeEvent as
+                        & TextInputKeyPressEventData
+                        & { isComposing?: boolean; keyCode?: number; shiftKey?: boolean };
+                      if (native.key !== 'Enter' || native.shiftKey) return;
+                      // 中日韩输入法「回车确认候选词」也会发一个 Enter —— 不挡住的话
+                      // 每选一次词就把半截草稿发出去，中文用户几乎每句话都中招。
+                      // 判据与 RNW 内部的 isEventComposing 一致（见 TextInput：
+                      // isComposing || keyCode === 229），它自己的 submit 分支
+                      // 也是这么挡的，我们别把它绕过去。
+                      if (native.isComposing || native.keyCode === 229) return;
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  : undefined
+              }
+              onFocus={() => {
+                LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+                setAttachmentOpen(false);
+                setEmojiOpen(false);
+                setMentionPickerVisible(false);
+              }}
+              editable={!isPreviewMode && !composerLocked}
+            />
+          )}
 
-        {canExpand ? (
-          <Pressable
-            style={[s.circleBtn, s.expandComposerButton]}
-            accessibilityRole="button"
-            accessibilityLabel={t('chat.detail.expandComposer')}
-            onPress={() => {
-              setAttachmentOpen(false);
-              setEmojiOpen(false);
-              setExpanded(true);
-            }}
-          >
-            <Ionicons name="expand-outline" size={20} color={mutedInk} />
-          </Pressable>
-        ) : null}
+          {canExpand ? (
+            <Pressable
+              style={[s.circleBtn, s.expandComposerButton]}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.detail.expandComposer')}
+              onPress={() => {
+                setAttachmentOpen(false);
+                setEmojiOpen(false);
+                setExpanded(true);
+              }}
+            >
+              <Ionicons name="expand-outline" size={20} color={mutedInk} />
+            </Pressable>
+          ) : null}
+          {voiceInputMode ? null : (
+            <Pressable
+              testID={E2E_TEST_IDS.chatSend}
+              style={[s.composerSendBtn, { backgroundColor: buttonFill, opacity: hasContent ? 1 : 0.4 }]}
+              onPress={handleSend}
+              disabled={!hasContent || sending || isPreviewMode || isVoiceRecording || composerLocked}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.send')}
+            >
+              <Ionicons name="arrow-up" size={24} color={colors.text} />
+            </Pressable>
+          )}
+        </View>
 
-        {/* 右侧依次为表情、附件；发送入口按草稿显示在最右边。 */}
-        <Pressable
-          style={[
-            s.circleBtn,
-            s.composerActionBtn,
-            compactButton,
-            { backgroundColor: colors.white, borderColor: withAlpha(colors.black, 0.06) },
-          ]}
-          onPress={() => {
-            if (voiceInputMode) toggleVoiceInputMode();
-            handleEmojiToggle();
-          }}
-          disabled={isPreviewMode || isVoiceRecording || composerLocked}
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.emojiPanelLabel')}
-          accessibilityState={{ expanded: emojiOpen }}
-        >
-          <Ionicons name="happy-outline" size={26} color={emojiOpen ? colors.primaryDeep : colors.black} />
-        </Pressable>
-        <Pressable
-          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-          onPress={handleAttachmentToggle}
-          disabled={isPreviewMode || isVoiceRecording || composerLocked}
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.attachmentPanelLabel', { defaultValue: '打开附件面板' })}
-          accessibilityState={{ expanded: attachmentOpen }}
-        >
-          <Ionicons name="add" size={26} color={mutedInk} />
-        </Pressable>
-        {hasContent ? (
-          <Pressable
-            key="send"
-            testID={E2E_TEST_IDS.chatSend}
-            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-            onPress={handleSend}
-            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.send')}
-          >
-            <Ionicons name="arrow-up" size={24} color={colors.text} />
-          </Pressable>
-        ) : null}
+        {/* 下一行：快捷键。 */}
+        <View style={s.composerToolbar}>
+          {shortcuts.map((item) => (
+            <Pressable
+              key={item.key}
+              style={s.composerToolbarBtn}
+              onPress={item.onPress}
+              disabled={item.disabled}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected: item.active === true, disabled: item.disabled }}
+            >
+              <Ionicons
+                name={item.icon}
+                size={24}
+                color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
+              />
+            </Pressable>
+          ))}
+        </View>
       </GlassSurface>
       <Modal
         visible={expanded}

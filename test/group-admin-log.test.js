@@ -339,7 +339,7 @@ test('chat detail locks the composer while the viewer is silenced', () => {
   const detail = readChatDetailSource();
   assert.match(detail, /const selfSilenced = useMemo\(/);
   assert.match(detail, /editable=\{!isPreviewMode && !composerLocked\}/);
-  assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/);
+  assert.match(detail, /disabled=\{!hasContent \|\| sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/);
   assert.match(detail, /testID="chat-silenced-bar"/);
   assert.match(detail, /chat\.youAreSilencedUntil/);
   assert.match(detail, /const timer = setTimeout\(\(\) => setSilenceClock\(Date\.now\(\)\), remaining \+ 1\)/);

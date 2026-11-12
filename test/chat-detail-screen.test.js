@@ -88,7 +88,9 @@ test('chat detail screen exposes refined message insets and composer action hier
   const source = readChatDetailSource();
 
   assert.match(source, /messageListInset/);
-  assert.match(source, /composerActionBtn/);
+  // Composer: an input row (text + send) above a row of shortcut buttons.
+  assert.match(source, /composerInputRow/);
+  assert.match(source, /composerToolbar/);
   assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset, \{ paddingTop: composerInset \+ Spacing\.sm \}\]\}/);
 });
 
@@ -153,7 +155,7 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /editable=\{!isPreviewMode && !composerLocked\}/);
   assert.match(
     source,
-    /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/,
+    /disabled=\{!hasContent \|\| sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/,
   );
 });
 

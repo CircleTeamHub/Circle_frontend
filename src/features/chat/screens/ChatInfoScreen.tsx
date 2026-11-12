@@ -33,7 +33,6 @@ import {
   setMyGroupChatAlias,
   setMyGroupChatRemark,
   clearChatConversationHistory,
-  requestChatHistoryClear,
   createCircleChatConversation,
   fetchChatMembers,
   refreshChatConversation,
@@ -117,6 +116,7 @@ import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
+import { clearDirectChatHistory } from '@/features/chat/utils/clear-direct-history';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -1726,36 +1726,7 @@ export default function ChatInfoScreen() {
     (bothSides: boolean) => {
       setClearDialogVisible(false);
       if (!resolvedConversationID) return;
-      void (async () => {
-        try {
-          const clearedBeforeHeight = await clearChatConversationHistory(resolvedConversationID, {
-            forEveryone: false,
-          });
-          if (bothSides) {
-            try {
-              await requestChatHistoryClear(resolvedConversationID, clearedBeforeHeight);
-            } catch (error) {
-              // 自己这边已经清掉了,只是申请没发出去:别让用户以为什么都没清。
-              reportHandledFailure('chatInfo', 'requestDirectHistoryClear', error);
-              Alert.alert(
-                t('chat.clearHistoryRequestFailed', {
-                  defaultValue: '已清空你的记录，双向清空申请发送失败',
-                }),
-                getApiErrorMessage(error, t('common.networkError')),
-              );
-              return;
-            }
-          }
-          Alert.alert(
-            bothSides
-              ? t('chat.clearHistoryRequestSent', { defaultValue: '已清空，已向对方发送双向清空申请' })
-              : t('chat.clearHistoryDone'),
-          );
-        } catch (error) {
-          reportHandledFailure('chatInfo', 'clearDirectHistory', error);
-          Alert.alert(t('chat.clearHistory'), getApiErrorMessage(error, t('common.networkError')));
-        }
-      })();
+      void clearDirectChatHistory(resolvedConversationID, bothSides, t);
     },
     [resolvedConversationID, t],
   );

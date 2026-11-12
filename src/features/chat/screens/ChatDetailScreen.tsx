@@ -17,6 +17,8 @@ import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
 import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
 import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet';
+import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
+import { clearDirectChatHistory } from '@/features/chat/utils/clear-direct-history';
 import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
 import { MediaGalleryPicker } from '@/features/chat/components/media-gallery-picker';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
@@ -84,7 +86,9 @@ interface ChatDetailScreenProps {
 export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const messageBlurTarget = useRef<View>(null);
-  const [composerDockHeight, setComposerDockHeight] = useState(80 + Math.max(insets.bottom, 12));
+  // 首帧估值（输入行 + 快捷键行），挂载后由 onLayout 量准。
+  const [composerDockHeight, setComposerDockHeight] = useState(110 + Math.max(insets.bottom, 12));
+  const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -833,6 +837,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             setEmojiOpen={setEmojiOpen}
             handleAttachmentToggle={handleAttachmentToggle}
             handleEmojiToggle={handleEmojiToggle}
+            handleAttachmentAction={handleAttachmentAction}
+            onClearHistory={isGroupChat || !conversationID ? undefined : () => setClearDialogVisible(true)}
             selection={selection}
             handleSelectionChange={handleSelectionChange}
             handleDraftChange={handleDraftChange}
@@ -881,6 +887,16 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
         actions={messageActions}
         onDismiss={() => setActionMenu(null)}
+      />
+
+      <ClearHistoryDialog
+        visible={clearDialogVisible}
+        defaultBothSides
+        onCancel={() => setClearDialogVisible(false)}
+        onConfirm={(bothSides) => {
+          setClearDialogVisible(false);
+          if (conversationID) void clearDirectChatHistory(conversationID, bothSides, t);
+        }}
       />
 
       <MediaSourceSheet
