@@ -11,6 +11,11 @@ import {
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Gradients, Spacing, Typography, useTheme } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { useNavigationLock } from '@/hooks/use-navigation-lock';
+import { fetchAssistantBootstrap } from '@/services/api/assistant';
+import { getAssistantChatHref, opensAssistantChatDirectly } from '@/features/assistant/assistant-entry';
+import { useChatStore } from '@/chat-core/store';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   // tab 根屏头部：大标题，没有返回箭头（对齐圈子广场 / 联系人）。
@@ -58,9 +63,25 @@ export default function ExploreScreen() {
     router.push('/(tabs)/explore/moments');
   }, [router]);
 
-  const handleOpenAssistant = useCallback(() => {
+  // 先问清楚要去哪再跳一次：已有订阅就直接进聊天页。以前总是先推引导页、加载完再
+  // replace 成聊天页，用户看到两次进入动画，中间还闪一下空白页。
+  // 跳转前要等一次请求，所以用回到本页才解锁的锁防连点。
+  const assistantLock = useNavigationLock();
+  const handleOpenAssistant = useCallback(async () => {
+    if (!assistantLock.tryLock()) return;
+    try {
+      const bootstrap = await fetchAssistantBootstrap();
+      if (opensAssistantChatDirectly(bootstrap)) {
+        useChatStore.getState().mergeConversationSnapshot(bootstrap.conversation);
+        router.push(getAssistantChatHref('explore', bootstrap));
+        return;
+      }
+    } catch (error) {
+      // 拉不到就交给引导页：它会自己重试并显示错误。
+      reportHandledFailure('assistant', 'exploreBootstrap', error);
+    }
     router.push('/(tabs)/explore/assistant');
-  }, [router]);
+  }, [assistantLock, router]);
 
   const momentsTitle = t('discover.moments');
   const assistantTitle = t('assistant.name');

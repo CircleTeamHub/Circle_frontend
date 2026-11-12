@@ -28,10 +28,8 @@ import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
-import {
-  getChatDetailHref,
-  getUserProfileScopeFromSegments,
-} from '@/features/user/utils/routes';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import { getAssistantChatHref, opensAssistantChatDirectly } from '@/features/assistant/assistant-entry';
 
 type WizardStep = 'circle' | 'keywords' | 'note-status';
 type ChatEntry = {
@@ -154,21 +152,7 @@ export default function AssistantChatScreen() {
         .getState()
         .mergeConversationSnapshot(data.conversation);
       // 换成本栈的聊天页：从探索 tab 进来就留在探索 tab，返回落回探索首页。
-      const chatHref = getChatDetailHref(
-        scope,
-        data.conversation.id,
-        data.assistant.displayName,
-        undefined,
-        data.conversation.id,
-      );
-      router.replace({
-        pathname: chatHref.pathname,
-        params: {
-          ...chatHref.params,
-          conversationKind: 'support',
-          assistantKey: data.assistant.key,
-        },
-      });
+      router.replace(getAssistantChatHref(scope, data));
     },
     [router, scope],
   );
@@ -214,17 +198,7 @@ export default function AssistantChatScreen() {
     try {
       const next = await fetchAssistantBootstrap(contextCircleId);
       setBootstrap(next);
-      if (!next.capabilities.infoSubscriptions) {
-        navigateToChat(next);
-        return;
-      }
-      const activeSubscription = next.subscriptions.some(
-        (subscription) =>
-          subscription.enabled &&
-          subscription.sourceTypes.includes('PLAZA_POST') &&
-          (!contextCircleId || subscription.circleId === contextCircleId),
-      );
-      if (activeSubscription) {
+      if (opensAssistantChatDirectly(next, contextCircleId)) {
         navigateToChat(next);
         return;
       }
