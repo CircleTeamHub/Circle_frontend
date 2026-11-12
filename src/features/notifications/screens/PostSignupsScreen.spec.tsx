@@ -1,7 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import PostSignupsScreen from './PostSignupsScreen';
-import { fetchMyPostSignups, fetchMyPlazaPost, updateMyPlazaPost } from '@/services/api/plaza';
+import { Alert } from 'react-native';
+import { fetchMyPostSignups, fetchMyPlazaPost, submitPostCollaborationRecognitions, updateMyPlazaPost } from '@/services/api/plaza';
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { CirclePlazaPost, PostSignupItem } from '@/types';
 
@@ -160,6 +161,28 @@ test('signers read like the messages list: last chat line, time and unread, and 
 
   await act(async () => { fireEvent.press(screen.getByText('几点集合？')); });
   expect(ensureDirectConversation).toHaveBeenCalledWith('user-Alice');
+});
+
+test('signer rows always open the chat; recognition is picked in its own sheet', async () => {
+  jest.mocked(ensureDirectConversation).mockResolvedValue({ conversationID: 'dm-bob' } as never);
+  jest.mocked(submitPostCollaborationRecognitions).mockResolvedValue({ count: 1 } as never);
+  jest.mocked(fetchMyPostSignups).mockResolvedValue({ items: [signup('Alice'), signup('Bob')], recognitionOpen: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  // Even after the activity ended, a tap on a signer opens the chat; nothing is ticked.
+  await act(async () => { fireEvent.press(screen.getByText('Bob')); });
+  expect(ensureDirectConversation).toHaveBeenCalledWith('user-Bob');
+  expect(screen.queryByRole('checkbox')).toBeNull();
+
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-open')); });
+  fireEvent.press(screen.getByRole('checkbox', { name: 'Alice' }));
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-submit')); });
+  expect(submitPostCollaborationRecognitions).toHaveBeenCalledWith('post-1', ['user-Alice']);
+  // The sheet closes after a successful submit.
+  expect(screen.queryByTestId('collaboration-recognition-submit')).toBeNull();
+  alert.mockRestore();
 });
 
 test('an empty signer list shows the empty text once loaded', async () => {
