@@ -978,6 +978,7 @@
       },
       "imageCount": "画像{{count}}枚",
       "videoCount": "動画{{count}}本",
+      "verificationCount": "検証{{count}}件",
       "includes": "含む: {{segments}}",
       "workStatus": {
         "working": "稼働中",
@@ -1476,6 +1477,7 @@
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
       "imageCount": "画像 {{count}} 枚",
       "videoCount": "動画 {{count}} 本",
+      "verificationCount": "検証 {{count}} 件",
       "day": {
         "sun": "日曜日",
         "mon": "月曜日",

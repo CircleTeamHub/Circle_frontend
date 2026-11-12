@@ -62,7 +62,15 @@ export function formatNoteFullDate(iso: string, t: TFunction): string {
 }
 
 /**
- * Build the card meta string. zh default: "04-10 14:32 | 日记 | 2图片 | 1视频"
+ * 验证区里都是视频,保存时和普通视频一起算进 videoCount:「视频」要扣掉验证视频,
+ * 否则同一个视频在「N视频」和「N验证」里各算一次。
+ */
+export function splitNoteVideoCounts(videoCount: number, showcaseCount = 0) {
+  return { videos: Math.max(0, videoCount - showcaseCount), verifications: showcaseCount };
+}
+
+/**
+ * Build the card meta string. zh default: "04-10 14:32 | 日记 | 2图片 | 1视频 | 1验证"
  */
 export function buildNoteMeta(
   params: {
@@ -70,9 +78,12 @@ export function buildNoteMeta(
     groupNames?: string[];
     imageCount: number;
     videoCount: number;
+    /** 验证区的视频数(note.showcaseCount);旧接口缺省按 0。 */
+    showcaseCount?: number;
   },
   t: TFunction,
 ): string {
+  const { videos, verifications } = splitNoteVideoCounts(params.videoCount, params.showcaseCount);
   const parts: string[] = [formatNoteDate(params.updatedAt)];
   if ((params.groupNames?.length ?? 0) > 0) {
     const groupLabel =
@@ -94,11 +105,19 @@ export function buildNoteMeta(
       }),
     );
   }
-  if (params.videoCount > 0) {
+  if (videos > 0) {
     parts.push(
       t('notes.format.videoCount', {
-        count: params.videoCount,
-        defaultValue: `${params.videoCount}视频`,
+        count: videos,
+        defaultValue: `${videos}视频`,
+      }),
+    );
+  }
+  if (verifications > 0) {
+    parts.push(
+      t('notes.format.verificationCount', {
+        count: verifications,
+        defaultValue: `${verifications}验证`,
       }),
     );
   }

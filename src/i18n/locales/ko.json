@@ -978,6 +978,7 @@
       },
       "imageCount": "이미지 {{count}}장",
       "videoCount": "동영상 {{count}}개",
+      "verificationCount": "인증 {{count}}개",
       "includes": "포함: {{segments}}",
       "workStatus": {
         "working": "영업 중",
@@ -1476,6 +1477,7 @@
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
       "imageCount": "이미지 {{count}}장",
       "videoCount": "동영상 {{count}}개",
+      "verificationCount": "인증 {{count}}개",
       "day": {
         "sun": "일요일",
         "mon": "월요일",

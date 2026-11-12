@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
+import { splitNoteVideoCounts } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteCardData } from '@/types';
 import { CHAT_CARD_PADDING_VERTICAL, CHAT_CARD_STANDARD_WIDTH } from './shared';
@@ -96,12 +97,16 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
     location: note.hasLocation ?? false,
   };
 
+  const { videos, verifications } = splitNoteVideoCounts(note.videoCount, note.showcaseCount);
   const countSegments = [
     note.imageCount > 0
       ? t('chat.noteCard.imageCount', { defaultValue: '{{count}}张图片', count: note.imageCount })
       : null,
-    note.videoCount > 0
-      ? t('chat.noteCard.videoCount', { defaultValue: '{{count}}个视频', count: note.videoCount })
+    videos > 0
+      ? t('chat.noteCard.videoCount', { defaultValue: '{{count}}个视频', count: videos })
+      : null,
+    verifications > 0
+      ? t('chat.noteCard.verificationCount', { defaultValue: '{{count}}个验证', count: verifications })
       : null,
   ].filter((segment): segment is string => segment !== null);
 

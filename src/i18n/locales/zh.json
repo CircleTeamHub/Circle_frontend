@@ -1049,6 +1049,7 @@
       },
       "imageCount": "{{count}}张图片",
       "videoCount": "{{count}}个视频",
+      "verificationCount": "{{count}}个验证",
       "includes": "包含: {{segments}}",
       "workStatus": {
         "working": "开工",
@@ -3141,6 +3142,7 @@
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
       "imageCount": "{{count}}图片",
       "videoCount": "{{count}}视频",
+      "verificationCount": "{{count}}验证",
       "day": {
         "sun": "星期日",
         "mon": "星期一",

@@ -1053,6 +1053,7 @@
       },
       "imageCount": "{{count}} images",
       "videoCount": "{{count}} videos",
+      "verificationCount": "{{count}} verifications",
       "includes": "Includes: {{segments}}",
       "workStatus": {
         "working": "Working",
@@ -3149,6 +3150,7 @@
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
       "imageCount": "{{count}} images",
       "videoCount": "{{count}} videos",
+      "verificationCount": "{{count}} verifications",
       "day": {
         "sun": "Sunday",
         "mon": "Monday",

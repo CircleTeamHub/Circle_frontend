@@ -85,6 +85,7 @@ function NoteCardInner({
       groupNames: note.groups.map((group) => group.name),
       imageCount: note.imageCount,
       videoCount: note.videoCount,
+      showcaseCount: note.showcaseCount,
     },
     t,
   );
