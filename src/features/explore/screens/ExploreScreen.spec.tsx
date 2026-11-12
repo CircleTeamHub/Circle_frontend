@@ -9,8 +9,15 @@ let mockMomentsUnread = 0;
 
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
-  // The screen never regains focus in these tests, so a navigation lock stays held.
-  useFocusEffect: jest.fn(),
+  // Focus effects run once on mount (the assistant prefetch). The screen never regains
+  // focus afterwards, so a navigation lock taken in a test stays held.
+  useFocusEffect: (effect: () => void) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(() => effect(), [effect]);
+  },
+}));
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { sessionEpoch: number }) => number) => selector({ sessionEpoch: 1 }),
 }));
 
 const mockMergeConversationSnapshot = jest.fn();
@@ -59,8 +66,32 @@ describe('ExploreScreen', () => {
   beforeEach(() => {
     mockRouter.push.mockClear();
     mockMergeConversationSnapshot.mockClear();
-    jest.mocked(fetchAssistantBootstrap).mockReset();
+    // Tests that do not care about the assistant leave the mount prefetch pending.
+    jest.mocked(fetchAssistantBootstrap).mockReset().mockReturnValue(new Promise(() => {}));
     mockMomentsUnread = 0;
+  });
+
+  it('asks where the assistant leads as soon as the page shows, then opens it on tap without waiting', async () => {
+    jest.mocked(fetchAssistantBootstrap).mockResolvedValueOnce(bootstrap(true) as never);
+    render(<ExploreScreen />);
+    expect(fetchAssistantBootstrap).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+
+    // No await between the tap and the push: the answer is already in hand.
+    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.exploreAssistantEntry));
+    expect(mockRouter.push).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/(tabs)/explore/chat-detail' }),
+    );
+    expect(fetchAssistantBootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the subscription wizard when the prefetch failed', async () => {
+    jest.mocked(fetchAssistantBootstrap).mockRejectedValueOnce(new Error('offline'));
+    render(<ExploreScreen />);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId(E2E_TEST_IDS.exploreAssistantEntry));
+    });
+    expect(mockRouter.push.mock.calls).toEqual([['/(tabs)/explore/assistant']]);
   });
 
   it('shows the moments tile before the assistant tile, names only', () => {
