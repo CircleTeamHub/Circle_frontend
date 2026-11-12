@@ -14,7 +14,7 @@ import {
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { Spacing, useTheme, withAlpha, type ThemeColors } from '@/theme';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { PANEL_LAYOUT_ANIM, type AttachmentId } from '@/features/chat/chat-detail/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
@@ -55,10 +55,8 @@ export interface ChatComposerBarProps {
   handleEmojiToggle: () => void;
   /** 快捷键直达「+」面板里的同名入口（多媒体 / 笔记 / 位置）。 */
   handleAttachmentAction: (id: AttachmentId) => void;
-  /** 清除聊天记录快捷键，和聊天信息页的「清空聊天记录」同一套流程。 */
+  /** 清除聊天记录快捷键，和聊天信息页的「清空聊天记录」同一套流程（私聊可勾双向清空）。 */
   onClearHistory: () => void;
-  /** 双向清空快捷键；不传就不显示（群聊没有双向清空）。 */
-  onClearBothSides?: () => void;
   selection: { start: number; end: number; } | undefined;
   handleSelectionChange: (event: { nativeEvent: { selection: { start: number; end: number; }; }; }) => void;
   handleDraftChange: (next: string) => void;
@@ -75,7 +73,7 @@ export interface ChatComposerBarProps {
 
 /**
  * 输入栏玻璃卡片:上面是输入框(语音模式换成按住说话条)+ 发送按钮;下面一排快捷键:
- * 语音、多媒体、笔记、位置、清除聊天记录、双向清空(仅私聊)、表情、「+」面板。
+ * 语音、多媒体、笔记、位置、清除聊天记录、表情、「+」面板。
  */
 export function ChatComposerBar({
   insets,
@@ -101,7 +99,6 @@ export function ChatComposerBar({
   handleEmojiToggle,
   handleAttachmentAction,
   onClearHistory,
-  onClearBothSides,
   selection,
   handleSelectionChange,
   handleDraftChange,
@@ -150,14 +147,17 @@ export function ChatComposerBar({
   const buttonFill = withAlpha(colors.text, dark ? 0.09 : 0.05);
   const toolDisabled = isPreviewMode || isVoiceRecording || composerLocked;
   // 输入框下面的快捷键行。表情 / 「+」开关各自的面板；其余直达「+」面板里的同名入口。
-  const shortcuts: {
+  const shortcuts: ({
     key: string;
-    icon: keyof typeof Ionicons.glyphMap;
     label: string;
     onPress: () => void;
     disabled: boolean;
     active?: boolean;
-  }[] = [
+  } & (
+    | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: undefined }
+    // Ionicons 里没有合适的字形时改用 MaterialCommunityIcons（同为线框风格）。
+    | { icon?: undefined; mciIcon: keyof typeof MaterialCommunityIcons.glyphMap }
+  ))[] = [
     {
       key: 'voice',
       icon: voiceInputMode ? 'keypad-outline' : 'mic-outline',
@@ -189,21 +189,13 @@ export function ChatComposerBar({
       disabled: toolDisabled,
     },
     {
+      // 只留这一个清除入口：私聊的确认框里可以勾「双向清空」，不再单独占一个按钮。
       key: 'clear-history',
-      icon: 'trash-outline',
+      mciIcon: 'chat-remove-outline',
       label: t('chat.clearHistory'),
       onPress: onClearHistory,
       disabled: isPreviewMode,
     },
-    ...(onClearBothSides
-      ? [{
-          key: 'clear-both-sides',
-          icon: 'swap-horizontal-outline' as const,
-          label: t('chat.clearHistoryBothSides', { defaultValue: '双向清空' }),
-          onPress: onClearBothSides,
-          disabled: isPreviewMode,
-        }]
-      : []),
     {
       key: 'emoji',
       icon: 'happy-outline',
@@ -407,11 +399,19 @@ export function ChatComposerBar({
               accessibilityLabel={item.label}
               accessibilityState={{ selected: item.active === true, disabled: item.disabled }}
             >
-              <Ionicons
-                name={item.icon}
-                size={24}
-                color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
-              />
+              {item.mciIcon ? (
+                <MaterialCommunityIcons
+                  name={item.mciIcon}
+                  size={24}
+                  color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
+                />
+              ) : (
+                <Ionicons
+                  name={item.icon}
+                  size={24}
+                  color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
+                />
+              )}
             </Pressable>
           ))}
         </View>

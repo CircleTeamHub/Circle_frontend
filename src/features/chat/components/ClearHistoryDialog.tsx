@@ -10,8 +10,6 @@ interface ClearHistoryDialogProps {
   onCancel: () => void;
   /** bothSides=true:清完自己的,再向对方申请双向清空。 */
   onConfirm: (bothSides: boolean) => void;
-  /** 打开时「双向清空」是否预先勾上(输入栏的双向清空快捷键)。 */
-  defaultBothSides?: boolean;
 }
 
 const s = StyleSheet.create({
@@ -26,14 +24,14 @@ const s = StyleSheet.create({
 });
 
 /** 私聊清空聊天记录:默认只清自己的;勾「双向清空」会请对方授权清对方那份。 */
-export function ClearHistoryDialog({ visible, onCancel, onConfirm, defaultBothSides = false }: ClearHistoryDialogProps) {
+export function ClearHistoryDialog({ visible, onCancel, onConfirm }: ClearHistoryDialogProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [bothSides, setBothSides] = useState(defaultBothSides);
+  const [bothSides, setBothSides] = useState(false);
 
   useEffect(() => {
-    if (visible) setBothSides(defaultBothSides);
-  }, [visible, defaultBothSides]);
+    if (visible) setBothSides(false);
+  }, [visible]);
 
   return (
     <FloatingModal visible={visible} onClose={onCancel} backdropStyle={{ backgroundColor: colors.overlay }}>

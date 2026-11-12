@@ -88,8 +88,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const messageBlurTarget = useRef<View>(null);
   // 首帧估值（输入行 + 快捷键行），挂载后由 onLayout 量准。
   const [composerDockHeight, setComposerDockHeight] = useState(110 + Math.max(insets.bottom, 12));
-  // 私聊清空确认框：「清除聊天记录」打开时不勾双向，「双向清空」打开时预先勾上。
-  const [clearDialog, setClearDialog] = useState<{ bothSides: boolean } | null>(null);
+  // 私聊清空确认框（和聊天信息页同一个，可勾「双向清空」）。
+  const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -625,7 +625,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       isGroupConversation: isGroupChat,
       canClearGroupForEveryone: raw?.myRole === 'OWNER' || raw?.ownerId === currentUserID,
       t,
-      openDirectDialog: () => setClearDialog({ bothSides: false }),
+      openDirectDialog: () => setClearDialogVisible(true),
     });
   }, [conversationID, currentUserID, isGroupChat, t]);
 
@@ -854,7 +854,6 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             handleEmojiToggle={handleEmojiToggle}
             handleAttachmentAction={handleAttachmentAction}
             onClearHistory={handleClearHistory}
-            onClearBothSides={isGroupChat || !conversationID ? undefined : () => setClearDialog({ bothSides: true })}
             selection={selection}
             handleSelectionChange={handleSelectionChange}
             handleDraftChange={handleDraftChange}
@@ -906,11 +905,10 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       />
 
       <ClearHistoryDialog
-        visible={clearDialog !== null}
-        defaultBothSides={clearDialog?.bothSides ?? false}
-        onCancel={() => setClearDialog(null)}
+        visible={clearDialogVisible}
+        onCancel={() => setClearDialogVisible(false)}
         onConfirm={(bothSides) => {
-          setClearDialog(null);
+          setClearDialogVisible(false);
           if (conversationID) void clearDirectChatHistory(conversationID, bothSides, t);
         }}
       />

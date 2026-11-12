@@ -230,9 +230,10 @@ test('messages screen has only the circle-notification entry, not the old all-no
     /pathname: "\/\(tabs\)\/messages\/notifications", params: \{ domain: "circle" \}/,
   );
   assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
-  // 和已读 / 搜索同一套粗描边 lucide 图标;Orbit 的小卫星点在 4px 描边下糊成一团。
-  assert.match(source, /<Bell size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
-  assert.doesNotMatch(source, /<Orbit /);
+  // 和已读 / 搜索同一套粗描边 lucide 图标;Orbit 的小卫星点在 4px 描边下糊成一团,
+  // 铃铛用户不要。两个相交的圆(Blend)代表「圈子」,形状简单。
+  assert.match(source, /<Blend size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
+  assert.doesNotMatch(source, /<Orbit |<Bell /);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {

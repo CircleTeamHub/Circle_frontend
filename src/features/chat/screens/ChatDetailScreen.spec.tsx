@@ -123,6 +123,7 @@ jest.mock('@expo/vector-icons', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Ionicons: ({ name }: { name: string }) => createElement(MockText, null, `icon:${name}`),
+    MaterialCommunityIcons: ({ name }: { name: string }) => createElement(MockText, null, `mci:${name}`),
   };
 });
 jest.mock('@/theme', () => {
@@ -963,13 +964,12 @@ test('the input keeps only the send button; the shortcut row below holds every o
     'icon:image-outline',
     'icon:document-text-outline',
     'icon:location-outline',
-    'icon:trash-outline',
-    'icon:swap-horizontal-outline',
+    'mci:chat-remove-outline',
     'icon:happy-outline',
     'icon:add-circle-outline',
   ];
   const order = screen
-    .getAllByText(/^icon:/)
+    .getAllByText(/^(icon|mci):/)
     .map((node) => String(node.props.children))
     .filter((name) => composerIcons.includes(name));
   expect(order).toEqual(composerIcons);
@@ -985,28 +985,21 @@ test('the notes shortcut opens the note picker straight from the composer', asyn
   });
 });
 
-test('the two-way clear shortcut asks first, with two-way already ticked, then clears and requests the peer', async () => {
+test('the one clear shortcut also covers two-way clear through its dialog', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.mocked(clearChatConversationHistory).mockResolvedValueOnce(42);
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  // Only one clear entry in the shortcut row; two-way clear is a tick box in its dialog.
+  expect(screen.queryByLabelText('chat.clearHistoryBothSides')).toBeNull();
 
-  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistoryBothSides')));
-  expect(clearChatConversationHistory).not.toHaveBeenCalled();
-  expect(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' })).toBeChecked();
-
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+  fireEvent.press(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' }));
   await act(async () => fireEvent.press(screen.getByRole('button', { name: 'common.confirm' })));
   await waitFor(() => expect(requestChatHistoryClear).toHaveBeenCalledWith(CONVERSATION, 42), SETTLE);
   expect(clearChatConversationHistory).toHaveBeenCalledWith(CONVERSATION, { forEveryone: false });
   expect(alert).toHaveBeenCalledWith('chat.clearHistoryRequestSent');
   alert.mockRestore();
-});
-
-test('group chats have no two-way clear shortcut', async () => {
-  mockParams = { conversationID: GROUP, sourceID: GROUP, title: 'Group', conversationType: 'group', conversationKind: 'group' };
-  render(<ChatDetailScreen />);
-  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
-  expect(screen.queryByLabelText('chat.clearHistoryBothSides')).toBeNull();
 });
 
 test('the clear-history shortcut opens the same unticked dialog as chat info in a direct chat', async () => {

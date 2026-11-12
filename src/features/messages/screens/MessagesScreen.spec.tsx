@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, CheckCheck, Search } from 'lucide-react-native';
+import { Blend, CheckCheck, Search } from 'lucide-react-native';
 import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
@@ -211,7 +211,7 @@ test('switching accounts exits selection and restores tab navigation', () => {
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
   // Same size and stroke as the neighbouring double-check icon.
-  expect(screen.UNSAFE_getByType(Bell).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
+  expect(screen.UNSAFE_getByType(Blend).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });

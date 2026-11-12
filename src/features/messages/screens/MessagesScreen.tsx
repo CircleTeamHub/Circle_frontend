@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { Bell, CheckCheck, Search } from 'lucide-react-native';
+import { Blend, CheckCheck, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -1568,8 +1568,8 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 和右边的已读 / 搜索 / + 同一套粗描边线性图标；入口只开圈子通知，和圈子动态页的铃铛一致。 */}
-            <Bell size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            {/* 两个相交的圆代表「圈子」；和右边的已读 / 搜索 / + 同一套粗描边线性图标，形状简单，4px 描边下也不糊。 */}
+            <Blend size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
             <View style={s.circleBellBadge}>
               <Badge count={circleBellUnread} />
             </View>
