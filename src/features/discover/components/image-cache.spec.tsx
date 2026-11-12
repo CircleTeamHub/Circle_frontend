@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Spacing } from '@/theme';
 import { ImageGrid } from './image-grid';
 import { MomentMedia } from './moment-media';
 import { NoteCard } from '@/features/notes/components/NoteCard';
@@ -38,23 +37,50 @@ test('feed thumbnails persist on disk without downloading the larger preview as 
   expect(image.props.placeholder).toBeUndefined();
 });
 
+type ReactTestInstance = ReturnType<typeof screen.getByRole>;
+
+/** Nearest host ancestor whose flattened style matches — the grid cell or row wrapping a tile. */
+function hostAncestor(node: ReactTestInstance, match: (style: Record<string, unknown>) => boolean) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    const style = StyleSheet.flatten(parent.props.style) as Record<string, unknown> | undefined;
+    if (typeof parent.type === 'string' && style && match(style)) return parent;
+  }
+  throw new Error('no matching ancestor');
+}
+const cellOf = (node: ReactTestInstance) => hostAncestor(node, (style) => style.aspectRatio === 1);
+const rowOf = (node: ReactTestInstance) => hostAncestor(cellOf(node), (style) => style.flexDirection === 'row');
+
 test('plaza cards show a single image as one nine-grid cell instead of a large preview', () => {
-  const cellWidth = Math.floor((400 - Spacing.lg * 2 - Spacing.md * 2 - Spacing.xs * 2) / 3);
-  const cellStyle = () => StyleSheet.flatten(screen.getByRole('imagebutton').props.style);
+  const cellStyle = () => StyleSheet.flatten(cellOf(screen.getByRole('imagebutton')).props.style);
   const { rerender } = render(<ImageGrid images={['photo']} />);
-  expect(cellStyle().width).toBeGreaterThan(cellWidth);
+  expect(cellStyle()).toMatchObject({ width: '65%' });
   rerender(<ImageGrid images={['photo']} uniformCells />);
-  expect(cellStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
+  expect(cellStyle()).toMatchObject({ flex: 1 });
 });
 
 test('a single plaza video is one nine-grid cell too', () => {
-  const cellWidth = Math.floor((400 - Spacing.lg * 2 - Spacing.md * 2 - Spacing.xs * 2) / 3);
   const video = [{ type: 'video' as const, key: 'clip', url: 'clip.mp4', posterUrl: 'poster.jpg' }];
-  const tileStyle = () => StyleSheet.flatten(screen.getByLabelText('moment.playVideo').props.style);
+  const cellStyle = () => StyleSheet.flatten(cellOf(screen.getByLabelText('moment.playVideo')).props.style);
   const { rerender } = render(<MomentMedia images={[]} attachments={video} />);
-  expect(tileStyle().width).toBeGreaterThan(cellWidth);
+  expect(cellStyle()).toMatchObject({ width: '65%' });
   rerender(<MomentMedia images={[]} attachments={video} uniformCells />);
-  expect(tileStyle()).toMatchObject({ width: cellWidth, height: cellWidth });
+  expect(cellStyle()).toMatchObject({ flex: 1 });
+});
+
+// Cells used to be sized in pixels from the screen width; pages with wider padding than that
+// guess (plaza cards, post detail) pushed the third cell onto the next line.
+test.each([
+  ['images', () => <ImageGrid images={['a', 'b', 'c', 'd']} />, () => screen.getAllByRole('imagebutton')],
+  ['mixed media', () => <MomentMedia images={[]} attachments={[
+    { type: 'image', key: 'a', url: 'a' }, { type: 'image', key: 'b', url: 'b' },
+    { type: 'video', key: 'c', url: 'c' }, { type: 'image', key: 'd', url: 'd' },
+  ]} />, () => screen.getAllByRole('button')],
+])('nine-grid %s put three tiles in a row that shares its real width', (_, ui, tiles) => {
+  render(ui());
+  const rows = tiles().map(rowOf);
+  expect(rows.slice(1, 3).every((row) => row === rows[0])).toBe(true);
+  expect(rows[3]).not.toBe(rows[0]);
+  for (const tile of tiles()) expect(StyleSheet.flatten(cellOf(tile).props.style).width).toBeUndefined();
 });
 
 test('feed preview fallback keeps a distinct stable key when the signed URL refreshes', () => {
