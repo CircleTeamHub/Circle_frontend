@@ -462,6 +462,17 @@ describe('loading and failure', () => {
     await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
   });
 
+  test('load and playback failures are reported so a caller can refresh an expired URL', async () => {
+    const onMediaError = jest.fn();
+    mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('expired'));
+    renderPage({ autoPlay: true, onMediaError });
+    await waitFor(() => expect(onMediaError).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByLabelText('common.retry'));
+    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    emitStatus('error');
+    expect(onMediaError).toHaveBeenCalledTimes(2);
+  });
+
   test('tapping a page that is still loading does not start playback early', () => {
     mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>(() => undefined));
     renderPage({ autoPlay: true });

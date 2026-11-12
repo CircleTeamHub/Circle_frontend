@@ -202,10 +202,11 @@ interface ViewerVideoPlayerProps {
   poster: ReactNode;
   onPlayingChange: (playing: boolean) => void;
   onScrubbingChange: (scrubbing: boolean) => void;
+  onMediaError?: () => void;
 }
 
 /** 只在这一页开始播放后挂载；useVideoPlayer 卸载时释放解码器。 */
-function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScrubbingChange }: ViewerVideoPlayerProps) {
+function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScrubbingChange, onMediaError }: ViewerVideoPlayerProps) {
   const { t } = useTranslation();
   const player = useVideoPlayer(null);
   const [attempt, setAttempt] = useState(0);
@@ -216,6 +217,8 @@ function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScr
   const endedRef = useRef(false);
   const onPlayingChangeRef = useRef(onPlayingChange);
   onPlayingChangeRef.current = onPlayingChange;
+  const onMediaErrorRef = useRef(onMediaError);
+  onMediaErrorRef.current = onMediaError;
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +238,7 @@ function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScr
           setLoading(false);
           report(false);
           reportHandledFailure('mediaViewer', 'videoPlayback', new Error('Video playback failed'));
+          onMediaErrorRef.current?.();
         } else if (status !== 'loading' && !player.playing) {
           // 缓冲期间按了暂停：缓冲结束后不会再来一次 playingChange。
           report(false);
@@ -262,6 +266,7 @@ function ViewerVideoPlayer({ videoUrl, ephemeral, poster, onPlayingChange, onScr
         setFailed(true);
         setLoading(false);
         reportHandledFailure('mediaViewer', 'videoLoad', new Error('Video load failed'));
+        onMediaErrorRef.current?.();
       }
     });
     return () => {
@@ -337,6 +342,8 @@ interface ViewerVideoPageProps {
   /** 播放或下滑期间外层须暂停翻页。 */
   onPagerLockChange: (locked: boolean) => void;
   onSwipeDown: () => void;
+  /** 加载或播放失败;笔记据此重新签发过期的媒体地址。 */
+  onMediaError?: () => void;
 }
 
 /**
@@ -353,6 +360,7 @@ export function ViewerVideoPage({
   autoPlay,
   onPagerLockChange,
   onSwipeDown,
+  onMediaError,
 }: ViewerVideoPageProps) {
   const { t } = useTranslation();
   const translateY = useRef(new Animated.Value(0)).current;
@@ -440,6 +448,7 @@ export function ViewerVideoPage({
             poster={poster}
             onPlayingChange={handlePlayingChange}
             onScrubbingChange={handleScrubbingChange}
+            onMediaError={onMediaError}
           />
         ) : (
           <>

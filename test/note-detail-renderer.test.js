@@ -31,10 +31,15 @@ test('NoteBlockRenderer handles video blocks with expo-video', () => {
   const src = read('src/features/notes/components/NoteBlockRenderer.tsx');
   assert.match(src, /case 'video'/);
   assert.match(src, /NoteVideoViewer/);
+  // Note videos play in the same full-screen player as chat: controls in a bottom bar,
+  // never the system controls (those sit in the middle of the picture).
   const viewer = read('src/features/notes/components/NoteVideoViewer.tsx');
-  assert.match(viewer, /expo-video/);
-  assert.match(viewer, /useVideoPlayer/);
-  assert.match(viewer, /VideoView/);
+  assert.match(viewer, /<ViewerVideoPage\s/);
+  assert.doesNotMatch(viewer, /nativeControls/);
+  const player = read('src/components/ui/viewer-video-page.tsx');
+  assert.match(player, /expo-video/);
+  assert.match(player, /useVideoPlayer/);
+  assert.match(player, /nativeControls=\{false\}/);
 });
 
 test('NoteDetailScreen prefers contentJson over plain content', () => {
