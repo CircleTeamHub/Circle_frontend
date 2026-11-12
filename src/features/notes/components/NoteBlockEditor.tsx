@@ -93,7 +93,6 @@ interface Props {
   onMediaUploaded?: (media: CreateNoteMediaInput) => void;
   mediaToolbarEnabled?: boolean;
   editable?: boolean;
-  placeholder?: string;
   /**
    * Grow with the content from a single line instead of filling the parent.
    * This is the chrome-free composer bar: no in-editor toolbar, surface
@@ -108,7 +107,6 @@ function NoteBlockEditorImpl({
   onMediaUploaded,
   mediaToolbarEnabled = true,
   editable = true,
-  placeholder,
   fitContent = false,
 }: Props) {
   const editableRef = useRef(editable);
@@ -380,9 +378,7 @@ function NoteBlockEditorImpl({
           toolbarLabels={toolbarLabels}
           mediaToolbarEnabled={mediaToolbarEnabled}
           editable={editable}
-          placeholder={placeholder}
           backgroundColor={fitContent ? colors.surface : undefined}
-          placeholderColor={fitContent ? colors.textSecondary : undefined}
           onContentHeightChange={fitContent ? handleContentHeightChange : undefined}
         />
       </View>

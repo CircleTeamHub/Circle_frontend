@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from '@/components/ui/bottom-sheet-modal';
 import { CollectionContentPreview } from '@/features/profile/components/CollectionContentPreview';
 import { resolveCollectionContent } from '@/features/profile/collection-content';
 import type { UserCollection } from '@/services/api/collections';
@@ -32,7 +32,7 @@ export function FavoriteSendSheet({ item, recipient, onCancel, onConfirm }: {
     sheetStyle={[s.sheet, { backgroundColor: resolvedMode === 'dark' ? colors.surface : colors.pinnedSurface, paddingBottom: keyboardVisible && !emojiOpen ? 16 : Math.max(insets.bottom, 24) + (emojiOpen ? 0 : 48) }]}>
     <View testID="favorite-send-sheet" style={s.content}>
       <Text style={[s.heading, { color: colors.text }]}>{t('share.favoriteConfirm.sendTo', { defaultValue: '发送给' })}</Text>
-      <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+      <BottomSheetScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
         <View style={s.recipient}>
           <Avatar size={48} shape="square" name={recipient?.name} uri={recipient?.avatarUrl} />
           <Text style={[s.name, { color: colors.text }]} numberOfLines={2}>
@@ -41,7 +41,7 @@ export function FavoriteSendSheet({ item, recipient, onCancel, onConfirm }: {
         </View>
         <View style={s.preview}><CollectionContentPreview content={content} expanded /></View>
         <View style={s.messageRow}>
-          <TextInput testID="favorite-additional-message" accessibilityLabel={t('share.favoriteConfirm.messageLabel', { defaultValue: '附加消息' })}
+          <BottomSheetTextInput testID="favorite-additional-message" accessibilityLabel={t('share.favoriteConfirm.messageLabel', { defaultValue: '附加消息' })}
             placeholder={t('share.favoriteConfirm.messagePlaceholder', { defaultValue: '输入附加消息（可选）' })}
             placeholderTextColor={colors.textSecondary} value={message} onChangeText={setMessage} multiline
             onFocus={() => setEmojiOpen(false)} style={[s.input, { color: colors.text, backgroundColor: colors.surface }]} />
@@ -52,7 +52,7 @@ export function FavoriteSendSheet({ item, recipient, onCancel, onConfirm }: {
           </Pressable>
         </View>
         {emojiOpen ? <EmojiPicker onSelect={emoji => setMessage(text => text + emoji)} /> : null}
-      </ScrollView>
+      </BottomSheetScrollView>
       <View style={s.actions}>
         <Pressable accessibilityRole="button" style={[s.action, { backgroundColor: colors.surfaceBorder }]} onPress={cancel}>
           <Text style={[s.actionText, { color: colors.text }]}>{t('common.cancel', { defaultValue: '取消' })}</Text>

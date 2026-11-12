@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -11,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetFlatList } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import type { ChatMemberDto } from '@/chat-core/protocol';
 import {
@@ -214,7 +213,7 @@ export function GroupMemberPickerSheet({
           autoCapitalize="none"
         />
       </View>
-      <FlatList
+      <BottomSheetFlatList
         data={filtered}
         keyExtractor={(item) => item.userId}
         renderItem={renderItem}

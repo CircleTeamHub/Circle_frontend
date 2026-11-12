@@ -12,7 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { NavHeader } from '@/components/ui/nav-header';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile } from '@/services/api/profile';
@@ -616,7 +616,7 @@ export default function EditProfileFieldScreen() {
 
         <View style={s.pickerColumns}>
           <View style={s.pickerColumn}>
-            <ScrollView style={[s.pickerList, d.pickerList]}>
+            <BottomSheetScrollView style={[s.pickerList, d.pickerList]}>
               {birthdayYears.map((year) => {
                 const isActive = birthdayDraft.year === year;
                 return (
@@ -645,11 +645,11 @@ export default function EditProfileFieldScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
 
           <View style={s.pickerColumn}>
-            <ScrollView style={[s.pickerList, d.pickerList]}>
+            <BottomSheetScrollView style={[s.pickerList, d.pickerList]}>
               {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
                 const isActive = birthdayDraft.month === month;
                 return (
@@ -678,11 +678,11 @@ export default function EditProfileFieldScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
 
           <View style={s.pickerColumn}>
-            <ScrollView style={[s.pickerList, d.pickerList]}>
+            <BottomSheetScrollView style={[s.pickerList, d.pickerList]}>
               {birthdayDays.map((day) => {
                 const isActive = birthdayDraft.day === day;
                 return (
@@ -707,7 +707,7 @@ export default function EditProfileFieldScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
         </View>
       </BottomSheetModal>
@@ -733,7 +733,7 @@ export default function EditProfileFieldScreen() {
 
         <View style={s.pickerColumns}>
           <View style={s.pickerColumn}>
-            <ScrollView style={[s.pickerList, d.pickerList]}>
+            <BottomSheetScrollView style={[s.pickerList, d.pickerList]}>
               {CITY_PROVINCES.map((region) => {
                 const isActive = cityDraftRegion === region.name;
                 return (
@@ -758,11 +758,11 @@ export default function EditProfileFieldScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
 
           <View style={s.pickerColumn}>
-            <ScrollView style={[s.pickerList, d.pickerList]}>
+            <BottomSheetScrollView style={[s.pickerList, d.pickerList]}>
               {cityOptions.map((city) => {
                 const isActive = cityDraftValue === city;
                 return (
@@ -782,7 +782,7 @@ export default function EditProfileFieldScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
         </View>
       </BottomSheetModal>

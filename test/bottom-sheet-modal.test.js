@@ -53,22 +53,23 @@ test("bottom sheet keeps children as direct sheet content for auto-height layout
 });
 
 // 回归：分享给好友的面板里，下滑时列表和面板一起往下走，轻轻一带面板就关了。
-test("sheet drag starts from the header, or from the body once its list is at the top", () => {
+test("sheet drag starts from the header, or from anywhere in the body once nothing in it can scroll up", () => {
   const sharedSheet = read("src/components/ui/bottom-sheet-modal.tsx");
 
-  // 把手区域照旧可拖；正文只有接入的列表滚到顶时才归面板。
+  // 把手区域照旧可拖；正文没有可滚内容、或者接入的全部滚到顶时，正文下拉也归面板
+  // （回归：笔记多选「其他选项」只有一排按钮，从正文下滑完全没反应）。
   assert.match(sharedSheet, /const DISMISS_HANDLE_ZONE = 56;/);
   assert.match(
     sharedSheet,
-    /scrollableCountRef\.current > 0 && scrollOffsetRef\.current <= SCROLL_TOP_TOLERANCE/,
+    /const everyScrollableAtTop = \[\.\.\.scrollOffsetsRef\.current\.values\(\)\]\.every\(\s*\(offsetY\) => offsetY <= SCROLL_TOP_TOLERANCE,\s*\);/,
   );
-  assert.match(sharedSheet, /return startsInHandleZone \|\| listAtTop;/);
+  assert.match(sharedSheet, /return startsInHandleZone \|\| everyScrollableAtTop;/);
   // 捕获阶段抢在列表之前判定，拿到后不让出。
   assert.match(sharedSheet, /onMoveShouldSetPanResponderCapture: \(_event, gesture\) => shouldClaim\(gesture\)/);
   assert.match(sharedSheet, /onPanResponderTerminationRequest: \(\) => false/);
   // 列表顶部不回弹，否则 iOS 上回弹和面板位移叠在一起。
-  assert.match(sharedSheet, /bounces=\{sheetScroll \? false : props\.bounces\}/);
-  assert.match(sharedSheet, /overScrollMode=\{sheetScroll \? 'never' : props\.overScrollMode\}/);
+  assert.match(sharedSheet, /bounces=\{inSheet \? false : props\.bounces\}/);
+  assert.match(sharedSheet, /overScrollMode=\{inSheet \? 'never' : props\.overScrollMode\}/);
 
   // 关闭要拖过面板三成（至少 120pt）；快甩还要同时拖出 48pt。
   assert.match(sharedSheet, /const DISMISS_MIN_DISTANCE = 120;/);

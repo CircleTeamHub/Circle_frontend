@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import {
   CITY_PROVINCES,
   findProvinceByCity,
@@ -119,7 +119,7 @@ export function CityPickerSheet({
 
       <View style={s.pickerColumns}>
         <View style={s.pickerColumn}>
-          <ScrollView
+          <BottomSheetScrollView
             style={[s.pickerList, d.pickerList]}
             contentContainerStyle={s.pickerListContent}
             showsVerticalScrollIndicator={false}
@@ -148,11 +148,11 @@ export function CityPickerSheet({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </BottomSheetScrollView>
         </View>
 
         <View style={s.pickerColumn}>
-          <ScrollView
+          <BottomSheetScrollView
             style={[s.pickerList, d.pickerList]}
             contentContainerStyle={s.pickerListContent}
             showsVerticalScrollIndicator={false}
@@ -176,7 +176,7 @@ export function CityPickerSheet({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </BottomSheetScrollView>
         </View>
       </View>
     </BottomSheetModal>

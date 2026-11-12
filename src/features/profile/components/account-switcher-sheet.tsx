@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { Divider } from '@/components/ui/divider';
 import { useAuth } from '@/hooks/use-auth';
 import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
@@ -173,7 +172,7 @@ export function AccountSwitcherSheet() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <BottomSheetScrollView
         bounces={false}
         showsVerticalScrollIndicator={false}
         style={{ maxHeight: 380 }}
@@ -213,7 +212,7 @@ export function AccountSwitcherSheet() {
             {t('accountSwitcher.addAccount')}
           </Text>
         </Pressable>
-      </ScrollView>
+      </BottomSheetScrollView>
     </BottomSheetModal>
   );
 }

@@ -3,7 +3,6 @@ import {
   Animated,
   PanResponder,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -11,7 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Circle } from '@/types';
@@ -274,7 +273,7 @@ export function CircleShortcutOrderSheet({
         </Pressable>
       </View>
 
-      <ScrollView
+      <BottomSheetScrollView
         style={s.list}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!draggingCircleId}
@@ -324,7 +323,7 @@ export function CircleShortcutOrderSheet({
             </Animated.View>
           );
         })}
-      </ScrollView>
+      </BottomSheetScrollView>
 
       <View style={s.footer}>
         <Pressable

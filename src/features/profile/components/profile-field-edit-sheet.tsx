@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetTextInput } from '@/components/ui/bottom-sheet-modal';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
@@ -269,7 +269,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
       ) : field.editorType === 'city' ? (
         <CityColumns draft={city} onChange={setCity} />
       ) : (
-        <TextInput
+        <BottomSheetTextInput
           ref={inputRef}
           value={value}
           onChangeText={setValue}

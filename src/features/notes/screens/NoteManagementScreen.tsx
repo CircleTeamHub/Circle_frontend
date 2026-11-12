@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetFlatList } from '@/components/ui/bottom-sheet-modal';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { NavHeader } from '@/components/ui/nav-header';
 import { fetchChatMembers, refreshConversationOrList } from '@/chat-core/api';
@@ -784,7 +783,7 @@ function NoteManagementContent() {
               })}
             </Text>
           </View>
-          <FlatList
+          <BottomSheetFlatList
             style={s.pickerList}
             data={unboundNotes}
             keyExtractor={(item) => item.id}

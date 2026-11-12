@@ -367,8 +367,8 @@ test('EditNoteScreen keeps structured regions with separate image and video acti
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /ScrollView/);
-  assert.match(src, /renderSectionHeader/);
-  assert.match(src, /sectionBlock/);
+  assert.match(src, /renderSectionBar/);
+  assert.match(src, /sectionBar/);
   assert.match(src, /notes\.edit\.sections\.text/);
   assert.match(src, /notes\.edit\.composer\.image/);
   assert.match(src, /notes\.edit\.composer\.video/);
@@ -392,13 +392,14 @@ test('EditNoteScreen keeps location selection map-only with a read-only selected
   assert.match(src, /mediaItems/);
   assert.match(src, /showcaseItems/);
   assert.match(src, /handleAddSectionMedia/);
-  assert.match(src, /renderMediaList/);
+  assert.match(src, /renderMediaTiles/);
   assert.match(src, /mediaToolbarEnabled=\{false\}/);
   assert.match(src, /locationDraft/);
   assert.match(src, /notes\.edit\.sections\.location.*defaultValue: '位置'/);
   assert.match(src, /notes\.edit\.pickLocation/);
-  assert.match(src, /notes\.edit\.locationPlaceNameLabel/);
-  assert.match(src, /notes\.edit\.locationAddressLabel/);
+  // 位置只显示地名和地址本身，不再加「地点名称 / 详细地址」小标签。
+  assert.doesNotMatch(src, /notes\.edit\.locationPlaceNameLabel/);
+  assert.doesNotMatch(src, /notes\.edit\.locationAddressLabel/);
   assert.match(src, /notes\.edit\.clearLocation/);
   assert.match(src, /handleClearLocation/);
   assert.match(src, /accessibilityRole="button"/);
@@ -434,21 +435,18 @@ test('EditNoteScreen can select a real map location and save the existing locati
   assert.match(src, /router\.push\(getNoteLocationPickerHref\(scope, \{/);
 });
 
-test('EditNoteScreen presents structured regions with quieter section chrome', () => {
+test('EditNoteScreen renders every non-text section as a bare bar like the text bar', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  // 分区从贯穿全宽的分隔线改为安静的卡片（surface 底 + 细边 + 大圆角），
-  // 小节头收敛成 眉标 + 右侧计数文本，不再有计数胶囊和解释性副标题。
-  assert.match(src, /secondarySection/);
-  assert.match(src, /sectionHeaderMeta/);
-  assert.match(
-    src,
-    /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.xl/,
-  );
-  assert.doesNotMatch(src, /sectionCountPill/);
-  // 正文已改成无小节头的输入条，不再有实时字数，小节头的 meta 只剩纯文本。
-  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
-  assert.doesNotMatch(src, /notes\.edit\.textCount/);
+  // 所有区块都和文字条同款：白色圆角条，内容在上，最下一行是一个「＋ 添加…」
+  // 和右侧红色删除。没有小节头、计数、虚线添加格和内框。
+  assert.match(src, /const renderSectionBar = \(/);
+  assert.match(src, /const renderSectionAdd = \(/);
+  assert.match(src, /sectionBar:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/);
+  assert.match(src, /<View testID=\{testID\} style=\{\[s\.sectionBar, d\.textBar\]\}>/);
+  assert.match(src, /name="trash-outline" size=\{20\} color=\{colors\.danger\}/);
+  assert.doesNotMatch(src, /renderSectionHeader|sectionHeaderMeta|sectionCountPill|secondarySection/);
+  assert.doesNotMatch(src, /emptyTray|mediaAddTile|notes\.edit\.itemsCount|notes\.edit\.textCount/);
   assert.match(src, /flexDirection:\s*'row'/);
 });
 
@@ -473,11 +471,12 @@ test('EditNoteScreen stacks full-width media previews and opens images in the vi
 test('EditNoteScreen reports upload state in the affected media section without remounting its controls', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /getMediaSectionStatus\('media', 'image', block.id\)/);
-  assert.match(src, /getMediaSectionStatus\('media', 'video', block.id\)/);
-  assert.match(src, /getMediaSectionStatus\('showcase', 'video', block.id\)/);
-  assert.match(src, /notes\.edit\.mediaUploading/);
-  assert.match(src, /const renderMediaList = useCallback/);
+  // 上传状态落在这一区块自己的添加按钮文案上，按钮本身不重挂。
+  assert.match(src, /renderMediaAdd\('media', 'image', block\.id/);
+  assert.match(src, /renderMediaAdd\('media', 'video', block\.id/);
+  assert.match(src, /renderMediaAdd\('showcase', 'video', block\.id/);
+  assert.match(src, /uploadingSection === `\$\{target\}:\$\{kind\}`\s*\?\s*t\('notes\.edit\.mediaUploading'/);
+  assert.match(src, /const renderMediaTiles = useCallback/);
 });
 
 test('EditNoteScreen batches bounded media selection and keeps local previews out of the payload', () => {
@@ -508,7 +507,7 @@ test('EditNoteScreen resets media upload ownership when its route loses focus', 
   assert.match(src, /const leaveEditor = \(\) => \{\s*invalidateUploadOwnership\(\);\s*setEditorVideoViewer\(null\);/);
   assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return leaveEditor/);
   assert.match(src, /if \(pendingSubmissionRef\.current \|\| saveInFlightRef\.current \|\| !isRouteDataReady \|\| uploadInFlightRef\.current\) return;[\s\S]*?router\.push/);
-  assert.match(src, /onPress=\{handleOpenLocationPicker\}[\s\S]*?disabled=\{!isRouteDataReady \|\| uploadingSection !== null\}/);
+  assert.match(src, /onPress: handleOpenLocationPicker,\s*disabled: !isRouteDataReady \|\| uploadingSection !== null,/);
   assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
 });
 
@@ -529,7 +528,7 @@ test('EditNoteScreen gates its map preview behind an explicit tap', () => {
   // 例外只有一处：本次会话里刚在选点页选好的位置。
   assert.match(src, /consumePickedLocation\(\)[\s\S]*?setMapRevealed\(true\)/);
 
-  assert.match(src, /locationPreviewCard/);
+  assert.match(src, /locationPreview/);
   assert.match(src, /locationMapPreview/);
   assert.doesNotMatch(src, /locationCoordinatePill/);
 });
@@ -770,4 +769,26 @@ test('the notes list reuses unchanged rows and skips focus reloads while nothing
   assert.match(source, /last\.epoch === epoch/);
   assert.match(source, /age >= 0 &&\s*age <= NOTES_FOCUS_RELOAD_FRESH_MS/);
   assert.match(source, /!notesMutatedSince\(last\.at\)/);
+});
+
+// 白底按钮在 #F8F9FA 页面上几乎融掉：多选态的全选 / 取消 / 其他选项和编辑页的预览
+// 都改成品牌浅紫底 + 紫字（link 在两种主题下都有足够对比度）。
+test('secondary note buttons use the tonal brand fill instead of white', () => {
+  const notes = read('src/features/notes/screens/NotesScreen.tsx');
+  const editor = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(notes, /unlistedBtn: \{\s*backgroundColor: colors\.primaryLight,\s*\}/);
+  assert.match(notes, /unlistedBtnText: \{\s*color: colors\.link,\s*\}/);
+  assert.match(notes, /secondaryBtn: \{ backgroundColor: colors\.primaryLight \}/);
+  assert.match(notes, /secondaryBtnText: \{ color: colors\.link \}/);
+  assert.match(editor, /composerPreviewButton: \{ backgroundColor: colors\.primaryLight \}/);
+  assert.match(editor, /composerPreviewButtonContent: \{ color: colors\.link \}/);
+});
+
+test('the showcase composer tool is labelled 验证 while its section keeps the full name', () => {
+  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
+
+  assert.equal(zh.notes.edit.composer.showcase, '验证');
+  assert.equal(zh.notes.edit.sections.showcase, '验证视频');
+  assert.equal(zh.notes.edit.textPlaceholder, undefined);
 });

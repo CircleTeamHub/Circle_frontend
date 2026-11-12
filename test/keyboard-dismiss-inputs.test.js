@@ -70,7 +70,7 @@ test('input scroll containers share down-drag keyboard dismissal behavior', () =
     assert.match(
       source,
       // 登录页的 ScrollView 带一段 onLayout(键盘弹起后把焦点输入框滚回可见),属性区更长。
-      /<(ScrollView|FlatList|SectionList)[\s\S]{0,1500}\{\.\.\.keyboardDismissOnDragProps\}|keyboardDismissMode="on-drag"|onScrollBeginDrag=\{closeInputPanels\}/,
+      /<(?:BottomSheet)?(ScrollView|FlatList|SectionList)[\s\S]{0,1500}\{\.\.\.keyboardDismissOnDragProps\}|keyboardDismissMode="on-drag"|onScrollBeginDrag=\{closeInputPanels\}/,
       `${file} should dismiss keyboard when the user drags its scrollable input area`,
     );
   }

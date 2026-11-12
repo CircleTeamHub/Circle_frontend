@@ -50,10 +50,7 @@ interface Props {
   toolbarLabels: NoteEditorToolbarLabels;
   mediaToolbarEnabled?: boolean;
   editable?: boolean;
-  /** Shown while the whole document is one empty block. */
-  placeholder?: string;
   backgroundColor?: string;
-  placeholderColor?: string;
   /**
    * Reports the rendered content height so the native side can size the
    * WebView to its content. When set, the editor lays out in normal flow
@@ -93,9 +90,7 @@ export default function NoteBlockEditor({
   toolbarLabels,
   mediaToolbarEnabled = true,
   editable = true,
-  placeholder = '',
   backgroundColor,
-  placeholderColor,
   onContentHeightChange,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
@@ -127,12 +122,11 @@ export default function NoteBlockEditor({
     initialContent: parsedInitial,
     dictionary: language === 'zh' ? zh : en,
     // The slash menu is intentionally disabled below because the DOM bridge
-    // does not provide BlockNote's ComponentsContext. Only an empty document
-    // shows the caller's placeholder; every per-block hint stays empty so the
-    // text area stays visually quiet.
+    // does not provide BlockNote's ComponentsContext. Keep every editor
+    // placeholder empty so the text area stays visually quiet.
     placeholders: {
       default: '',
-      emptyDocument: placeholder,
+      emptyDocument: '',
       heading: '',
       toggleListItem: '',
       bulletListItem: '',
@@ -314,10 +308,6 @@ export default function NoteBlockEditor({
         }
         .note-editor .bn-inline-content {
           overflow-wrap: anywhere;
-        }
-        .note-editor .bn-container .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child):before {
-          font-style: normal;
-          ${placeholderColor ? `color: ${placeholderColor};` : ''}
         }
       `}</style>
       {/* Editor scroll area */}

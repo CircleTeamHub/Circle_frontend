@@ -272,9 +272,11 @@ test('note text editor toolbar offers only paragraph and list, and the composer 
   assert.match(dom, /\{fitsContent \? null : \(/);
   assert.match(dom, /new ResizeObserver\(/);
 
-  // 文字块对齐竞品的单行输入条：占位符 + 右侧删除，随内容长高，没有拖动条。
+  // 文字块对齐竞品的单行输入条：输入区 + 右侧删除，随内容长高，没有拖动条。
   assert.match(screen, /<View testID="note-text-section" style=\{\[s\.textBar, d\.textBar\]\}>/);
-  assert.match(screen, /placeholder=\{t\('notes\.edit\.textPlaceholder'/);
+  // 不要「请输入」占位：BlockNote 的占位伪元素在窄条里会逐字换行、被裁掉。
+  assert.doesNotMatch(screen, /textPlaceholder/);
+  assert.match(dom, /emptyDocument: '',/);
   assert.match(screen, /\n\s*fitContent\r?\n/);
   assert.doesNotMatch(screen, /TEXT_EDITOR_RESIZE_HANDLE_HEIGHT|textEditorFrame|resizeTextBlock/);
 });

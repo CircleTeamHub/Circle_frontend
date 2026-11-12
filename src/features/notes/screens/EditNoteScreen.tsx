@@ -52,7 +52,7 @@ import {
 } from '@/features/notes/constants';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
@@ -533,6 +533,11 @@ export default function EditNoteScreen() {
   const draftHydratedRef = useRef(false);
   const baselineFingerprintRef = useRef<string | null>(null);
   const draftPersistedFingerprintRef = useRef<string | null>(null);
+  // 这次进入编辑器时的样子：恢复出来的草稿，没有草稿就是原笔记 / 空白。返回时只看
+  // 「这次有没有改过」—— 自动保存不断写进草稿的中间状态只是给闪退兜底，不能代替
+  // 作者的选择。
+  const entryFingerprintRef = useRef<string | null>(null);
+  const entryDraftRecordRef = useRef<NoteEditorDraftRecord | null>(null);
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftTextSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftSavePromiseRef = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -1079,6 +1084,8 @@ export default function EditNoteScreen() {
     setDraftHydratedKey(null);
     baselineFingerprintRef.current = null;
     draftPersistedFingerprintRef.current = null;
+    entryFingerprintRef.current = null;
+    entryDraftRecordRef.current = null;
     setSettledRouteKey(null);
     setLoadedNoteId(null);
     textStatsStore.reset();
@@ -1372,6 +1379,8 @@ export default function EditNoteScreen() {
       if (!record && draftPersistedFingerprintRef.current == null) {
         draftPersistedFingerprintRef.current = baselineFingerprintRef.current;
       }
+      entryDraftRecordRef.current = record;
+      entryFingerprintRef.current = draftPersistedFingerprintRef.current;
       draftHydratedRef.current = true;
       setDraftHydratedKey(draftRouteKey);
     };
@@ -1587,14 +1596,55 @@ export default function EditNoteScreen() {
         saveAndExit();
         return;
       }
+      // 本来就没有草稿：自动保存替闪退写下的那份删掉，草稿箱里不留东西。
+      const discardDraft = () => {
+        if (currentUser?.id) {
+          try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
+          catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+        } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
+        draftRemoteQueue.cancel();
+        completeNavigation(action);
+        // Delete after in-flight saves, so their late response cannot revive a discarded draft.
+        void draftSavePromiseRef.current.catch(() => false).then(async () => {
+          if (!isCurrentEditor() || !currentUser?.id) return;
+          try {
+            const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
+            if (!isCurrentEditor()) return;
+            await deleteNoteDraft(editorDraftId);
+            if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
+          } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
+        });
+      };
+      // 从草稿箱打开的草稿：不保存 = 退回打开时的样子，草稿本身留着，不能整份删掉。
+      const revertDraft = (entry: NoteEditorDraftRecord) => {
+        if (!currentUser?.id) return;
+        // 本地副本盖上「现在」，比任何已经写到服务端的自动保存都新，下次打开以它为准。
+        const reverted = { ...entry, updatedAt: Date.now() };
+        try { saveLocalNoteDraft(currentUser.id, reverted); }
+        catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed')); return; }
+        // 这次新录、退回后不再被引用的录音：本地持久副本一并清掉。
+        const keptRecordings = new Set(reverted.audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []));
+        removeUnreferencedLocalNoteRecordings(currentUser.id, buildCurrentDraftRecord().audioItems.flatMap((item) =>
+          item.localRecordingId && !keptRecordings.has(item.localRecordingId) ? [item.localRecordingId] : []));
+        draftRemoteQueue.cancel();
+        completeNavigation(action);
+        // Rewrite the server copy after in-flight autosaves, so a late one cannot keep the edits.
+        void draftSavePromiseRef.current.catch(() => false).then(async () => {
+          if (!isCurrentEditor()) return;
+          try { await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(reverted)); }
+          catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); }
+        });
+      };
       const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
-      const dirtyNow = hasUndurableRecording || (
+      const changedThisSession = hasUndurableRecording || (
         draftHydratedRef.current &&
-        baselineFingerprintRef.current != null &&
-        draftPersistedFingerprintRef.current !== currentFingerprint);
-      if (!dirtyNow) {
-        if (currentUser?.id) saveAndExit();
-        else completeNavigation(action);
+        entryFingerprintRef.current != null &&
+        entryFingerprintRef.current !== currentFingerprint);
+      if (!changedThisSession) {
+        if (!currentUser?.id) completeNavigation(action);
+        // 改了又全部改回去：自动保存留下的中间状态不该变成一份草稿。
+        else if (!entryDraftRecordRef.current && draftPersistedFingerprintRef.current !== currentFingerprint) discardDraft();
+        else saveAndExit();
         return;
       }
       Alert.alert(
@@ -1609,22 +1659,9 @@ export default function EditNoteScreen() {
             style: 'destructive',
             onPress: () => {
               if (!isCurrentEditor()) return;
-              if (currentUser?.id) {
-                try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-                catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
-              } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
-              draftRemoteQueue.cancel();
-              completeNavigation(action);
-              // Delete after in-flight saves, so their late response cannot revive a discarded draft.
-              void draftSavePromiseRef.current.catch(() => false).then(async () => {
-                if (!isCurrentEditor() || !currentUser?.id) return;
-                try {
-                  const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
-                  if (!isCurrentEditor()) return;
-                  await deleteNoteDraft(editorDraftId);
-                  if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
-                } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
-              });
+              const entryDraft = entryDraftRecordRef.current;
+              if (entryDraft) revertDraft(entryDraft);
+              else discardDraft();
             },
           },
           {
@@ -2937,45 +2974,22 @@ export default function EditNoteScreen() {
       groupSheetRowMeta: { color: colors.textSecondary },
       groupSheetDone: { backgroundColor: colors.primary },
       groupSheetDoneText: { color: colors.white },
-      sectionIcon: { backgroundColor: colors.primaryLight },
-      secondarySection: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
       heroCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
       textBar: { backgroundColor: colors.surface },
-      sectionHeading: { color: colors.text },
+      sectionAddText: { color: colors.textSecondary },
       sectionSubtitle: { color: colors.textSecondary },
-      sectionHeaderMeta: { color: colors.textSecondary },
-      mediaPreviewTile: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
+      mediaPreviewTile: { backgroundColor: colors.surface },
       mediaTitle: { color: colors.text },
       mediaMeta: { color: colors.textSecondary },
-      emptyText: { color: colors.textSecondary },
-      emptyTray: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      sectionAction: {
-        backgroundColor: colors.primaryLight,
-        borderColor: 'transparent',
-      },
-      sectionActionText: { color: colors.iconAccent },
       legacyMediaWarning: { borderColor: colors.warning },
       legacyMediaWarningText: { color: colors.text },
-      locationPreviewCard: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      locationDetailLabel: { color: colors.textSecondary },
       locationClearAction: { borderColor: colors.surfaceBorder },
       locationClearText: { color: colors.textSecondary },
-      locationMapFallback: { backgroundColor: colors.surface },
+      // 地图占位和白条同底会糊成一片，用次级灰把这块内容区托出来。
+      locationMapFallback: { backgroundColor: colors.surfaceMuted },
       locationMapRevealButton: { backgroundColor: colors.overlay },
       locationMapRevealText: {
         color: colors.textSecondary,
@@ -2998,8 +3012,9 @@ export default function EditNoteScreen() {
         borderColor: colors.surfaceBorder,
       },
       composerSortButton: { backgroundColor: colors.primary },
-      composerPreviewButton: { backgroundColor: colors.surfaceMuted },
-      composerPreviewButtonContent: { color: colors.text },
+      // 次要按钮用品牌浅紫底 + 紫字：灰底在白色底栏上几乎看不出是个按钮。
+      composerPreviewButton: { backgroundColor: colors.primaryLight },
+      composerPreviewButtonContent: { color: colors.link },
     }),
     [colors],
   );
@@ -3039,41 +3054,66 @@ export default function EditNoteScreen() {
         )
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
-  const audioSectionStatus = uploadingSection === 'audio'
-    ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-    : recordingAudioStartedAt !== null
-      ? t('notes.edit.audioRecording', { defaultValue: '录音中，点击停止' })
-      : `${audioItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
-  // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
-  const renderSectionHeader = (
-    icon: keyof typeof Ionicons.glyphMap,
-    sectionTitle: string,
-    meta?: string,
-    onRemove?: () => void,
-  ) => (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionIcon, d.sectionIcon]}>
-        <Ionicons name={icon} size={16} color={colors.iconAccent} />
+  // 文字以外的每个区块都和文字条同款：白色圆角条，有内容时内容在上，最下一行
+  // 是「＋ 添加…」按钮和右侧红色删除。没有小节头、计数和内框 —— 按钮文案本身
+  // 就说明了这是哪一种区块。
+  const renderSectionBar = ({
+    testID,
+    label,
+    onRemove,
+    content,
+    actions,
+  }: {
+    testID?: string;
+    label: string;
+    onRemove?: () => void;
+    content?: ReactNode;
+    actions: ReactNode;
+  }) => (
+    <View testID={testID} style={[s.sectionBar, d.textBar]}>
+      {content ? <View style={s.sectionBarContent}>{content}</View> : null}
+      <View style={s.sectionBarRow}>
+        <View style={s.sectionBarActions}>{actions}</View>
+        {onRemove ? (
+          <Pressable
+            style={s.textBarRemoveButton}
+            onPress={onRemove}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${label}`}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          </Pressable>
+        ) : null}
       </View>
-      <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
-      {meta ? (
-        <View style={s.sectionHeaderMeta}>
-          <Text style={[s.sectionHeaderMetaText, d.sectionHeaderMeta]}>{meta}</Text>
-        </View>
-      ) : null}
-      {onRemove ? (
-        <Pressable
-          style={s.sectionRemoveButton}
-          onPress={onRemove}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${sectionTitle}`}
-        >
-          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-        </Pressable>
-      ) : null}
     </View>
+  );
+
+  const renderSectionAdd = ({
+    icon = 'add',
+    label,
+    onPress,
+    disabled,
+  }: {
+    icon?: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+    disabled: boolean;
+  }) => (
+    <Pressable
+      style={s.sectionAddButton}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+    >
+      <Ionicons name={icon} size={20} color={disabled ? colors.textSecondary : colors.iconAccent} />
+      <Text style={[s.sectionAddText, d.sectionAddText]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 
   const getMediaItemsForBlock = useCallback((
@@ -3084,45 +3124,25 @@ export default function EditNoteScreen() {
     return items.filter((item) => getNoteComposerMediaOwner(composerBlocks, target, item.type, mediaOwnerByClientId[item.clientId]) === blockId);
   }, [composerBlocks, mediaOwnerByClientId]);
 
-  const getMediaSectionStatus = (target: SectionMediaTarget, kind: 'image' | 'video', blockId: string) =>
-    uploadingSection === `${target}:${kind}`
+  // 上传状态落在这一区块自己的添加按钮上：文案换成「正在上传」，按钮本身不重挂。
+  const renderMediaAdd = (
+    target: SectionMediaTarget,
+    kind: 'image' | 'video',
+    blockId: string,
+    addLabel: string,
+  ) => renderSectionAdd({
+    label: uploadingSection === `${target}:${kind}`
       ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-      : `${getMediaItemsForBlock(target === 'showcase' ? showcaseItems : mediaItems, target, blockId).length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
+      : addLabel,
+    onPress: () => void handleAddSectionMedia({ target, kind, blockId }),
+    disabled: !isRouteDataReady || uploadingSection !== null,
+  });
 
-  const renderMediaList = useCallback((
+  const renderMediaTiles = useCallback((
     items: EditorNoteMediaDraft[],
     target: SectionMediaTarget,
-    onAdd: () => void,
-    addLabel: string,
   ) => {
-    const addTile = (
-      <Pressable
-        style={[s.mediaAddTile, d.mediaPreviewTile]}
-        onPress={onAdd}
-        disabled={!isRouteDataReady || uploadingSection !== null}
-        accessibilityRole="button"
-        accessibilityLabel={addLabel}
-      >
-        <Ionicons name="add" size={28} color={colors.iconAccent} />
-        <Text style={[s.mediaAddLabel, d.emptyText]}>{addLabel}</Text>
-      </Pressable>
-    );
-    if (items.length === 0) {
-      return (
-        <Pressable
-          style={[s.emptyTray, d.emptyTray]}
-          onPress={onAdd}
-          disabled={!isRouteDataReady || uploadingSection !== null}
-          accessibilityRole="button"
-          accessibilityLabel={addLabel}
-        >
-          <Ionicons name="add-circle-outline" size={22} color={colors.iconAccent} />
-          <Text style={[s.emptySectionText, d.emptyText]}>
-            {addLabel}
-          </Text>
-        </Pressable>
-      );
-    }
+    if (items.length === 0) return null;
     return (
       <View style={s.mediaPreviewList}>
         {items.map((item) => {
@@ -3199,20 +3219,15 @@ export default function EditNoteScreen() {
             </View>
           );
         })}
-        {addTile}
       </View>
     );
   }, [
     colors.iconAccent,
     colors.text,
-    d.emptyText,
-    d.emptyTray,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
-    isRouteDataReady,
     uploadedClientIds,
-    uploadingSection,
     t,
   ]);
 
@@ -3268,7 +3283,7 @@ export default function EditNoteScreen() {
           </View>
         );
       case 'text':
-        // 对齐竞品的单行输入条：只有占位符和右侧删除，随内容自动长高；
+        // 对齐竞品的单行输入条：只有输入区和右侧删除，随内容自动长高；
         // 超长时的错误提示仍挂在条下面，「完成」被挡住时作者看得到原因。
         return (
           <>
@@ -3281,7 +3296,6 @@ export default function EditNoteScreen() {
                     onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
                     mediaToolbarEnabled={false}
                     editable={!isEditingLocked}
-                    placeholder={t('notes.edit.textPlaceholder', { defaultValue: '请输入' })}
                     fitContent
                   />
                 ) : null}
@@ -3335,209 +3349,123 @@ export default function EditNoteScreen() {
           </View>
         ) : null}
 
-        <View testID="note-image-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'images-outline',
-            t('notes.edit.composer.image', { defaultValue: '图片' }),
-            getMediaSectionStatus('media', 'image', block.id),
-            () => handleRemoveComposerBlock(block),
-          )}
-          {renderMediaList(
-            getMediaItemsForBlock(mediaItems, 'media', block.id),
-            'media',
-            () => void handleAddSectionMedia({ target: 'media', kind: 'image', blockId: block.id }),
-            t('notes.edit.addImage', { defaultValue: '添加图片' }),
-          )}
-        </View>
-
+        {renderSectionBar({
+          testID: 'note-image-section',
+          label: t('notes.edit.composer.image', { defaultValue: '图片' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
+          actions: renderMediaAdd('media', 'image', block.id, t('notes.edit.addImage', { defaultValue: '添加图片' })),
+        })}
           </>
         );
       case 'video':
-        return (
-          <View testID="note-video-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader(
-              'videocam-outline',
-              t('notes.edit.composer.video', { defaultValue: '视频' }),
-              getMediaSectionStatus('media', 'video', block.id),
-              () => handleRemoveComposerBlock(block),
-            )}
-            {renderMediaList(
-              getMediaItemsForBlock(mediaItems, 'media', block.id),
-              'media',
-              () => void handleAddSectionMedia({ target: 'media', kind: 'video', blockId: block.id }),
-              t('notes.edit.addVideo', { defaultValue: '添加视频' }),
-            )}
-          </View>
-        );
+        return renderSectionBar({
+          testID: 'note-video-section',
+          label: t('notes.edit.composer.video', { defaultValue: '视频' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
+          actions: renderMediaAdd('media', 'video', block.id, t('notes.edit.addVideo', { defaultValue: '添加视频' })),
+        });
       case 'showcase':
-        return (
-          <>
-        <View testID="note-showcase-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'albums-outline',
-            t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
-            getMediaSectionStatus('showcase', 'video', block.id),
-            () => handleRemoveComposerBlock(block),
-          )}
-          {renderMediaList(
-            getMediaItemsForBlock(showcaseItems, 'showcase', block.id),
-            'showcase',
-            () => void handleAddSectionMedia({ target: 'showcase', kind: 'video', blockId: block.id }),
-            t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' }),
-          )}
-        </View>
-
-          </>
-        );
+        return renderSectionBar({
+          testID: 'note-showcase-section',
+          label: t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(showcaseItems, 'showcase', block.id), 'showcase'),
+          actions: renderMediaAdd('showcase', 'video', block.id, t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' })),
+        });
       case 'audio':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader('mic-outline', t('notes.edit.composer.audio', { defaultValue: '录音' }), audioSectionStatus, () => handleRemoveComposerBlock(block))}
-            <View style={s.sectionActions}>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void handleAddAudioFile(block.id)}
-                disabled={!isRouteDataReady || uploadingSection !== null || recordingAudioStartedAt !== null}
-              >
-                <Ionicons name="cloud-upload-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {t('notes.edit.uploadAudio', { defaultValue: '上传音频' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void toggleNoteRecording(block.id)}
-                disabled={!isRouteDataReady || uploadingSection !== null || (recordingAudioStartedAt === null && audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))}
-              >
-                <Ionicons name={recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline'} size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {recordingAudioStartedAt !== null
-                    ? t('notes.edit.stopRecording', { defaultValue: '停止录音' })
-                    : t('notes.edit.startRecording', { defaultValue: '开始录音' })}
-                </Text>
-              </Pressable>
-            </View>
-            {isFirstAudioBlock && audioItems.length > 0 ? (
-              <View style={s.audioList}>
-                {audioItems.map((item) => (
-                  <View key={item.clientId} style={[s.audioRow, d.locationPreviewCard]}>
-                    <Ionicons name="mic" size={18} color={colors.iconAccent} />
-                    <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
-                      {typeof item.durationMs === 'number' && item.durationMs > 0
-                        ? t('notes.edit.audioDuration', { defaultValue: '{{seconds}} 秒', seconds: Math.max(1, Math.round(item.durationMs / 1000)) })
-                        : t('notes.edit.audioItem', { defaultValue: '音频' })}
-                    </Text>
-                    {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
-                      <Pressable accessibilityRole="button" accessibilityLabel={t('common.retry')}
-                        onPress={() => void retryRecordedAudio(item)} disabled={uploadingSection !== null || recordingAudioStartedAt !== null}>
-                        <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable accessibilityRole="button" accessibilityLabel={t('notes.actions.delete') + t('notes.edit.audioItem')} onPress={() => removeRecordedAudio(item)} hitSlop={8}>
-                      <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        );
-      case 'contact':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader('person-outline', t('notes.edit.composer.contact', { defaultValue: '名片' }), `${contactItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`, () => handleRemoveComposerBlock(block))}
-            <View style={s.sectionActions}>
-              <Pressable style={[s.sectionAction, d.sectionAction]} onPress={() => void openCardPicker('contact')} disabled={!isRouteDataReady}>
-                <Ionicons name="person-add-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>{t('notes.edit.addContact', { defaultValue: '选择联系人' })}</Text>
-              </Pressable>
-            </View>
-            {contactItems.map((item) => {
-              const avatar = getNoteCardAvatar(item);
-              return (
-                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
-                  {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                  ) : (
-                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
-                    </View>
-                  )}
-                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
-                </View>
-              );
-            })}
-          </View>
-        );
-      case 'group':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader(
-              'people-outline',
-              t('notes.edit.composer.group', { defaultValue: '群名片' }),
-              sourceGroupCardLocked
-                ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
-                : `${groupCardItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
-              sourceGroupCardLocked ? undefined : () => handleRemoveComposerBlock(block),
-            )}
-            <View style={s.sectionActions}>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void openCardPicker('group')}
-                disabled={!isRouteDataReady || sourceGroupCardLocked}
-                accessibilityState={{ disabled: !isRouteDataReady || sourceGroupCardLocked }}
-              >
-                <Ionicons name="people-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {sourceGroupCardLocked
-                    ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
-                    : t('notes.edit.addGroup', { defaultValue: '选择群组' })}
-                </Text>
-              </Pressable>
-            </View>
-            {groupCardItems.map((item) => {
-              const avatar = getNoteCardAvatar(item);
-              return (
-                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
-                  {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                  ) : (
-                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
-                    </View>
-                  )}
-                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
-                </View>
-              );
-            })}
-          </View>
-        );
-      case 'location':
-        return (
-          <>
-        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'location-outline',
-            t('notes.edit.sections.location', { defaultValue: '位置' }),
-            hasLocation
-              ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
-              : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
-            () => handleRemoveComposerBlock(block),
-          )}
-          <View style={s.sectionActions}>
-            <Pressable
-              style={[s.sectionAction, d.sectionAction]}
-              onPress={handleOpenLocationPicker}
-              disabled={!isRouteDataReady || uploadingSection !== null}
-            >
-              <Ionicons name="map-outline" size={17} color={colors.text} />
-              <Text style={[s.sectionActionText, d.sectionActionText]}>
-                {t('notes.edit.pickLocation', { defaultValue: '选择位置' })}
+        return renderSectionBar({
+          label: t('notes.edit.composer.audio', { defaultValue: '录音' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: isFirstAudioBlock && audioItems.length > 0 ? audioItems.map((item) => (
+            <View key={item.clientId} style={s.audioRow}>
+              <Ionicons name="mic" size={18} color={colors.iconAccent} />
+              <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
+                {typeof item.durationMs === 'number' && item.durationMs > 0
+                  ? t('notes.edit.audioDuration', { defaultValue: '{{seconds}} 秒', seconds: Math.max(1, Math.round(item.durationMs / 1000)) })
+                  : t('notes.edit.audioItem', { defaultValue: '音频' })}
               </Text>
-            </Pressable>
-          </View>
-          {hasLocation ? (
-            <View style={[s.locationPreviewCard, d.locationPreviewCard]}>
+              {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={t('common.retry')}
+                  onPress={() => void retryRecordedAudio(item)} disabled={uploadingSection !== null || recordingAudioStartedAt !== null}>
+                  <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable accessibilityRole="button" accessibilityLabel={t('notes.actions.delete') + t('notes.edit.audioItem')} onPress={() => removeRecordedAudio(item)} hitSlop={8}>
+                <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          )) : null,
+          actions: (
+            <>
+              {renderSectionAdd({
+                icon: 'cloud-upload-outline',
+                label: uploadingSection === 'audio'
+                  ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+                  : t('notes.edit.uploadAudio', { defaultValue: '上传音频' }),
+                onPress: () => void handleAddAudioFile(block.id),
+                disabled: !isRouteDataReady || uploadingSection !== null || recordingAudioStartedAt !== null,
+              })}
+              {renderSectionAdd({
+                icon: recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline',
+                label: recordingAudioStartedAt !== null
+                  ? t('notes.edit.stopRecording', { defaultValue: '停止录音' })
+                  : t('notes.edit.startRecording', { defaultValue: '开始录音' }),
+                onPress: () => void toggleNoteRecording(block.id),
+                disabled: !isRouteDataReady || uploadingSection !== null || (recordingAudioStartedAt === null && audioItems.some((item) => item.uploadStatus !== 'UPLOADED')),
+              })}
+            </>
+          ),
+        });
+      case 'contact':
+      case 'group': {
+        const isGroup = kind === 'group';
+        const cardItems = isGroup ? groupCardItems : contactItems;
+        const locked = isGroup && sourceGroupCardLocked;
+        return renderSectionBar({
+          label: isGroup
+            ? t('notes.edit.composer.group', { defaultValue: '群名片' })
+            : t('notes.edit.composer.contact', { defaultValue: '名片' }),
+          // 收藏副本的来源群名片是固定的，删不掉也换不了。
+          onRemove: locked ? undefined : () => handleRemoveComposerBlock(block),
+          content: cardItems.length > 0 ? cardItems.map((item) => {
+            const avatar = getNoteCardAvatar(item);
+            return (
+              <View key={item.id} style={s.cardRow}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+                ) : (
+                  <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                    <Ionicons name={isGroup ? 'people-outline' : 'person-outline'} size={19} color={colors.iconAccent} />
+                  </View>
+                )}
+                <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+              </View>
+            );
+          }) : null,
+          actions: renderSectionAdd({
+            label: locked
+              ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
+              : isGroup
+                ? t('notes.edit.addGroup', { defaultValue: '选择群组' })
+                : t('notes.edit.addContact', { defaultValue: '选择联系人' }),
+            onPress: () => void openCardPicker(isGroup ? 'group' : 'contact'),
+            disabled: !isRouteDataReady || locked,
+          }),
+        });
+      }
+      case 'location':
+        return renderSectionBar({
+          label: t('notes.edit.sections.location', { defaultValue: '位置' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          actions: renderSectionAdd({
+            label: t('notes.edit.pickLocation', { defaultValue: '选择位置' }),
+            onPress: handleOpenLocationPicker,
+            disabled: !isRouteDataReady || uploadingSection !== null,
+          }),
+          content: hasLocation ? (
+            <View style={s.locationPreview}>
               <View
                 testID="note-location-map"
                 style={s.locationMapPreview}
@@ -3588,18 +3516,9 @@ export default function EditNoteScreen() {
                 )}
               </View>
               <View style={s.locationPreviewInfo}>
-                <View style={s.locationPreviewTitleRow}>
-                  <Ionicons name="location" size={16} color={colors.iconAccent} />
-                  <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
-                    {t('notes.edit.locationPlaceNameLabel', { defaultValue: '地点名称' })}
-                  </Text>
-                </View>
                 <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
                   {locationDraft.title ||
                     t('notes.edit.locationPreviewTitle', { defaultValue: '已选择位置' })}
-                </Text>
-                <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
-                  {t('notes.edit.locationAddressLabel', { defaultValue: '详细地址' })}
                 </Text>
                 <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
                   {locationDraft.address ||
@@ -3620,10 +3539,8 @@ export default function EditNoteScreen() {
                 </View>
               </View>
             </View>
-          ) : null}
-        </View>
-          </>
-        );
+          ) : null,
+        });
       default:
         return null;
     }
@@ -3923,7 +3840,7 @@ export default function EditNoteScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('notes.edit.composer.preview', { defaultValue: '预览' })}
           >
-            <Ionicons name="eye-outline" size={18} color={colors.text} />
+            <Ionicons name="eye-outline" size={18} color={colors.link} />
             <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>
               {t('notes.edit.composer.preview', { defaultValue: '预览' })}
             </Text>
@@ -3956,7 +3873,7 @@ export default function EditNoteScreen() {
             <Ionicons name="close" size={24} color={colors.textSecondary} />
           </Pressable>
         </View>
-        <ScrollView
+        <BottomSheetScrollView
           style={s.composerSortList}
           showsVerticalScrollIndicator={false}
           scrollEnabled={draggingComposerBlockId === null}
@@ -4053,7 +3970,7 @@ export default function EditNoteScreen() {
               );
             })
           )}
-        </ScrollView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
       {previewVisible ? (
         <Modal
@@ -4165,7 +4082,7 @@ export default function EditNoteScreen() {
             color={colors.primary}
           />
         ) : (
-          <ScrollView
+          <BottomSheetScrollView
             style={s.cardPickerList}
             contentContainerStyle={s.cardPickerListContent}
             keyboardShouldPersistTaps="handled"
@@ -4241,7 +4158,7 @@ export default function EditNoteScreen() {
                 </Text>
               )
             )}
-          </ScrollView>
+          </BottomSheetScrollView>
         )}
         <View style={s.cardPickerActions}>
           <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
@@ -4283,7 +4200,7 @@ export default function EditNoteScreen() {
               {t('notes.groupPicker.empty', { defaultValue: '暂无分组' })}
             </Text>
           ) : (
-            <ScrollView
+            <BottomSheetScrollView
               style={s.groupSheetList}
               contentContainerStyle={s.groupSheetListContent}
               showsVerticalScrollIndicator={false}
@@ -4318,7 +4235,7 @@ export default function EditNoteScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           )}
           {groupCreateOpen ? (
             <View style={s.groupCreateRow}>
@@ -4591,57 +4508,42 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
-  sectionBlock: {
+  sectionSubtitle: { ...Typography.small },
+  // 其余区块与文字条同一套外形：左内边距 16 让「＋」和正文首字对齐，
+  // 右侧只留删除按钮的位置；内容区在上，按钮行在下。
+  sectionBar: {
     marginHorizontal: Spacing.lg,
-    marginBottom: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.xs,
+    borderRadius: Radius.lg,
     borderCurve: 'continuous',
-    padding: Spacing.md,
-    gap: Spacing.md,
+    overflow: 'hidden',
   },
-  secondarySection: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
+  sectionBarContent: {
+    paddingTop: Spacing.md,
+    paddingRight: Spacing.md,
+    gap: Spacing.sm,
   },
-  sectionHeader: {
+  sectionBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    minHeight: 30,
+    minHeight: 50,
   },
-  sectionIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionHeading: {
+  sectionBarActions: {
     flex: 1,
-    // 与详情页小节标题同档（h3/700），编辑页分段更醒目。
-    ...Typography.h3,
-    fontWeight: '700',
-  },
-  sectionSubtitle: { ...Typography.small },
-  sectionHeaderMeta: {
-    marginLeft: 'auto',
-    alignItems: 'flex-end',
-  },
-  sectionHeaderMetaText: { ...Typography.small },
-  sectionRemoveButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.xs,
+    gap: Spacing.lg,
   },
+  sectionAddButton: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 50,
+  },
+  sectionAddText: { ...Typography.body, flexShrink: 1 },
   // 编辑器自己带 10pt 内边距，条只补 6pt：文字离左边缘 16，和标题对齐。
   // 上下各留 2pt，WebView 不碰圆角（安卓不一定按父视图圆角裁 WebView），
   // 单行时整条正好 50 高。
@@ -4679,43 +4581,14 @@ const s = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   legacyMediaWarningText: { ...Typography.small, flex: 1, lineHeight: 18 },
-  sectionActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  sectionAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 0,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 9,
-    gap: Spacing.xs,
-  },
-  sectionActionText: { ...Typography.small, fontWeight: '600' },
   mediaPreviewList: {
     gap: Spacing.sm,
   },
   mediaPreviewTile: {
     width: '100%',
     aspectRatio: 1,
-    borderWidth: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-  },
-  mediaAddTile: {
-    minHeight: 96,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    borderStyle: 'dashed',
-  },
-  mediaAddLabel: {
-    ...Typography.tiny,
-    textAlign: 'center',
   },
   mediaThumb: {
     width: '100%',
@@ -4743,32 +4616,16 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.86)',
   },
-  emptyTray: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
-  emptySectionText: { ...Typography.small },
-  audioList: { gap: Spacing.xs, marginTop: Spacing.sm },
   audioRow: {
     minHeight: 44,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
   cardRow: {
     minHeight: 44,
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -4791,14 +4648,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationPreviewCard: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+  locationPreview: { gap: Spacing.sm },
   locationMapPreview: {
     width: '100%',
     height: LOCATION_MAP_HEIGHT,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   locationMapTile: {
@@ -4838,18 +4692,8 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  locationPreviewInfo: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  locationPreviewTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  locationDetailLabel: { ...Typography.small, fontWeight: '600' },
-  locationClearRow: { alignItems: 'flex-end', paddingTop: Spacing.xs },
+  locationPreviewInfo: { gap: 2 },
+  locationClearRow: { alignItems: 'flex-end' },
   locationClearAction: {
     flexDirection: 'row',
     alignItems: 'center',

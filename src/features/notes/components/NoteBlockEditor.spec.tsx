@@ -293,9 +293,7 @@ test('readonly mode reaches the DOM editor and ignores delayed bridge content ca
 });
 
 type MockFitContentProps = {
-  placeholder?: string;
   backgroundColor?: string;
-  placeholderColor?: string;
   onContentHeightChange?: (height: number) => void;
 };
 
@@ -305,16 +303,12 @@ const frameHeight = () =>
 test('fit-content mode starts as one line, follows the reported height and caps it', () => {
   const windowHeight = Dimensions.get('window').height;
   render(
-    <NoteBlockEditor initialContent={null} onContentChange={jest.fn()} placeholder="请输入" fitContent />,
+    <NoteBlockEditor initialContent={null} onContentChange={jest.fn()} fitContent />,
   );
   const domProps = () => mockDomProps as unknown as MockFitContentProps;
 
   expect(frameHeight()).toBe(46);
-  expect(domProps()).toEqual(expect.objectContaining({
-    placeholder: '请输入',
-    backgroundColor: '#FFFFFF',
-    placeholderColor: '#6B7280',
-  }));
+  expect(domProps().backgroundColor).toBe('#FFFFFF');
 
   act(() => domProps().onContentHeightChange?.(132));
   expect(frameHeight()).toBe(132);

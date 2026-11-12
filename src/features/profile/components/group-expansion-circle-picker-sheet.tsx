@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetFlatList } from '@/components/ui/bottom-sheet-modal';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { MyCircle } from '@/types';
 
@@ -190,7 +189,7 @@ export function GroupExpansionCirclePickerSheet({
         ) : null}
       </View>
 
-      <FlatList
+      <BottomSheetFlatList
         data={filteredCircles}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
