@@ -71,6 +71,16 @@
       "expo-router",
       "expo-image",
       "expo-document-picker",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "允许风信访问你的照片和视频，用于在聊天中发送媒体以及设置头像。",
+          "savePhotosPermission": "允许风信保存二维码等图片到你的相册。",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": ["photo", "video"],
+          "preventAutomaticLimitedAccessAlert": true
+        }
+      ],
       "expo-notifications",
       "expo-web-browser",
       "expo-localization",

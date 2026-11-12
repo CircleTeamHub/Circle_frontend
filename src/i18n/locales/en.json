@@ -930,7 +930,8 @@
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
       "transfer": "Transfer",
-      "mediaAlbum": "Album"
+      "mediaAlbum": "Album",
+      "editAndSend": "Edit & Send"
     },
     "photoEditor": {
       "title": "Edit Photo",
@@ -1089,6 +1090,28 @@
     "clearHistoryConfirmDirect": "Clear this chat history? It will also be deleted for the other person and cannot be undone.",
     "clearHistoryDone": "Cleared",
     "clearHistoryDoneDirect": "Chat history deleted for both people",
+    "mediaPicker": {
+      "recents": "Recents",
+      "single": "Single",
+      "captionPlaceholder": "Add a description",
+      "preview": "Preview",
+      "confirm": "Done",
+      "confirmCount": "Done ({{count}})",
+      "limitedNotice": "You've allowed access to only some photos and videos",
+      "manageAccess": "Manage",
+      "permissionTitle": "Photo access needed",
+      "permissionMessage": "Allow access to photos and videos to pick and send them here",
+      "openSettings": "Open Settings",
+      "useSystemPicker": "Choose from system photos",
+      "empty": "No photos or videos",
+      "loadFailed": "Couldn't load photos. Tap to retry",
+      "selectionLimit": "You can select up to {{count}} items",
+      "resolveFailed": "Couldn't read the selected items. Please try again",
+      "someSkipped": "Some items couldn't be read and were skipped",
+      "switchAlbum": "Switch album",
+      "photo": "Photo",
+      "video": "Video"
+    },
     "mediaSend": {
       "title": "Send {{count}} items",
       "captionPlaceholder": "Add a caption (optional)",

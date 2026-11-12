@@ -926,7 +926,8 @@
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账",
-      "mediaAlbum": "相册"
+      "mediaAlbum": "相册",
+      "editAndSend": "编辑发送"
     },
     "photoEditor": {
       "title": "编辑照片",
@@ -1085,6 +1086,28 @@
     "clearHistoryConfirmDirect": "确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。",
     "clearHistoryDone": "已清空",
     "clearHistoryDoneDirect": "双方聊天记录已删除",
+    "mediaPicker": {
+      "recents": "最近项目",
+      "single": "单张",
+      "captionPlaceholder": "请输入描述",
+      "preview": "预览",
+      "confirm": "确认",
+      "confirmCount": "确认({{count}})",
+      "limitedNotice": "你只允许访问部分照片和视频",
+      "manageAccess": "管理",
+      "permissionTitle": "需要相册权限",
+      "permissionMessage": "允许访问照片和视频后，可以在这里直接选择并发送",
+      "openSettings": "去设置",
+      "useSystemPicker": "从系统相册选择",
+      "empty": "没有照片或视频",
+      "loadFailed": "相册读取失败，轻触重试",
+      "selectionLimit": "最多选择 {{count}} 项",
+      "resolveFailed": "读取所选内容失败，请重试",
+      "someSkipped": "部分内容无法读取，已跳过",
+      "switchAlbum": "切换相册",
+      "photo": "照片",
+      "video": "视频"
+    },
     "mediaSend": {
       "title": "发送 {{count}} 项内容",
       "captionPlaceholder": "添加描述（可选）",

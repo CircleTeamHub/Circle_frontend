@@ -29,6 +29,11 @@ interface BottomSheetModalProps {
   closeOnBackdropPress?: boolean;
   statusBarTranslucent?: boolean;
   avoidKeyboard?: boolean;
+  /**
+   * iOS only (React Native's Modal never fires it on Android): called once the sheet has
+   * fully closed. iOS cannot present another Modal while this one is still dismissing.
+   */
+  onDismiss?: () => void;
 }
 
 // 下拉关闭的判定：拖过面板高度的三成（且至少 120pt）才关；快速下甩要同时
@@ -102,6 +107,7 @@ export function BottomSheetModal({
   closeOnBackdropPress = true,
   statusBarTranslucent = true,
   avoidKeyboard = true,
+  onDismiss,
 }: BottomSheetModalProps) {
   const { colors } = useTheme();
   // 默认就压暗背后的页面:面板常和页面同底色,没有蒙层两者分不出边界。
@@ -248,6 +254,7 @@ export function BottomSheetModal({
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      onDismiss={onDismiss}
       statusBarTranslucent={statusBarTranslucent}
     >
       <View style={s.root}>

@@ -856,7 +856,8 @@
       "favorites": "즐겨찾기",
       "quickReply": "빠른 답장",
       "transfer": "송금",
-      "mediaAlbum": "앨범"
+      "mediaAlbum": "앨범",
+      "editAndSend": "편집 후 전송"
     },
     "photoEditor": {
       "title": "사진 편집",
@@ -1015,6 +1016,28 @@
     "clearHistoryConfirmDirect": "채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
     "clearHistoryDone": "지웠습니다",
     "clearHistoryDoneDirect": "양쪽 채팅 기록을 삭제했습니다",
+    "mediaPicker": {
+      "recents": "최근 항목",
+      "single": "한 장",
+      "captionPlaceholder": "설명을 입력하세요",
+      "preview": "미리보기",
+      "confirm": "확인",
+      "confirmCount": "확인({{count}})",
+      "limitedNotice": "일부 사진과 동영상에만 접근을 허용했습니다",
+      "manageAccess": "관리",
+      "permissionTitle": "사진 접근 권한이 필요합니다",
+      "permissionMessage": "사진과 동영상 접근을 허용하면 여기서 바로 선택해 보낼 수 있습니다",
+      "openSettings": "설정 열기",
+      "useSystemPicker": "시스템 사진에서 선택",
+      "empty": "사진이나 동영상이 없습니다",
+      "loadFailed": "사진을 불러오지 못했습니다. 탭하여 다시 시도",
+      "selectionLimit": "최대 {{count}}개까지 선택할 수 있습니다",
+      "resolveFailed": "선택한 항목을 읽지 못했습니다. 다시 시도하세요",
+      "someSkipped": "일부 항목을 읽을 수 없어 건너뛰었습니다",
+      "switchAlbum": "앨범 전환",
+      "photo": "사진",
+      "video": "동영상"
+    },
     "mediaSend": {
       "title": "{{count}}개 항목 보내기",
       "captionPlaceholder": "설명 추가 (선택)",

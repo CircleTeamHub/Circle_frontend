@@ -856,7 +856,8 @@
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金",
-      "mediaAlbum": "アルバム"
+      "mediaAlbum": "アルバム",
+      "editAndSend": "編集して送信"
     },
     "photoEditor": {
       "title": "写真を編集",
@@ -1015,6 +1016,28 @@
     "clearHistoryConfirmDirect": "チャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
     "clearHistoryDone": "削除しました",
     "clearHistoryDoneDirect": "双方のチャット履歴を削除しました",
+    "mediaPicker": {
+      "recents": "最近の項目",
+      "single": "1枚",
+      "captionPlaceholder": "説明を入力",
+      "preview": "プレビュー",
+      "confirm": "完了",
+      "confirmCount": "完了({{count}})",
+      "limitedNotice": "一部の写真・動画へのアクセスのみ許可されています",
+      "manageAccess": "管理",
+      "permissionTitle": "写真へのアクセスが必要です",
+      "permissionMessage": "写真と動画へのアクセスを許可すると、ここから選んで送信できます",
+      "openSettings": "設定を開く",
+      "useSystemPicker": "システムの写真から選ぶ",
+      "empty": "写真や動画がありません",
+      "loadFailed": "写真を読み込めませんでした。タップして再試行",
+      "selectionLimit": "最大{{count}}件まで選択できます",
+      "resolveFailed": "選択した項目を読み込めませんでした。もう一度お試しください",
+      "someSkipped": "一部の項目を読み込めなかったためスキップしました",
+      "switchAlbum": "アルバムを切り替え",
+      "photo": "写真",
+      "video": "動画"
+    },
     "mediaSend": {
       "title": "{{count}} 件を送信",
       "captionPlaceholder": "説明を追加（任意）",

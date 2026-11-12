@@ -23,6 +23,17 @@ export interface PreparedChatVideo {
   cleanup?: () => Promise<void>;
 }
 
+function loadCompressor(): ChatVideoCompressorModule | null {
+  if (Platform.OS === 'web') return null;
+  // Existing binaries and Expo Go can still send; the native feature needs a new APK/IPA.
+  return requireOptionalNativeModule<ChatVideoCompressorModule>('ChatVideoCompressor');
+}
+
+/** Whether picked videos get re-encoded before upload, so their size can only be judged afterwards. */
+export function isChatVideoCompressionAvailable(): boolean {
+  return loadCompressor() !== null;
+}
+
 /** Native validates the output and returns null when transcoding would not save bytes. */
 export async function prepareChatVideoForUpload(
   asset: ChatMediaFile,
@@ -30,9 +41,7 @@ export async function prepareChatVideoForUpload(
   contentType: string,
 ): Promise<PreparedChatVideo> {
   const original = { asset, filename, contentType };
-  if (Platform.OS !== 'android') return original;
-  const native = requireOptionalNativeModule<ChatVideoCompressorModule>('ChatVideoCompressor');
-  // Existing binaries and Expo Go can still send; the native feature needs a new APK.
+  const native = loadCompressor();
   if (!native) return original;
   try {
     const output = await native.compress(asset.uri);
@@ -45,13 +54,13 @@ export async function prepareChatVideoForUpload(
         try {
           await native.release(output.id);
         } catch {
-          reportHandledFailure('chatMedia', 'videoCompressionCleanup', new Error('Android video compression cleanup failed'));
+          reportHandledFailure('chatMedia', 'videoCompressionCleanup', new Error('Video compression cleanup failed'));
         }
       },
     };
   } catch {
     // Native codec errors may contain local private paths. Record only a static diagnostic.
-    reportHandledFailure('chatMedia', 'videoCompression', new Error('Android video compression failed'));
+    reportHandledFailure('chatMedia', 'videoCompression', new Error('Video compression failed'));
     return original;
   }
 }

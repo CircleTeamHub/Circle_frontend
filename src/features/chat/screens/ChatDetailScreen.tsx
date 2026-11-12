@@ -18,7 +18,7 @@ import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recordin
 import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
 import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet';
 import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
-import { MediaSendConfirmDialog } from '@/features/chat/components/media-send-confirm-dialog';
+import { MediaGalleryPicker } from '@/features/chat/components/media-gallery-picker';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { type PendingMediaUpload } from '@/chat-core/client';
@@ -583,13 +583,16 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const {
     mediaSourceSheetVisible,
     setMediaSourceSheetVisible,
+    handleMediaSourceSelect,
+    handleMediaSourceSheetDismiss,
+    galleryMode,
+    setGalleryMode,
+    handleGalleryConfirm,
+    handleGalleryDismiss,
+    handlePickFromSystem,
     photoEditorAsset,
     setPhotoEditorAsset,
     handleSendEditedPhoto,
-    pendingMediaAssets,
-    setPendingMediaAssets,
-    handleSendPendingMedia,
-    handleMediaSourceSelect,
   } = useMediaSend({
     t,
     inFlightRef,
@@ -884,6 +887,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         visible={mediaSourceSheetVisible}
         onSelect={handleMediaSourceSelect}
         onClose={() => setMediaSourceSheetVisible(false)}
+        onDismiss={handleMediaSourceSheetDismiss}
       />
 
       <ReactionPickerSheet
@@ -898,10 +902,12 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
         onSend={handleSendEditedPhoto}
       />
 
-      <MediaSendConfirmDialog
-        assets={pendingMediaAssets}
-        onCancel={() => setPendingMediaAssets(null)}
-        onSend={handleSendPendingMedia}
+      <MediaGalleryPicker
+        mode={galleryMode}
+        onCancel={() => setGalleryMode(null)}
+        onConfirm={handleGalleryConfirm}
+        onPickFromSystem={(caption) => void handlePickFromSystem(caption)}
+        onDismiss={handleGalleryDismiss}
       />
 
       {noteCollectSheet}

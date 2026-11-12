@@ -56,26 +56,28 @@ test('chat attachment panel merges photos, videos, and camera into one media ent
   assert.match(attachmentItems, /chat\.attachments\.mediaHub/);
   assert.doesNotMatch(attachmentItems, /id: 'camera'/);
 
-  // 照片和视频合并成一个「相册」入口,一次选择里可以混选。
-  assert.match(mediaSheetSource, /id: 'album'/);
-  assert.doesNotMatch(mediaSheetSource, /id: 'photo'/);
-  assert.doesNotMatch(mediaSheetSource, /id: 'video'/);
-  assert.match(mediaSheetSource, /id: 'camera'/);
-  assert.match(source, /mediaTypes: \['images', 'videos'\]/);
+  // 自媒体面板:相册(照片和视频混选,直接发)、拍照、编辑发送,外加取消。
+  const sheetIds = [...mediaSheetSource.matchAll(/id: '([^']+)'/g)].map((match) => match[1]);
+  assert.deepEqual(sheetIds, ['album', 'camera', 'edit']);
+  assert.match(mediaSheetSource, /chat\.attachments\.editAndSend/);
+  assert.match(mediaSheetSource, /common\.cancel/);
   assert.match(source, /setMediaSourceSheetVisible\(true\)/);
   assert.match(source, /<MediaSourceSheet/);
-  assert.match(mediaSheetSource, /justifyContent: 'center'/);
-  assert.match(mediaSheetSource, /flexDirection: 'row'/);
+  assert.match(source, /onDismiss=\{handleMediaSourceSheetDismiss\}/);
 });
 
-test('picked and captured photos open the editor before any upload starts', () => {
-  assert.match(source, /setPhotoEditorAsset\(result\.assets\[0\]\);\n      return;/);
+test('the album and edit & send go through the in-app gallery; edit & send and the camera open the editor', () => {
+  assert.match(source, /<MediaGalleryPicker/);
+  assert.match(source, /onConfirm=\{handleGalleryConfirm\}/);
+  assert.match(source, /setGalleryMode\(action === 'edit' \? 'edit' : 'send'\)/);
   assert.match(source, /setPhotoEditorAsset\(result\.assets\[0\]\)/);
   assert.match(source, /<PhotoEditorModal/);
   assert.match(source, /onSend=\{handleSendEditedPhoto\}/);
   assert.match(source, /accepted = await uploadAndSendImageAsset\(item, turn\)/);
+  // 描述在选图时填,编辑器里不再有描述输入框。
+  assert.doesNotMatch(photoEditorSource, /captionPlaceholder|<TextInput/);
 
-  // Editor-before-upload and video bypass are exercised by chat-image-send-order.test.js.
+  // Gallery, editor and caption ordering are exercised by chat-image-send-order.test.js.
 });
 
 test('photo editor copy stays localized in every supported language', () => {

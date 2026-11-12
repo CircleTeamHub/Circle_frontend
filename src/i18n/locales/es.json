@@ -860,7 +860,8 @@
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia",
-      "mediaAlbum": "Álbum"
+      "mediaAlbum": "Álbum",
+      "editAndSend": "Editar y enviar"
     },
     "photoEditor": {
       "title": "Editar foto",
@@ -1019,6 +1020,28 @@
     "clearHistoryConfirmDirect": "¿Vaciar el historial? También se eliminará para la otra persona y no se podrá deshacer.",
     "clearHistoryDone": "Vaciado",
     "clearHistoryDoneDirect": "Historial eliminado para ambas personas",
+    "mediaPicker": {
+      "recents": "Recientes",
+      "single": "Una sola",
+      "captionPlaceholder": "Escribe una descripción",
+      "preview": "Vista previa",
+      "confirm": "Listo",
+      "confirmCount": "Listo ({{count}})",
+      "limitedNotice": "Solo permitiste acceder a algunas fotos y videos",
+      "manageAccess": "Gestionar",
+      "permissionTitle": "Se necesita acceso a las fotos",
+      "permissionMessage": "Permite el acceso a fotos y videos para elegirlos y enviarlos aquí",
+      "openSettings": "Abrir ajustes",
+      "useSystemPicker": "Elegir desde las fotos del sistema",
+      "empty": "No hay fotos ni videos",
+      "loadFailed": "No se pudieron cargar las fotos. Toca para reintentar",
+      "selectionLimit": "Puedes seleccionar hasta {{count}} elementos",
+      "resolveFailed": "No se pudieron leer los elementos seleccionados. Inténtalo de nuevo",
+      "someSkipped": "Algunos elementos no se pudieron leer y se omitieron",
+      "switchAlbum": "Cambiar álbum",
+      "photo": "Foto",
+      "video": "Video"
+    },
     "mediaSend": {
       "title": "Enviar {{count}} elementos",
       "captionPlaceholder": "Añade una descripción (opcional)",
