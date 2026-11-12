@@ -16,8 +16,13 @@ const mockListeners = new Map<string, Listener>();
 const mockPlayer = {
   status: 'idle',
   playing: false,
+  currentTime: 0,
+  duration: 0,
+  playbackRate: 1,
+  timeUpdateEventInterval: 0,
   replaceAsync: jest.fn(() => Promise.resolve()),
   play: jest.fn(),
+  pause: jest.fn(),
   replay: jest.fn(),
   addListener: jest.fn((name: string, listener: Listener) => {
     mockListeners.set(name, listener);
@@ -33,19 +38,19 @@ jest.mock('expo-video', () => {
       useEffect(() => () => mockRelease(), []);
       return mockPlayer;
     },
-    VideoView: () => <View testID="video-player" />,
+    VideoView: ({ nativeControls }: { nativeControls?: boolean }) => <View testID="video-player" {...{ nativeControls }} />,
   };
 });
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 34 }) }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/app/UploadProgressHost', () => ({ UploadProgressHost: () => null }));
 jest.mock('@/utils/save-image', () => ({ saveImageToLibrary: jest.fn() }));
 jest.mock('@/theme', () => ({
-  Radius: { xl: 20, full: 9999 },
-  Spacing: { sm: 4, md: 8, lg: 16 },
-  Typography: { body: {} },
+  Radius: { md: 12, xl: 20, full: 9999 },
+  Spacing: { xs: 2, sm: 4, md: 8, lg: 16 },
+  Typography: { body: {}, tinyRegular: {} },
   useTheme: () => ({ colors: {} }),
 }));
 
@@ -114,8 +119,12 @@ beforeEach(() => {
   mockListeners.clear();
   mockPlayer.status = 'idle';
   mockPlayer.playing = false;
+  mockPlayer.currentTime = 0;
+  mockPlayer.duration = 0;
+  mockPlayer.playbackRate = 1;
   mockPlayer.replaceAsync.mockReset().mockResolvedValue(undefined);
   mockPlayer.play.mockClear();
+  mockPlayer.pause.mockClear();
   mockPlayer.replay.mockClear();
   mockRelease.mockClear();
 });
@@ -236,11 +245,104 @@ describe('resuming', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  test('the paused gesture layer leaves the native progress bar uncovered', async () => {
+  test('tapping the playing video pauses it', async () => {
     await renderPlayingPage();
+    fireEvent.press(screen.getByTestId('viewer-video-gesture-layer'));
+    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('bottom control bar', () => {
+  function emitTime(currentTime: number, duration: number) {
+    mockPlayer.currentTime = currentTime;
+    mockPlayer.duration = duration;
+    act(() => mockListeners.get('timeUpdate')?.({ currentTime }));
+  }
+
+  test('replaces the system controls with a bar along the bottom, above the home indicator', async () => {
+    await renderPlayingPage();
+    expect(screen.getByTestId('video-player').props.nativeControls).toBe(false);
+    expect(StyleSheet.flatten(screen.getByTestId('viewer-video-controls').props.style)).toMatchObject({
+      position: 'absolute',
+      bottom: 34 + 8,
+    });
+    expect(mockPlayer.timeUpdateEventInterval).toBeGreaterThan(0);
+  });
+
+  test('play and pause from the bar', async () => {
+    await renderPlayingPage();
+    fireEvent.press(screen.getByLabelText('chat.detail.pauseVideo'));
+    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
     emitPlaying(false);
-    const layer = StyleSheet.flatten(screen.getByLabelText(PLAY_LABEL).props.style);
-    expect(layer.bottom).toBeGreaterThan(34);
+    mockPlayer.play.mockClear();
+    fireEvent.press(screen.getByLabelText(PLAY_LABEL));
+    expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows elapsed and remaining time', async () => {
+    await renderPlayingPage();
+    emitTime(3.6, 14);
+    expect(screen.getByText('00:03')).toBeTruthy();
+    expect(screen.getByText('-00:11')).toBeTruthy();
+  });
+
+  test('skip buttons jump 15 seconds and stop at either end', async () => {
+    await renderPlayingPage();
+    emitTime(20, 40);
+    fireEvent.press(screen.getByLabelText('chat.detail.videoSkipForward'));
+    expect(mockPlayer.currentTime).toBe(35);
+    fireEvent.press(screen.getByLabelText('chat.detail.videoSkipForward'));
+    expect(mockPlayer.currentTime).toBe(40);
+    emitTime(10, 40);
+    fireEvent.press(screen.getByLabelText('chat.detail.videoSkipBack'));
+    expect(mockPlayer.currentTime).toBe(0);
+  });
+
+  test('dragging the scrubber holds the pager and swipe-down, then seeks where the finger lifts', async () => {
+    const { onPagerLockChange } = await renderPlayingPage();
+    emitPlaying(false);
+    emitTime(0, 40);
+    const scrubber = screen.getByTestId('viewer-video-scrubber');
+    fireEvent(scrubber, 'layout', { nativeEvent: { layout: { width: 200, height: 32 } } });
+    fireEvent(scrubber, 'responderGrant', { nativeEvent: { locationX: 50, pageX: 100 } });
+    expect(onPagerLockChange).toHaveBeenLastCalledWith(true);
+    expect(captured.onMoveShouldSetPanResponder({}, drag(0, 40))).toBe(false);
+    fireEvent(scrubber, 'responderMove', { nativeEvent: { pageX: 150 } });
+    expect(screen.getByText('00:20')).toBeTruthy();
+    expect(mockPlayer.currentTime).toBe(0);
+    fireEvent(scrubber, 'responderRelease', { nativeEvent: { pageX: 150 } });
+    expect(mockPlayer.currentTime).toBe(20);
+    expect(onPagerLockChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('an interrupted scrub releases the pager without seeking', async () => {
+    const { onPagerLockChange } = await renderPlayingPage();
+    emitPlaying(false);
+    emitTime(5, 40);
+    const scrubber = screen.getByTestId('viewer-video-scrubber');
+    fireEvent(scrubber, 'layout', { nativeEvent: { layout: { width: 200, height: 32 } } });
+    fireEvent(scrubber, 'responderGrant', { nativeEvent: { locationX: 150, pageX: 200 } });
+    fireEvent(scrubber, 'responderTerminate', {});
+    expect(mockPlayer.currentTime).toBe(5);
+    expect(onPagerLockChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByText('00:05')).toBeTruthy();
+  });
+
+  test('the speed button cycles through playback rates back to normal', async () => {
+    await renderPlayingPage();
+    const speed = () => screen.getByLabelText('chat.detail.videoPlaybackSpeed');
+    const seen = [1, 1.25, 1.5, 2, 0.5].map(() => {
+      fireEvent.press(speed());
+      return mockPlayer.playbackRate;
+    });
+    expect(seen).toEqual([1.25, 1.5, 2, 0.5, 1]);
+  });
+
+  test('a failed load hides the bar and leaves only retry', async () => {
+    mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('network'));
+    renderPage({ autoPlay: true });
+    await waitFor(() => expect(screen.getByLabelText('common.retry')).toBeTruthy());
+    expect(screen.queryByTestId('viewer-video-controls')).toBeNull();
   });
 });
 
@@ -358,6 +460,17 @@ describe('loading and failure', () => {
     expect(onPagerLockChange).not.toHaveBeenCalledWith(true);
     fireEvent.press(screen.getByLabelText('common.retry'));
     await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+  });
+
+  test('load and playback failures are reported so a caller can refresh an expired URL', async () => {
+    const onMediaError = jest.fn();
+    mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('expired'));
+    renderPage({ autoPlay: true, onMediaError });
+    await waitFor(() => expect(onMediaError).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByLabelText('common.retry'));
+    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    emitStatus('error');
+    expect(onMediaError).toHaveBeenCalledTimes(2);
   });
 
   test('tapping a page that is still loading does not start playback early', () => {

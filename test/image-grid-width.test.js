@@ -4,14 +4,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8');
 
-test('ImageGrid accepts an optional containerWidth and falls back to default', () => {
-  const src = read('src/features/discover/components/image-grid.tsx');
-  assert.match(src, /containerWidth\?:\s*number/);
-  // 入参优先，缺省退回按可用宽度算（实现用 containerWidthProp 避免变量遮蔽）。
-  // 基准从视口宽换成了栏宽 —— 桌面网页版里内容待在 640 的居中栏里，
-  // 按 1440 的视口算单图会溢出栏外（见 desktop-web-review-fixes）。
-  assert.match(
-    src,
-    /containerWidthProp\s*\?\?\s*availableWidth - Spacing\.lg \* 2 - Spacing\.md \* 2/,
-  );
+test('nine-grid cells split their real container instead of a width guessed from the screen', () => {
+  // Cells used to be sized in pixels from "screen width - assumed padding". Pages with more
+  // padding than assumed (plaza cards, post detail) pushed the third cell onto the next row.
+  const grid = read('src/features/discover/components/image-grid.tsx');
+  assert.match(grid, /export function NineGrid/);
+  assert.match(grid, /cell: \{ flex: 1, aspectRatio: 1 \}/);
+  assert.match(grid, /single: \{ width: '65%', aspectRatio: 1 \}/);
+  assert.doesNotMatch(grid, /containerWidth/);
+
+  // The mixed photo/video grid shares the same layout.
+  const media = read('src/features/discover/components/moment-media.tsx');
+  assert.match(media, /<NineGrid/);
+  assert.doesNotMatch(media, /containerWidth/);
 });

@@ -38,8 +38,12 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/components/ui/bottom-sheet-modal', () => {
-  const { View } = jest.requireActual('react-native');
-  return { BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) => visible ? <View>{children}</View> : null };
+  const { View, ScrollView, TextInput } = jest.requireActual('react-native');
+  return {
+    BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) => visible ? <View>{children}</View> : null,
+    BottomSheetScrollView: ScrollView,
+    BottomSheetTextInput: TextInput,
+  };
 });
 jest.mock('@/features/chat/components/emoji-picker', () => {
   const { Pressable } = jest.requireActual('react-native');

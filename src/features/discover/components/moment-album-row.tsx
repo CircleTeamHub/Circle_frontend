@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { getAlbumDateParts } from '@/features/discover/utils/album-date';
@@ -75,7 +74,6 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const availableWidth = useContentColumnWidth();
 
   const dateParts = useMemo(
     () => getAlbumDateParts(post.createdAt, i18n.language),
@@ -104,11 +102,6 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
     [colors],
   );
 
-  // 内容列宽 = 可用宽 - 左右页边距 - 日期列 - 行内 gap
-  // （桌面网页版里"可用宽"是居中栏宽，不是视口宽，否则整行溢出栏外。）
-  const contentWidth =
-    availableWidth - Spacing.lg * 2 - DATE_COL_WIDTH - Spacing.md;
-
   const comments = post.comments ?? [];
   const likedFriends = post.likedFriends ?? [];
 
@@ -135,7 +128,6 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
             images={post.images}
             media={post.media}
             attachments={post.attachments}
-            containerWidth={contentWidth}
           />
         ) : null}
 

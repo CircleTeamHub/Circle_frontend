@@ -1,8 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import PostSignupsScreen from './PostSignupsScreen';
-import { fetchMyPostSignups, fetchMyPlazaPost, updateMyPlazaPost } from '@/services/api/plaza';
+import { Alert } from 'react-native';
+import { fetchMyPostSignups, fetchMyPlazaPost, submitPostCollaborationRecognitions, updateMyPlazaPost } from '@/services/api/plaza';
+import { ensureDirectConversation } from '@/chat-core/client';
 import type { CirclePlazaPost, PostSignupItem } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 jest.mock('react-native', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -22,6 +25,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn(), navigate: jest.fn() }),
   useSegments: () => ['(tabs)', 'discover', 'post-signups'],
   useLocalSearchParams: () => ({ postId: 'post-1', title: 'Hike' }),
+  // The screen never regains focus in these tests, so a navigation lock stays held.
+  useFocusEffect: jest.fn(),
 }));
 const mockTranslate = (key: string) => key;
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
@@ -65,10 +70,25 @@ jest.mock('@/features/notifications/utils/seen-target', () => ({ markMatchingTar
 jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: { getState: () => ({ signupUnread: 0, setSignupUnread: jest.fn() }) } }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('@/components/ui/badge', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { Badge: ({ count }: { count: number }) => <Text testID="unread-badge">{count}</Text> };
+});
+let mockChatConversations: { id: string; type: string; peer?: { id: string }; preview: string; unreadCount: number }[] = [];
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: (select: (state: { conversations: unknown[] }) => unknown) => select({ conversations: mockChatConversations }),
+}));
+jest.mock('@/chat-core/mappers', () => ({
+  mapChatConversationToUI: (dto: { id: string; preview: string; unreadCount: number }) => ({
+    id: dto.id, message: dto.preview, time: '10:30', unreadCount: dto.unreadCount,
+  }),
+}));
 
 type SignupsResult = Awaited<ReturnType<typeof fetchMyPostSignups>>;
 
 beforeEach(() => {
+  mockChatConversations = [];
+  jest.mocked(ensureDirectConversation).mockReset();
   jest.mocked(fetchMyPostSignups).mockReset();
   jest.mocked(fetchMyPlazaPost).mockReset().mockReturnValue(new Promise(() => {}));
   jest.mocked(updateMyPlazaPost).mockReset();
@@ -123,6 +143,80 @@ test('pulling to refresh the signer list shows the refresh control until it sett
   expect(busy()).toBe(true);
   await act(async () => { pulled.resolve({ items: [signup('Alice')], recognitionOpen: false }); });
   expect(busy()).toBe(false);
+});
+
+test('signers read like the messages list: last chat line, time and unread, and the row opens the chat', async () => {
+  mockChatConversations = [
+    { id: 'dm-alice', type: 'DIRECT', peer: { id: 'user-Alice' }, preview: '几点集合？', unreadCount: 2 },
+    // A group chat with the same person must not be mistaken for the direct chat.
+    { id: 'group-x', type: 'GROUP', peer: { id: 'user-Bob' }, preview: '群消息', unreadCount: 5 },
+  ];
+  jest.mocked(ensureDirectConversation).mockResolvedValue({ conversationID: 'dm-alice' } as never);
+  jest.mocked(fetchMyPostSignups).mockResolvedValueOnce({ items: [signup('Alice'), signup('Bob')], recognitionOpen: false });
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  expect(screen.getByText('几点集合？')).toBeTruthy();
+  expect(screen.getByText('10:30')).toBeTruthy();
+  expect(screen.getByTestId('unread-badge')).toHaveTextContent('2');
+  // Never chatted yet: the preview falls back to when they signed up.
+  expect(screen.getByText('notifications.signupMgmt.signedAt')).toBeTruthy();
+  expect(screen.queryByText('群消息')).toBeNull();
+
+  await act(async () => { fireEvent.press(screen.getByText('几点集合？')); });
+  expect(ensureDirectConversation).toHaveBeenCalledWith('user-Alice');
+});
+
+test('signer rows always open the chat; recognition is picked in its own sheet', async () => {
+  jest.mocked(ensureDirectConversation).mockResolvedValue({ conversationID: 'dm-bob' } as never);
+  jest.mocked(submitPostCollaborationRecognitions).mockResolvedValue({ count: 1 } as never);
+  jest.mocked(fetchMyPostSignups).mockResolvedValue({ items: [signup('Alice'), signup('Bob')], recognitionOpen: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  // Even after the activity ended, a tap on a signer opens the chat; nothing is ticked.
+  await act(async () => { fireEvent.press(screen.getByText('Bob')); });
+  expect(ensureDirectConversation).toHaveBeenCalledWith('user-Bob');
+  expect(screen.queryByRole('checkbox')).toBeNull();
+
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-open')); });
+  fireEvent.press(screen.getByRole('checkbox', { name: 'Alice' }));
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-submit')); });
+  expect(submitPostCollaborationRecognitions).toHaveBeenCalledWith('post-1', ['user-Alice']);
+  // The sheet closes after a successful submit.
+  expect(screen.queryByTestId('collaboration-recognition-submit')).toBeNull();
+  alert.mockRestore();
+});
+
+test('a failed recognition submit is reported and keeps the sheet open', async () => {
+  const failure = new Error('offline');
+  jest.mocked(submitPostCollaborationRecognitions).mockRejectedValue(failure);
+  jest.mocked(fetchMyPostSignups).mockResolvedValue({ items: [signup('Alice')], recognitionOpen: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-open')); });
+  fireEvent.press(screen.getByRole('checkbox', { name: 'Alice' }));
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-submit')); });
+
+  expect(reportHandledFailure).toHaveBeenCalledWith('postSignups', 'submitRecognitions', failure);
+  expect(alert).toHaveBeenCalledWith('notifications.signupMgmt.recognitionFailedTitle', expect.any(String));
+  expect(screen.getByTestId('collaboration-recognition-submit')).toBeTruthy();
+  alert.mockRestore();
+});
+
+test('tapping a signer twice opens the chat once and stages no opener', async () => {
+  jest.mocked(ensureDirectConversation).mockResolvedValue({ conversationID: 'dm-alice' } as never);
+  jest.mocked(fetchMyPostSignups).mockResolvedValueOnce({ items: [signup('Alice')], recognitionOpen: false });
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  // The second tap lands while the first jump's transition is still running.
+  await act(async () => { fireEvent.press(screen.getByText('Alice')); });
+  await act(async () => { fireEvent.press(screen.getByText('Alice')); });
+  expect(ensureDirectConversation).toHaveBeenCalledTimes(1);
 });
 
 test('an empty signer list shows the empty text once loaded', async () => {

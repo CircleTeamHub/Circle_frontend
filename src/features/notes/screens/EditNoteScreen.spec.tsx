@@ -192,9 +192,8 @@ test('loads old mixed media into independent regions and deleting images preserv
   expect(within(screen.getByTestId('note-image-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
   expect(within(screen.getByTestId('note-video-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
   expect(within(screen.getByTestId('note-showcase-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
-  for (const kind of ['image', 'video', 'showcase']) {
-    expect(within(screen.getByTestId(`note-${kind}-section`)).getByText('1 notes.edit.itemsCount')).toBeTruthy();
-  }
+  // 区块是无小节头的白条：不再有「N 项」计数。
+  expect(screen.queryByText(/notes\.edit\.itemsCount/)).toBeNull();
   fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' }));
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
   await waitFor(() => expect(updateNote).toHaveBeenCalled());
@@ -281,7 +280,8 @@ test('keeps legacy audio editable and saves its attachment after removing the re
   expect(screen.queryByRole('button', { name: 'notes.edit.composer.audio' })).toBeNull();
   expect(screen.getByText('notes.edit.audioDuration')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
-  expect(screen.getAllByText('notes.edit.composer.audio')).toHaveLength(2);
+  // 录音区块本身没有小节头，名字只出现在排序列表里。
+  expect(screen.getAllByText('notes.edit.composer.audio')).toHaveLength(1);
   fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Updated legacy audio');
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
@@ -384,13 +384,14 @@ let mockTranslate: MockTranslate = identityTranslate;
 const mockLightThemeColors = {
   background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
   textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
-  surfaceMuted: '#f1f2f5',
+  surfaceMuted: '#f1f2f5', primaryLight: 'rgba(99, 102, 241, 0.15)', link: '#4F46E5',
   overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b', danger: '#ef4444',
 };
 const mockDarkThemeColors = {
   ...mockLightThemeColors,
   background: '#1A1B23', surface: '#252630', text: '#FFFFFF',
   textSecondary: '#FFFFFF', white: '#FFFFFF', surfaceMuted: '#30323E',
+  primaryLight: 'rgba(99, 102, 241, 0.25)', link: '#B18AFF',
 };
 let mockThemeMode: 'light' | 'dark' = 'light';
 let mockThemeColors = mockLightThemeColors;
@@ -1003,9 +1004,13 @@ beforeEach(() => {
   mockGenerateThumbnails.mockResolvedValue([mockGeneratedVideoThumbnail]);
 });
 
-test('keeps the preview label readable in dark theme', async () => {
-  mockThemeMode = 'dark';
-  mockThemeColors = mockDarkThemeColors;
+// 灰底预览按钮在白色底栏上几乎看不出来：改成品牌浅紫底 + 紫字，两种主题都要成立。
+test.each([
+  ['light', mockLightThemeColors],
+  ['dark', mockDarkThemeColors],
+] as const)('the preview button stands out from the %s footer', async (mode, themeColors) => {
+  mockThemeMode = mode;
+  mockThemeColors = themeColors;
 
   render(<EditNoteScreen />);
 
@@ -1016,8 +1021,9 @@ test('keeps the preview label readable in dark theme', async () => {
   const previewLabel = screen.getByText('notes.edit.composer.preview');
   const labelStyle = StyleSheet.flatten(previewLabel.props.style);
 
-  expect(buttonStyle.backgroundColor).toBe(mockDarkThemeColors.surfaceMuted);
-  expect(labelStyle.color).toBe(mockDarkThemeColors.text);
+  expect(buttonStyle.backgroundColor).toBe(themeColors.primaryLight);
+  expect(buttonStyle.backgroundColor).not.toBe(themeColors.surface);
+  expect(labelStyle.color).toBe(themeColors.link);
 });
 
 test('blurred uploads cannot alert over another route and focus restores usable media controls', async () => {
@@ -1296,10 +1302,11 @@ test('renders a map-selected location as read-only details and clears the saved 
   render(<EditNoteScreen />);
   await screen.findByDisplayValue('Located note');
 
-  expect(screen.getByText('notes.edit.locationPlaceNameLabel')).toBeTruthy();
+  // 只留地名和地址本身，不再有「地点名称 / 详细地址」小标签。
   expect(screen.getByText('Harbor Cafe')).toBeTruthy();
-  expect(screen.getByText('notes.edit.locationAddressLabel')).toBeTruthy();
   expect(screen.getByText('1 Ocean Drive, Seaside')).toBeTruthy();
+  expect(screen.queryByText('notes.edit.locationPlaceNameLabel')).toBeNull();
+  expect(screen.queryByText('notes.edit.locationAddressLabel')).toBeNull();
   expect(screen.queryByText('notes.edit.useCurrentLocation')).toBeNull();
 
   fireEvent.press(screen.getByText('notes.edit.clearLocation'));
@@ -1478,8 +1485,7 @@ test.each([
   render(<EditNoteScreen />);
   await screen.findByDisplayValue('Partial location note');
 
-  expect(screen.getByText('notes.edit.locationPlaceNameLabel')).toBeTruthy();
-  expect(screen.getByText('notes.edit.locationAddressLabel')).toBeTruthy();
+  expect(screen.getByText('notes.edit.locationPreviewTitle')).toBeTruthy();
   const clearLocation = screen.getByLabelText('notes.edit.clearLocation');
   expect(clearLocation.props.accessibilityRole).toBe('button');
 
@@ -1951,8 +1957,6 @@ test('a note with real rich text is never overwritten by the legacy content fiel
   ]));
 });
 
-// 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
-// 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
 test('opening a grouping sheet does not rebuild the unchanged note snapshot', async () => {
   const normalize = jest.spyOn(noteSections, 'normalizeNoteMediaSections');
   const view = render(<EditNoteScreen />);
@@ -1966,12 +1970,24 @@ test('opening a grouping sheet does not rebuild the unchanged note snapshot', as
   } finally { view.unmount(); normalize.mockRestore(); }
 });
 
-test('typing in the body updates the live counter without re-rendering the screen', async () => {
-  mockTranslate = (key, options) =>
-    key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
+// 正文是一条和竞品一致的输入条：只有占位符和右侧删除，没有小节头、计数和内框。
+// 正文统计放在屏外的小 store 里：每敲一个字都不能让整屏（分组 chip、媒体/展示
+// 九宫格、地图预览）重渲染，超限提示只在条下那一小格里更新。
+test('the body is a bare auto-height bar and typing never re-renders the screen', async () => {
   render(<EditNoteScreen />);
   pressComposer('text');
   await waitFor(() => expect(mockEditorProps).toBeDefined());
+
+  expect(mockEditorProps).toEqual(expect.objectContaining({
+    fitContent: true,
+    mediaToolbarEnabled: false,
+  }));
+  // 不要「请输入」占位：空条就是空的。
+  expect(mockEditorProps).not.toHaveProperty('placeholder');
+  const bar = screen.getByTestId('note-text-section');
+  expect(within(bar).queryByText('notes.edit.sections.text')).toBeNull();
+  expect(screen.queryByText(/notes\.edit\.textCount/)).toBeNull();
+  expect(screen.queryByRole('adjustable')).toBeNull();
 
   const editorPropsBeforeTyping = mockEditorProps;
   const rendersBeforeTyping = mockEditorRenderCount;
@@ -1980,10 +1996,30 @@ test('typing in the body updates the live counter without re-rendering the scree
       { type: 'paragraph', content: [{ type: 'text', text }] },
     ]));
   }
-
-  expect(screen.getByText('字数:3')).toBeTruthy();
   expect(mockEditorRenderCount).toBe(rendersBeforeTyping);
   expect(mockEditorProps).toBe(editorPropsBeforeTyping);
+
+  fireEvent.press(within(bar).getByRole('button', { name: 'notes.actions.deletenotes.edit.sections.text' }));
+  expect(screen.queryByTestId('note-text-section')).toBeNull();
+});
+
+test('the title card has no date line and groups through a compact chip', () => {
+  render(<EditNoteScreen />);
+  pressComposer('title');
+
+  const chip = screen.getByRole('button', { name: 'notes.edit.groupsLabel' });
+  expect(chip.props.accessibilityValue).toEqual({ text: 'notes.edit.noGroups' });
+  expect(within(chip).getByText('notes.edit.groupsLabel')).toBeTruthy();
+  expect(screen.queryByText('notes.format.fullDate')).toBeNull();
+});
+
+test('the title tool draws a heading glyph so it no longer looks like the text tool', () => {
+  render(<EditNoteScreen />);
+
+  const titleTool = screen.getByRole('button', { name: 'notes.edit.composer.title' });
+  expect(within(titleTool).getByTestId('composer-tool-glyph-title').props.children).toBe('T');
+  const textTool = screen.getByRole('button', { name: 'notes.edit.composer.text' });
+  expect(within(textTool).queryByTestId('composer-tool-glyph-text')).toBeNull();
 });
 
 
@@ -3514,18 +3550,88 @@ test('late consumed draft cleanup cannot navigate away from the next account edi
   } finally { deletion.resolve(); rendered.unmount(); }
 });
 
-test('Back flushes a locally autosaved latest snapshot before cancelling its remote debounce', async () => {
+// 自动保存只给闪退兜底：已经写进本地的改动，点返回也要先问，选「保存到草稿箱」才落定。
+test('Back asks before keeping an autosaved edit, and Save flushes the latest snapshot', async () => {
   jest.useFakeTimers(); signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: 'Initial', styles: {} }] }] }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(mockEditorProps).toBeTruthy());
     await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Latest before Back', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
     expect(mockSaveDraft).not.toHaveBeenCalled();
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    expect(alert).toHaveBeenCalledWith('notes.drafts.unsavedTitle', 'notes.drafts.unsavedMessage', expect.any(Array));
+    expect(mockSaveDraft).not.toHaveBeenCalled();
+    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
     expect(mockSaveDraft.mock.calls[0][1].content).toBe('Latest before Back');
     await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
-  } finally { rendered.unmount(); jest.useRealTimers(); }
+  } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
+});
+
+test('discarding edits to a draft from the drafts box restores it as opened instead of deleting it', async () => {
+  jest.useFakeTimers(); signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: 'Opened text', styles: {} }] }] }));
+  const values = durableDraftStorage();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockEditorProps).toBeTruthy());
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Edit to throw away', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
+    expect(JSON.stringify(storedReviewDraft(values))).toContain('Edit to throw away');
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(mockSaveDraft.mock.calls[0][1])).toContain('Opened text');
+    expect(JSON.stringify(mockSaveDraft.mock.calls[0][1])).not.toContain('Edit to throw away');
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+    expect(JSON.stringify(storedReviewDraft(values))).toContain('Opened text');
+    expect(JSON.stringify(storedReviewDraft(values))).not.toContain('Edit to throw away');
+  } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
+});
+
+test('discarding a new note on Back removes the autosave so nothing lands in the drafts box', async () => {
+  jest.useFakeTimers();
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' }; mockRouteDraftId = 'fresh-note-discard'; mockDraftMode = 'new';
+  const values = durableDraftStorage();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.text' })).toBeEnabled());
+    pressComposer('text');
+    await waitFor(() => expect(mockEditorProps).toBeTruthy());
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Half written', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
+    expect([...values.keys()].some((key) => key.endsWith(':fresh-note-discard'))).toBe(true);
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    expect(alert).toHaveBeenCalledWith('notes.drafts.unsavedTitle', 'notes.drafts.unsavedMessage', expect.any(Array));
+    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
+    await act(async () => { jest.runOnlyPendingTimers(); await Promise.resolve(); });
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('fresh-note-discard'));
+  } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
+});
+
+test('every non-text section is a bare bar: one add button and a delete, no header or count', () => {
+  render(<EditNoteScreen />);
+  pressComposer('image');
+
+  const bar = screen.getByTestId('note-image-section');
+  expect(within(bar).getByRole('button', { name: 'notes.edit.addImage' })).toBeTruthy();
+  expect(within(bar).getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' })).toBeTruthy();
+  expect(within(bar).queryByText('notes.edit.composer.image')).toBeNull();
+  expect(within(bar).queryByText(/notes\.edit\.itemsCount/)).toBeNull();
+  expect(within(bar).getAllByRole('button')).toHaveLength(2);
+});
+
+test('leaving a resumed draft without changes neither asks nor deletes it', async () => {
+  signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft());
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
+    expect(alert).not.toHaveBeenCalled();
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); alert.mockRestore(); }
 });
 
 

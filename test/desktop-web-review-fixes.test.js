@@ -12,12 +12,13 @@ const read = (relative) =>
 test('discover image sizing follows the centered column, not the viewport', () => {
   // useWindowDimensions 在网页版报的是 1440 的浏览器视口，而内容实际待在
   // 640 的居中栏里：单图会算到 ~890、相册网格 ~1300，直接溢出栏外。
+  // 九宫格现在按 flex 均分父容器（见 image-grid-width），根本不读宽度。
   for (const relative of [
     'src/features/discover/components/image-grid.tsx',
+    'src/features/discover/components/moment-media.tsx',
     'src/features/discover/components/moment-album-row.tsx',
   ]) {
     const source = read(relative);
-    assert.match(source, /useContentColumnWidth\(\)/, relative);
     assert.doesNotMatch(
       source,
       /useWindowDimensions/,

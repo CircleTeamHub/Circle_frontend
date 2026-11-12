@@ -1,7 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { Animated, PanResponder, StyleSheet, Text } from 'react-native';
-import { BottomSheetFlatList, BottomSheetModal } from './bottom-sheet-modal';
+import {
+  BottomSheetFlatList,
+  BottomSheetModal,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+} from './bottom-sheet-modal';
 
 jest.mock('@/components/app/UploadProgressHost', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -101,10 +106,13 @@ test('a downward drag from the header claims the gesture and dismisses the sheet
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test('a drag that starts in the body never moves or dismisses the sheet', () => {
+// 回归：笔记多选「其他选项」那样只有一排按钮的面板，从正文往下滑完全没反应。
+// 正文里没有可滚动的内容时，从哪里开始下拉都该能把面板拉下来。
+test('a sheet without scrollable content drags down from anywhere in its body', () => {
   const onClose = renderSheetAt(400);
-  expect(claim('onMoveShouldSetPanResponder', 600, { dx: 0, dy: 120 })).toBe(false);
-  expect(onClose).not.toHaveBeenCalled();
+  expect(claim('onMoveShouldSetPanResponderCapture', 650, { dx: 0, dy: 20 })).toBe(true);
+  drag(650, 200);
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 // 回归:面板按下就成为 JS responder 的话,iOS 新架构下里面的 ScrollView 不让滚(祖先是 responder),
@@ -211,6 +219,56 @@ test('while its list is scrolled down, a body drag scrolls the list and leaves t
   expect(onClose).not.toHaveBeenCalled();
   // 把手区域始终可拖。
   expect(claim('onMoveShouldSetPanResponderCapture', 420, { dx: 0, dy: 20 })).toBe(true);
+  // 滚回顶部后，正文下拉重新归面板。
+  scrollListTo(0);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 40 })).toBe(true);
+});
+
+function scrollTo(testID: string, y: number) {
+  fireEvent.scroll(screen.getByTestId(testID), {
+    nativeEvent: {
+      contentOffset: { x: 0, y },
+      contentSize: { width: 390, height: 2000 },
+      layoutMeasurement: { width: 390, height: 300 },
+    },
+  });
+}
+
+// 省市两列那样的面板：分不清手指在哪一列，只要有一列没回到顶，正文下拉就留给列表。
+test('with two lists, a body drag waits until both are back at the top', () => {
+  render(
+    <BottomSheetModal visible onClose={jest.fn()}>
+      <BottomSheetScrollView testID="left-column"><Text>left</Text></BottomSheetScrollView>
+      <BottomSheetScrollView testID="right-column"><Text>right</Text></BottomSheetScrollView>
+    </BottomSheetModal>,
+  );
+  fireEvent(screen.getByTestId('bottom-sheet-content'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 400, width: 390, height: 400 } },
+  });
+  scrollTo('left-column', 300);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 40 })).toBe(false);
+  scrollTo('left-column', 0);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 40 })).toBe(true);
+});
+
+test('a scrolled multiline input keeps the body drag for its own text', () => {
+  render(
+    <BottomSheetModal visible onClose={jest.fn()}>
+      <BottomSheetTextInput testID="sheet-input" multiline />
+    </BottomSheetModal>,
+  );
+  fireEvent(screen.getByTestId('bottom-sheet-content'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 400, width: 390, height: 400 } },
+  });
+  scrollTo('sheet-input', 80);
+  expect(claim('onMoveShouldSetPanResponderCapture', 600, { dx: 0, dy: 40 })).toBe(false);
+});
+
+test('outside a sheet the scroll wrappers leave the scroll view untouched', () => {
+  render(<BottomSheetScrollView testID="plain-scroll" bounces><Text>row</Text></BottomSheetScrollView>);
+  const props = screen.getByTestId('plain-scroll').props;
+  expect(props.bounces).toBe(true);
+  expect(props.overScrollMode).toBeUndefined();
 });
 
 // 面板常和页面同底色(个人资料编辑就是),背后不压暗的话两者分不出边界。

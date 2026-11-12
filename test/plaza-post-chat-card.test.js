@@ -74,12 +74,11 @@ test('pending-card store + chat consume + send card-then-text', () => {
   assert.match(screen, /\(!nextText && !pendingCard\)/);
 });
 
-test('signup → chat stages the post card + opener draft', () => {
+test('the signup list only opens the chat, without staging a card or opener', () => {
+  // 报名列表是对话列表:每次点进去都自动塞「活动卡片 + 你报名了我发起的活动」太打扰。
   const screen = read('src/features/notifications/screens/PostSignupsScreen.tsx');
-  assert.match(screen, /setPendingChatCard\(/);
-  assert.match(screen, /conversationKey: signer\.userId/);
-  assert.match(screen, /plaza\.signup\.chatOpener/);
-  assert.match(screen, /toPlazaPostCardData\(/);
+  assert.doesNotMatch(screen, /setPendingChatCard|plaza\.signup\.chatOpener|toPlazaPostCardData/);
+  assert.match(screen, /await ensureDirectConversation\(signer\.userId\)/);
 });
 
 test('card has no general share entry — only the signup list creates it', () => {
@@ -92,19 +91,12 @@ test('card has no general share entry — only the signup list creates it', () =
   assert.doesNotMatch(picker, /plaza-post-card/);
 });
 
-test('signup chat stages only for a resolved conversation or preview fallback', () => {
-  const screen = read('src/features/notifications/screens/PostSignupsScreen.tsx');
-  const handler = screen.slice(screen.indexOf('const openChat'), screen.indexOf('const openSignerProfile'));
-  const resolution = handler.indexOf('await ensureDirectConversation');
-  const normalStage = handler.indexOf('setPendingChatCard', resolution);
-  const normalNavigation = handler.indexOf('router.push', normalStage);
-  const fallback = handler.indexOf('if (shouldOpenChatPreview');
-  const fallbackStage = handler.indexOf('setPendingChatCard', fallback);
-  const fallbackNavigation = handler.indexOf('router.push', fallbackStage);
-
-  assert.equal(normalStage > resolution && normalStage < normalNavigation, true);
-  assert.equal(handler.slice(0, resolution).includes('setPendingChatCard'), false);
-  assert.equal(fallbackStage > fallback && fallbackStage < fallbackNavigation, true);
+test('signing up from a post card goes straight to the poster chat', () => {
+  const card = read('src/features/discover/components/plaza-post-card.tsx');
+  assert.match(card, /if \(next && res\.signed\) void openAuthorChat\(\)/);
+  assert.match(card, /ensureDirectConversation\(post\.author\.id\)/);
+  // 跟报名列表一样只进聊天,不自动塞卡片和开场白。
+  assert.doesNotMatch(card, /setPendingChatCard|chatOpener/);
 });
 
 test('plaza detail missing route id starts in a stable error state', () => {

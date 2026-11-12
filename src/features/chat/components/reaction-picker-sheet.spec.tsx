@@ -7,6 +7,7 @@ import { EMOJI_GROUPS } from '@/constants/emojis';
 jest.mock('@/components/ui/bottom-sheet-modal', () => ({
   BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
     visible ? <MockView>{children}</MockView> : null,
+  BottomSheetScrollView: jest.requireActual<typeof import('react-native')>('react-native').ScrollView,
 }));
 // Custom stickers stay disabled for reactions; isolate their native session storage.
 jest.mock('@/services/api/upload', () => ({}));

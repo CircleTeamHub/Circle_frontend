@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, assets } = {}) {
-  const sent = [], failed = [], uploading = [], pickerOptions = [], editorAssets = [], pendingBatches = [], sendErrors = [];
+function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, assets, os = 'web', compressedSize } = {}) {
+  // compressedSize 有值 = 安装包带压缩模块,视频压缩成这个体积的 compressed-<原名>.mp4。
+  const compressionAvailable = compressedSize !== undefined;
+  const sent = [], failed = [], uploading = [], pickerOptions = [], sendErrors = [], alerts = [];
   // 迷你 hooks 运行时:按调用顺序记住 state/ref,render() 重新执行 hook 就能读到最新状态。
   const states = [], refs = [];
   let stateIndex = 0, refIndex = 0;
@@ -11,6 +13,8 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
   const first = new Promise((resolve, reject) => { resolveFirst = resolve; rejectFirst = reject; });
   const scheduler = loadTsModule('src/features/chat/utils/media-upload-scheduler.ts');
   const mediaPolicy = loadTsModule('src/features/chat/utils/chat-media-policy.ts');
+  const picked = assets ?? [kind === 'photo' ? 'first.jpg' : 'first.mp4', kind === 'photo' ? 'second.jpg' : 'second.mp4']
+    .map((uri) => ({ uri, mimeType: kind === 'photo' ? 'image/jpeg' : 'video/mp4', type: kind === 'photo' ? 'image' : 'video' }));
   const client = {
     assertMediaSendSessionCurrent() {},
     startMediaSend: (input) => input.source.uri,
@@ -35,22 +39,19 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
           useState: (value) => {
             const index = stateIndex++;
             if (!(index in states)) states[index] = value;
-            return [states[index], (next) => {
-              states[index] = next;
-              if (Array.isArray(next)) pendingBatches.push(next);
-              else if (next) editorAssets.push(next);
-            }];
+            return [states[index], (next) => { states[index] = next; }];
           },
         };
-        case 'react-native': return { Platform: { OS: 'web' }, Alert: { alert() {} } };
+        case 'react-native': return { Platform: { OS: os }, Alert: { alert: (...args) => alerts.push(args) } };
         case 'expo-image-picker': return {
           UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+          VideoExportPreset: { H264_1280x720: 'h264-720p' },
           requestMediaLibraryPermissionsAsync: async () => ({ granted: true }),
           requestCameraPermissionsAsync: async () => ({ granted: true }),
           launchCameraAsync: async () => ({ canceled: false, assets: [{ uri: 'camera.jpg', mimeType: 'image/jpeg' }] }),
           launchImageLibraryAsync: async (options) => {
             pickerOptions.push(options);
-            return { canceled: false, assets: assets ?? [kind === 'photo' ? 'first.jpg' : 'first.mp4', kind === 'photo' ? 'second.jpg' : 'second.mp4'].map((uri) => ({ uri, mimeType: kind === 'photo' ? 'image/jpeg' : 'video/mp4', type: kind === 'photo' ? 'image' : 'video' })) };
+            return { canceled: false, assets: picked };
           },
         };
         case '@/features/profile/image-picker': return {
@@ -66,8 +67,16 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
           uploadLocalFileToPresignedUrl: async (url) => { uploading.push(url); if (url === rejectedAsset) throw new Error('offline'); if (url === 'first.jpg' || (delayFirstVideo && url === 'first.mp4')) await first; },
         };
         case '@/features/chat/utils/image-thumbnail': return { uploadChatImageThumbnail: async () => null };
-        case '@/features/chat/utils/chat-image-compress': return { prepareChatImageForUpload: async (input) => input };
-        case '@/features/chat/utils/chat-video-compress': return { prepareChatVideoForUpload: async (asset, filename, contentType) => ({ asset, filename, contentType }) };
+        case '@/features/chat/utils/chat-image-compress': return {
+          planChatImageUpload: (source) => ({ reencode: source.contentType !== 'image/gif' }),
+          prepareChatImageForUpload: async (input) => input,
+        };
+        case '@/features/chat/utils/chat-video-compress': return {
+          isChatVideoCompressionAvailable: () => compressionAvailable,
+          prepareChatVideoForUpload: async (asset, filename, contentType) => (compressionAvailable
+            ? { asset: { ...asset, fileSize: compressedSize }, filename: `compressed-${filename}`, contentType: 'video/mp4' }
+            : { asset, filename, contentType }),
+        };
         case '@/features/chat/utils/chat-video-poster': return { uploadChatVideoPoster: async () => null };
         case '@/components/app/top-notice-store': return { hideTopNotice() {}, showTopNotice() {} };
         case '@/chat-core/client': return client;
@@ -98,13 +107,13 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
     return createMediaSend(params);
   };
   const controls = render();
-  /** 从相册选完后停在确认框,点「发送」并附上 caption。 */
-  const pickAndConfirm = async (caption = '') => {
-    controls.handleMediaSourceSelect('album');
-    await until(() => pendingBatches.length === 1);
-    render().handleSendPendingMedia(caption);
+  /** 从来源面板进应用内相册,选好之后填上描述点「确认」。 */
+  const pickAndConfirm = async (caption = '', action = 'album') => {
+    controls.handleMediaSourceSelect(action);
+    await until(() => render().galleryMode !== null);
+    render().handleGalleryConfirm(picked, caption);
   };
-  return { controls, render, pickAndConfirm, sent, failed, uploading, pickerOptions, editorAssets, pendingBatches, sendErrors, resolveFirst, rejectFirst };
+  return { controls, render, pickAndConfirm, picked, sent, failed, uploading, pickerOptions, sendErrors, alerts, resolveFirst, rejectFirst };
 }
 
 async function until(predicate) {
@@ -132,17 +141,15 @@ test('a failed earlier upload releases the next image send without hiding its re
   assert.deepEqual(h.sent, ['second.jpg']);
 });
 
-test('video picking allows a batch and sends every selected video', async () => {
+test('the album sends every selected video without the photo editor', async () => {
   const h = harness({ kind: 'video' });
   await h.pickAndConfirm();
-  assert.equal(h.pickerOptions[0].allowsMultipleSelection, true);
-  assert.ok(h.pickerOptions[0].selectionLimit > 1);
   await until(() => h.sent.length === 2);
   assert.deepEqual(h.sent, ['first.mp4', 'second.mp4']);
-  assert.deepEqual(h.editorAssets, []);
+  assert.equal(h.render().photoEditorAsset, null);
 });
 
-test('the album picks photos and videos together and sends them in picker order', async () => {
+test('the album sends photos and videos together in selection order', async () => {
   const h = harness({
     assets: [
       { uri: 'clip.mp4', mimeType: 'video/mp4', type: 'video' },
@@ -150,25 +157,26 @@ test('the album picks photos and videos together and sends them in picker order'
     ],
   });
   await h.pickAndConfirm();
-  assert.equal(JSON.stringify(h.pickerOptions[0].mediaTypes), JSON.stringify(['images', 'videos']));
   await until(() => h.sent.length === 2);
   assert.deepEqual(h.sent, ['clip.mp4', 'photo.jpg']);
 });
 
-test('nothing uploads until the batch is confirmed', async () => {
+test('the album opens the in-app gallery and nothing uploads until it is confirmed', async () => {
   const h = harness();
   h.controls.handleMediaSourceSelect('album');
-  await until(() => h.pendingBatches.length === 1);
+  await until(() => h.render().galleryMode === 'send');
+  assert.deepEqual(h.pickerOptions, []);
   assert.deepEqual(h.uploading, []);
   assert.deepEqual(h.sent, []);
-  assert.deepEqual(h.pendingBatches[0].map((asset) => asset.uri), ['first.jpg', 'second.jpg']);
 });
 
-test('a single picked video skips the photo editor and asks for a caption', async () => {
-  const h = harness({ assets: [{ uri: 'only.mp4', mimeType: 'video/mp4', type: 'video' }] });
-  h.controls.handleMediaSourceSelect('album');
-  await until(() => h.pendingBatches.length === 1);
-  assert.deepEqual(h.editorAssets, []);
+test('a single photo picked from the album is sent directly, without the editor', async () => {
+  const h = harness({ assets: [{ uri: 'only.jpg', mimeType: 'image/jpeg', type: 'image' }] });
+  await h.pickAndConfirm('看这张');
+  await until(() => h.sent.length === 2);
+  assert.deepEqual(h.sent, ['only.jpg', 'text:看这张']);
+  assert.equal(h.render().photoEditorAsset, null);
+  assert.equal(h.render().galleryMode, null);
 });
 
 test('the caption is sent after every media item in the batch, even a slow first one', async () => {
@@ -207,20 +215,107 @@ test('an empty caption sends no text message', async () => {
   assert.deepEqual(h.sent, ['first.mp4', 'second.mp4']);
 });
 
-for (const action of ['album', 'camera']) {
-  test(`a ${action === 'album' ? 'picked' : 'captured'} photo waits for editor confirmation before upload`, async () => {
-    const h = harness({ assets: [{ uri: 'single.jpg', mimeType: 'image/jpeg' }] });
-    h.controls.handleMediaSourceSelect(action);
-    await until(() => h.editorAssets.length === 1);
-    const selected = h.editorAssets[0];
-    assert.equal(selected.uri, action === 'camera' ? 'camera.jpg' : 'single.jpg');
-    assert.deepEqual(h.uploading, []);
-    assert.deepEqual(h.sent, []);
-    await h.render().handleSendEditedPhoto(selected, '配文');
-    await until(() => h.sent.length === 2);
-    assert.deepEqual(h.sent, [selected.uri, 'text:配文']);
+test('large originals that get re-encoded are sent; an oversized GIF sent as-is is dropped with a warning', async () => {
+  const h = harness({
+    assets: [
+      { uri: 'huge.gif', mimeType: 'image/gif', type: 'image', fileSize: 10 * 1024 * 1024 + 1 },
+      { uri: 'prores.heic', mimeType: 'image/heic', type: 'image', fileSize: 40 * 1024 * 1024 },
+      { uri: 'small.jpg', mimeType: 'image/jpeg', type: 'image', fileSize: 1024 },
+    ],
   });
-}
+  await h.pickAndConfirm('说明');
+  await until(() => h.sent.length === 3);
+  assert.deepEqual(h.sent, ['prores.heic', 'small.jpg', 'text:说明']);
+  assert.deepEqual(h.alerts.map(([title]) => title), ['validation.imageTooLarge']);
+});
+
+test('the system picker fallback ignores a second tap while it is open', async () => {
+  const h = harness();
+  h.controls.handleMediaSourceSelect('album');
+  await until(() => h.render().galleryMode === 'send');
+  const first = h.render().handlePickFromSystem('');
+  const second = h.render().handlePickFromSystem('');
+  await Promise.all([first, second]);
+  assert.equal(h.pickerOptions.length, 1);
+});
+
+test('edit & send opens the editor with the picked photo and sends the gallery caption after it', async () => {
+  const h = harness({ assets: [{ uri: 'single.jpg', mimeType: 'image/jpeg', type: 'image' }] });
+  await h.pickAndConfirm('配文', 'edit');
+  const selected = h.render().photoEditorAsset;
+  assert.equal(selected.uri, 'single.jpg');
+  assert.equal(h.render().galleryMode, null);
+  assert.deepEqual(h.uploading, []);
+  assert.deepEqual(h.sent, []);
+  assert.equal(await h.render().handleSendEditedPhoto({ ...selected, uri: 'edited.jpg' }), true);
+  await until(() => h.sent.length === 2);
+  assert.deepEqual(h.sent, ['edited.jpg', 'text:配文']);
+  assert.equal(h.render().photoEditorAsset, null);
+});
+
+test('a captured photo waits for editor confirmation and goes out without a caption', async () => {
+  const h = harness();
+  h.controls.handleMediaSourceSelect('camera');
+  await until(() => h.render().photoEditorAsset !== null);
+  const selected = h.render().photoEditorAsset;
+  assert.equal(selected.uri, 'camera.jpg');
+  assert.deepEqual(h.uploading, []);
+  await h.render().handleSendEditedPhoto(selected);
+  await until(() => h.sent.length === 1);
+  await new Promise(setImmediate);
+  assert.deepEqual(h.sent, ['camera.jpg']);
+});
+
+test('on iOS the gallery opens only after the source sheet has finished closing', async () => {
+  const h = harness({ os: 'ios' });
+  h.controls.handleMediaSourceSelect('album');
+  await new Promise(setImmediate);
+  assert.equal(h.render().galleryMode, null);
+  assert.equal(h.render().mediaSourceSheetVisible, false);
+  h.render().handleMediaSourceSheetDismiss();
+  assert.equal(h.render().galleryMode, 'send');
+  // A later dismissal without a pending choice does nothing.
+  h.render().setGalleryMode(null);
+  h.render().handleMediaSourceSheetDismiss();
+  assert.equal(h.render().galleryMode, null);
+});
+
+test('on iOS the editor waits for the gallery to finish closing', async () => {
+  const h = harness({ os: 'ios', assets: [{ uri: 'single.jpg', mimeType: 'image/jpeg', type: 'image' }] });
+  h.controls.handleMediaSourceSelect('edit');
+  h.render().handleMediaSourceSheetDismiss();
+  assert.equal(h.render().galleryMode, 'edit');
+  h.render().handleGalleryConfirm(h.picked, '配文');
+  assert.equal(h.render().galleryMode, null);
+  assert.equal(h.render().photoEditorAsset, null);
+  h.render().handleGalleryDismiss();
+  assert.equal(h.render().photoEditorAsset.uri, 'single.jpg');
+});
+
+test('without gallery access the system picker sends the batch with the typed caption', async () => {
+  const h = harness();
+  h.controls.handleMediaSourceSelect('album');
+  await until(() => h.render().galleryMode === 'send');
+  await h.render().handlePickFromSystem('说明');
+  assert.equal(h.pickerOptions[0].allowsMultipleSelection, true);
+  assert.ok(h.pickerOptions[0].selectionLimit > 1);
+  assert.equal(JSON.stringify(h.pickerOptions[0].mediaTypes), JSON.stringify(['images', 'videos']));
+  h.resolveFirst();
+  await until(() => h.sent.length === 3);
+  assert.deepEqual(h.sent, ['first.jpg', 'second.jpg', 'text:说明']);
+  assert.equal(h.render().galleryMode, null);
+});
+
+test('edit & send through the system picker asks for one photo and opens the editor', async () => {
+  const h = harness({ assets: [{ uri: 'single.jpg', mimeType: 'image/jpeg', type: 'image' }] });
+  h.controls.handleMediaSourceSelect('edit');
+  await until(() => h.render().galleryMode === 'edit');
+  await h.render().handlePickFromSystem('配文');
+  assert.equal(JSON.stringify(h.pickerOptions[0].mediaTypes), JSON.stringify(['images']));
+  assert.equal(h.pickerOptions[0].allowsMultipleSelection, false);
+  assert.equal(h.pickerOptions[0].selectionLimit, 1);
+  assert.equal(h.render().photoEditorAsset.uri, 'single.jpg');
+});
 
 test('a failed video upload does not prevent the next selected video from sending', async () => {
   const h = harness({ kind: 'video', rejectedAsset: 'first.mp4' });
@@ -239,6 +334,30 @@ test('video uploads retain picker order when the later upload completes first', 
   h.resolveFirst();
   await until(() => h.sent.length === 2);
   assert.deepEqual(h.sent, ['first.mp4', 'second.mp4']);
+});
+
+test('an oversized original video is compressed and sent instead of being rejected up front', async () => {
+  const h = harness({
+    kind: 'video', compressedSize: 30 * 1024 * 1024,
+    assets: [{ uri: 'big.mov', fileName: 'big.mov', mimeType: 'video/quicktime', type: 'video', fileSize: 300 * 1024 * 1024 }],
+  });
+  await h.pickAndConfirm();
+  await until(() => h.sent.length === 1);
+  assert.deepEqual(h.sent, ['compressed-big.mov']);
+  assert.deepEqual(h.alerts, []);
+});
+
+test('a video still over the limit after compression fails with a specific message', async () => {
+  const h = harness({
+    kind: 'video', compressedSize: 120 * 1024 * 1024,
+    assets: [{ uri: 'long.mov', fileName: 'long.mov', mimeType: 'video/quicktime', type: 'video', fileSize: 900 * 1024 * 1024 }],
+  });
+  await h.pickAndConfirm('说明');
+  await until(() => h.failed.length === 1);
+  await until(() => h.sendErrors.includes('chat.detail.captionNotSent'));
+  assert.deepEqual(h.uploading, []);
+  assert.deepEqual(h.sent, []);
+  assert.ok(h.sendErrors.includes('chat.detail.videoTooLarge'));
 });
 
 for (const [reason, middle] of [

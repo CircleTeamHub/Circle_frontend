@@ -825,11 +825,13 @@ function NotesContent() {
       container: { backgroundColor: colors.background },
       header: { backgroundColor: colors.background },
       headerTitle: { color: colors.text },
+      // 多选态的次要按钮（全选 / 取消 / 其他选项）用品牌浅紫底 + 紫字：
+      // 白底按钮在 #F8F9FA 页面底色上几乎融掉，看不出能点。
       unlistedBtn: {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.primaryLight,
       },
       unlistedBtnText: {
-        color: colors.text,
+        color: colors.link,
       },
       tabActive: { color: colors.text },
       tabInactive: { color: colors.text },
@@ -845,8 +847,8 @@ function NotesContent() {
       },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
-      secondaryBtn: { backgroundColor: colors.surface },
-      secondaryBtnText: { color: colors.text },
+      secondaryBtn: { backgroundColor: colors.primaryLight },
+      secondaryBtnText: { color: colors.link },
     }),
     [colors],
   );

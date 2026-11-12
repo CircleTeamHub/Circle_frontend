@@ -161,7 +161,7 @@ test('"view" opens the chat as soon as it is known, while the notes are still se
 });
 
 test('the chosen sections go to the chosen chat', async () => {
-  const options = { card: true, media: true, showcase: false, location: true };
+  const options = { card: true, showcase: false, location: true };
   render(<ShareNoteSheet request={{ notes: [note], options }} onClose={jest.fn()} />);
   expect(screen.queryByText('dialog.send')).toBeNull();
   await pickAndSend();

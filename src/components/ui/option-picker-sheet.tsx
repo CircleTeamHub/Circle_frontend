@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 
 export interface PickerOption<T> {
@@ -127,7 +127,7 @@ export function OptionPickerSheet<T extends string | number | null>({
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </Pressable>
       </View>
-      <ScrollView
+      <BottomSheetScrollView
         ref={scrollRef}
         bounces={false}
         showsVerticalScrollIndicator={false}
@@ -170,7 +170,7 @@ export function OptionPickerSheet<T extends string | number | null>({
             </View>
           );
         })}
-      </ScrollView>
+      </BottomSheetScrollView>
     </BottomSheetModal>
   );
 }

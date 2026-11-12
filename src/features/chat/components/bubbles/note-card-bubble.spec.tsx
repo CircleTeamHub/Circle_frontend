@@ -43,6 +43,12 @@ test('shows a row of preview thumbnails when the card carries them', () => {
   expect(screen.getByTestId('img:https://cdn/b.jpg')).toBeTruthy();
 });
 
+test('the counts line ends with the verification videos, not counted again as videos', () => {
+  render(<NoteCardBubble message={message(card({ videoCount: 1, showcaseCount: 1 }))} outgoing={false} />);
+  expect(screen.getByTestId('note-card-counts').props.children)
+    .toBe('chat.noteCard.imageCount · chat.noteCard.verificationCount');
+});
+
 test('older cards without previews render no thumbnail row', () => {
   render(<NoteCardBubble message={message(card())} outgoing={false} />);
   expect(screen.queryByTestId('note-card-previews')).toBeNull();

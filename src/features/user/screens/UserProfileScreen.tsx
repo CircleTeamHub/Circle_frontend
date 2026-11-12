@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useNavigationLock } from '@/hooks/use-navigation-lock';
 import { useChatStore } from '@/chat-core/store';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -311,6 +312,7 @@ function UserProfileContent() {
     () => cachedFriendValue(initialCache?.friendSettings),
   );
   const [openingChat, setOpeningChat] = useState(false);
+  const chatLock = useNavigationLock();
   const [recognitionIconImageFailed, setRecognitionIconImageFailed] =
     useState(false);
   const mountedRef = useRef(true);
@@ -765,7 +767,9 @@ function UserProfileContent() {
   }, [profile.name, profileId, router, scope]);
 
   const handleOpenChat = useCallback(async () => {
-    if (!canonicalProfileUserId || openingChat) {
+    // 连点守卫要同步生效(state 版要等重渲染,双击两次都能进来),并且锁到回到本页:
+    // 转场途中再点不会再压一层聊天页。
+    if (!canonicalProfileUserId || !chatLock.tryLock()) {
       return;
     }
 
@@ -807,6 +811,8 @@ function UserProfileContent() {
         ),
       );
     } catch (error) {
+      // 没跳成功：当场解锁，可以重试。
+      chatLock.release();
       if (!mountedRef.current) return;
       Alert.alert(
         t('userProfile.openChatFailedTitle'),
@@ -817,8 +823,8 @@ function UserProfileContent() {
     }
   }, [
     canonicalProfileUserId,
+    chatLock,
     displayName,
-    openingChat,
     profile.avatarUrl,
     router,
     scope,

@@ -77,8 +77,15 @@ test('the explore stack resolves its own scope and keeps moments inside it', () 
 test('the assistant opened from explore hands off to a chat in the same stack', () => {
   assert.match(read('app/(tabs)/explore/assistant.tsx'), /AssistantChatScreen/);
   const screen = read('src/features/assistant/screens/AssistantChatScreen.tsx');
-  assert.match(screen, /getChatDetailHref\(\s*scope,/);
+  assert.match(screen, /getAssistantChatHref\(scope, data\)/);
   assert.doesNotMatch(screen, /pathname: '\/\(tabs\)\/messages\/chat-detail'/);
+  // The chat href is built per stack in one shared place.
+  assert.match(read('src/features/assistant/assistant-entry.ts'), /getChatDetailHref\(\s*scope,/);
+  // Explore decides the destination first and jumps once: subscribed users land in the
+  // chat directly instead of on a wizard page that then replaces itself.
+  const explore = read('src/features/explore/screens/ExploreScreen.tsx');
+  assert.match(explore, /opensAssistantChatDirectly\(bootstrap\)/);
+  assert.match(explore, /router\.push\(getAssistantChatHref\('explore', bootstrap\)\)/);
 });
 
 test('group invites opened from explore chat info stay in the explore stack', () => {

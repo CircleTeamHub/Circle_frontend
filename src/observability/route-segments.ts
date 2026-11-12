@@ -66,6 +66,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'group-abnormal-members',
   'group-log',
   'group-manage',
+  'group-notice',
   'group-review',
   'groups',
   'guide',

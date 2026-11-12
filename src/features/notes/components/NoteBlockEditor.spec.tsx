@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NoteBlockEditor } from './NoteBlockEditor';
 
 const mockRequestPermission = jest.fn();
@@ -19,7 +19,10 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/theme', () => ({
-  useTheme: () => ({ resolvedMode: 'light' }),
+  useTheme: () => ({
+    resolvedMode: 'light',
+    colors: { surface: '#FFFFFF', textSecondary: '#6B7280' },
+  }),
 }));
 
 jest.mock('@/services/api/upload', () => ({
@@ -287,4 +290,40 @@ test('readonly mode reaches the DOM editor and ignores delayed bridge content ca
   (mockDomProps as unknown as { onContentChange: (json: string) => void }).onContentChange(JSON.stringify([{ type: 'paragraph', content: [] }]));
   expect(onChange).toHaveBeenCalledTimes(1);
   rendered.unmount();
+});
+
+type MockFitContentProps = {
+  backgroundColor?: string;
+  onContentHeightChange?: (height: number) => void;
+};
+
+const frameHeight = () =>
+  StyleSheet.flatten(screen.getByTestId('note-block-editor-frame').props.style).height;
+
+test('fit-content mode starts as one line, follows the reported height and caps it', () => {
+  const windowHeight = Dimensions.get('window').height;
+  render(
+    <NoteBlockEditor initialContent={null} onContentChange={jest.fn()} fitContent />,
+  );
+  const domProps = () => mockDomProps as unknown as MockFitContentProps;
+
+  expect(frameHeight()).toBe(46);
+  expect(domProps().backgroundColor).toBe('#FFFFFF');
+
+  act(() => domProps().onContentHeightChange?.(132));
+  expect(frameHeight()).toBe(132);
+
+  act(() => domProps().onContentHeightChange?.(windowHeight * 3));
+  expect(frameHeight()).toBe(Math.round(windowHeight * 0.6));
+
+  act(() => domProps().onContentHeightChange?.(12));
+  expect(frameHeight()).toBe(46);
+});
+
+test('the default editor fills its parent and never asks the DOM for its height', () => {
+  render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+  const frame = StyleSheet.flatten(screen.getByTestId('note-block-editor-frame').props.style);
+  expect(frame).toEqual({ flex: 1 });
+  expect((mockDomProps as unknown as MockFitContentProps).onContentHeightChange).toBeUndefined();
+  expect((mockDomProps as unknown as MockFitContentProps).backgroundColor).toBeUndefined();
 });

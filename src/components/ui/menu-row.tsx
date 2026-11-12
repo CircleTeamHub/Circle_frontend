@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
@@ -27,6 +27,8 @@ interface MenuRowProps {
   onToggle?: (val: boolean) => void;
   destructive?: boolean;
   onPress?: () => void;
+  /** 行尾自定义内容（如群头像缩略图），排在 rightText 与箭头之间。 */
+  rightElement?: ReactNode;
 }
 
 const s = StyleSheet.create({
@@ -34,7 +36,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 52,
+    // 最小 52：带两行副标题的行（如群公告）长高，不被裁掉；单行行高不变。
+    minHeight: 52,
+  },
+  rowWithSubtitle: {
+    paddingVertical: Spacing.sm,
   },
   left: {
     flexDirection: 'row',
@@ -71,6 +77,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   onToggle,
   destructive,
   onPress,
+  rightElement,
 }) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -104,7 +111,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   return (
     <Pressable
       testID={testID}
-      style={s.row}
+      style={[s.row, subtitle ? s.rowWithSubtitle : null]}
       onPress={onPress}
       accessibilityRole={hasToggle ? 'switch' : 'button'}
       accessibilityLabel={
@@ -138,6 +145,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
       <View style={s.right}>
         <UnreadCountBadge count={unreadCount} />
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
+        {rightElement}
         {hasToggle ? (
           <ThemedSwitch
             value={toggleValue}

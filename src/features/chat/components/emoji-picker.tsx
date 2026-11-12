@@ -7,6 +7,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { EMOJI_GROUPS } from '@/constants/emojis';
+import { BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { useStickerStore } from '@/features/chat/store/use-sticker-store';
 import { useAuthStore } from '@/stores/authStore';
@@ -186,7 +187,7 @@ export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker
         onContentSizeChange={() => pagerRef.current?.scrollTo({ x: activePage * pageWidth, animated: false })}
       >
         {pages.map((group, index) => (
-          <ScrollView
+          <BottomSheetScrollView
             key={group?.labelKey ?? 'custom'}
             testID={`emoji-page-${group?.labelKey ?? 'custom'}`}
             style={{ width: pageWidth }}
@@ -230,7 +231,7 @@ export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker
                 </Pressable>
               </View>
             </>}
-          </ScrollView>
+          </BottomSheetScrollView>
         ))}
       </ScrollView>
     </View>

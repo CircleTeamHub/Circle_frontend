@@ -151,7 +151,7 @@
   "expo": {
     "autolinking": {
       "android": {
-        "buildFromSource": ["expo-video"]
+        "buildFromSource": ["expo-video", "expo-blur"]
       }
     }
   },

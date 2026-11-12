@@ -9,7 +9,8 @@ test('MomentAlbumRow renders date column + content + grid + social, themed', () 
   assert.match(src, /showDate/);
   assert.match(src, /getAlbumDateParts/);
   assert.match(src, /MomentMedia/);
-  assert.match(src, /containerWidth=/); // 给九宫格传相册列宽
+  // 九宫格自己按父容器均分，不再传列宽。
+  assert.doesNotMatch(src, /containerWidth=/);
   assert.match(src, /formatRelativeTime/);
   // 主题：用 useTheme，不硬编码颜色
   assert.match(src, /useTheme\(\)/);

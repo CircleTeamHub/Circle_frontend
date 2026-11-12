@@ -16,7 +16,7 @@ import {
   sendTextMessage,
   sendQuoteMessage,
 } from '@/chat-core/client';
-import { fetchChatMembers } from '@/chat-core/api';
+import { clearChatConversationHistory, fetchChatMembers, requestChatHistoryClear } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useComposerDraftStore } from '@/chat-core/composer-drafts';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
@@ -123,6 +123,7 @@ jest.mock('@expo/vector-icons', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Ionicons: ({ name }: { name: string }) => createElement(MockText, null, `icon:${name}`),
+    MaterialCommunityIcons: ({ name }: { name: string }) => createElement(MockText, null, `mci:${name}`),
   };
 });
 jest.mock('@/theme', () => {
@@ -342,7 +343,7 @@ function standaloneGroup(): ChatConversationDto {
   } as ChatConversationDto;
 }
 
-test('a shared pinned group notice appears below the header and disappears when turned off', async () => {
+test('a shared pinned group notice appears below the header, opens its detail page and disappears when turned off', async () => {
   const group = { ...standaloneGroup(), notice: '完整群公告第一行\n第二行', noticePinned: true };
   mockParams = { conversationID: GROUP, sourceID: GROUP, title: group.name!, conversationType: 'group', conversationKind: 'group' };
   useChatStore.getState().upsertConversation(group);
@@ -351,7 +352,12 @@ test('a shared pinned group notice appears below the header and disappears when 
     render(<ChatDetailScreen />);
     expect(await screen.findByTestId('group-notice-banner')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: '完整群公告第一行 第二行' }));
-    expect(alert).toHaveBeenCalledWith(expect.any(String), group.notice);
+    // A page in the same stack, not a dialog.
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/(tabs)/messages/group-notice',
+      params: { conversationID: GROUP },
+    });
+    expect(alert).not.toHaveBeenCalled();
     act(() => useChatStore.getState().upsertConversation({ ...group, noticePinned: false }));
     expect(screen.queryByTestId('group-notice-banner')).toBeNull();
   } finally { alert.mockRestore(); }
@@ -949,17 +955,80 @@ test.each([
   }
 });
 
-test('with a draft the send button sits at the far right, after the emoji button', async () => {
+test('the input keeps only the send button; the shortcut row below holds every other tool', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  const send = () => screen.getByTestId(E2E_TEST_IDS.chatSend);
+  expect(send()).toBeDisabled();
   fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
+  expect(send()).toBeEnabled();
 
-  const composerIcons = ['icon:mic-outline', 'icon:happy-outline', 'icon:add', 'icon:arrow-up'];
+  const composerIcons = [
+    'icon:arrow-up',
+    'icon:mic-outline',
+    'icon:image-outline',
+    'icon:document-text-outline',
+    'icon:location-outline',
+    'mci:chat-remove-outline',
+    'icon:happy-outline',
+    'icon:add-circle-outline',
+  ];
   const order = screen
-    .getAllByText(/^icon:/)
+    .getAllByText(/^(icon|mci):/)
     .map((node) => String(node.props.children))
     .filter((name) => composerIcons.includes(name));
   expect(order).toEqual(composerIcons);
+});
+
+test('the notes shortcut opens the note picker straight from the composer', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.attachments.notes')));
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/share-picker',
+    params: { type: 'note', sourceID: PEER },
+  });
+});
+
+test('the one clear shortcut also covers two-way clear through its dialog', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(clearChatConversationHistory).mockResolvedValueOnce(42);
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  // Only one clear entry in the shortcut row; two-way clear is a tick box in its dialog.
+  expect(screen.queryByLabelText('chat.clearHistoryBothSides')).toBeNull();
+
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+  fireEvent.press(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' }));
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: 'common.confirm' })));
+  await waitFor(() => expect(requestChatHistoryClear).toHaveBeenCalledWith(CONVERSATION, 42), SETTLE);
+  expect(clearChatConversationHistory).toHaveBeenCalledWith(CONVERSATION, { forEveryone: false });
+  expect(alert).toHaveBeenCalledWith('chat.clearHistoryRequestSent');
+  alert.mockRestore();
+});
+
+test('the clear-history shortcut opens the same unticked dialog as chat info in a direct chat', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+  expect(screen.getByRole('checkbox', { name: 'chat.clearHistoryBothSides' })).not.toBeChecked();
+  expect(clearChatConversationHistory).not.toHaveBeenCalled();
+});
+
+test('the clear-history shortcut lets a group member clear only their own copy', async () => {
+  mockParams = { conversationID: GROUP, sourceID: GROUP, title: 'Group', conversationType: 'group', conversationKind: 'group' };
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByLabelText('chat.clearHistory')));
+
+  const [title, message, buttons] = alert.mock.calls.at(-1)!;
+  expect([title, message]).toEqual(['chat.clearHistory', 'chat.clearHistoryConfirm']);
+  // Not the owner: no "delete for everyone" option.
+  expect(buttons!.map((button) => button.text)).toEqual(['common.cancel', 'chat.clearHistory']);
+  await act(async () => { buttons![1].onPress!(); });
+  expect(clearChatConversationHistory).toHaveBeenCalledWith(GROUP, { forEveryone: false });
+  alert.mockRestore();
 });
 
 test('the white emoji button switches from voice mode back to an editable draft', async () => {

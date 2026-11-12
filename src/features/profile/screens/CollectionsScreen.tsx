@@ -3,11 +3,11 @@ import { router, useFocusEffect } from 'expo-router';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { ImageViewer } from '@/components/ui/image-viewer';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
 import { CollectionListItem } from '@/features/profile/components/CollectionListItem';
 import { CollectionListToolbar, type CollectionTab } from '@/features/profile/components/CollectionListToolbar';
@@ -354,7 +354,7 @@ function CollectionsContent() {
           <Text style={[s.fullText, { color: colors.text }]}>{t('profile.collections.textPreviewTitle', { defaultValue: '收藏内容' })}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={t('common.close', { defaultValue: '关闭' })} style={s.button} onPress={() => setTextPreview(null)}><Ionicons name="close" size={22} color={colors.text} /></Pressable>
         </View>
-        <ScrollView><Text selectable style={[s.fullText, { color: colors.text }]}>{textPreview}</Text></ScrollView>
+        <BottomSheetScrollView><Text selectable style={[s.fullText, { color: colors.text }]}>{textPreview}</Text></BottomSheetScrollView>
       </BottomSheetModal>
     </View>
   );

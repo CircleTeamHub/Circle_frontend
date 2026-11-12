@@ -52,7 +52,7 @@ import {
 } from '@/features/notes/constants';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
@@ -80,7 +80,6 @@ import {
   MAX_NOTE_TITLE_LENGTH,
   type NoteTextStats,
 } from '@/features/notes/utils/note-text-stats';
-import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
   createPickerPreviewDisposer,
@@ -220,11 +219,13 @@ type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | 'audio' |
 
 const COMPOSER_ACTIONS: readonly {
   kind: NoteComposerBlockKind;
-  icon: keyof typeof Ionicons.glyphMap;
+  // Ionicons has no heading glyph and both of its text icons read as "Aa",
+  // so the title tool draws a serif "T" to stay distinct from body text.
+  icon: keyof typeof Ionicons.glyphMap | { glyph: string };
   translationKey: string;
   defaultLabel: string;
 }[] = [
-  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
+  { kind: 'title', icon: { glyph: 'T' }, translationKey: 'title', defaultLabel: '标题' },
   { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
   { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
   { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
@@ -240,12 +241,6 @@ const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' 
 const COMPOSER_SORT_ROW_HEIGHT = 58;
 // 松手后被拖的行滑进空位的时长：够短不拖沓，又能看清它落到了哪。
 const COMPOSER_DROP_DURATION = 120;
-// 文字块是笔记的主体：默认给到能写十来行的高度，最小也留出 240，
-// 免得扣掉工具栏后只剩两三行可见。
-const DEFAULT_TEXT_EDITOR_HEIGHT = 360;
-const MIN_TEXT_EDITOR_HEIGHT = 240;
-const MAX_TEXT_EDITOR_HEIGHT = 640;
-const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 20;
 
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -538,6 +533,11 @@ export default function EditNoteScreen() {
   const draftHydratedRef = useRef(false);
   const baselineFingerprintRef = useRef<string | null>(null);
   const draftPersistedFingerprintRef = useRef<string | null>(null);
+  // 这次进入编辑器时的样子：恢复出来的草稿，没有草稿就是原笔记 / 空白。返回时只看
+  // 「这次有没有改过」—— 自动保存不断写进草稿的中间状态只是给闪退兜底，不能代替
+  // 作者的选择。
+  const entryFingerprintRef = useRef<string | null>(null);
+  const entryDraftRecordRef = useRef<NoteEditorDraftRecord | null>(null);
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftTextSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftSavePromiseRef = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -549,10 +549,6 @@ export default function EditNoteScreen() {
   // 存字符串就得在加载 effect 里用 t 格式化，t 于是成了 effect 的依赖 —— 切一次
   // 语言就重新拉一遍这篇笔记，把没保存的编辑整个冲掉（见下面的加载 effect）。
   const [createdAtIso, setCreatedAtIso] = useState(() => new Date().toISOString());
-  const dateStr = useMemo(
-    () => formatNoteFullDate(createdAtIso, t),
-    [createdAtIso, t],
-  );
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const uploadInFlightRef = useRef(false);
   const uploadOperationGuardRef = useRef(createNoteMediaUploadOperationGuard());
@@ -620,17 +616,6 @@ export default function EditNoteScreen() {
   // A new note starts as a clean canvas. Blocks are mounted only after the
   // author chooses them from the compact toolbar below.
   const [composerBlocks, setComposerBlocks] = useState<NoteComposerBlock[]>([]);
-  const [textEditorHeights, setTextEditorHeights] = useState<Record<string, number>>({});
-  const textEditorHeightsRef = useRef<Record<string, number>>({});
-  const textEditorHeightValuesRef = useRef(new Map<string, Animated.Value>());
-  const textEditorResizeMetaRef = useRef<{
-    blockId: string;
-    startHeight: number;
-    currentHeight: number;
-  } | null>(null);
-  const textEditorResizeRespondersRef = useRef(
-    new Map<string, ReturnType<typeof PanResponder.create>>(),
-  );
   const composerIdRef = useRef(0);
   const [sortMode, setSortMode] = useState(false);
   const composerBlocksRef = useRef<NoteComposerBlock[]>([]);
@@ -740,85 +725,6 @@ export default function EditNoteScreen() {
   useEffect(() => {
     composerBlocksRef.current = composerBlocks;
   }, [composerBlocks]);
-
-  const setTextEditorHeight = useCallback((blockId: string, height: number) => {
-    const nextHeight = Math.round(height);
-    if (textEditorHeightsRef.current[blockId] === nextHeight) return;
-    textEditorHeightsRef.current = {
-      ...textEditorHeightsRef.current,
-      [blockId]: nextHeight,
-    };
-    setTextEditorHeights((current) => (
-      current[blockId] === nextHeight
-        ? current
-        : { ...current, [blockId]: nextHeight }
-    ));
-  }, []);
-
-  const getTextEditorHeightValue = useCallback((blockId: string, height: number) => {
-    const cached = textEditorHeightValuesRef.current.get(blockId);
-    if (cached) return cached;
-    const value = new Animated.Value(height);
-    textEditorHeightValuesRef.current.set(blockId, value);
-    return value;
-  }, []);
-
-  const finishTextEditorResize = useCallback(() => {
-    const meta = textEditorResizeMetaRef.current;
-    if (meta) {
-      textEditorHeightValuesRef.current.get(meta.blockId)?.stopAnimation();
-      setTextEditorHeight(meta.blockId, meta.currentHeight);
-    }
-    textEditorResizeMetaRef.current = null;
-  }, [setTextEditorHeight]);
-
-  const getTextEditorResizeResponder = useCallback(
-    (blockId: string) => {
-      const cached = textEditorResizeRespondersRef.current.get(blockId);
-      if (cached) return cached;
-
-      const responder = PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponderCapture: () => true,
-        onPanResponderGrant: () => {
-          if (pendingSubmissionRef.current || saveInFlightRef.current) return;
-          const startHeight =
-            textEditorHeightsRef.current[blockId] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
-          textEditorResizeMetaRef.current = {
-            blockId,
-            startHeight,
-            currentHeight: startHeight,
-          };
-        },
-        onPanResponderMove: (_event, gestureState) => {
-          const meta = textEditorResizeMetaRef.current;
-          if (!meta) return;
-          const nextHeight = Math.max(
-            MIN_TEXT_EDITOR_HEIGHT,
-            Math.min(MAX_TEXT_EDITOR_HEIGHT, meta.startHeight + gestureState.dy),
-          );
-          meta.currentHeight = nextHeight;
-          textEditorHeightValuesRef.current.get(meta.blockId)?.setValue(nextHeight);
-        },
-        onPanResponderRelease: finishTextEditorResize,
-        onPanResponderTerminate: finishTextEditorResize,
-        onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
-      });
-
-      textEditorResizeRespondersRef.current.set(blockId, responder);
-      return responder;
-    },
-    [finishTextEditorResize],
-  );
-
-  useEffect(() => () => {
-    finishTextEditorResize();
-    textEditorHeightValuesRef.current.clear();
-    textEditorResizeRespondersRef.current.clear();
-  }, [finishTextEditorResize]);
 
   const finishComposerDrag = useCallback(() => {
     const meta = composerDragMetaRef.current;
@@ -1098,11 +1004,6 @@ export default function EditNoteScreen() {
     setPendingSubmission(null);
     setNavigating(false);
     setTitleAdded(false);
-    textEditorResizeMetaRef.current = null;
-    textEditorHeightsRef.current = {};
-    textEditorHeightValuesRef.current.clear();
-    textEditorResizeRespondersRef.current.clear();
-    setTextEditorHeights({});
     return () => {
       groupCreateRequestRef.current += 1;
       if (saveGenerationRef.current === routeGeneration) {
@@ -1183,6 +1084,8 @@ export default function EditNoteScreen() {
     setDraftHydratedKey(null);
     baselineFingerprintRef.current = null;
     draftPersistedFingerprintRef.current = null;
+    entryFingerprintRef.current = null;
+    entryDraftRecordRef.current = null;
     setSettledRouteKey(null);
     setLoadedNoteId(null);
     textStatsStore.reset();
@@ -1476,6 +1379,8 @@ export default function EditNoteScreen() {
       if (!record && draftPersistedFingerprintRef.current == null) {
         draftPersistedFingerprintRef.current = baselineFingerprintRef.current;
       }
+      entryDraftRecordRef.current = record;
+      entryFingerprintRef.current = draftPersistedFingerprintRef.current;
       draftHydratedRef.current = true;
       setDraftHydratedKey(draftRouteKey);
     };
@@ -1691,14 +1596,55 @@ export default function EditNoteScreen() {
         saveAndExit();
         return;
       }
+      // 本来就没有草稿：自动保存替闪退写下的那份删掉，草稿箱里不留东西。
+      const discardDraft = () => {
+        if (currentUser?.id) {
+          try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
+          catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+        } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
+        draftRemoteQueue.cancel();
+        completeNavigation(action);
+        // Delete after in-flight saves, so their late response cannot revive a discarded draft.
+        void draftSavePromiseRef.current.catch(() => false).then(async () => {
+          if (!isCurrentEditor() || !currentUser?.id) return;
+          try {
+            const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
+            if (!isCurrentEditor()) return;
+            await deleteNoteDraft(editorDraftId);
+            if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
+          } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
+        });
+      };
+      // 从草稿箱打开的草稿：不保存 = 退回打开时的样子，草稿本身留着，不能整份删掉。
+      const revertDraft = (entry: NoteEditorDraftRecord) => {
+        if (!currentUser?.id) return;
+        // 本地副本盖上「现在」，比任何已经写到服务端的自动保存都新，下次打开以它为准。
+        const reverted = { ...entry, updatedAt: Date.now() };
+        try { saveLocalNoteDraft(currentUser.id, reverted); }
+        catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed')); return; }
+        // 这次新录、退回后不再被引用的录音：本地持久副本一并清掉。
+        const keptRecordings = new Set(reverted.audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []));
+        removeUnreferencedLocalNoteRecordings(currentUser.id, buildCurrentDraftRecord().audioItems.flatMap((item) =>
+          item.localRecordingId && !keptRecordings.has(item.localRecordingId) ? [item.localRecordingId] : []));
+        draftRemoteQueue.cancel();
+        completeNavigation(action);
+        // Rewrite the server copy after in-flight autosaves, so a late one cannot keep the edits.
+        void draftSavePromiseRef.current.catch(() => false).then(async () => {
+          if (!isCurrentEditor()) return;
+          try { await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(reverted)); }
+          catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); }
+        });
+      };
       const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
-      const dirtyNow = hasUndurableRecording || (
+      const changedThisSession = hasUndurableRecording || (
         draftHydratedRef.current &&
-        baselineFingerprintRef.current != null &&
-        draftPersistedFingerprintRef.current !== currentFingerprint);
-      if (!dirtyNow) {
-        if (currentUser?.id) saveAndExit();
-        else completeNavigation(action);
+        entryFingerprintRef.current != null &&
+        entryFingerprintRef.current !== currentFingerprint);
+      if (!changedThisSession) {
+        if (!currentUser?.id) completeNavigation(action);
+        // 改了又全部改回去：自动保存留下的中间状态不该变成一份草稿。
+        else if (!entryDraftRecordRef.current && draftPersistedFingerprintRef.current !== currentFingerprint) discardDraft();
+        else saveAndExit();
         return;
       }
       Alert.alert(
@@ -1713,22 +1659,9 @@ export default function EditNoteScreen() {
             style: 'destructive',
             onPress: () => {
               if (!isCurrentEditor()) return;
-              if (currentUser?.id) {
-                try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-                catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
-              } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
-              draftRemoteQueue.cancel();
-              completeNavigation(action);
-              // Delete after in-flight saves, so their late response cannot revive a discarded draft.
-              void draftSavePromiseRef.current.catch(() => false).then(async () => {
-                if (!isCurrentEditor() || !currentUser?.id) return;
-                try {
-                  const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
-                  if (!isCurrentEditor()) return;
-                  await deleteNoteDraft(editorDraftId);
-                  if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
-                } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
-              });
+              const entryDraft = entryDraftRecordRef.current;
+              if (entryDraft) revertDraft(entryDraft);
+              else discardDraft();
             },
           },
           {
@@ -3030,13 +2963,8 @@ export default function EditNoteScreen() {
       titleInput: { color: colors.text },
       // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
-      dateText: { color: colors.textSecondary },
-      groupButton: {
-        backgroundColor: colors.surfaceMuted,
-        borderColor: 'transparent',
-      },
+      groupButton: { backgroundColor: colors.surfaceMuted },
       groupButtonText: { color: colors.text },
-      groupButtonSummary: { color: colors.textSecondary },
       groupSheetBackdrop: { backgroundColor: colors.overlay },
       groupSheet: { backgroundColor: colors.surface },
       groupSheetHandle: { backgroundColor: colors.surfaceBorder },
@@ -3046,52 +2974,22 @@ export default function EditNoteScreen() {
       groupSheetRowMeta: { color: colors.textSecondary },
       groupSheetDone: { backgroundColor: colors.primary },
       groupSheetDoneText: { color: colors.white },
-      sectionIcon: { backgroundColor: colors.primaryLight },
-      secondarySection: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
       heroCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      metaIcon: { backgroundColor: colors.primaryLight },
-      // 分区做成安静的卡片：surface 底 + 细边，取代原来贯穿全宽的分隔线
-      sectionShell: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      editorFrame: { borderColor: colors.surfaceBorder },
-      editorResizeGrip: { backgroundColor: colors.textSecondary },
-      sectionHeading: { color: colors.text },
+      textBar: { backgroundColor: colors.surface },
+      sectionAddText: { color: colors.textSecondary },
       sectionSubtitle: { color: colors.textSecondary },
-      sectionHeaderMeta: { color: colors.textSecondary },
-      mediaPreviewTile: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
+      mediaPreviewTile: { backgroundColor: colors.surface },
       mediaTitle: { color: colors.text },
       mediaMeta: { color: colors.textSecondary },
-      emptyText: { color: colors.textSecondary },
-      emptyTray: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      sectionAction: {
-        backgroundColor: colors.primaryLight,
-        borderColor: 'transparent',
-      },
-      sectionActionText: { color: colors.iconAccent },
       legacyMediaWarning: { borderColor: colors.warning },
       legacyMediaWarningText: { color: colors.text },
-      locationPreviewCard: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      locationDetailLabel: { color: colors.textSecondary },
       locationClearAction: { borderColor: colors.surfaceBorder },
       locationClearText: { color: colors.textSecondary },
-      locationMapFallback: { backgroundColor: colors.surface },
+      // 地图占位和白条同底会糊成一片，用次级灰把这块内容区托出来。
+      locationMapFallback: { backgroundColor: colors.surfaceMuted },
       locationMapRevealButton: { backgroundColor: colors.overlay },
       locationMapRevealText: {
         color: colors.textSecondary,
@@ -3114,8 +3012,9 @@ export default function EditNoteScreen() {
         borderColor: colors.surfaceBorder,
       },
       composerSortButton: { backgroundColor: colors.primary },
-      composerPreviewButton: { backgroundColor: colors.surfaceMuted },
-      composerPreviewButtonContent: { color: colors.text },
+      // 次要按钮用品牌浅紫底 + 紫字：灰底在白色底栏上几乎看不出是个按钮。
+      composerPreviewButton: { backgroundColor: colors.primaryLight },
+      composerPreviewButtonContent: { color: colors.link },
     }),
     [colors],
   );
@@ -3155,43 +3054,66 @@ export default function EditNoteScreen() {
         )
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
-  const audioSectionStatus = uploadingSection === 'audio'
-    ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-    : recordingAudioStartedAt !== null
-      ? t('notes.edit.audioRecording', { defaultValue: '录音中，点击停止' })
-      : `${audioItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
-  // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
-  // meta 收 ReactNode 而不是 string：正文那一格要放实时字数，它必须是一个能自己
-  // 订阅、自己重渲染的小节点，否则整屏都得跟着每个键击重渲染一次。
-  const renderSectionHeader = (
-    icon: keyof typeof Ionicons.glyphMap,
-    sectionTitle: string,
-    meta?: ReactNode,
-    onRemove?: () => void,
-  ) => (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionIcon, d.sectionIcon]}>
-        <Ionicons name={icon} size={16} color={colors.iconAccent} />
+  // 文字以外的每个区块都和文字条同款：白色圆角条，有内容时内容在上，最下一行
+  // 是「＋ 添加…」按钮和右侧红色删除。没有小节头、计数和内框 —— 按钮文案本身
+  // 就说明了这是哪一种区块。
+  const renderSectionBar = ({
+    testID,
+    label,
+    onRemove,
+    content,
+    actions,
+  }: {
+    testID?: string;
+    label: string;
+    onRemove?: () => void;
+    content?: ReactNode;
+    actions: ReactNode;
+  }) => (
+    <View testID={testID} style={[s.sectionBar, d.textBar]}>
+      {content ? <View style={s.sectionBarContent}>{content}</View> : null}
+      <View style={s.sectionBarRow}>
+        <View style={s.sectionBarActions}>{actions}</View>
+        {onRemove ? (
+          <Pressable
+            style={s.textBarRemoveButton}
+            onPress={onRemove}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${label}`}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          </Pressable>
+        ) : null}
       </View>
-      <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
-      {meta ? (
-        <View style={s.sectionHeaderMeta}>
-          <Text style={[s.sectionHeaderMetaText, d.sectionHeaderMeta]}>{meta}</Text>
-        </View>
-      ) : null}
-      {onRemove ? (
-        <Pressable
-          style={s.sectionRemoveButton}
-          onPress={onRemove}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${sectionTitle}`}
-        >
-          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-        </Pressable>
-      ) : null}
     </View>
+  );
+
+  const renderSectionAdd = ({
+    icon = 'add',
+    label,
+    onPress,
+    disabled,
+  }: {
+    icon?: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+    disabled: boolean;
+  }) => (
+    <Pressable
+      style={s.sectionAddButton}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+    >
+      <Ionicons name={icon} size={20} color={disabled ? colors.textSecondary : colors.iconAccent} />
+      <Text style={[s.sectionAddText, d.sectionAddText]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 
   const getMediaItemsForBlock = useCallback((
@@ -3202,45 +3124,25 @@ export default function EditNoteScreen() {
     return items.filter((item) => getNoteComposerMediaOwner(composerBlocks, target, item.type, mediaOwnerByClientId[item.clientId]) === blockId);
   }, [composerBlocks, mediaOwnerByClientId]);
 
-  const getMediaSectionStatus = (target: SectionMediaTarget, kind: 'image' | 'video', blockId: string) =>
-    uploadingSection === `${target}:${kind}`
+  // 上传状态落在这一区块自己的添加按钮上：文案换成「正在上传」，按钮本身不重挂。
+  const renderMediaAdd = (
+    target: SectionMediaTarget,
+    kind: 'image' | 'video',
+    blockId: string,
+    addLabel: string,
+  ) => renderSectionAdd({
+    label: uploadingSection === `${target}:${kind}`
       ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-      : `${getMediaItemsForBlock(target === 'showcase' ? showcaseItems : mediaItems, target, blockId).length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
+      : addLabel,
+    onPress: () => void handleAddSectionMedia({ target, kind, blockId }),
+    disabled: !isRouteDataReady || uploadingSection !== null,
+  });
 
-  const renderMediaList = useCallback((
+  const renderMediaTiles = useCallback((
     items: EditorNoteMediaDraft[],
     target: SectionMediaTarget,
-    onAdd: () => void,
-    addLabel: string,
   ) => {
-    const addTile = (
-      <Pressable
-        style={[s.mediaAddTile, d.mediaPreviewTile]}
-        onPress={onAdd}
-        disabled={!isRouteDataReady || uploadingSection !== null}
-        accessibilityRole="button"
-        accessibilityLabel={addLabel}
-      >
-        <Ionicons name="add" size={28} color={colors.iconAccent} />
-        <Text style={[s.mediaAddLabel, d.emptyText]}>{addLabel}</Text>
-      </Pressable>
-    );
-    if (items.length === 0) {
-      return (
-        <Pressable
-          style={[s.emptyTray, d.emptyTray]}
-          onPress={onAdd}
-          disabled={!isRouteDataReady || uploadingSection !== null}
-          accessibilityRole="button"
-          accessibilityLabel={addLabel}
-        >
-          <Ionicons name="add-circle-outline" size={22} color={colors.iconAccent} />
-          <Text style={[s.emptySectionText, d.emptyText]}>
-            {addLabel}
-          </Text>
-        </Pressable>
-      );
-    }
+    if (items.length === 0) return null;
     return (
       <View style={s.mediaPreviewList}>
         {items.map((item) => {
@@ -3317,20 +3219,15 @@ export default function EditNoteScreen() {
             </View>
           );
         })}
-        {addTile}
       </View>
     );
   }, [
     colors.iconAccent,
     colors.text,
-    d.emptyText,
-    d.emptyTray,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
-    isRouteDataReady,
     uploadedClientIds,
-    uploadingSection,
     t,
   ]);
 
@@ -3361,119 +3258,74 @@ export default function EditNoteScreen() {
               returnKeyType="next"
             />
 
-            <View style={s.metaRow}>
-              <View style={[s.metaIcon, d.metaIcon]}>
-                <Ionicons name="calendar-outline" size={13} color={colors.iconAccent} />
-              </View>
-              <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-            </View>
-
-            <View style={s.groupSection}>
-              <Pressable
-                style={[s.groupButton, d.groupButton]}
-                disabled={isEditingLocked}
-                onPress={() => {
-                  setGroupCreateOpen(false);
-                  setGroupCreateName('');
-                  setGroupCreating(false);
-                  setGroupSheetVisible(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-              >
-                <View style={[s.metaIcon, d.metaIcon]}>
-                  <Ionicons name="folder-open-outline" size={15} color={colors.iconAccent} />
-                </View>
-                <View style={s.groupButtonTextWrap}>
-                  <Text style={[s.groupButtonText, d.groupButtonText]}>
-                    {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-                  </Text>
-                  <Text style={[s.groupButtonSummary, d.groupButtonSummary]} numberOfLines={1}>
-                    {groupSummary}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </Pressable>
-            </View>
+            <Pressable
+              style={[s.groupButton, d.groupButton]}
+              disabled={isEditingLocked}
+              onPress={() => {
+                setGroupCreateOpen(false);
+                setGroupCreateName('');
+                setGroupCreating(false);
+                setGroupSheetVisible(true);
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+              accessibilityValue={{ text: groupSummary }}
+            >
+              <Ionicons name="folder-outline" size={14} color={colors.iconAccent} />
+              <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
+                {selectedGroupNames.length > 0
+                  ? groupSummary
+                  : t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+              </Text>
+              <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
+            </Pressable>
           </View>
         );
-      case 'text': {
-        const textEditorHeight = textEditorHeights[block.id] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
-        const textEditorHeightValue = getTextEditorHeightValue(block.id, textEditorHeight);
-        const textEditorResizeResponder = getTextEditorResizeResponder(block.id);
+      case 'text':
+        // 对齐竞品的单行输入条：只有输入区和右侧删除，随内容自动长高；
+        // 超长时的错误提示仍挂在条下面，「完成」被挡住时作者看得到原因。
         return (
           <>
-        <View style={[s.sectionBlock, s.textSectionBlock, d.sectionShell]}>
-          {renderSectionHeader(
-            'text-outline',
-            t('notes.edit.sections.text', { defaultValue: '文字' }),
-            <NoteTextStatsConsumer store={textStatsStore}>
-              {(stats) =>
-                t('notes.edit.textCount', {
-                  defaultValue: '正文长度 {{count}} / {{max}}',
-                  count: stats.characters,
-                  max: MAX_NOTE_TEXT_LENGTH,
-                })
-              }
-            </NoteTextStatsConsumer>,
-            () => handleRemoveComposerBlock(block),
-          )}
-          <View>
-            <Animated.View
-              style={[
-                s.textEditorFrame,
-                { height: textEditorHeightValue, minHeight: MIN_TEXT_EDITOR_HEIGHT },
-                d.editorFrame,
-              ]}
-            >
-              {editorMounted ? (
-                <NoteBlockEditor
-                  key={isEditingLocked ? 'locked' : 'editing'}
-                  initialContent={textBlocksById[block.id] ?? null}
-                  onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
-                  mediaToolbarEnabled={false}
-                  editable={!isEditingLocked}
-                />
-              ) : null}
-            </Animated.View>
-            {!isEditingLocked ? (
-              <View
-                {...textEditorResizeResponder.panHandlers}
-                style={s.textEditorResizeHandle}
-                accessible
-                accessibilityRole="adjustable"
-                accessibilityLabel={t('notes.edit.resizeTextBlock', {
-                  defaultValue: '调整文字块高度',
-                })}
-                accessibilityValue={{
-                  min: MIN_TEXT_EDITOR_HEIGHT,
-                  max: MAX_TEXT_EDITOR_HEIGHT,
-                  now: textEditorHeight,
-                }}
-              >
-                <View style={[s.textEditorResizeGrip, d.editorResizeGrip]} />
+            <View testID="note-text-section" style={[s.textBar, d.textBar]}>
+              <View style={s.textBarEditor}>
+                {editorMounted ? (
+                  <NoteBlockEditor
+                    key={isEditingLocked ? 'locked' : 'editing'}
+                    initialContent={textBlocksById[block.id] ?? null}
+                    onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
+                    mediaToolbarEnabled={false}
+                    editable={!isEditingLocked}
+                    fitContent
+                  />
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          <NoteTextStatsConsumer store={textStatsStore}>
-            {(stats) => {
-              const textError = getTextError(stats);
-              return textError ? (
-                <Text
-                  accessibilityRole="alert"
-                  accessibilityLiveRegion="polite"
-                  style={[s.sectionSubtitle, d.hintError]}
-                >
-                  {textError}
-                </Text>
-              ) : null;
-            }}
-          </NoteTextStatsConsumer>
-        </View>
-
+              <Pressable
+                style={s.textBarRemoveButton}
+                onPress={() => handleRemoveComposerBlock(block)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${t('notes.edit.sections.text', { defaultValue: '文字' })}`}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </Pressable>
+            </View>
+            <NoteTextStatsConsumer store={textStatsStore}>
+              {(stats) => {
+                const textError = getTextError(stats);
+                return textError ? (
+                  <Text
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    style={[s.textBarError, d.hintError]}
+                  >
+                    {textError}
+                  </Text>
+                ) : null;
+              }}
+            </NoteTextStatsConsumer>
           </>
         );
-      }
       case 'image':
         return (
           <>
@@ -3497,209 +3349,123 @@ export default function EditNoteScreen() {
           </View>
         ) : null}
 
-        <View testID="note-image-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'images-outline',
-            t('notes.edit.composer.image', { defaultValue: '图片' }),
-            getMediaSectionStatus('media', 'image', block.id),
-            () => handleRemoveComposerBlock(block),
-          )}
-          {renderMediaList(
-            getMediaItemsForBlock(mediaItems, 'media', block.id),
-            'media',
-            () => void handleAddSectionMedia({ target: 'media', kind: 'image', blockId: block.id }),
-            t('notes.edit.addImage', { defaultValue: '添加图片' }),
-          )}
-        </View>
-
+        {renderSectionBar({
+          testID: 'note-image-section',
+          label: t('notes.edit.composer.image', { defaultValue: '图片' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
+          actions: renderMediaAdd('media', 'image', block.id, t('notes.edit.addImage', { defaultValue: '添加图片' })),
+        })}
           </>
         );
       case 'video':
-        return (
-          <View testID="note-video-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader(
-              'videocam-outline',
-              t('notes.edit.composer.video', { defaultValue: '视频' }),
-              getMediaSectionStatus('media', 'video', block.id),
-              () => handleRemoveComposerBlock(block),
-            )}
-            {renderMediaList(
-              getMediaItemsForBlock(mediaItems, 'media', block.id),
-              'media',
-              () => void handleAddSectionMedia({ target: 'media', kind: 'video', blockId: block.id }),
-              t('notes.edit.addVideo', { defaultValue: '添加视频' }),
-            )}
-          </View>
-        );
+        return renderSectionBar({
+          testID: 'note-video-section',
+          label: t('notes.edit.composer.video', { defaultValue: '视频' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
+          actions: renderMediaAdd('media', 'video', block.id, t('notes.edit.addVideo', { defaultValue: '添加视频' })),
+        });
       case 'showcase':
-        return (
-          <>
-        <View testID="note-showcase-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'albums-outline',
-            t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
-            getMediaSectionStatus('showcase', 'video', block.id),
-            () => handleRemoveComposerBlock(block),
-          )}
-          {renderMediaList(
-            getMediaItemsForBlock(showcaseItems, 'showcase', block.id),
-            'showcase',
-            () => void handleAddSectionMedia({ target: 'showcase', kind: 'video', blockId: block.id }),
-            t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' }),
-          )}
-        </View>
-
-          </>
-        );
+        return renderSectionBar({
+          testID: 'note-showcase-section',
+          label: t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: renderMediaTiles(getMediaItemsForBlock(showcaseItems, 'showcase', block.id), 'showcase'),
+          actions: renderMediaAdd('showcase', 'video', block.id, t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' })),
+        });
       case 'audio':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader('mic-outline', t('notes.edit.composer.audio', { defaultValue: '录音' }), audioSectionStatus, () => handleRemoveComposerBlock(block))}
-            <View style={s.sectionActions}>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void handleAddAudioFile(block.id)}
-                disabled={!isRouteDataReady || uploadingSection !== null || recordingAudioStartedAt !== null}
-              >
-                <Ionicons name="cloud-upload-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {t('notes.edit.uploadAudio', { defaultValue: '上传音频' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void toggleNoteRecording(block.id)}
-                disabled={!isRouteDataReady || uploadingSection !== null || (recordingAudioStartedAt === null && audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))}
-              >
-                <Ionicons name={recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline'} size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {recordingAudioStartedAt !== null
-                    ? t('notes.edit.stopRecording', { defaultValue: '停止录音' })
-                    : t('notes.edit.startRecording', { defaultValue: '开始录音' })}
-                </Text>
-              </Pressable>
-            </View>
-            {isFirstAudioBlock && audioItems.length > 0 ? (
-              <View style={s.audioList}>
-                {audioItems.map((item) => (
-                  <View key={item.clientId} style={[s.audioRow, d.locationPreviewCard]}>
-                    <Ionicons name="mic" size={18} color={colors.iconAccent} />
-                    <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
-                      {typeof item.durationMs === 'number' && item.durationMs > 0
-                        ? t('notes.edit.audioDuration', { defaultValue: '{{seconds}} 秒', seconds: Math.max(1, Math.round(item.durationMs / 1000)) })
-                        : t('notes.edit.audioItem', { defaultValue: '音频' })}
-                    </Text>
-                    {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
-                      <Pressable accessibilityRole="button" accessibilityLabel={t('common.retry')}
-                        onPress={() => void retryRecordedAudio(item)} disabled={uploadingSection !== null || recordingAudioStartedAt !== null}>
-                        <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable accessibilityRole="button" accessibilityLabel={t('notes.actions.delete') + t('notes.edit.audioItem')} onPress={() => removeRecordedAudio(item)} hitSlop={8}>
-                      <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        );
-      case 'contact':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader('person-outline', t('notes.edit.composer.contact', { defaultValue: '名片' }), `${contactItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`, () => handleRemoveComposerBlock(block))}
-            <View style={s.sectionActions}>
-              <Pressable style={[s.sectionAction, d.sectionAction]} onPress={() => void openCardPicker('contact')} disabled={!isRouteDataReady}>
-                <Ionicons name="person-add-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>{t('notes.edit.addContact', { defaultValue: '选择联系人' })}</Text>
-              </Pressable>
-            </View>
-            {contactItems.map((item) => {
-              const avatar = getNoteCardAvatar(item);
-              return (
-                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
-                  {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                  ) : (
-                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
-                    </View>
-                  )}
-                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
-                </View>
-              );
-            })}
-          </View>
-        );
-      case 'group':
-        return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader(
-              'people-outline',
-              t('notes.edit.composer.group', { defaultValue: '群名片' }),
-              sourceGroupCardLocked
-                ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
-                : `${groupCardItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
-              sourceGroupCardLocked ? undefined : () => handleRemoveComposerBlock(block),
-            )}
-            <View style={s.sectionActions}>
-              <Pressable
-                style={[s.sectionAction, d.sectionAction]}
-                onPress={() => void openCardPicker('group')}
-                disabled={!isRouteDataReady || sourceGroupCardLocked}
-                accessibilityState={{ disabled: !isRouteDataReady || sourceGroupCardLocked }}
-              >
-                <Ionicons name="people-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>
-                  {sourceGroupCardLocked
-                    ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
-                    : t('notes.edit.addGroup', { defaultValue: '选择群组' })}
-                </Text>
-              </Pressable>
-            </View>
-            {groupCardItems.map((item) => {
-              const avatar = getNoteCardAvatar(item);
-              return (
-                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
-                  {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-                  ) : (
-                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
-                    </View>
-                  )}
-                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
-                </View>
-              );
-            })}
-          </View>
-        );
-      case 'location':
-        return (
-          <>
-        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-          {renderSectionHeader(
-            'location-outline',
-            t('notes.edit.sections.location', { defaultValue: '位置' }),
-            hasLocation
-              ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
-              : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
-            () => handleRemoveComposerBlock(block),
-          )}
-          <View style={s.sectionActions}>
-            <Pressable
-              style={[s.sectionAction, d.sectionAction]}
-              onPress={handleOpenLocationPicker}
-              disabled={!isRouteDataReady || uploadingSection !== null}
-            >
-              <Ionicons name="map-outline" size={17} color={colors.text} />
-              <Text style={[s.sectionActionText, d.sectionActionText]}>
-                {t('notes.edit.pickLocation', { defaultValue: '选择位置' })}
+        return renderSectionBar({
+          label: t('notes.edit.composer.audio', { defaultValue: '录音' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          content: isFirstAudioBlock && audioItems.length > 0 ? audioItems.map((item) => (
+            <View key={item.clientId} style={s.audioRow}>
+              <Ionicons name="mic" size={18} color={colors.iconAccent} />
+              <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
+                {typeof item.durationMs === 'number' && item.durationMs > 0
+                  ? t('notes.edit.audioDuration', { defaultValue: '{{seconds}} 秒', seconds: Math.max(1, Math.round(item.durationMs / 1000)) })
+                  : t('notes.edit.audioItem', { defaultValue: '音频' })}
               </Text>
-            </Pressable>
-          </View>
-          {hasLocation ? (
-            <View style={[s.locationPreviewCard, d.locationPreviewCard]}>
+              {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={t('common.retry')}
+                  onPress={() => void retryRecordedAudio(item)} disabled={uploadingSection !== null || recordingAudioStartedAt !== null}>
+                  <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable accessibilityRole="button" accessibilityLabel={t('notes.actions.delete') + t('notes.edit.audioItem')} onPress={() => removeRecordedAudio(item)} hitSlop={8}>
+                <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          )) : null,
+          actions: (
+            <>
+              {renderSectionAdd({
+                icon: 'cloud-upload-outline',
+                label: uploadingSection === 'audio'
+                  ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+                  : t('notes.edit.uploadAudio', { defaultValue: '上传音频' }),
+                onPress: () => void handleAddAudioFile(block.id),
+                disabled: !isRouteDataReady || uploadingSection !== null || recordingAudioStartedAt !== null,
+              })}
+              {renderSectionAdd({
+                icon: recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline',
+                label: recordingAudioStartedAt !== null
+                  ? t('notes.edit.stopRecording', { defaultValue: '停止录音' })
+                  : t('notes.edit.startRecording', { defaultValue: '开始录音' }),
+                onPress: () => void toggleNoteRecording(block.id),
+                disabled: !isRouteDataReady || uploadingSection !== null || (recordingAudioStartedAt === null && audioItems.some((item) => item.uploadStatus !== 'UPLOADED')),
+              })}
+            </>
+          ),
+        });
+      case 'contact':
+      case 'group': {
+        const isGroup = kind === 'group';
+        const cardItems = isGroup ? groupCardItems : contactItems;
+        const locked = isGroup && sourceGroupCardLocked;
+        return renderSectionBar({
+          label: isGroup
+            ? t('notes.edit.composer.group', { defaultValue: '群名片' })
+            : t('notes.edit.composer.contact', { defaultValue: '名片' }),
+          // 收藏副本的来源群名片是固定的，删不掉也换不了。
+          onRemove: locked ? undefined : () => handleRemoveComposerBlock(block),
+          content: cardItems.length > 0 ? cardItems.map((item) => {
+            const avatar = getNoteCardAvatar(item);
+            return (
+              <View key={item.id} style={s.cardRow}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+                ) : (
+                  <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                    <Ionicons name={isGroup ? 'people-outline' : 'person-outline'} size={19} color={colors.iconAccent} />
+                  </View>
+                )}
+                <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+              </View>
+            );
+          }) : null,
+          actions: renderSectionAdd({
+            label: locked
+              ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
+              : isGroup
+                ? t('notes.edit.addGroup', { defaultValue: '选择群组' })
+                : t('notes.edit.addContact', { defaultValue: '选择联系人' }),
+            onPress: () => void openCardPicker(isGroup ? 'group' : 'contact'),
+            disabled: !isRouteDataReady || locked,
+          }),
+        });
+      }
+      case 'location':
+        return renderSectionBar({
+          label: t('notes.edit.sections.location', { defaultValue: '位置' }),
+          onRemove: () => handleRemoveComposerBlock(block),
+          actions: renderSectionAdd({
+            label: t('notes.edit.pickLocation', { defaultValue: '选择位置' }),
+            onPress: handleOpenLocationPicker,
+            disabled: !isRouteDataReady || uploadingSection !== null,
+          }),
+          content: hasLocation ? (
+            <View style={s.locationPreview}>
               <View
                 testID="note-location-map"
                 style={s.locationMapPreview}
@@ -3750,18 +3516,9 @@ export default function EditNoteScreen() {
                 )}
               </View>
               <View style={s.locationPreviewInfo}>
-                <View style={s.locationPreviewTitleRow}>
-                  <Ionicons name="location" size={16} color={colors.iconAccent} />
-                  <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
-                    {t('notes.edit.locationPlaceNameLabel', { defaultValue: '地点名称' })}
-                  </Text>
-                </View>
                 <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
                   {locationDraft.title ||
                     t('notes.edit.locationPreviewTitle', { defaultValue: '已选择位置' })}
-                </Text>
-                <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
-                  {t('notes.edit.locationAddressLabel', { defaultValue: '详细地址' })}
                 </Text>
                 <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
                   {locationDraft.address ||
@@ -3782,10 +3539,8 @@ export default function EditNoteScreen() {
                 </View>
               </View>
             </View>
-          ) : null}
-        </View>
-          </>
-        );
+          ) : null,
+        });
       default:
         return null;
     }
@@ -4038,11 +3793,21 @@ export default function EditNoteScreen() {
                 accessibilityLabel={label}
               >
                 <View style={s.composerToolIcon}>
-                  <Ionicons
-                    name={action.icon}
-                    size={21}
-                    color={colors.textSecondary}
-                  />
+                  {typeof action.icon === 'string' ? (
+                    <Ionicons
+                      name={action.icon}
+                      size={21}
+                      color={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text
+                      testID={`composer-tool-glyph-${action.kind}`}
+                      style={[s.composerToolGlyph, { color: colors.textSecondary }]}
+                      allowFontScaling={false}
+                    >
+                      {action.icon.glyph}
+                    </Text>
+                  )}
                 </View>
                 <Text
                   style={[s.composerToolLabel, { color: colors.textSecondary }]}
@@ -4075,7 +3840,7 @@ export default function EditNoteScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('notes.edit.composer.preview', { defaultValue: '预览' })}
           >
-            <Ionicons name="eye-outline" size={18} color={colors.text} />
+            <Ionicons name="eye-outline" size={18} color={colors.link} />
             <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>
               {t('notes.edit.composer.preview', { defaultValue: '预览' })}
             </Text>
@@ -4108,7 +3873,7 @@ export default function EditNoteScreen() {
             <Ionicons name="close" size={24} color={colors.textSecondary} />
           </Pressable>
         </View>
-        <ScrollView
+        <BottomSheetScrollView
           style={s.composerSortList}
           showsVerticalScrollIndicator={false}
           scrollEnabled={draggingComposerBlockId === null}
@@ -4205,7 +3970,7 @@ export default function EditNoteScreen() {
               );
             })
           )}
-        </ScrollView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
       {previewVisible ? (
         <Modal
@@ -4317,7 +4082,7 @@ export default function EditNoteScreen() {
             color={colors.primary}
           />
         ) : (
-          <ScrollView
+          <BottomSheetScrollView
             style={s.cardPickerList}
             contentContainerStyle={s.cardPickerListContent}
             keyboardShouldPersistTaps="handled"
@@ -4393,7 +4158,7 @@ export default function EditNoteScreen() {
                 </Text>
               )
             )}
-          </ScrollView>
+          </BottomSheetScrollView>
         )}
         <View style={s.cardPickerActions}>
           <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
@@ -4435,7 +4200,7 @@ export default function EditNoteScreen() {
               {t('notes.groupPicker.empty', { defaultValue: '暂无分组' })}
             </Text>
           ) : (
-            <ScrollView
+            <BottomSheetScrollView
               style={s.groupSheetList}
               contentContainerStyle={s.groupSheetListContent}
               showsVerticalScrollIndicator={false}
@@ -4470,7 +4235,7 @@ export default function EditNoteScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BottomSheetScrollView>
           )}
           {groupCreateOpen ? (
             <View style={s.groupCreateRow}>
@@ -4586,40 +4351,20 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 26,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 2,
-    paddingBottom: Spacing.md,
-    gap: Spacing.xs,
-  },
-  dateText: { ...Typography.caption },
-  metaIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-  },
+  // 分组收成标题下的一枚小胶囊：宽度随文字，超长时省略，不再占满一整行。
   groupButton: {
-    minHeight: 56,
-    borderRadius: Radius.md,
-    borderCurve: 'continuous',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.xs,
+    height: 28,
+    marginHorizontal: Spacing.lg,
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: 10,
+    borderRadius: Radius.pill,
   },
-  groupButtonTextWrap: { flex: 1, gap: 2 },
-  groupButtonText: { ...Typography.body, fontWeight: '600' },
-  groupButtonSummary: { ...Typography.small },
+  groupButtonText: { ...Typography.small, fontWeight: '500', flexShrink: 1 },
   groupSheetWrap: { width: '100%', maxHeight: '70%' },
   groupSheet: {
     borderTopLeftRadius: Radius.xl,
@@ -4763,84 +4508,67 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
-  sectionBlock: {
+  sectionSubtitle: { ...Typography.small },
+  // 其余区块与文字条同一套外形：左内边距 16 让「＋」和正文首字对齐，
+  // 右侧只留删除按钮的位置；内容区在上，按钮行在下。
+  sectionBar: {
     marginHorizontal: Spacing.lg,
-    marginBottom: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.xs,
+    borderRadius: Radius.lg,
     borderCurve: 'continuous',
-    padding: Spacing.md,
-    gap: Spacing.md,
+    overflow: 'hidden',
   },
-  // 文字块把纵向留白收紧到 8：卡片上下、标题与编辑框之间都不需要整档 16，
-  // 省下的高度都给可写区域。
-  textSectionBlock: {
-    paddingVertical: Spacing.sm,
+  sectionBarContent: {
+    paddingTop: Spacing.md,
+    paddingRight: Spacing.md,
     gap: Spacing.sm,
   },
-  secondarySection: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
-  },
-  sectionHeader: {
+  sectionBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    minHeight: 30,
+    minHeight: 50,
   },
-  sectionIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionHeading: {
+  sectionBarActions: {
     flex: 1,
-    // 与详情页小节标题同档（h3/700），编辑页分段更醒目。
-    ...Typography.h3,
-    fontWeight: '700',
-  },
-  sectionSubtitle: { ...Typography.small },
-  sectionHeaderMeta: {
-    marginLeft: 'auto',
-    alignItems: 'flex-end',
-  },
-  sectionHeaderMetaText: { ...Typography.small },
-  sectionRemoveButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.xs,
+    gap: Spacing.lg,
   },
-  textEditorFrame: {
-    height: DEFAULT_TEXT_EDITOR_HEIGHT,
-    minHeight: MIN_TEXT_EDITOR_HEIGHT,
-    // 卡片内边距 + 编辑器内边距叠起来太宽：编辑框向两侧撑出 8pt 贴近卡片边，
-    // 卡片标题行仍与其他区块对齐。
-    marginHorizontal: -Spacing.sm,
-    overflow: 'hidden',
-    borderRadius: Radius.md,
+  sectionAddButton: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 50,
+  },
+  sectionAddText: { ...Typography.body, flexShrink: 1 },
+  // 编辑器自己带 10pt 内边距，条只补 6pt：文字离左边缘 16，和标题对齐。
+  // 上下各留 2pt，WebView 不碰圆角（安卓不一定按父视图圆角裁 WebView），
+  // 单行时整条正好 50 高。
+  textBar: {
+    marginHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingLeft: 6,
+    paddingRight: Spacing.xs,
+    borderRadius: Radius.lg,
     borderCurve: 'continuous',
-    borderWidth: 1,
+    overflow: 'hidden',
   },
-  textEditorResizeHandle: {
-    height: TEXT_EDITOR_RESIZE_HANDLE_HEIGHT,
+  textBarEditor: { flex: 1 },
+  textBarRemoveButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textEditorResizeGrip: {
-    width: 40,
-    height: 4,
-    borderRadius: Radius.full,
-    opacity: 0.45,
+  textBarError: {
+    ...Typography.small,
+    marginHorizontal: Spacing.lg + Spacing.xs,
+    marginTop: Spacing.xs,
   },
   legacyMediaWarning: {
     flexDirection: 'row',
@@ -4853,43 +4581,14 @@ const s = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   legacyMediaWarningText: { ...Typography.small, flex: 1, lineHeight: 18 },
-  sectionActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  sectionAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 0,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 9,
-    gap: Spacing.xs,
-  },
-  sectionActionText: { ...Typography.small, fontWeight: '600' },
   mediaPreviewList: {
     gap: Spacing.sm,
   },
   mediaPreviewTile: {
     width: '100%',
     aspectRatio: 1,
-    borderWidth: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-  },
-  mediaAddTile: {
-    minHeight: 96,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    borderStyle: 'dashed',
-  },
-  mediaAddLabel: {
-    ...Typography.tiny,
-    textAlign: 'center',
   },
   mediaThumb: {
     width: '100%',
@@ -4917,32 +4616,16 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.86)',
   },
-  emptyTray: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
-  emptySectionText: { ...Typography.small },
-  audioList: { gap: Spacing.xs, marginTop: Spacing.sm },
   audioRow: {
     minHeight: 44,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
   cardRow: {
     minHeight: 44,
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -4965,14 +4648,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationPreviewCard: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+  locationPreview: { gap: Spacing.sm },
   locationMapPreview: {
     width: '100%',
     height: LOCATION_MAP_HEIGHT,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   locationMapTile: {
@@ -5012,18 +4692,8 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  locationPreviewInfo: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  locationPreviewTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  locationDetailLabel: { ...Typography.small, fontWeight: '600' },
-  locationClearRow: { alignItems: 'flex-end', paddingTop: Spacing.xs },
+  locationPreviewInfo: { gap: 2 },
+  locationClearRow: { alignItems: 'flex-end' },
   locationClearAction: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5062,6 +4732,12 @@ const s = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  composerToolGlyph: {
+    fontSize: 23,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
   },
   composerToolLabel: {
     ...Typography.tinyRegular,

@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from 'expo';
+import { Platform } from 'react-native';
 import type { ChatMediaFile } from '@/features/chat/chat-detail/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -22,6 +23,17 @@ export interface PreparedChatVideo {
   cleanup?: () => Promise<void>;
 }
 
+function loadCompressor(): ChatVideoCompressorModule | null {
+  if (Platform.OS === 'web') return null;
+  // Existing binaries and Expo Go can still send; the native feature needs a new APK/IPA.
+  return requireOptionalNativeModule<ChatVideoCompressorModule>('ChatVideoCompressor');
+}
+
+/** Whether picked videos get re-encoded before upload, so their size can only be judged afterwards. */
+export function isChatVideoCompressionAvailable(): boolean {
+  return loadCompressor() !== null;
+}
+
 /** Native validates the output and returns null when transcoding would not save bytes. */
 export async function prepareChatVideoForUpload(
   asset: ChatMediaFile,
@@ -29,8 +41,7 @@ export async function prepareChatVideoForUpload(
   contentType: string,
 ): Promise<PreparedChatVideo> {
   const original = { asset, filename, contentType };
-  const native = requireOptionalNativeModule<ChatVideoCompressorModule>('ChatVideoCompressor');
-  // Web, Expo Go and binaries built before the module existed still send the original.
+  const native = loadCompressor();
   if (!native) return original;
   try {
     const output = await native.compress(asset.uri);

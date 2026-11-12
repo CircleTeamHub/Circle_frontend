@@ -47,7 +47,8 @@ test('chat detail consumes note batches through the pure task planner', () => {
   // 汇总提示要等全部有了结果。
   assert.match(pipeline, /await Promise\.all\(deliveries\)/);
   // 四种任务各走对应的发送通道。
-  assert.match(pipeline, /buildNoteSendTasks\(note, options, imported, location\)/);
+  // posterKeys: frames grabbed from the note's own videos, so sent videos aren't black.
+  assert.match(pipeline, /buildNoteSendTasks\(note, options, imported, location, posterKeys\)/);
   assert.match(pipeline, /sendImageMessage\(\{\s*conversationId,\s*key: task\.key/);
   assert.match(pipeline, /sendVideoMessage\(\{\s*conversationId,\s*key: task\.key/);
   assert.match(pipeline, /sendLocationMessage\(\{\s*conversationId,\s*latitude: task\.latitude/);

@@ -16,7 +16,7 @@ import {
   type FriendProfile,
 } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetFlatList } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,7 +28,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Pressable,
   SectionList,
   SectionListData,
@@ -548,7 +547,7 @@ export default function FriendTagDetailScreen() {
             <Text style={d.pickerEmpty}>{pickerEmptyText}</Text>
           </View>
         ) : (
-          <FlatList
+          <BottomSheetFlatList
             data={visibleCandidates}
             keyExtractor={(item) => item.id}
             style={s.pickerList}

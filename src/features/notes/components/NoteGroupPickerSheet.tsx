@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetScrollView } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import {
   GROUP_NAME_MAX_LENGTH,
@@ -237,7 +236,7 @@ export function NoteGroupPickerSheet({
           })}
         </Text>
       ) : (
-        <ScrollView
+        <BottomSheetScrollView
           style={s.list}
           contentContainerStyle={s.listContent}
           {...keyboardDismissOnDragProps}
@@ -279,7 +278,7 @@ export function NoteGroupPickerSheet({
               </Pressable>
             );
           })}
-        </ScrollView>
+        </BottomSheetScrollView>
       )}
       {creatingOpen ? (
         <View style={s.createRow}>

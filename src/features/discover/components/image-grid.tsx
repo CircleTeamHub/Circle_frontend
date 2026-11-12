@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { MediaImage } from '@/components/ui/media-image';
-import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Radius, Spacing } from '@/theme';
 import type { ImageMediaVariant } from '@/types';
@@ -13,8 +12,6 @@ interface ImageGridProps {
   media?: ImageMediaVariant[];
   /** 覆盖点图行为；不传时用内置的全屏大图查看器（默认且期望的行为）。 */
   onPress?: (index: number) => void;
-  /** 外部容器可用宽度（相册行的内容列宽度）。缺省时按 discover 卡片布局计算。 */
-  containerWidth?: number;
   /**
    * 单图也只占九宫格的一格。圈子动态列表要卡片高度接近，单图放大会让那一条
    * 比别的帖子高出一截；朋友圈保留单图大图。
@@ -30,6 +27,7 @@ interface DisplayImage {
 }
 
 const GAP = Spacing.xs;
+const COLUMNS = 3;
 
 function firstString(
   ...values: (string | null | undefined)[]
@@ -75,35 +73,58 @@ export function getDisplayImages(
   });
 }
 
+/**
+ * 九宫格骨架：每行 3 格均分父容器的实际宽度；单图大图占 65% 宽的正方形。
+ * 不按屏幕宽度推算像素 —— 各页面左右留白不同，推算多出几 pt，第三格就会掉到下一行。
+ */
+export function NineGrid({ count, single, renderCell, children }: {
+  count: number;
+  /** 单图大图，而不是九宫格里的一格。 */
+  single: boolean;
+  /** 返回的元素会被撑满所在格子（需自带 flex: 1）。 */
+  renderCell: (index: number) => ReactNode;
+  /** 跟随网格挂载的附属元素（全屏查看器）。 */
+  children?: ReactNode;
+}) {
+  if (single) {
+    return (
+      <View style={s.single}>
+        {renderCell(0)}
+        {children}
+      </View>
+    );
+  }
+  const rows = Array.from({ length: Math.ceil(count / COLUMNS) }, (_, row) => row);
+  return (
+    <View style={s.grid}>
+      {rows.map((row) => (
+        <View key={row} style={s.row}>
+          {Array.from({ length: COLUMNS }, (_, column) => {
+            const index = row * COLUMNS + column;
+            return (
+              <View key={column} style={s.cell}>
+                {index < count ? renderCell(index) : null}
+              </View>
+            );
+          })}
+        </View>
+      ))}
+      {children}
+    </View>
+  );
+}
+
 export const ImageGrid: React.FC<ImageGridProps> = ({
   images,
   media,
   onPress,
-  containerWidth: containerWidthProp,
   uniformCells = false,
 }) => {
-  // 桌面网页版里这是居中栏宽（640），不是 1440 的视口宽。
-  const availableWidth = useContentColumnWidth();
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const containerWidth =
-    containerWidthProp ?? availableWidth - Spacing.lg * 2 - Spacing.md * 2;
   const displayImages = useMemo(
     () => getDisplayImages(images, media),
     [images, media],
   );
-
-  const layout = useMemo(() => {
-    const count = displayImages.length;
-    if (count === 0) return { cols: 0, rows: 0, itemSize: 0 };
-    if (count === 1 && !uniformCells) {
-      return { cols: 1, rows: 1, itemSize: containerWidth * 0.65 };
-    }
-    return {
-      cols: 3,
-      rows: Math.ceil(count / 3),
-      itemSize: Math.floor((containerWidth - GAP * 2) / 3),
-    };
-  }, [displayImages.length, containerWidth, uniformCells]);
 
   const handlePress = useCallback(
     (index: number) => {
@@ -122,36 +143,33 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
   const viewerCacheKeys = displayImages.map((item) => item.originalCacheKey);
 
   return (
-    <View style={s.grid}>
-      {displayImages.map((item, i) => (
-        <Pressable
-          key={`${item.originalCacheKey ?? item.originalUri}-${i}`}
-          onPress={() => handlePress(i)}
-          accessibilityRole="imagebutton"
-          style={[
-            s.imageWrap,
-            {
-              width: layout.itemSize,
-              height: layout.itemSize,
-              marginRight: (i + 1) % layout.cols === 0 ? 0 : GAP,
-              marginBottom: GAP,
-            },
-          ]}
-        >
-          <MediaImage
-            source={{
-              uri: item.thumbUri,
-              ...(item.thumbCacheKey ? { cacheKey: item.thumbCacheKey } : {}),
-            }}
-            recyclingKey={item.thumbCacheKey ?? item.thumbUri}
-            cachePolicy="memory-disk"
-            enforceEarlyResizing
-            style={s.image}
-            contentFit="cover"
-            transition={0}
-          />
-        </Pressable>
-      ))}
+    <NineGrid
+      count={displayImages.length}
+      single={displayImages.length === 1 && !uniformCells}
+      renderCell={(i) => {
+        const item = displayImages[i];
+        return (
+          <Pressable
+            onPress={() => handlePress(i)}
+            accessibilityRole="imagebutton"
+            style={s.imageWrap}
+          >
+            <MediaImage
+              source={{
+                uri: item.thumbUri,
+                ...(item.thumbCacheKey ? { cacheKey: item.thumbCacheKey } : {}),
+              }}
+              recyclingKey={item.thumbCacheKey ?? item.thumbUri}
+              cachePolicy="memory-disk"
+              enforceEarlyResizing
+              style={s.image}
+              contentFit="cover"
+              transition={0}
+            />
+          </Pressable>
+        );
+      }}
+    >
       {viewerIndex !== null ? (
         <ImageViewer
           images={viewerImages}
@@ -161,16 +179,18 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
           onClose={() => setViewerIndex(null)}
         />
       ) : null}
-    </View>
+    </NineGrid>
   );
 };
 
 const s = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+  // alignSelf 保证父容器 alignItems 不是 stretch 时网格仍铺满整行。
+  grid: { alignSelf: 'stretch', gap: GAP },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: GAP },
+  cell: { flex: 1, aspectRatio: 1 },
+  single: { width: '65%', aspectRatio: 1 },
   imageWrap: {
+    flex: 1,
     borderRadius: Radius.sm,
     overflow: 'hidden',
   },
