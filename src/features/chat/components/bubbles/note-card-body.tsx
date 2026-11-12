@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
+import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
 import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteCardData } from '@/types';
@@ -54,6 +56,8 @@ const s = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700', lineHeight: 22, flexShrink: 1 },
   preview: { fontSize: 13, fontWeight: '400', lineHeight: 18 },
   meta: { ...Typography.small, lineHeight: 16 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  metaText: { flexShrink: 1 },
   // 与笔记页的开工/打烊/下架标签同一套实心底(noteWorkStatusFill + onStatusFill)。
   statusPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   statusText: { ...Typography.small, fontWeight: '700' },
@@ -88,6 +92,9 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   const previewUrls = note.previewUrls ?? [];
   const hasPreviews = previewUrls.length > 0;
   const unlisted = note.publicationStatus === 'UNLISTED' || note.publicationStatus === 'DELETED';
+  // This month's counters arrive with the conversation's source-state reconciliation.
+  const ratingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
+  const hasRatings = Boolean(ratingCounts && (ratingCounts.goodCount > 0 || ratingCounts.badCount > 0));
 
   const available: Record<NoteCardSection, boolean> = {
     text: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
@@ -157,10 +164,20 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
               {note.contentPreview}
             </Text>
           ) : null}
-          {countSegments.length > 0 ? (
-            <Text style={[s.meta, { color: onCardMuted }]} numberOfLines={1} testID="note-card-counts">
-              {countSegments.join(' · ')}
-            </Text>
+          {countSegments.length > 0 || hasRatings ? (
+            <View style={s.metaRow}>
+              {countSegments.length > 0 ? (
+                <Text style={[s.meta, s.metaText, { color: onCardMuted }]} numberOfLines={1} testID="note-card-counts">
+                  {countSegments.join(' · ')}
+                </Text>
+              ) : null}
+              <NoteRatingCounts
+                goodCount={ratingCounts?.goodCount}
+                badCount={ratingCounts?.badCount}
+                color={onCardMuted}
+                testID="note-card-rating"
+              />
+            </View>
           ) : null}
         </View>
       </View>

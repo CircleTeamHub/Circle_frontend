@@ -1550,6 +1550,68 @@
       "chooseGroup": "グループを選ぶ",
       "editTitle": "タイトルを編集",
       "collectHint": "「グループを選ぶ」をオフにすると未分類に、「タイトルを編集」をオフにすると元のタイトルのまま保存します。"
+    },
+    "rating": {
+      "monthLabel": "今月",
+      "good": "高評価 {{count}}",
+      "bad": "低評価 {{count}}",
+      "rateGood": "高評価する",
+      "rateBad": "低評価する",
+      "countsA11y": "今月の高評価 {{good}}、低評価 {{bad}}",
+      "viewBad": "低評価を見る",
+      "heldNotice": "評価を送信しました。審査中で、承認後に今月の件数に反映されます。",
+      "failedTitle": "評価できませんでした",
+      "blockedTitle": "まだ評価できません",
+      "blocked": {
+        "NOTE_RATING_NOT_COLLECTED": "このノートをマイノートに追加すると評価できます。",
+        "NOTE_RATING_NOT_IN_GROUP": "ノート内のグループに参加すると評価できます。",
+        "NOTE_RATING_LOW_CREDIT": "信用スコアが90未満のため、現在は評価できません。",
+        "NOTE_RATING_ACCOUNT_TOO_NEW": "登録から7日経つと評価できます。",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "今日はすでに評価しました。また明日どうぞ。",
+        "cooldownDays": "{{count}}日後にこのノートを再評価できます。",
+        "cooldownHours": "{{count}}時間後にこのノートを再評価できます。",
+        "NOTE_RATING_NOTE_GOOD_FULL": "このノートは本日の高評価の上限に達しました。また明日どうぞ。",
+        "NOTE_RATING_NOTE_BAD_FULL": "このノートは本日の低評価の上限に達しました。また明日どうぞ。",
+        "unknown": "現在は評価できません。しばらくしてからお試しください。"
+      },
+      "reasons": {
+        "INACCURATE": "情報が不正確",
+        "EXPIRED": "無効になった",
+        "BAD_EXPERIENCE": "体験が悪い",
+        "OTHER": "その他"
+      },
+      "reasonSheet": {
+        "title": "低評価の理由",
+        "otherPlaceholder": "具体的な状況を入力（必須）",
+        "submit": "低評価を送信",
+        "submitting": "送信中..."
+      },
+      "badList": {
+        "title": "低評価",
+        "subtitle": "理由と日時のみ表示され、評価した人は表示されません",
+        "empty": "低評価はありません",
+        "loadFailed": "低評価を読み込めませんでした",
+        "loadMore": "さらに読み込む",
+        "appealsRemaining": "今月はあと{{count}}回申し立てできます",
+        "appeal": "申し立て",
+        "appealFailedTitle": "申し立てできませんでした",
+        "status": {
+          "HELD": "審査中",
+          "VOID": "取り消し済み"
+        },
+        "appealStatus": {
+          "PENDING": "申し立て審査中",
+          "UPHELD": "申し立ては却下され、低評価は残ります",
+          "REVOKED": "申し立てが認められ、低評価は取り消されました"
+        },
+        "appealSheet": {
+          "title": "この低評価に申し立てる",
+          "hint": "審査中も、この低評価は今月の件数に含まれます。",
+          "placeholder": "理由を入力（必須）",
+          "submit": "申し立てを送信",
+          "submitting": "送信中..."
+        }
+      }
     }
   },
   "tempChats": {
@@ -3270,6 +3332,7 @@
     "scoreAfter": "変動後 {{score}}",
     "reasons": {
       "friendReport": "通報が認定されました",
+      "noteRatingAbuse": "ノート評価の不正が確認されました",
       "other": "信頼度の調整"
     }
   },
@@ -3604,6 +3667,22 @@
     "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "NOTE_SHARE_LINK_UNAVAILABLE": "ノートの共有はまだ利用できません",
+    "NOTE_RATING_OWNER": "自分のノートは評価できません",
+    "NOTE_RATING_NOT_COLLECTED": "このノートをマイノートに追加すると評価できます",
+    "NOTE_RATING_NOT_IN_GROUP": "ノート内のグループに参加すると評価できます",
+    "NOTE_RATING_NO_GROUP": "このノートにはグループがないため評価できません",
+    "NOTE_RATING_LOW_CREDIT": "信用スコアが90未満のため、現在は評価できません",
+    "NOTE_RATING_ACCOUNT_TOO_NEW": "登録から7日経つと評価できます",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "今日はすでに評価しました。また明日どうぞ",
+    "NOTE_RATING_COOLDOWN": "同じノートは3日に1回しか評価できません",
+    "NOTE_RATING_NOTE_GOOD_FULL": "このノートは本日の高評価の上限に達しました",
+    "NOTE_RATING_NOTE_BAD_FULL": "このノートは本日の低評価の上限に達しました",
+    "NOTE_RATING_NOT_FOUND": "この評価は存在しません",
+    "NOTE_RATING_NOT_APPEALABLE": "この低評価は現在申し立てできません",
+    "NOTE_RATING_ALREADY_APPEALED": "この低評価にはすでに申し立て済みです",
+    "NOTE_RATING_APPEAL_QUOTA": "今月の申し立て回数を使い切りました",
+    "NOTE_RATING_CASE_RESOLVED": "この審査はすでに処理されています",
+    "NOTE_RATING_CASE_ACTION_INVALID": "この操作はこの審査には使えません",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
     "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "消えるメッセージのチャット内のメッセージは保存できません",

@@ -1787,6 +1787,7 @@
     "scoreAfter": "变动后 {{score}}",
     "reasons": {
       "friendReport": "被举报并核实",
+      "noteRatingAbuse": "笔记评分违规",
       "other": "信誉值调整"
     }
   },
@@ -3215,6 +3216,68 @@
       "chooseGroup": "选择分组",
       "editTitle": "编辑标题",
       "collectHint": "关闭「选择分组」会放进未分组；关闭「编辑标题」会沿用原笔记标题。"
+    },
+    "rating": {
+      "monthLabel": "本月",
+      "good": "好评 {{count}}",
+      "bad": "差评 {{count}}",
+      "rateGood": "给好评",
+      "rateBad": "给差评",
+      "countsA11y": "本月好评 {{good}}，差评 {{bad}}",
+      "viewBad": "查看差评",
+      "heldNotice": "评分已提交，正在审核，通过后计入本月计数。",
+      "failedTitle": "评分失败",
+      "blockedTitle": "暂时不能评分",
+      "blocked": {
+        "NOTE_RATING_NOT_COLLECTED": "先把这条笔记添加到我的笔记，才能评分。",
+        "NOTE_RATING_NOT_IN_GROUP": "需要加入笔记里的群才能评分。",
+        "NOTE_RATING_LOW_CREDIT": "信用分不足 90，暂时不能评分。",
+        "NOTE_RATING_ACCOUNT_TOO_NEW": "注册满 7 天后才能评分。",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "今天已经打过分了，明天再来。",
+        "cooldownDays": "{{count}} 天后可再评这条笔记。",
+        "cooldownHours": "{{count}} 小时后可再评这条笔记。",
+        "NOTE_RATING_NOTE_GOOD_FULL": "这条笔记今日好评名额已满，明天再来。",
+        "NOTE_RATING_NOTE_BAD_FULL": "这条笔记今日差评名额已满，明天再来。",
+        "unknown": "暂时不能评分，请稍后再试。"
+      },
+      "reasons": {
+        "INACCURATE": "信息不实",
+        "EXPIRED": "已失效",
+        "BAD_EXPERIENCE": "体验差",
+        "OTHER": "其他"
+      },
+      "reasonSheet": {
+        "title": "差评原因",
+        "otherPlaceholder": "说说具体情况（必填）",
+        "submit": "提交差评",
+        "submitting": "提交中..."
+      },
+      "badList": {
+        "title": "差评",
+        "subtitle": "只显示原因和时间，不显示评价人",
+        "empty": "暂无差评",
+        "loadFailed": "差评加载失败",
+        "loadMore": "加载更多",
+        "appealsRemaining": "本月还可申诉 {{count}} 次",
+        "appeal": "申诉",
+        "appealFailedTitle": "申诉失败",
+        "status": {
+          "HELD": "审核中",
+          "VOID": "已撤销"
+        },
+        "appealStatus": {
+          "PENDING": "申诉处理中",
+          "UPHELD": "申诉未通过，差评保留",
+          "REVOKED": "申诉已通过，差评已撤销"
+        },
+        "appealSheet": {
+          "title": "申诉这条差评",
+          "hint": "申诉处理期间差评仍计入本月计数。",
+          "placeholder": "说明理由（必填）",
+          "submit": "提交申诉",
+          "submitting": "提交中..."
+        }
+      }
     }
   },
   "search": {
@@ -3604,6 +3667,22 @@
     "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "NOTE_SHARE_LINK_UNAVAILABLE": "笔记分享暂未开放",
+    "NOTE_RATING_OWNER": "不能给自己的笔记评分",
+    "NOTE_RATING_NOT_COLLECTED": "先把这条笔记添加到我的笔记，才能评分",
+    "NOTE_RATING_NOT_IN_GROUP": "需要加入笔记里的群才能评分",
+    "NOTE_RATING_NO_GROUP": "这条笔记没有关联群，不能评分",
+    "NOTE_RATING_LOW_CREDIT": "信用分不足 90，暂时不能评分",
+    "NOTE_RATING_ACCOUNT_TOO_NEW": "注册满 7 天后才能评分",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "今天已经打过分了，明天再来",
+    "NOTE_RATING_COOLDOWN": "3 天内只能给同一条笔记评一次分",
+    "NOTE_RATING_NOTE_GOOD_FULL": "这条笔记今日好评名额已满",
+    "NOTE_RATING_NOTE_BAD_FULL": "这条笔记今日差评名额已满",
+    "NOTE_RATING_NOT_FOUND": "这条评分不存在",
+    "NOTE_RATING_NOT_APPEALABLE": "这条差评当前不能申诉",
+    "NOTE_RATING_ALREADY_APPEALED": "这条差评已经申诉过了",
+    "NOTE_RATING_APPEAL_QUOTA": "本月申诉次数已用完",
+    "NOTE_RATING_CASE_RESOLVED": "这条审核已处理",
+    "NOTE_RATING_CASE_ACTION_INVALID": "这个操作不适用于该审核",
     "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
     "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "阅后即焚会话中的消息不能收藏",

@@ -18,6 +18,7 @@ let mockBodyProps: any;
 let mockConversations: { id: string; type: string; circleId: string | null }[] = [];
 let mockViewport: NoteImageViewport | null = null;
 let mockClock = 0;
+let mockRatingBarProps: { noteId: string; refreshKey?: string; onOpenBadRatings: (id: string) => void } | null = null;
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 jest.mock('@/observability/http-diagnostics', () => ({ diagnosticNow: () => mockClock }));
 jest.mock('expo-router', () => ({
@@ -50,6 +51,11 @@ jest.mock('@/features/notes/components/NoteDocumentBody', () => ({ NoteDocumentB
   return null;
 } }));
 jest.mock('@/features/notes/components/ShareNoteSheet', () => ({ ShareNoteSheet: () => null }));
+// The rating bar has its own spec; here it only has to be mounted with the right note and stack.
+jest.mock('@/features/notes/components/NoteRatingBar', () => ({ NoteRatingBar: (props: unknown) => {
+  mockRatingBarProps = props as typeof mockRatingBarProps;
+  return null;
+} }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
 jest.mock('@/chat-core/store', () => ({
   useChatStore: { getState: () => ({ conversations: mockConversations }) },
@@ -188,6 +194,16 @@ test('editing a note opened from chat stays in the messages stack', async () => 
   render(<NoteDetailScreen />);
   fireEvent.press(await screen.findByTestId('note-detail-edit'));
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notes/edit', params: { id: 'note' } });
+});
+
+test('mounts the rating bar for the note and opens 查看差评 in the same stack', async () => {
+  jest.mocked(fetchNoteDetail).mockResolvedValue({ ...note, ownerId: 'me', canEdit: true } as any);
+  render(<NoteDetailScreen />);
+  await screen.findByTestId('note-detail-edit');
+
+  expect(mockRatingBarProps).toMatchObject({ noteId: 'note', refreshKey: 'not-added' });
+  mockRatingBarProps!.onOpenBadRatings('root-note');
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notes/bad-ratings', params: { id: 'root-note' } });
 });
 
 test('the group avatar opens a group the viewer already belongs to straight into the chat', async () => {

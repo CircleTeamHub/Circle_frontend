@@ -176,6 +176,9 @@ export interface NoteSummary {
   sections?: Partial<NoteSections> | null;
   /** 从聊天收藏来的笔记带来源快照；自建笔记为 null/缺省 */
   collectedFrom?: NoteCollectedFrom | null;
+  /** 来源笔记本月（上海时区）的好评 / 差评数；旧接口缺省按 0。 */
+  goodCount?: number;
+  badCount?: number;
 }
 
 export interface NoteDetail extends NoteSummary {

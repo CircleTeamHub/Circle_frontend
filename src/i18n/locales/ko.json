@@ -1550,6 +1550,68 @@
       "chooseGroup": "그룹 선택",
       "editTitle": "제목 편집",
       "collectHint": "「그룹 선택」을 끄면 미분류에 저장되고, 「제목 편집」을 끄면 원래 제목을 그대로 사용합니다."
+    },
+    "rating": {
+      "monthLabel": "이번 달",
+      "good": "좋아요 {{count}}",
+      "bad": "별로예요 {{count}}",
+      "rateGood": "좋아요 평가",
+      "rateBad": "별로예요 평가",
+      "countsA11y": "이번 달 좋아요 {{good}}, 별로예요 {{bad}}",
+      "viewBad": "별로예요 보기",
+      "heldNotice": "평가가 제출되어 검토 중입니다. 승인되면 이번 달 집계에 반영됩니다.",
+      "failedTitle": "평가하지 못했습니다",
+      "blockedTitle": "아직 평가할 수 없습니다",
+      "blocked": {
+        "NOTE_RATING_NOT_COLLECTED": "이 노트를 내 노트에 추가해야 평가할 수 있습니다.",
+        "NOTE_RATING_NOT_IN_GROUP": "노트에 있는 그룹에 참여해야 평가할 수 있습니다.",
+        "NOTE_RATING_LOW_CREDIT": "신용 점수가 90 미만이라 지금은 평가할 수 없습니다.",
+        "NOTE_RATING_ACCOUNT_TOO_NEW": "가입 후 7일이 지나면 평가할 수 있습니다.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "오늘은 이미 평가했습니다. 내일 다시 오세요.",
+        "cooldownDays": "{{count}}일 후에 이 노트를 다시 평가할 수 있습니다.",
+        "cooldownHours": "{{count}}시간 후에 이 노트를 다시 평가할 수 있습니다.",
+        "NOTE_RATING_NOTE_GOOD_FULL": "이 노트는 오늘 좋아요 한도에 도달했습니다. 내일 다시 시도하세요.",
+        "NOTE_RATING_NOTE_BAD_FULL": "이 노트는 오늘 별로예요 한도에 도달했습니다. 내일 다시 시도하세요.",
+        "unknown": "지금은 평가할 수 없습니다. 잠시 후 다시 시도하세요."
+      },
+      "reasons": {
+        "INACCURATE": "정보가 사실과 다름",
+        "EXPIRED": "더 이상 유효하지 않음",
+        "BAD_EXPERIENCE": "경험이 나쁨",
+        "OTHER": "기타"
+      },
+      "reasonSheet": {
+        "title": "별로예요 이유",
+        "otherPlaceholder": "구체적인 상황을 입력하세요 (필수)",
+        "submit": "별로예요 제출",
+        "submitting": "제출 중..."
+      },
+      "badList": {
+        "title": "별로예요",
+        "subtitle": "이유와 시간만 표시되며 평가한 사람은 표시되지 않습니다",
+        "empty": "별로예요 평가가 없습니다",
+        "loadFailed": "별로예요 평가를 불러오지 못했습니다",
+        "loadMore": "더 보기",
+        "appealsRemaining": "이번 달 이의 신청 {{count}}회 남음",
+        "appeal": "이의 신청",
+        "appealFailedTitle": "이의 신청하지 못했습니다",
+        "status": {
+          "HELD": "검토 중",
+          "VOID": "취소됨"
+        },
+        "appealStatus": {
+          "PENDING": "이의 신청 검토 중",
+          "UPHELD": "이의 신청이 기각되어 평가가 유지됩니다",
+          "REVOKED": "이의 신청이 받아들여져 평가가 취소되었습니다"
+        },
+        "appealSheet": {
+          "title": "이 별로예요에 이의 신청",
+          "hint": "검토 중에도 이 평가는 이번 달 집계에 포함됩니다.",
+          "placeholder": "이유를 입력하세요 (필수)",
+          "submit": "이의 신청 제출",
+          "submitting": "제출 중..."
+        }
+      }
     }
   },
   "tempChats": {
@@ -3270,6 +3332,7 @@
     "scoreAfter": "변동 후 {{score}}",
     "reasons": {
       "friendReport": "신고 사실 확인",
+      "noteRatingAbuse": "노트 평가 부정 확인",
       "other": "평판 조정"
     }
   },
@@ -3604,6 +3667,22 @@
     "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
     "NOTE_SHARE_LINK_UNAVAILABLE": "노트 공유는 아직 사용할 수 없습니다",
+    "NOTE_RATING_OWNER": "내 노트는 평가할 수 없습니다",
+    "NOTE_RATING_NOT_COLLECTED": "이 노트를 내 노트에 추가해야 평가할 수 있습니다",
+    "NOTE_RATING_NOT_IN_GROUP": "노트에 있는 그룹에 참여해야 평가할 수 있습니다",
+    "NOTE_RATING_NO_GROUP": "이 노트에는 그룹이 없어 평가할 수 없습니다",
+    "NOTE_RATING_LOW_CREDIT": "신용 점수가 90 미만이라 지금은 평가할 수 없습니다",
+    "NOTE_RATING_ACCOUNT_TOO_NEW": "가입 후 7일이 지나면 평가할 수 있습니다",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "오늘은 이미 평가했습니다. 내일 다시 오세요",
+    "NOTE_RATING_COOLDOWN": "같은 노트는 3일에 한 번만 평가할 수 있습니다",
+    "NOTE_RATING_NOTE_GOOD_FULL": "이 노트는 오늘 좋아요 한도에 도달했습니다",
+    "NOTE_RATING_NOTE_BAD_FULL": "이 노트는 오늘 별로예요 한도에 도달했습니다",
+    "NOTE_RATING_NOT_FOUND": "이 평가는 존재하지 않습니다",
+    "NOTE_RATING_NOT_APPEALABLE": "이 별로예요 평가는 지금 이의 신청할 수 없습니다",
+    "NOTE_RATING_ALREADY_APPEALED": "이 별로예요 평가에는 이미 이의 신청했습니다",
+    "NOTE_RATING_APPEAL_QUOTA": "이번 달 이의 신청 횟수를 모두 사용했습니다",
+    "NOTE_RATING_CASE_RESOLVED": "이 검토는 이미 처리되었습니다",
+    "NOTE_RATING_CASE_ACTION_INVALID": "이 작업은 이 검토에 적용되지 않습니다",
     "UPLOAD_INVALID_CONTENT_TYPE": "지원하지 않는 파일 형식입니다",
     "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "사라지는 메시지 대화의 메시지는 수집할 수 없습니다",

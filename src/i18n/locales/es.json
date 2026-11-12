@@ -1556,6 +1556,68 @@
       "chooseGroup": "Elegir un grupo",
       "editTitle": "Editar el título",
       "collectHint": "Sin «Elegir un grupo», la nota va a Sin grupo. Sin «Editar el título», se mantiene el título original."
+    },
+    "rating": {
+      "monthLabel": "Este mes",
+      "good": "Positivas {{count}}",
+      "bad": "Negativas {{count}}",
+      "rateGood": "Valorar positivo",
+      "rateBad": "Valorar negativo",
+      "countsA11y": "Este mes: {{good}} positivas, {{bad}} negativas",
+      "viewBad": "Ver valoraciones negativas",
+      "heldNotice": "Tu valoración se envió y está en revisión. Contará cuando se apruebe.",
+      "failedTitle": "No se pudo valorar",
+      "blockedTitle": "Aún no puedes valorar",
+      "blocked": {
+        "NOTE_RATING_NOT_COLLECTED": "Primero añade esta nota a tus notas para valorarla.",
+        "NOTE_RATING_NOT_IN_GROUP": "Únete a uno de los grupos de esta nota para valorarla.",
+        "NOTE_RATING_LOW_CREDIT": "Tu reputación es inferior a 90; por ahora no puedes valorar.",
+        "NOTE_RATING_ACCOUNT_TOO_NEW": "Podrás valorar cuando tu cuenta tenga 7 días.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "Ya valoraste hoy. Vuelve mañana.",
+        "cooldownDays": "Podrás volver a valorar esta nota en {{count}} días.",
+        "cooldownHours": "Podrás volver a valorar esta nota en {{count}} horas.",
+        "NOTE_RATING_NOTE_GOOD_FULL": "Esta nota alcanzó hoy el límite de valoraciones positivas. Prueba mañana.",
+        "NOTE_RATING_NOTE_BAD_FULL": "Esta nota alcanzó hoy el límite de valoraciones negativas. Prueba mañana.",
+        "unknown": "Ahora no puedes valorar. Inténtalo más tarde."
+      },
+      "reasons": {
+        "INACCURATE": "Información falsa",
+        "EXPIRED": "Ya no es válida",
+        "BAD_EXPERIENCE": "Mala experiencia",
+        "OTHER": "Otro"
+      },
+      "reasonSheet": {
+        "title": "Motivo de la valoración negativa",
+        "otherPlaceholder": "Cuéntanos qué pasó (obligatorio)",
+        "submit": "Enviar valoración negativa",
+        "submitting": "Enviando..."
+      },
+      "badList": {
+        "title": "Valoraciones negativas",
+        "subtitle": "Solo se muestran el motivo y la hora, nunca quién valoró",
+        "empty": "Sin valoraciones negativas",
+        "loadFailed": "No se pudieron cargar las valoraciones negativas",
+        "loadMore": "Cargar más",
+        "appealsRemaining": "Te quedan {{count}} apelaciones este mes",
+        "appeal": "Apelar",
+        "appealFailedTitle": "No se pudo apelar",
+        "status": {
+          "HELD": "En revisión",
+          "VOID": "Retirada"
+        },
+        "appealStatus": {
+          "PENDING": "Apelación en revisión",
+          "UPHELD": "Apelación rechazada, la valoración se mantiene",
+          "REVOKED": "Apelación aceptada, valoración retirada"
+        },
+        "appealSheet": {
+          "title": "Apelar esta valoración negativa",
+          "hint": "Mientras se revisa la apelación, la valoración sigue contando este mes.",
+          "placeholder": "Explica el motivo (obligatorio)",
+          "submit": "Enviar apelación",
+          "submitting": "Enviando..."
+        }
+      }
     }
   },
   "tempChats": {
@@ -3278,6 +3340,7 @@
     "scoreAfter": "Ahora {{score}}",
     "reasons": {
       "friendReport": "Denuncia confirmada",
+      "noteRatingAbuse": "Abuso de valoraciones confirmado",
       "other": "Ajuste de reputación"
     }
   },
@@ -3612,6 +3675,22 @@
     "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
     "NOTE_SHARE_LINK_UNAVAILABLE": "Compartir notas aún no está disponible",
+    "NOTE_RATING_OWNER": "No puedes valorar tu propia nota",
+    "NOTE_RATING_NOT_COLLECTED": "Primero añade esta nota a tus notas para valorarla",
+    "NOTE_RATING_NOT_IN_GROUP": "Únete a uno de los grupos de esta nota para valorarla",
+    "NOTE_RATING_NO_GROUP": "Esta nota no tiene grupo, así que no se puede valorar",
+    "NOTE_RATING_LOW_CREDIT": "Tu reputación es inferior a 90; por ahora no puedes valorar",
+    "NOTE_RATING_ACCOUNT_TOO_NEW": "Podrás valorar cuando tu cuenta tenga 7 días",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "Ya valoraste hoy. Vuelve mañana",
+    "NOTE_RATING_COOLDOWN": "Solo puedes valorar la misma nota una vez cada 3 días",
+    "NOTE_RATING_NOTE_GOOD_FULL": "Esta nota alcanzó hoy el límite de valoraciones positivas",
+    "NOTE_RATING_NOTE_BAD_FULL": "Esta nota alcanzó hoy el límite de valoraciones negativas",
+    "NOTE_RATING_NOT_FOUND": "Esta valoración no existe",
+    "NOTE_RATING_NOT_APPEALABLE": "Ahora no se puede apelar esta valoración negativa",
+    "NOTE_RATING_ALREADY_APPEALED": "Ya apelaste esta valoración negativa",
+    "NOTE_RATING_APPEAL_QUOTA": "Ya usaste todas tus apelaciones de este mes",
+    "NOTE_RATING_CASE_RESOLVED": "Esta revisión ya se gestionó",
+    "NOTE_RATING_CASE_ACTION_INVALID": "Esta acción no corresponde a esta revisión",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
     "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "Los mensajes de un chat de mensajes temporales no se pueden guardar",

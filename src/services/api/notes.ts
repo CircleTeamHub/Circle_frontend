@@ -481,6 +481,9 @@ export interface NoteSourceState {
   workStatus: NoteWorkStatus;
   /** UNLISTED 也覆盖「当前用户读不到」——服务端不区分不存在与无权限。 */
   publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED';
+  /** 来源笔记本月的好评 / 差评数（聊天卡片展示）；旧服务端缺省。 */
+  goodCount?: number;
+  badCount?: number;
 }
 
 /** 每次请求最多 100 条；服务端沿收录链取根来源笔记的实时状态。 */

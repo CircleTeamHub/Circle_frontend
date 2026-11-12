@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useChatStore } from '@/chat-core/store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
+import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { fetchNoteSourceStates } from '@/services/api/notes';
@@ -110,6 +111,8 @@ export function useNoteCardStatusSync(
         // 会话或恢复周期已经切换：旧请求不得覆盖新周期的权威对账结果。
         if (!active || syncedRef.current !== synced) return;
         finished = true;
+        // Same batch carries the source's monthly rating counters for the cards.
+        useNoteRatingCountsStore.getState().record(states);
         const apply = useChatStore.getState().applyNoteSourceStatus;
         const currentSourceVersions =
           useNoteStatusSignalStore.getState().sourceVersions;

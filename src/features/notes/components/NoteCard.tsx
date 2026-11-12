@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
+import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
 import {
   isSetNoteWorkStatus,
@@ -226,9 +227,17 @@ function NoteCardInner({
             </Text>
           </View>
         )}
-        <Text style={[s.meta, d.meta]} numberOfLines={1}>
-          {meta}
-        </Text>
+        <View style={s.metaRow}>
+          <Text style={[s.meta, s.metaText, d.meta]} numberOfLines={1}>
+            {meta}
+          </Text>
+          <NoteRatingCounts
+            goodCount={note.goodCount}
+            badCount={note.badCount}
+            color={colors.textSecondary}
+            testID={`note-card-rating-${note.id}`}
+          />
+        </View>
       </View>
 
       {selectionMode ? (
@@ -392,6 +401,8 @@ const s = StyleSheet.create({
   meta: {
     ...Typography.small,
   },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  metaText: { flexShrink: 1 },
   // 来源双按钮：通栏等分，名字占满剩余宽度，尾部 chevron 提示可点。
   sourceRow: {
     flexDirection: 'row',
