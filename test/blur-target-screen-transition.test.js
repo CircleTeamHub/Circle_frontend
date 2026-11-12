@@ -19,6 +19,10 @@ test('the chat blur target keeps its content drawn while a screen slides away (A
   assert.match(patch, /\+ {2}override fun startViewTransition\(view: View\?\) \{[\s\S]*?\+ {4}blurTargetView\.startViewTransition\(view\)/);
   assert.match(patch, /\+ {2}override fun endViewTransition\(view: View\?\) \{[\s\S]*?\+ {4}blurTargetView\.endViewTransition\(view\)/);
 
+  // expo-blur ships prebuilt for Android; without this the patched Kotlin never gets compiled.
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.ok(pkg.expo.autolinking.android.buildFromSource.includes('expo-blur'));
+
   const screen = fs.readFileSync(path.join(root, 'src/features/chat/screens/ChatDetailScreen.tsx'), 'utf8');
   assert.match(screen, /<BlurTargetView ref=\{messageBlurTarget\}/);
 });
