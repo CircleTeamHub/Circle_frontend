@@ -9,11 +9,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetTextInput } from '@/components/ui/bottom-sheet-modal';
 import { NOTE_RATING_BAD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import { noteRatingReasonLabel } from '@/features/notes/components/NoteRatingReasonSheet';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -278,7 +277,7 @@ export default function NoteBadRatingsScreen() {
           <Text style={[s.hint, d.muted]}>
             {t('notes.rating.badList.appealSheet.hint', { defaultValue: '申诉处理期间差评仍计入本月计数。' })}
           </Text>
-          <TextInput
+          <BottomSheetTextInput
             testID="note-bad-rating-appeal-input"
             style={[s.input, d.input]}
             value={appealText}

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetTextInput } from '@/components/ui/bottom-sheet-modal';
 import {
   NOTE_RATING_COMMENT_MAX,
   NOTE_RATING_REASONS,
@@ -88,7 +88,7 @@ export function NoteRatingReasonSheet({ visible, submitting, onClose, onSubmit }
           })}
         </View>
         {reason === 'OTHER' ? (
-          <TextInput
+          <BottomSheetTextInput
             testID="note-rating-comment"
             style={[s.input, d.input]}
             value={comment}

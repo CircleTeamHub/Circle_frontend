@@ -34,10 +34,11 @@ jest.mock('@/theme', () => ({
   }),
 }));
 jest.mock('@/components/ui/bottom-sheet-modal', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { TextInput, View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
       visible ? <View testID="sheet">{children}</View> : null,
+    BottomSheetTextInput: TextInput,
   };
 });
 jest.mock('@/services/api/client', () => ({ apiClient: jest.fn() }));
