@@ -291,21 +291,26 @@ test('group owner dissolves instead of leaving, and dissolve wipes everyone', ()
   assert.match(codes, /'CHAT_GROUP_OWNER_ONLY'/);
 });
 
-test('group info sections are separated by dividers at every boundary', () => {
+test('group info uses the same rounded cards and icon rows as the direct chat info page', () => {
   const screen = read('src/features/chat/screens/ChatInfoScreen.tsx');
-  const groupLayout = screen.slice(screen.indexOf('if (isGroupConversation) {'));
+  const groupLayout = screen.slice(
+    screen.indexOf('if (isGroupConversation) {'),
+    screen.indexOf("<NavHeader title={t('chat.chatInfo')}"),
+  );
 
-  // groupContent 没有 gap,各段是同一块 surface 直接相接的 —— 段尾不补
-  // Divider 就会出现「有的行有线、有的行没线」。每个 groupSection 收尾都要有。
-  const sections = groupLayout.split('<View style={[s.groupSection, d.groupSection]}>').slice(1);
-  assert.equal(sections.length, 4, 'expected four group info sections');
-  for (const [index, section] of sections.entries()) {
-    const body = section.slice(0, section.indexOf('\n          </View>'));
-    assert.match(
-      body.trimEnd().slice(-40),
-      /<Divider \/>$/,
-      `group section ${index + 1} must end with a divider`,
-    );
+  // 和私聊一样:每组是一张圆角卡片(s.section),卡片之间靠 s.content 的 gap 分开,
+  // 行是带图标的 MenuRow。旧的通栏分组和无图标行不能再出现。
+  assert.match(groupLayout, /contentContainerStyle=\{\[s\.content,/);
+  assert.ok(
+    groupLayout.split('<View style={[s.section, d.section]}>').length - 1 >= 5,
+    'expected the group info rows to be grouped into rounded cards',
+  );
+  assert.match(groupLayout, /<MenuRow\s+icon=/);
+  assert.doesNotMatch(screen, /GroupInfoRow|s\.groupSection|d\.groupSection|s\.leaveButton/);
+  // 卡片里最后一行后面不画分割线(卡片圆角收边),和私聊卡片一致。
+  for (const card of groupLayout.split('<View style={[s.section, d.section]}>').slice(1)) {
+    const body = card.slice(0, card.indexOf('\n          </View>'));
+    assert.doesNotMatch(body.trimEnd().slice(-40), /<Divider \/>$/);
   }
 });
 

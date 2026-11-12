@@ -34,7 +34,22 @@ jest.mock('@/theme', () => ({
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
-jest.mock('@/components/ui/menu-row', () => ({ MenuRow: () => null }));
+// Group and direct info pages both use MenuRow: render what a user sees and can tap.
+jest.mock('@/components/ui/menu-row', () => {
+  const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    MenuRow: ({ label, subtitle, rightText, rightElement, onPress }: {
+      label: string; subtitle?: string; rightText?: string; rightElement?: React.ReactNode; onPress?: () => void;
+    }) => (
+      <Pressable onPress={onPress} disabled={!onPress}>
+        <Text>{label}</Text>
+        {subtitle ? <Text>{subtitle}</Text> : null}
+        {rightText ? <Text>{rightText}</Text> : null}
+        {rightElement}
+      </Pressable>
+    ),
+  };
+});
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/components/ui/option-picker-sheet', () => ({ OptionPickerSheet: () => null }));
 jest.mock('@/components/ui/themed-switch', () => ({ ThemedSwitch: () => null }));

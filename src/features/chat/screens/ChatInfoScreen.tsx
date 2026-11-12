@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,6 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -139,13 +138,9 @@ const s = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.md,
   },
-  groupContent: {
-    paddingBottom: Spacing.xl,
-  },
+  // 成员宫格所在的卡片：左右内边距沿用 section，上下再留白。
   groupMemberSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   groupMemberGrid: {
     flexDirection: 'row',
@@ -174,45 +169,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
-  },
-  groupSection: {
-    paddingLeft: Spacing.lg,
-  },
-  groupRow: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-    paddingRight: Spacing.lg,
-  },
-  groupRowLarge: {
-    minHeight: 92,
-    alignItems: 'flex-start',
-    paddingVertical: Spacing.md,
-  },
-  groupRowLeft: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  groupRowRight: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: Spacing.sm,
-  },
-  groupNameText: {
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  groupNoticeText: {
-    lineHeight: 20,
-  },
-  leaveButton: {
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   renameBackdrop: {
     flex: 1,
@@ -276,80 +232,10 @@ type CircleGroupInfo = {
   memberCount: number;
 };
 
-type GroupInfoRowProps = {
-  label: string;
-  value?: string;
-  subtitle?: string;
-  showArrow?: boolean;
-  hasToggle?: boolean;
-  toggleValue?: boolean;
-  onToggle?: (nextValue: boolean) => void;
-  onPress?: () => void;
-  destructive?: boolean;
-  /** 行尾自定义内容(群头像行的缩略图);排在 value 与箭头之间。 */
-  rightElement?: ReactNode;
-};
-
-function GroupInfoRow({
-  label,
-  value,
-  subtitle,
-  showArrow = true,
-  hasToggle,
-  toggleValue,
-  onToggle,
-  onPress,
-  destructive,
-  rightElement,
-}: GroupInfoRowProps) {
-  const { colors } = useTheme();
-  const rowLarge = Boolean(subtitle);
-  const d = useMemo(
-    () => ({
-      label: {
-        color: destructive ? colors.error : colors.text,
-        ...Typography.body,
-      },
-      value: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-      },
-      subtitle: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-      },
-    }),
-    [colors, destructive],
-  );
-
-  return (
-    <Pressable style={[s.groupRow, rowLarge && s.groupRowLarge]} onPress={onPress} disabled={!onPress && !hasToggle}>
-      <View style={s.groupRowLeft}>
-        <Text style={d.label}>{label}</Text>
-        {subtitle ? (
-          <Text style={[s.groupNoticeText, d.subtitle]} numberOfLines={3}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      <View style={s.groupRowRight}>
-        {value ? (
-          <Text style={[s.groupNameText, d.value]} numberOfLines={1}>
-            {value}
-          </Text>
-        ) : null}
-        {rightElement}
-        {hasToggle ? (
-          <ThemedSwitch
-            value={toggleValue}
-            onValueChange={onToggle}
-          />
-        ) : showArrow ? (
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        ) : null}
-      </View>
-    </Pressable>
-  );
+/** 行尾放不下长文本（会把左侧标题挤没）：备注、群昵称这类值截到 12 个字。 */
+function shortRowValue(value: string | null | undefined): string {
+  if (!value) return '';
+  return value.length > 12 ? `${value.slice(0, 12)}…` : value;
 }
 
 export default function ChatInfoScreen() {
@@ -1900,13 +1786,6 @@ export default function ChatInfoScreen() {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
       },
-      groupSection: {
-        backgroundColor: colors.surface,
-      },
-      leaveText: {
-        color: colors.error,
-        ...Typography.body,
-      },
       renameBackdrop: {
         backgroundColor: colors.overlay,
       },
@@ -1977,11 +1856,12 @@ export default function ChatInfoScreen() {
         />
         <ScrollView
           style={s.scroll}
-          contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
+          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* 和私聊「聊天信息」同一套样式：圆角卡片 + 带图标的设置行。成员宫格放在第一张卡片里。 */}
           {canViewMemberDirectory || canPresentCachedDirectory ? (
-            <View style={s.groupMemberSection}>
+            <View style={[s.section, s.groupMemberSection, d.section]}>
             <View style={s.groupMemberGrid}>
               {visibleGroupMembers.map((member) => {
                 const memberName = groupMemberDisplayName(member);
@@ -2042,27 +1922,27 @@ export default function ChatInfoScreen() {
             </View>
           ) : null}
 
-          <View style={[s.groupSection, d.groupSection]}>
-              <GroupInfoRow
+          {/* 群资料：名称、头像、公告，以及入群方式。长文本放副标题，免得把标题挤没。 */}
+          <View style={[s.section, d.section]}>
+            <MenuRow
+              icon="chatbubbles-outline"
               label={t('chat.groupName')}
-              value={groupTitle}
-              onPress={
-                canManageGroup ? handleEditGroupName : undefined
-              }
+              subtitle={groupTitle}
+              onPress={canManageGroup ? handleEditGroupName : undefined}
               showArrow={canManageGroup}
             />
             {isTempConversation ? null : (
               <>
                 <Divider />
-                <GroupInfoRow
+                <MenuRow
+                  icon="person-circle-outline"
                   label={t('chat.groupAvatar', { defaultValue: '群头像' })}
                   onPress={() => setAvatarPreviewKey(avatarSubjectKey)}
-                  rightElement={
-                    <GroupChatAvatar size={32} name={groupTitle} uri={groupAvatarUrl} />
-                  }
+                  rightElement={<GroupChatAvatar size={28} name={groupTitle} uri={groupAvatarUrl} />}
                 />
                 <Divider />
-                <GroupInfoRow
+                <MenuRow
+                  icon="megaphone-outline"
                   label={t('chat.groupNotice')}
                   subtitle={groupNotice || t('chat.noGroupNotice')}
                   onPress={canManageGroup ? handleEditGroupNotice : undefined}
@@ -2070,10 +1950,30 @@ export default function ChatInfoScreen() {
                 />
               </>
             )}
-            {/* 管理入口紧跟群公告(临时群没有公告行时紧跟群名称),群主/管理员不用滚到底找。 */}
+            {isTempConversation ? (
+              <>
+                <Divider />
+                <MenuRow
+                  icon="link-outline"
+                  label={t('tempChats.inviteLink')}
+                  rightText={t('tempChats.copyLink')}
+                  onPress={() => void handleCopyTempChatInviteLink()}
+                  showArrow={false}
+                />
+              </>
+            ) : qrJoinEnabled ? (
+              <>
+                <Divider />
+                <MenuRow icon="qr-code-outline" label={t('qr.groupEntry')} onPress={handleOpenGroupQr} />
+              </>
+            ) : null}
+          </View>
+
+          {/* 群功能：管理入口放在前面，群主/管理员不用滚到底找。 */}
+          <View style={[s.section, d.section]}>
             {/* 群主进来是笔记管理;普通成员进来只读看群笔记和状态。 */}
-            <Divider />
-            <GroupInfoRow
+            <MenuRow
+              icon="document-text-outline"
               label={
                 isOwner
                   ? t('chat.groupManagement.noteManagement', { defaultValue: '笔记管理' })
@@ -2084,7 +1984,8 @@ export default function ChatInfoScreen() {
             {canManageGroup ? (
               <>
                 <Divider />
-                <GroupInfoRow
+                <MenuRow
+                  icon="settings-outline"
                   label={t('chat.groupManage', { defaultValue: '群管理' })}
                   onPress={handleOpenGroupManage}
                 />
@@ -2093,9 +1994,10 @@ export default function ChatInfoScreen() {
             {canViewMemberDirectory ? (
               <>
                 <Divider />
-                <GroupInfoRow
+                <MenuRow
+                  icon="people-outline"
                   label={t('chat.groupMembersRow', { defaultValue: '群成员' })}
-                  value={
+                  rightText={
                     memberLimit
                       ? t('chat.memberCountWithLimit', {
                           count: memberCount,
@@ -2111,101 +2013,91 @@ export default function ChatInfoScreen() {
                 />
               </>
             ) : null}
-            {isTempConversation ? (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('tempChats.inviteLink')}
-                  value={t('tempChats.copyLink')}
-                  onPress={() => void handleCopyTempChatInviteLink()}
-                  showArrow={false}
-                />
-              </>
-            ) : qrJoinEnabled ? (
-              <>
-                <Divider />
-                <GroupInfoRow label={t('qr.groupEntry')} onPress={handleOpenGroupQr} />
-              </>
-            ) : null}
-            <Divider />
-            <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-            {isTempConversation ? null : (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.groupRemark', { defaultValue: '群备注' })}
-                  // 群备注与群昵称挨着放,不写明「只有你自己看得见」两行会被当成同一件事。
-                  subtitle={t('chat.groupRemarkHint', {
-                    defaultValue: '只有你自己看得见',
-                  })}
-                  value={myGroupRemark || t('chat.notSet')}
-                  onPress={handleEditMyGroupRemark}
-                />
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.myAliasInGroup', { defaultValue: '我在群里的昵称' })}
-                  value={myGroupAlias || t('chat.notSet')}
-                  onPress={handleEditMyGroupAlias}
-                />
-              </>
-            )}
-            <Divider />
           </View>
 
-          <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow
-              label={t('chat.muteNotification')}
-              hasToggle={!actionPending.mute}
-              toggleValue={muted}
-              onToggle={actionPending.mute ? undefined : handleToggleMuted}
-              showArrow={false}
-            />
+          {/* 我在这个群：群备注只有自己看得见，群昵称所有成员都看得见。 */}
+          {isTempConversation ? null : (
+            <View style={[s.section, d.section]}>
+              <MenuRow
+                icon="create-outline"
+                label={t('chat.groupRemark', { defaultValue: '群备注' })}
+                // 群备注与群昵称挨着放,不写明「只有你自己看得见」两行会被当成同一件事。
+                subtitle={t('chat.groupRemarkHint', {
+                  defaultValue: '只有你自己看得见',
+                })}
+                rightText={shortRowValue(myGroupRemark) || t('chat.notSet')}
+                onPress={handleEditMyGroupRemark}
+              />
+              <Divider />
+              <MenuRow
+                icon="person-outline"
+                label={t('chat.myAliasInGroup', { defaultValue: '我在群里的昵称' })}
+                rightText={shortRowValue(myGroupAlias) || t('chat.notSet')}
+                onPress={handleEditMyGroupAlias}
+              />
+            </View>
+          )}
+
+          {/* 与私聊「聊天信息」第一张卡片同一组、同一顺序。 */}
+          <View style={[s.section, d.section]}>
+            <MenuRow icon="search-outline" label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
             <Divider />
-            <GroupInfoRow
+            <MenuRow icon="image-outline" label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
+            <Divider />
+            <MenuRow
+              icon="arrow-up-circle-outline"
               label={t('chat.pinChat')}
               hasToggle={!actionPending.pin}
-              toggleValue={pinned}
               onToggle={actionPending.pin ? undefined : handleTogglePinned}
+              toggleValue={pinned}
+              rightText={actionPending.pin ? t('chat.pending') : undefined}
               showArrow={false}
             />
-            <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.burnAfterReading')}
-                  value={
-                    burnDurationSec
-                      ? formatBurnDuration(burnDurationSec)
-                      : t('chat.burnOff')
-                  }
-                  onPress={handleOpenBurnOptions}
-                />
-            </>
             <Divider />
-            <GroupInfoRow
+            <MenuRow
+              icon="notifications-off-outline"
+              label={t('chat.muteNotification')}
+              hasToggle={!actionPending.mute}
+              onToggle={actionPending.mute ? undefined : handleToggleMuted}
+              toggleValue={muted}
+              rightText={actionPending.mute ? t('chat.pending') : undefined}
+              showArrow={false}
+            />
+            <Divider />
+            <MenuRow
+              icon="flame-outline"
+              label={t('chat.burnAfterReading')}
+              rightText={
+                burnDurationSec
+                  ? formatBurnDuration(burnDurationSec)
+                  : t('chat.burnOff')
+              }
+              onPress={handleOpenBurnOptions}
+            />
+            <Divider />
+            <MenuRow
+              icon="trash-outline"
               label={t('chat.clearHistory')}
               onPress={handleClearHistory}
-              destructive
-              showArrow={false}
             />
-            <Divider />
           </View>
 
-          <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
-            <Divider />
+          <View style={[s.section, d.section]}>
+            <MenuRow icon="warning-outline" label={t('chat.report.title')} onPress={handleOpenGroupReport} />
           </View>
 
-          <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow label={t('chat.report.title')} onPress={handleOpenGroupReport} />
-            <Divider />
-          </View>
-
-          <View style={[d.groupSection]}>
+          <View style={[s.section, d.section]}>
             {/* 群主/圈主按的是解散(微信语义:群没了,所有人的记录一起没),
                 普通成员按的是退出。两者后果完全不同,不共用一个按钮。
                 独立群聊解散的是会话,圈子群解散的是整个圈子 —— 端点不同。 */}
-            <Pressable
-              style={s.leaveButton}
+            <MenuRow
+              icon={isStandaloneGroupOwner || isCircleOwner ? 'close-circle-outline' : 'exit-outline'}
+              label={
+                isStandaloneGroupOwner || isCircleOwner
+                  ? t('chat.dissolve')
+                  : t('chat.leave')
+              }
+              destructive
               onPress={
                 isStandaloneGroupOwner
                   ? handleDissolveGroup
@@ -2213,14 +2105,7 @@ export default function ChatInfoScreen() {
                     ? handleDissolveCircle
                     : handleLeaveGroup
               }
-              accessibilityRole="button"
-            >
-              <Text style={d.leaveText}>
-                {isStandaloneGroupOwner || isCircleOwner
-                  ? t('chat.dissolve')
-                  : t('chat.leave')}
-              </Text>
-            </Pressable>
+            />
           </View>
         </ScrollView>
         <OptionPickerSheet

@@ -89,8 +89,8 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.doesNotMatch(source, /s\.groupHeaderName/);
   assert.doesNotMatch(source, /s\.groupHeaderMeta/);
   assert.doesNotMatch(source, /t\('chat\.groupMembersCount',\s*\{\s*count: memberCount\s*\}\)/);
-  assert.match(source, /groupNameText/);
-  assert.match(source, /t\('chat\.groupName'\)/);
+  // 群名称放在副标题里：长群名不会把左侧标题挤没。
+  assert.match(source, /label=\{t\('chat\.groupName'\)\}\s*subtitle=\{groupTitle\}/);
   assert.match(source, /t\('chat\.groupNotice'\)/);
   assert.match(source, /t\('chat\.searchHistory'\)/);
   assert.match(source, /t\('chat\.moreGroupMembers'/);
@@ -119,7 +119,7 @@ test('temporary chat info copies its invite link without treating the room as a 
   assert.match(infoSource, /fetchMyTempChats\(\)/);
   assert.match(infoSource, /Clipboard\.setStringAsync\(room\.shareUrl\)/);
   assert.match(infoSource, /label=\{t\('tempChats\.inviteLink'\)\}/);
-  assert.match(infoSource, /value=\{t\('tempChats\.copyLink'\)\}/);
+  assert.match(infoSource, /rightText=\{t\('tempChats\.copyLink'\)\}/);
 });
 
 // 临时房走群布局但不是圈子:groupID 被清空,圈子那条成员目录路径整条不跑。
@@ -284,7 +284,10 @@ test('chat info screen uses the shared primary switch color for group toggles', 
 
   // 开关统一走 ThemedSwitch(默认 primary 轨道 + 白滑块);原本此处断言
   // trackColor 字面量,收口后改为守住"不得回退成绿色系"这个原意。
-  assert.match(source, /<ThemedSwitch/);
+  // 群聊与私聊现在都用 MenuRow 的开关,由它渲染 ThemedSwitch。
+  assert.match(source, /hasToggle=\{!actionPending\.pin\}/);
+  const menuRow = fs.readFileSync(path.join(process.cwd(), 'src/components/ui/menu-row.tsx'), 'utf8');
+  assert.match(menuRow, /<ThemedSwitch/);
   assert.doesNotMatch(source, /trackColor=/);
   assert.doesNotMatch(source, /tint=\{colors\.(?:success|green)\}/);
 });
