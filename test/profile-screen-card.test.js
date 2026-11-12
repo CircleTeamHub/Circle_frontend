@@ -77,6 +77,13 @@ test('ProfileScreen removes the old green badge icon', () => {
   assert.doesNotMatch(src, /colors\.success/);
 });
 
+test('ProfileScreen header has no AI assistant icon (the assistant lives on the Explore tab)', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.doesNotMatch(src, /AssistantAvatar|profile-open-assistant|\/\(tabs\)\/messages\/assistant/);
+  assert.match(read('src/features/explore/screens/ExploreScreen.tsx'), /exploreAssistantEntry/);
+});
+
 test('ProfileScreen shows selected identity badges inside the gold member card', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
