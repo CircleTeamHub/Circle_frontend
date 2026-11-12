@@ -9,7 +9,10 @@ import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
+import { getChatDetailHref, getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
+import { ensureDirectConversation } from '@/chat-core/client';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { useNavigationLock } from '@/hooks/use-navigation-lock';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   cancelSignup,
@@ -378,8 +381,37 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     [post.signupRestrictions, t],
   );
 
+  // 报名成功后直接进入和发帖人的单聊（同报名列表：只进聊天，不自动塞内容）。
+  // 聊天页开在卡片所在的 tab 栈里，返回回到这条帖子。跳转后锁到回到本页。
+  const chatLock = useNavigationLock();
+  const openAuthorChat = useCallback(async () => {
+    if (!chatLock.tryLock()) return;
+    try {
+      const conversation = await ensureDirectConversation(post.author.id);
+      router.push(
+        getChatDetailHref(
+          scope,
+          post.author.id,
+          post.author.nickname,
+          post.author.avatarUrl ?? undefined,
+          conversation.conversationID,
+        ),
+      );
+    } catch (error) {
+      // 没跳成功：当场解锁。
+      chatLock.release();
+      reportHandledFailure('plazaPost', 'openAuthorChat', error);
+      Alert.alert(
+        t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
+        getApiErrorMessage(error, t('common.networkError', { defaultValue: '网络错误，请重试' })),
+      );
+    }
+  }, [chatLock, post.author.avatarUrl, post.author.id, post.author.nickname, router, scope, t]);
+
   const handleToggleSignup = useCallback(async () => {
-    if (signupInFlightRef.current) return;
+    // 报名请求在途时不重复提交（连点只算一次）；报名成功正在进聊天时，
+    // 转场途中再点不能把刚报上的名又取消掉。
+    if (signupInFlightRef.current || chatLock.isLocked()) return;
     // 取消报名不校验门槛；仅当未报名且不满足资格时拦截并提示。
     if (!signed && !post.canSignup) {
       // 后端可能因为一个前端当前不展示的门槛(例如靓号)判定不可报名,这时
@@ -410,6 +442,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         : await cancelSignup(post.id);
       setSigned(res.signed);
       setSignupCount(res.signupCount);
+      if (next && res.signed) void openAuthorChat();
     } catch {
       // 回滚
       const latest = deferredSignupRef.current;
@@ -420,7 +453,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       signupInFlightRef.current = false;
       setBusy(false);
     }
-  }, [signed, post.id, post.canSignup, buildSignupReasonText, t]);
+  }, [signed, post.id, post.canSignup, buildSignupReasonText, chatLock, openAuthorChat, t]);
 
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {

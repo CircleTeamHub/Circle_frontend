@@ -9,6 +9,7 @@ import {
 } from '@react-navigation/native';
 import {
   Redirect,
+  router,
   Stack,
   useNavigationContainerRef,
   useSegments,
@@ -23,6 +24,7 @@ import { installAlertBridge } from '@/utils/alert-bridge';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
+import { installNavigationDedupe } from '@/utils/navigation-dedupe';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -92,6 +94,9 @@ type PersistedStore = {
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
+
+// 全局防连点：同一目标短时间内只 push/navigate 一次（双击、转场途中再点不会叠两层页面）。
+installNavigationDedupe(router);
 
 // 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
 registerDeviceIdProvider(getDeviceId);

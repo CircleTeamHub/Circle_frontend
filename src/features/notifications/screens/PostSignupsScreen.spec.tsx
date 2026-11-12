@@ -24,6 +24,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn(), navigate: jest.fn() }),
   useSegments: () => ['(tabs)', 'discover', 'post-signups'],
   useLocalSearchParams: () => ({ postId: 'post-1', title: 'Hike' }),
+  // The screen never regains focus in these tests, so a navigation lock stays held.
+  useFocusEffect: jest.fn(),
 }));
 const mockTranslate = (key: string) => key;
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
@@ -85,6 +87,7 @@ type SignupsResult = Awaited<ReturnType<typeof fetchMyPostSignups>>;
 
 beforeEach(() => {
   mockChatConversations = [];
+  jest.mocked(ensureDirectConversation).mockReset();
   jest.mocked(fetchMyPostSignups).mockReset();
   jest.mocked(fetchMyPlazaPost).mockReset().mockReturnValue(new Promise(() => {}));
   jest.mocked(updateMyPlazaPost).mockReset();
@@ -183,6 +186,18 @@ test('signer rows always open the chat; recognition is picked in its own sheet',
   // The sheet closes after a successful submit.
   expect(screen.queryByTestId('collaboration-recognition-submit')).toBeNull();
   alert.mockRestore();
+});
+
+test('tapping a signer twice opens the chat once and stages no opener', async () => {
+  jest.mocked(ensureDirectConversation).mockResolvedValue({ conversationID: 'dm-alice' } as never);
+  jest.mocked(fetchMyPostSignups).mockResolvedValueOnce({ items: [signup('Alice')], recognitionOpen: false });
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  // The second tap lands while the first jump's transition is still running.
+  await act(async () => { fireEvent.press(screen.getByText('Alice')); });
+  await act(async () => { fireEvent.press(screen.getByText('Alice')); });
+  expect(ensureDirectConversation).toHaveBeenCalledTimes(1);
 });
 
 test('an empty signer list shows the empty text once loaded', async () => {

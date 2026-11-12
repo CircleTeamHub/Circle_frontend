@@ -35,8 +35,6 @@ import {
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ensureDirectConversation } from '@/chat-core/client';
-import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
-import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { PlazaPostCard } from '@/features/discover/components/plaza-post-card';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import {
@@ -48,9 +46,10 @@ import { useNotificationCenterStore } from '@/features/notifications/store/use-n
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useAuthStore } from '@/stores/authStore';
-import type { CirclePlazaPost, Conversation, PlazaPostCardData, PostSignupItem } from '@/types';
+import type { CirclePlazaPost, Conversation, PostSignupItem } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
+import { useNavigationLock } from '@/hooks/use-navigation-lock';
 import { RecognitionPickerModal } from '@/features/notifications/components/RecognitionPickerModal';
 
 export default function PostSignupsScreen() {
@@ -61,7 +60,7 @@ export default function PostSignupsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const mountedRef = useRef(true);
-  const openingChatRef = useRef(false);
+  const chatLock = useNavigationLock();
   const { postId } = useLocalSearchParams<{ postId: string }>();
 
   const [signups, setSignups] = useState<PostSignupItem[]>([]);
@@ -70,7 +69,6 @@ export default function PostSignupsScreen() {
   const [editContent, setEditContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -148,15 +146,6 @@ export default function PostSignupsScreen() {
       });
     }
   };
-
-  const buildPostCard = useCallback(
-    (p: CirclePlazaPost): PlazaPostCardData =>
-      toPlazaPostCardData(
-        p,
-        t('plaza.signup.cardUntitled', { defaultValue: '活动分享' }),
-      ),
-    [t],
-  );
 
   const load = useCallback(async () => {
     if (!postId) return;
@@ -261,23 +250,13 @@ export default function PostSignupsScreen() {
 
   const openChat = useCallback(
     async (signer: PostSignupItem) => {
-      if (openingChatRef.current) return;
-      openingChatRef.current = true;
-      // 报名→聊天：先构造卡片，目的地解析成功后再紧邻导航写入待发状态。
-      const pendingChatCard = post
-        ? {
-          conversationKey: signer.userId,
-          card: buildPostCard(post),
-          draftText: t('plaza.signup.chatOpener', {
-            defaultValue: '你报名了我发起的活动，开始聊天吧',
-          }),
-        }
-        : null;
+      // 连点守卫：跳转后一直锁到回到本页，转场途中再点不会再压一层聊天页。
+      if (!chatLock.tryLock()) return;
+      // 报名列表就是对话列表：只进聊天，不再自动塞活动卡片和「你报名了我发起的活动」草稿。
       try {
         setOpeningChatFor(signer.userId);
         // 先解析单聊会话拿到 conversationID，否则聊天页只会停在预览模式。
         const conversation = await ensureDirectConversation(signer.userId);
-        if (pendingChatCard) setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
             scope,
@@ -287,7 +266,11 @@ export default function PostSignupsScreen() {
             conversation.conversationID,
           ),
         );
-      } catch (error) {        Alert.alert(
+      } catch (error) {
+        // 没跳成功：当场解锁，可以重试。
+        chatLock.release();
+        reportHandledFailure('postSignups', 'openChat', error);
+        Alert.alert(
           t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
           getApiErrorMessage(
             error,
@@ -295,11 +278,10 @@ export default function PostSignupsScreen() {
           ),
         );
       } finally {
-        openingChatRef.current = false;
         if (mountedRef.current) setOpeningChatFor(null);
       }
     },
-    [router, scope, t, post, setPendingChatCard, buildPostCard],
+    [chatLock, router, scope, t],
   );
 
   // 报名行按消息列表的样子展示：和该报名者的单聊（若已有）的最近一条消息、时间与未读。

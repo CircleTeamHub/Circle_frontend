@@ -35,13 +35,15 @@ test('post signups screen only marks signups read after a successful list fetch'
   assert.doesNotMatch(source, /void markMyPostSignupsRead\(postId\)/);
 });
 
-test('post signups screen uses a ref guard to prevent duplicate chat opens', () => {
+test('post signups screen locks chat opens until it is focused again', () => {
   const source = readScreen();
 
-  assert.match(source, /const openingChatRef = useRef\(false\)/);
-  assert.match(source, /if \(openingChatRef\.current\) return/);
-  assert.match(source, /openingChatRef\.current = true/);
-  assert.match(source, /openingChatRef\.current = false/);
+  // 跳转后一直锁到回到本页(转场途中再点不会再压一层),失败时当场解锁。
+  assert.match(source, /const chatLock = useNavigationLock\(\)/);
+  assert.match(source, /if \(!chatLock\.tryLock\(\)\) return/);
+  assert.match(source, /chatLock\.release\(\)/);
+  // 以前在 finally 里立刻解锁,挡不住转场那几百毫秒。
+  assert.doesNotMatch(source, /openingChatRef/);
 });
 
 const readRecognitionPicker = () =>
