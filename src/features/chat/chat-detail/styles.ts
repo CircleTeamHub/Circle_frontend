@@ -160,6 +160,9 @@ export const chatDetailStyles = StyleSheet.create({
     includeFontPadding: false,
   },
   composerSendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // 输入区与快捷键之间的刻线，上方留一点呼吸，左右比卡片内边距再收进一些。
+  composerDivider: { marginTop: 6, marginHorizontal: 12 },
+  composerDividerLine: { height: StyleSheet.hairlineWidth },
   composerToolbar: { flexDirection: 'row', alignItems: 'center' },
   composerToolbarBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
   expandComposerButton: { position: 'absolute', top: 0, right: 4, width: 36, height: 36, borderRadius: 18 },

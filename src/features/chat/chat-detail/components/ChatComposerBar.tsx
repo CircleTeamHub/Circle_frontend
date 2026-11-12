@@ -387,6 +387,12 @@ export function ChatComposerBar({
           )}
         </View>
 
+        {/* 输入区和快捷键之间一道刻在玻璃上的细线：一线暗色 + 紧贴其下的一线高光，左右内收不顶边。 */}
+        <View testID="chat-composer-divider" pointerEvents="none" style={s.composerDivider}>
+          <View style={[s.composerDividerLine, { backgroundColor: withAlpha(colors.text, dark ? 0.14 : 0.08) }]} />
+          <View style={[s.composerDividerLine, { backgroundColor: withAlpha(colors.white, dark ? 0.05 : 0.65) }]} />
+        </View>
+
         {/* 下一行：快捷键。 */}
         <View style={s.composerToolbar}>
           {shortcuts.map((item) => (
