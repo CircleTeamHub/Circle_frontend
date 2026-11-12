@@ -77,7 +77,10 @@ const s = StyleSheet.create({
 
 const Sep = () => <View style={{ height: Spacing.xs }} />;
 
-/** 独立群聊的「邀请好友」:好友多选直接进群(区别于圈子群的担保邀请流程)。 */
+/**
+ * 独立群聊的「邀请好友」(区别于圈子群的担保邀请流程)。Friends join directly while
+ * the group stays within 30 members; past that they get an invitation to accept.
+ */
 export default function InviteGroupMembersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -255,6 +258,16 @@ export default function InviteGroupMembersScreen() {
           {t('messages.inviteGroupMembersSubtitle', { groupName })}
         </Text>
       ) : null}
+      {/* Picks are sent in selection order; the backend seats them directly until the group reaches 30. */}
+      <Text
+        style={{
+          color: colors.textSecondary,
+          ...Typography.caption,
+          ...s.subtitle,
+        }}
+      >
+        {t('messages.inviteGroupMembersRule')}
+      </Text>
 
       <View style={[s.searchWrap, { backgroundColor: colors.surface }]}>
         <Ionicons name="search-outline" size={18} color={colors.textSecondary} />

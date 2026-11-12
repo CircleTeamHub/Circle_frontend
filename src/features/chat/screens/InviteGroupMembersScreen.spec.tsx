@@ -145,6 +145,25 @@ test('a friends-list failure is surfaced through the localized funnel, not swall
   );
 });
 
+test('states the 30-member rule and sends picks in the order they were chosen', async () => {
+  jest.mocked(fetchChatMembers).mockResolvedValue([] as never);
+  jest.mocked(inviteGroupChatMembers).mockResolvedValue({ id: 'group-1' } as never);
+
+  await renderLoaded();
+  expect(screen.getByText('messages.inviteGroupMembersRule')).toBeTruthy();
+  // The backend seats picks in request order until the group reaches 30 members.
+  fireEvent.press(await screen.findByLabelText('小林', {}, SETTLE));
+  fireEvent.press(screen.getByLabelText('阿宁'));
+  fireEvent.press(screen.getByLabelText('messages.inviteGroupMembersSubmit'));
+
+  await waitFor(
+    () => expect(topNotice.success).toHaveBeenCalledWith('messages.inviteGroupMembersSent'),
+    SETTLE,
+  );
+  expect(inviteGroupChatMembers).toHaveBeenCalledWith('group-1', ['u2', 'u1']);
+  expect(mockBack).toHaveBeenCalled();
+});
+
 test('an invite rejected by the backend shows the localized reason, never the raw error', async () => {
   // 目录拿不到时已在群里的好友仍会出现在候选里;真被服务端拒时,
   // 用户看到的必须是错误码对应的文案。
