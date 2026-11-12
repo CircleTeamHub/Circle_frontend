@@ -22,7 +22,6 @@ jest.mock('@/theme', () => ({
   ...jest.requireActual('@/theme/tokens'),
   useTheme: () => ({ colors: jest.requireActual('@/theme/colors').lightColors }),
 }));
-jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 // Only the header's right slot matters here; the back button has its own tests.
 jest.mock('@/components/ui/nav-header', () => ({
   NavHeader: ({ rightSlot }: { rightSlot?: React.ReactNode }) => rightSlot ?? null,
@@ -46,11 +45,12 @@ beforeEach(() => {
   useChatStore.setState({ conversations: [] });
 });
 
-test('members read the full notice and cannot edit it', () => {
+test('members read just the notice text and cannot edit it', () => {
   useChatStore.setState({ conversations: [group()] });
   render(<GroupNoticeScreen />);
   expect(screen.getByText('周六早上八点集合\n记得带水')).toBeTruthy();
-  expect(screen.getByText('周末爬山群')).toBeTruthy();
+  // Text only: no group avatar or name above it.
+  expect(screen.queryByText('周末爬山群')).toBeNull();
   expect(screen.queryByTestId('group-notice-edit')).toBeNull();
 });
 
