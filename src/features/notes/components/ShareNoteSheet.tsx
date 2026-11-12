@@ -20,7 +20,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
 import { Typography, useTheme } from '@/theme';
 
-/** 要分享的笔记和每条要发的分块(笔记卡片 / 图片视频 / 展示 / 地址)。 */
+/** 要分享的笔记和每条要发的分块(笔记卡片 / 展示 / 地址)。 */
 export interface NoteShareRequest {
   notes: NoteSummary[];
   options: NoteSendOptions;
@@ -29,7 +29,6 @@ export interface NoteShareRequest {
 /** 只发笔记卡片:笔记详情页「分享」等没有选项的入口。 */
 export const NOTE_SHARE_CARD_ONLY: NoteSendOptions = {
   card: true,
-  media: false,
   showcase: false,
   location: false,
 };

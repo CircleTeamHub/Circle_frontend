@@ -6,18 +6,21 @@ import type {
 } from '../../notes/types';
 
 /**
- * 批量发笔记的「发什么」选项（选择器 sheet 的五个勾选项；「全部发送」
- * 是派生态 = 四项全开，不单独落字段）。
+ * 批量发笔记的「发什么」选项（发送底栏的勾选项；「三连」是派生态 = 三项全开，
+ * 不单独落字段）。
  */
 export interface NoteSendOptions {
   /** 笔记卡片本体 */
   card: boolean;
-  /** 「图片 · 视频」区的媒体，逐条转成 image/video 消息 */
-  media: boolean;
-  /** 「展示」区的媒体（用户口中的「验证」） */
+  /** 「展示」区的媒体（用户口中的「验证」），逐条转成 image/video 消息 */
   showcase: boolean;
   /** 「地址」区，转成 location 消息 */
   location: boolean;
+  /**
+   * 「图片 · 视频」区。发送底栏已不提供这一项（也不算进「三连」），
+   * 只有聊天里笔记卡片「单独发这一区」会置上。
+   */
+  media?: boolean;
 }
 
 export type { NoteChatMediaSection } from '../../notes/types';
@@ -81,18 +84,18 @@ export const NOTE_BATCH_SEND_WINDOW_LIMIT = 17;
 export const NOTE_BATCH_SEND_WINDOW_MS = 10_000;
 
 export function hasAnyNoteSendOption(options: NoteSendOptions): boolean {
-  return options.card || options.media || options.showcase || options.location;
+  return options.card || options.showcase || options.location;
 }
 
 export function isAllNoteSendOptions(options: NoteSendOptions): boolean {
-  return options.card && options.media && options.showcase && options.location;
+  return options.card && options.showcase && options.location;
 }
 
 export function withAllNoteSendOptions(
   options: NoteSendOptions,
   value: boolean,
 ): NoteSendOptions {
-  return { ...options, card: value, media: value, showcase: value, location: value };
+  return { ...options, card: value, showcase: value, location: value };
 }
 
 /** 需要向服务端申请拷贝的分区（只有媒体类分区需要）。 */

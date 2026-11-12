@@ -18,9 +18,9 @@ import {
   type ThemeColors,
 } from '@/theme';
 
-// 底栏常驻的「发什么」开关(横排 icon+短标签)。「全部」是四项的派生开关,单独渲染。
+// 底栏常驻的「发什么」开关(横排 icon+短标签)。「三连」是三项的派生开关,单独渲染。
 // accent 取自色板 token:每项一个色相,选中时同色淡底+同色描边+同色图标文字,
-// 未选中保持中性灰 —— 让"选了什么"一眼可辨,而不是五个一样的灰框。
+// 未选中保持中性灰 —— 让"选了什么"一眼可辨,而不是四个一样的灰框。
 const NOTE_OPTION_CHIPS = [
   {
     key: 'card',
@@ -28,13 +28,6 @@ const NOTE_OPTION_CHIPS = [
     accent: 'primary',
     labelKey: 'share.noteBatch.optionCard',
     defaultLabel: '笔记',
-  },
-  {
-    key: 'media',
-    icon: 'images-outline',
-    accent: 'blue',
-    labelKey: 'share.noteBatch.optionMedia',
-    defaultLabel: '图片视频',
   },
   {
     key: 'showcase',
@@ -52,7 +45,7 @@ const NOTE_OPTION_CHIPS = [
   },
 ] as const;
 
-/** 「全部」是四项的派生开关，用品牌紫与单项色相区隔。 */
+/** 「三连」是三项的派生开关，用品牌紫与单项色相区隔。 */
 const NOTE_OPTION_ALL_ACCENT = 'brandPurple' as const;
 
 type NoteOptionAccent =
@@ -84,7 +77,7 @@ interface NoteOptionChipProps {
   onToggle: () => void;
 }
 
-/** 底栏「发什么」单个开关：图标 + 标签 + 对号。四个分区与「全部」共用。 */
+/** 底栏「发什么」单个开关：图标 + 标签 + 对号。三个分区与「三连」共用。 */
 function NoteOptionChip({
   icon,
   label,
@@ -162,7 +155,7 @@ interface NoteSendOptionsRowProps {
   onChange: Dispatch<SetStateAction<NoteSendOptions>>;
 }
 
-/** 发笔记时「发什么」的五个开关:笔记 / 图片视频 / 展示 / 地址 / 全部。 */
+/** 发笔记时「发什么」的四个开关:笔记 / 展示 / 地址 / 三连。 */
 export function NoteSendOptionsRow({ value, onChange }: NoteSendOptionsRowProps) {
   const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
@@ -180,7 +173,7 @@ export function NoteSendOptionsRow({ value, onChange }: NoteSendOptionsRowProps)
       ))}
       <NoteOptionChip
         icon="checkmark-done-outline"
-        label={t('share.noteBatch.optionAll', { defaultValue: '全部' })}
+        label={t('share.noteBatch.optionAll', { defaultValue: '三连' })}
         tone={noteOptionTone(NOTE_OPTION_ALL_ACCENT, colors, resolvedMode)}
         checked={isAllNoteSendOptions(value)}
         onToggle={() => onChange((prev) => withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)))}

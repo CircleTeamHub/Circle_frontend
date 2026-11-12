@@ -126,7 +126,6 @@ export default function SharePickerScreen() {
   const [selectedNotes, setSelectedNotes] = useState<NoteSummary[]>([]);
   const [sendOptions, setSendOptions] = useState<NoteSendOptions>({
     card: true,
-    media: false,
     showcase: false,
     location: false,
   });

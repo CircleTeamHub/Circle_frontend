@@ -69,7 +69,7 @@ const create = (conversationID: string) => renderHook(() => useNoteBatchSend({
   conversationID,
   isPreviewMode: false,
 }));
-const cardOnly = { card: true, media: false, showcase: false, location: false };
+const cardOnly = { card: true, showcase: false, location: false };
 
 test('a closed or off-shelf note is sent straight away without a status warning', async () => {
   const hook = create('conversation-a');
