@@ -7,7 +7,13 @@ jest.mock('expo-image', () => {
   const { View } = jest.requireActual('react-native');
   return { Image: ({ source }: { source: { uri: string } }) => <View testID={`img:${source.uri}`} /> };
 });
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    Ionicons: () => null,
+    MaterialCommunityIcons: ({ name }: { name: string }) => <View testID={`mci:${name}`} />,
+  };
+});
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('./shared', () => ({
   BubbleStatusText: () => null,
@@ -120,14 +126,16 @@ test("always shows the source's monthly rating counters, updated once reconciled
   >('@/features/notes/store/use-note-rating-counts-store');
   render(<NoteCardBubble message={message(card({ noteId: 'rated-card' }))} outgoing={false} />);
   // Not reconciled yet: the area is there with zeros, so the card keeps its height.
-  expect(screen.getByText('👍 0')).toBeTruthy();
-  expect(screen.getByText('👎 0')).toBeTruthy();
+  expect(screen.getByTestId('note-card-rating-good')).toHaveTextContent('0');
+  expect(screen.getByTestId('note-card-rating-bad')).toHaveTextContent('0');
+  // 好评 is a firework, 差评 a rain cloud — no thumbs.
+  expect(screen.getByTestId('mci:firework')).toBeTruthy();
+  expect(screen.getByTestId('mci:weather-pouring')).toBeTruthy();
 
   React.act(() => {
     useNoteRatingCountsStore.getState().record([{ noteId: 'rated-card', goodCount: 3, badCount: 1 }]);
   });
 
-  expect(screen.getByTestId('note-card-rating')).toBeTruthy();
-  expect(screen.getByText('👍 3')).toBeTruthy();
-  expect(screen.getByText('👎 1')).toBeTruthy();
+  expect(screen.getByTestId('note-card-rating-good')).toHaveTextContent('3');
+  expect(screen.getByTestId('note-card-rating-bad')).toHaveTextContent('1');
 });

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { NOTE_RATING_BAD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import { noteRatingReasonLabel } from '@/features/notes/components/NoteRatingReasonSheet';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ApiError } from '@/services/api/api-error';
@@ -155,7 +156,10 @@ export default function NoteBadRatingsScreen() {
       return (
         <View style={[s.card, d.card]} testID={`note-bad-rating-${item.id}`}>
           <View style={s.cardHeader}>
-            <Text style={[s.reason, d.title]}>👎 {noteRatingReasonLabel(t, item.reason)}</Text>
+            <View style={s.reasonRow}>
+              <MaterialCommunityIcons name={NOTE_RATING_BAD_ICON} size={18} color={colors.text} />
+              <Text style={[s.reason, d.title]}>{noteRatingReasonLabel(t, item.reason)}</Text>
+            </View>
             {statusLabel ? <Text style={[s.status, d.muted]}>{statusLabel}</Text> : null}
           </View>
           {item.comment ? <Text style={[s.comment, d.title]}>{item.comment}</Text> : null}
@@ -311,6 +315,7 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexShrink: 1 },
   reason: { ...Typography.body, fontWeight: '600', flexShrink: 1 },
   status: { ...Typography.small, fontWeight: '600' },
   comment: { ...Typography.bodyRegular },

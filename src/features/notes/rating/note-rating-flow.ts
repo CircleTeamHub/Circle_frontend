@@ -100,7 +100,7 @@ async function submit(
   }
 }
 
-/** 👍 rates at once; a rejection explains why (cooldown, not in the group, …). */
+/** 好评 rates at once; a rejection explains why (cooldown, not in the group, …). */
 export async function rateNoteGood(noteId: string, onRated?: NoteRatedListener): Promise<void> {
   if (inFlight) return;
   inFlight = true;
@@ -112,7 +112,7 @@ export async function rateNoteGood(noteId: string, onRated?: NoteRatedListener):
 }
 
 /**
- * 👎 needs a reason, so check eligibility before asking for one: a rater who
+ * 差评 needs a reason, so check eligibility before asking for one: a rater who
  * cannot rate learns why straight away instead of after filling in the sheet.
  */
 export async function startBadNoteRating(noteId: string, onRated?: NoteRatedListener): Promise<void> {

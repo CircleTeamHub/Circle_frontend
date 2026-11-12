@@ -17,7 +17,10 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate, i
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@expo/vector-icons', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { Ionicons: ({ name }: { name: string }) => <Text>{name}</Text> };
+  return {
+    Ionicons: ({ name }: { name: string }) => <Text>{name}</Text>,
+    MaterialCommunityIcons: ({ name }: { name: string }) => <Text>{`mci:${name}`}</Text>,
+  };
 });
 jest.mock('@/theme', () => ({
   Radius: { full: 999, lg: 16, md: 12, xl: 20, pill: 26 },
@@ -84,7 +87,8 @@ test('lists reason, text, status and appeal results without any rater', async ()
   });
   render(<NoteBadRatingsScreen />);
 
-  expect(await screen.findByText('👎 notes.rating.reasons.OTHER')).toBeTruthy();
+  expect(await screen.findByText('notes.rating.reasons.OTHER')).toBeTruthy();
+  expect(screen.getAllByText('mci:weather-pouring')).toHaveLength(3);
   expect(fetchNoteBadRatings).toHaveBeenCalledWith('root-1');
   expect(screen.getByText('Phone is wrong')).toBeTruthy();
   expect(screen.getByText('notes.rating.badList.status.HELD')).toBeTruthy();

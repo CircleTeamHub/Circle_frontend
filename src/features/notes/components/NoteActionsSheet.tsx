@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
 import {
   NOTE_WORK_STATUS_ICON,
@@ -55,11 +56,14 @@ interface NoteActionsSheetProps {
 
 type NoteAction = {
   key: string;
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   destructive?: boolean;
   run: () => void;
-};
+} & (
+  | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: never }
+  /** For glyphs Ionicons lacks (the note rating 烟花 / 乌云). */
+  | { mciIcon: keyof typeof MaterialCommunityIcons.glyphMap; icon?: never }
+);
 
 export function NoteActionsSheet({
   note,
@@ -201,13 +205,13 @@ export function NoteActionsSheet({
           ? [
               {
                 key: 'rate-good',
-                icon: 'thumbs-up-outline' as const,
+                mciIcon: NOTE_RATING_GOOD_ICON,
                 label: t('notes.rating.actionGood', { defaultValue: '好评' }),
                 run: () => onRateGood(note),
               },
               {
                 key: 'rate-bad',
-                icon: 'thumbs-down-outline' as const,
+                mciIcon: NOTE_RATING_BAD_ICON,
                 label: t('notes.rating.actionBad', { defaultValue: '差评' }),
                 run: () => onRateBad(note),
               },
@@ -217,7 +221,7 @@ export function NoteActionsSheet({
           ? [
               {
                 key: 'view-bad-ratings',
-                icon: 'thumbs-down-outline' as const,
+                mciIcon: NOTE_RATING_BAD_ICON,
                 label: t('notes.rating.viewBad', { defaultValue: '查看差评' }),
                 run: () => onViewBadRatings(note),
               },
@@ -355,11 +359,19 @@ export function NoteActionsSheet({
             accessibilityRole="button"
             accessibilityLabel={action.label}
           >
-            <Ionicons
-              name={action.icon}
-              size={20}
-              color={action.destructive ? colors.error : colors.text}
-            />
+            {action.mciIcon ? (
+              <MaterialCommunityIcons
+                name={action.mciIcon}
+                size={20}
+                color={action.destructive ? colors.error : colors.text}
+              />
+            ) : (
+              <Ionicons
+                name={action.icon}
+                size={20}
+                color={action.destructive ? colors.error : colors.text}
+              />
+            )}
             <Text
               style={[s.label, action.destructive ? d.destructive : d.label]}
             >

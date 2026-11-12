@@ -33,6 +33,7 @@ import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
 import { rateNoteGood, startBadNoteRating } from '@/features/notes/rating/note-rating-flow';
 import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
+import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { CollectMessageResult } from './use-collect-message';
 
 export type MessageSelectionProgress = { action: 'save' | 'collect'; current: number; total: number };
@@ -715,13 +716,13 @@ export function useMessageActions({
       actions.push(
         {
           key: 'rate-good',
-          icon: 'thumbs-up-outline',
+          mciIcon: NOTE_RATING_GOOD_ICON,
           label: t('notes.rating.actionGood', { defaultValue: '好评' }),
           onPress: () => void rateNoteGood(card.noteId, recordCounts),
         },
         {
           key: 'rate-bad',
-          icon: 'thumbs-down-outline',
+          mciIcon: NOTE_RATING_BAD_ICON,
           label: t('notes.rating.actionBad', { defaultValue: '差评' }),
           onPress: () => void startBadNoteRating(card.noteId, recordCounts),
         },

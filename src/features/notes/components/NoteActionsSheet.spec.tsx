@@ -5,7 +5,13 @@ import type { NoteSummary } from '@/features/notes/types';
 
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    Ionicons: () => null,
+    MaterialCommunityIcons: ({ name }: { name: string }) => <Text>{`mci:${name}`}</Text>,
+  };
+});
 jest.mock('@/theme', () => ({
   Radius: { full: 999, xl: 20 },
   Spacing: { xs: 4, sm: 8, md: 12, lg: 16 },
@@ -47,6 +53,8 @@ test('a collected copy offers 好评 and 差评 for its source note', () => {
   const handlers = renderSheet(copy);
 
   expect(screen.queryByLabelText('notes.rating.viewBad')).toBeNull();
+  expect(screen.getByLabelText('notes.rating.actionGood')).toHaveTextContent(/mci:firework/);
+  expect(screen.getByLabelText('notes.rating.actionBad')).toHaveTextContent(/mci:weather-pouring/);
   fireEvent.press(screen.getByLabelText('notes.rating.actionGood'));
   expect(handlers.onRateGood).toHaveBeenCalledWith(copy);
   fireEvent.press(screen.getByLabelText('notes.rating.actionBad'));
@@ -60,6 +68,7 @@ test('my own source note offers 查看差评 instead of rating myself', () => {
 
   expect(screen.queryByLabelText('notes.rating.actionGood')).toBeNull();
   expect(screen.queryByLabelText('notes.rating.actionBad')).toBeNull();
+  expect(screen.getByLabelText('notes.rating.viewBad')).toHaveTextContent(/mci:weather-pouring/);
   fireEvent.press(screen.getByLabelText('notes.rating.viewBad'));
   expect(handlers.onViewBadRatings).toHaveBeenCalledWith(baseNote);
 });

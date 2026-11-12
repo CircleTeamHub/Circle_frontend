@@ -32,7 +32,7 @@ interface NoteRatingReasonSheetProps {
   onSubmit: (reason: NoteRatingReason, comment?: string) => void;
 }
 
-/** 👎 needs a reason; 其他 also needs text (≤ 200 chars, like the backend). */
+/** 差评 needs a reason; 其他 also needs text (≤ 200 chars, like the backend). */
 export function NoteRatingReasonSheet({ visible, submitting, onClose, onSubmit }: NoteRatingReasonSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();

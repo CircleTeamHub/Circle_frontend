@@ -7,15 +7,18 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export type MessageAction = {
   key: string;
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-};
+} & (
+  | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: never }
+  /** For glyphs Ionicons lacks (the note rating 烟花 / 乌云). */
+  | { mciIcon: keyof typeof MaterialCommunityIcons.glyphMap; icon?: never }
+);
 
 interface MessageActionMenuProps {
   // Screen-space point the long-press happened at; null hides the menu.
@@ -113,7 +116,11 @@ export function MessageActionMenu({
                 action.onPress();
               }}
             >
-              <Ionicons name={action.icon} size={20} color={colors.background} />
+              {action.mciIcon ? (
+                <MaterialCommunityIcons name={action.mciIcon} size={20} color={colors.background} />
+              ) : (
+                <Ionicons name={action.icon} size={20} color={colors.background} />
+              )}
               <Text
                 style={[s.label, { color: colors.background }]}
                 numberOfLines={1}
