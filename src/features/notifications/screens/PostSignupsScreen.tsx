@@ -233,6 +233,7 @@ export default function PostSignupsScreen() {
       // 重新拉取，让 recognized 标记成为「已提交」的唯一真相，刷新/重进都不会丢、也无法重复提交。
       void load();
     } catch (error) {
+      reportHandledFailure('postSignups', 'submitRecognitions', error);
       if (!mountedRef.current) return;
       Alert.alert(
         t('notifications.signupMgmt.recognitionFailedTitle', {

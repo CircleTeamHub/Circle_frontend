@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import { fetchMyPostSignups, fetchMyPlazaPost, submitPostCollaborationRecognitions, updateMyPlazaPost } from '@/services/api/plaza';
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { CirclePlazaPost, PostSignupItem } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 jest.mock('react-native', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -185,6 +186,24 @@ test('signer rows always open the chat; recognition is picked in its own sheet',
   expect(submitPostCollaborationRecognitions).toHaveBeenCalledWith('post-1', ['user-Alice']);
   // The sheet closes after a successful submit.
   expect(screen.queryByTestId('collaboration-recognition-submit')).toBeNull();
+  alert.mockRestore();
+});
+
+test('a failed recognition submit is reported and keeps the sheet open', async () => {
+  const failure = new Error('offline');
+  jest.mocked(submitPostCollaborationRecognitions).mockRejectedValue(failure);
+  jest.mocked(fetchMyPostSignups).mockResolvedValue({ items: [signup('Alice')], recognitionOpen: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<PostSignupsScreen />);
+  await act(async () => { await Promise.resolve(); });
+
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-open')); });
+  fireEvent.press(screen.getByRole('checkbox', { name: 'Alice' }));
+  await act(async () => { fireEvent.press(screen.getByTestId('collaboration-recognition-submit')); });
+
+  expect(reportHandledFailure).toHaveBeenCalledWith('postSignups', 'submitRecognitions', failure);
+  expect(alert).toHaveBeenCalledWith('notifications.signupMgmt.recognitionFailedTitle', expect.any(String));
+  expect(screen.getByTestId('collaboration-recognition-submit')).toBeTruthy();
   alert.mockRestore();
 });
 
