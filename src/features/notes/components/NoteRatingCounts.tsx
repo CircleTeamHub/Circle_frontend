@@ -10,12 +10,11 @@ interface NoteRatingCountsProps {
 }
 
 /**
- * Small "👍 N 👎 M" counters (this month) for list and chat note cards. Renders
- * nothing until the note has a rating this month, so unrated notes stay quiet.
+ * The "👍 N 👎 M" area (this month's counters of the source note) on list and
+ * chat note cards. Zeros are shown too, so every card has the same layout.
  */
 export function NoteRatingCounts({ goodCount = 0, badCount = 0, color, testID }: NoteRatingCountsProps) {
   const { t } = useTranslation();
-  if (goodCount <= 0 && badCount <= 0) return null;
   return (
     <View
       style={s.row}

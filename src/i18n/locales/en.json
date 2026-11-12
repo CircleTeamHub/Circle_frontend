@@ -3226,11 +3226,9 @@
       "collectHint": "With “Choose a group” off, notes go to Ungrouped. With “Edit the title” off, the original title is kept."
     },
     "rating": {
-      "monthLabel": "This month",
-      "good": "Good {{count}}",
-      "bad": "Bad {{count}}",
-      "rateGood": "Rate good",
-      "rateBad": "Rate bad",
+      "actionGood": "Good",
+      "actionBad": "Bad",
+      "ratedTitle": "Rated",
       "countsA11y": "This month: {{good}} good, {{bad}} bad",
       "viewBad": "View bad ratings",
       "heldNotice": "Your rating was submitted and is under review. It will count once approved.",

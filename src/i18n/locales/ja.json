@@ -1552,11 +1552,9 @@
       "collectHint": "「グループを選ぶ」をオフにすると未分類に、「タイトルを編集」をオフにすると元のタイトルのまま保存します。"
     },
     "rating": {
-      "monthLabel": "今月",
-      "good": "高評価 {{count}}",
-      "bad": "低評価 {{count}}",
-      "rateGood": "高評価する",
-      "rateBad": "低評価する",
+      "actionGood": "高評価",
+      "actionBad": "低評価",
+      "ratedTitle": "評価しました",
       "countsA11y": "今月の高評価 {{good}}、低評価 {{bad}}",
       "viewBad": "低評価を見る",
       "heldNotice": "評価を送信しました。審査中で、承認後に今月の件数に反映されます。",

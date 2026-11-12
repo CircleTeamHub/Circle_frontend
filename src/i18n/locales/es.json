@@ -1558,11 +1558,9 @@
       "collectHint": "Sin «Elegir un grupo», la nota va a Sin grupo. Sin «Editar el título», se mantiene el título original."
     },
     "rating": {
-      "monthLabel": "Este mes",
-      "good": "Positivas {{count}}",
-      "bad": "Negativas {{count}}",
-      "rateGood": "Valorar positivo",
-      "rateBad": "Valorar negativo",
+      "actionGood": "Positiva",
+      "actionBad": "Negativa",
+      "ratedTitle": "Valoración enviada",
       "countsA11y": "Este mes: {{good}} positivas, {{bad}} negativas",
       "viewBad": "Ver valoraciones negativas",
       "heldNotice": "Tu valoración se envió y está en revisión. Contará cuando se apruebe.",

@@ -25,6 +25,11 @@ interface NoteActionsSheetProps {
   onPin: (note: NoteSummary) => void;
   /** 进入多选模式（并选中当前笔记） */
   onMultiSelect?: (note: NoteSummary) => void;
+  /** 收藏副本：给来源笔记打好评 / 差评。 */
+  onRateGood?: (note: NoteSummary) => void;
+  onRateBad?: (note: NoteSummary) => void;
+  /** 自己的源笔记：查看收到的差评（不能给自己打分）。 */
+  onViewBadRatings?: (note: NoteSummary) => void;
   /** 打开备注编辑弹层 */
   onRemark?: (note: NoteSummary) => void;
   onEdit: (note: NoteSummary) => void;
@@ -63,6 +68,9 @@ export function NoteActionsSheet({
   onClose,
   onPin,
   onMultiSelect,
+  onRateGood,
+  onRateBad,
+  onViewBadRatings,
   onRemark,
   onEdit,
   onEditGroups,
@@ -187,6 +195,34 @@ export function NoteActionsSheet({
             : t('notes.actions.pin', { defaultValue: '置顶' }),
           run: () => onPin(note),
         },
+        // Ratings belong to the source note: a collected copy rates it, the
+        // owner's own source note lists what it received instead.
+        ...(note.collectedFrom && onRateGood && onRateBad
+          ? [
+              {
+                key: 'rate-good',
+                icon: 'thumbs-up-outline' as const,
+                label: t('notes.rating.actionGood', { defaultValue: '好评' }),
+                run: () => onRateGood(note),
+              },
+              {
+                key: 'rate-bad',
+                icon: 'thumbs-down-outline' as const,
+                label: t('notes.rating.actionBad', { defaultValue: '差评' }),
+                run: () => onRateBad(note),
+              },
+            ]
+          : []),
+        ...(!note.collectedFrom && onViewBadRatings
+          ? [
+              {
+                key: 'view-bad-ratings',
+                icon: 'thumbs-down-outline' as const,
+                label: t('notes.rating.viewBad', { defaultValue: '查看差评' }),
+                run: () => onViewBadRatings(note),
+              },
+            ]
+          : []),
         ...(onMultiSelect
           ? [
               {

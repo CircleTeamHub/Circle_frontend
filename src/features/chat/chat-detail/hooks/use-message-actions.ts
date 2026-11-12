@@ -31,6 +31,8 @@ import { getMessageReadersHref, type UserProfileScope } from '@/features/user/ut
 import { useStickerStore } from '@/features/chat/store/use-sticker-store';
 import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
+import { rateNoteGood, startBadNoteRating } from '@/features/notes/rating/note-rating-flow';
+import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
 import type { CollectMessageResult } from './use-collect-message';
 
 export type MessageSelectionProgress = { action: 'save' | 'collect'; current: number; total: number };
@@ -698,6 +700,31 @@ export function useMessageActions({
               label: t('chat.messageActions.collect'),
               onPress: () => void handleCollectMessage(message),
             },
+      );
+    }
+    // 好评 / 差评 go to the card's source note. Not offered on cards of the
+    // viewer's own source note; the server re-checks every other rule.
+    const card = message.type === 'note-card' ? message.noteCard : undefined;
+    const ownSourceCard =
+      card?.ownerId != null &&
+      card.ownerId === useAuthStore.getState().user?.id &&
+      (!card.sourceNoteId || card.sourceNoteId === card.noteId);
+    if (card && !ownSourceCard && !isLocalMessageId(message.id) && card.publicationStatus !== 'DELETED') {
+      const recordCounts = (counts: { goodCount: number; badCount: number }) =>
+        useNoteRatingCountsStore.getState().record([{ noteId: card.noteId, ...counts }]);
+      actions.push(
+        {
+          key: 'rate-good',
+          icon: 'thumbs-up-outline',
+          label: t('notes.rating.actionGood', { defaultValue: '好评' }),
+          onPress: () => void rateNoteGood(card.noteId, recordCounts),
+        },
+        {
+          key: 'rate-bad',
+          icon: 'thumbs-down-outline',
+          label: t('notes.rating.actionBad', { defaultValue: '差评' }),
+          onPress: () => void startBadNoteRating(card.noteId, recordCounts),
+        },
       );
     }
     actions.push({

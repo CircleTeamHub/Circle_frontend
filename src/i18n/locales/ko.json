@@ -1552,11 +1552,9 @@
       "collectHint": "「그룹 선택」을 끄면 미분류에 저장되고, 「제목 편집」을 끄면 원래 제목을 그대로 사용합니다."
     },
     "rating": {
-      "monthLabel": "이번 달",
-      "good": "좋아요 {{count}}",
-      "bad": "별로예요 {{count}}",
-      "rateGood": "좋아요 평가",
-      "rateBad": "별로예요 평가",
+      "actionGood": "좋아요",
+      "actionBad": "별로예요",
+      "ratedTitle": "평가했습니다",
       "countsA11y": "이번 달 좋아요 {{good}}, 별로예요 {{bad}}",
       "viewBad": "별로예요 보기",
       "heldNotice": "평가가 제출되어 검토 중입니다. 승인되면 이번 달 집계에 반영됩니다.",

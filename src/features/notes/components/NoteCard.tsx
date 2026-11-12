@@ -231,12 +231,15 @@ function NoteCardInner({
           <Text style={[s.meta, s.metaText, d.meta]} numberOfLines={1}>
             {meta}
           </Text>
-          <NoteRatingCounts
-            goodCount={note.goodCount}
-            badCount={note.badCount}
-            color={colors.textSecondary}
-            testID={`note-card-rating-${note.id}`}
-          />
+          {/* 旧服务端不回计数时不显示，免得把「没数据」显示成 0。 */}
+          {note.goodCount === undefined ? null : (
+            <NoteRatingCounts
+              goodCount={note.goodCount}
+              badCount={note.badCount}
+              color={colors.textSecondary}
+              testID={`note-card-rating-${note.id}`}
+            />
+          )}
         </View>
       </View>
 

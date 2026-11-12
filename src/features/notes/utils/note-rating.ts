@@ -5,6 +5,10 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 const BLOCK_MESSAGE_KEYS: Record<string, string> = {
+  // No extra context to add to these: the server error copy says it all.
+  NOTE_RATING_OWNER: 'serverErrors.NOTE_RATING_OWNER',
+  NOTE_RATING_NO_GROUP: 'serverErrors.NOTE_RATING_NO_GROUP',
+  NOTE_RATING_COOLDOWN: 'serverErrors.NOTE_RATING_COOLDOWN',
   NOTE_RATING_NOT_COLLECTED: 'notes.rating.blocked.NOTE_RATING_NOT_COLLECTED',
   NOTE_RATING_NOT_IN_GROUP: 'notes.rating.blocked.NOTE_RATING_NOT_IN_GROUP',
   NOTE_RATING_LOW_CREDIT: 'notes.rating.blocked.NOTE_RATING_LOW_CREDIT',

@@ -92,9 +92,10 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   const previewUrls = note.previewUrls ?? [];
   const hasPreviews = previewUrls.length > 0;
   const unlisted = note.publicationStatus === 'UNLISTED' || note.publicationStatus === 'DELETED';
-  // This month's counters arrive with the conversation's source-state reconciliation.
+  // This month's counters of the source note. They arrive with the conversation's
+  // source-state reconciliation, or right after the viewer rates from the menu;
+  // until then the area shows 0 so the card keeps its height.
   const ratingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
-  const hasRatings = Boolean(ratingCounts && (ratingCounts.goodCount > 0 || ratingCounts.badCount > 0));
 
   const available: Record<NoteCardSection, boolean> = {
     text: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
@@ -164,21 +165,19 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
               {note.contentPreview}
             </Text>
           ) : null}
-          {countSegments.length > 0 || hasRatings ? (
-            <View style={s.metaRow}>
-              {countSegments.length > 0 ? (
-                <Text style={[s.meta, s.metaText, { color: onCardMuted }]} numberOfLines={1} testID="note-card-counts">
-                  {countSegments.join(' · ')}
-                </Text>
-              ) : null}
-              <NoteRatingCounts
-                goodCount={ratingCounts?.goodCount}
-                badCount={ratingCounts?.badCount}
-                color={onCardMuted}
-                testID="note-card-rating"
-              />
-            </View>
-          ) : null}
+          <View style={s.metaRow}>
+            {countSegments.length > 0 ? (
+              <Text style={[s.meta, s.metaText, { color: onCardMuted }]} numberOfLines={1} testID="note-card-counts">
+                {countSegments.join(' · ')}
+              </Text>
+            ) : null}
+            <NoteRatingCounts
+              goodCount={ratingCounts?.goodCount}
+              badCount={ratingCounts?.badCount}
+              color={onCardMuted}
+              testID="note-card-rating"
+            />
+          </View>
         </View>
       </View>
 

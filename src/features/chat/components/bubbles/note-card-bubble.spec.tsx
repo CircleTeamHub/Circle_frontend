@@ -114,13 +114,14 @@ test('older cards without the grid keep their cover image', () => {
   expect(screen.getByTestId('img:https://cdn/cover.jpg')).toBeTruthy();
 });
 
-test("shows the source's monthly rating counters once the conversation reconciled them", () => {
+test("always shows the source's monthly rating counters, updated once reconciled", () => {
   const { useNoteRatingCountsStore } = jest.requireActual<
     typeof import('@/features/notes/store/use-note-rating-counts-store')
   >('@/features/notes/store/use-note-rating-counts-store');
   render(<NoteCardBubble message={message(card({ noteId: 'rated-card' }))} outgoing={false} />);
-  // Not reconciled yet, or nothing rated this month: no counters.
-  expect(screen.queryByTestId('note-card-rating')).toBeNull();
+  // Not reconciled yet: the area is there with zeros, so the card keeps its height.
+  expect(screen.getByText('👍 0')).toBeTruthy();
+  expect(screen.getByText('👎 0')).toBeTruthy();
 
   React.act(() => {
     useNoteRatingCountsStore.getState().record([{ noteId: 'rated-card', goodCount: 3, badCount: 1 }]);

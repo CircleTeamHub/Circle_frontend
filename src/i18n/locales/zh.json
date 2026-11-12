@@ -3218,11 +3218,9 @@
       "collectHint": "关闭「选择分组」会放进未分组；关闭「编辑标题」会沿用原笔记标题。"
     },
     "rating": {
-      "monthLabel": "本月",
-      "good": "好评 {{count}}",
-      "bad": "差评 {{count}}",
-      "rateGood": "给好评",
-      "rateBad": "给差评",
+      "actionGood": "好评",
+      "actionBad": "差评",
+      "ratedTitle": "已评分",
       "countsA11y": "本月好评 {{good}}，差评 {{bad}}",
       "viewBad": "查看差评",
       "heldNotice": "评分已提交，正在审核，通过后计入本月计数。",

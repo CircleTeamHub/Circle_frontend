@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import NotesScreen from './NotesScreen';
 import NoteManagementScreen from './NoteManagementScreen';
 import { fetchNoteDraft, fetchNotes, fetchNoteGroups } from '@/services/api/notes';
@@ -34,14 +34,32 @@ jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.rej
 jest.mock('@/services/api/client', () => ({ ApiError: class ApiError extends Error { status = 0; } }));
 jest.mock('@/features/notes/components/NoteCard', () => {
   const { Pressable, Text, View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { NoteCard: ({ note, onSourcePress }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void }) => (
+  return { NoteCard: ({ note, onSourcePress, onMorePress }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void; onMorePress?: (note: NoteSummary) => void }) => (
     <View>
       <Pressable testID="note-contact" onPress={() => onSourcePress?.(note, 'sender')}><Text>Contact</Text></Pressable>
       <Pressable testID="note-group" onPress={() => onSourcePress?.(note, 'group')}><Text>Group</Text></Pressable>
+      <Pressable testID="note-more" onPress={() => onMorePress?.(note)}><Text>More</Text></Pressable>
+      <Text testID="note-rating-counts">{`${note.goodCount ?? '-'}/${note.badCount ?? '-'}`}</Text>
     </View>
   ) };
 });
-jest.mock('@/features/notes/components/NoteActionsSheet', () => ({ NoteActionsSheet: () => null }));
+type MockSheetProps = {
+  note: NoteSummary | null;
+  onRateGood?: (note: NoteSummary) => void;
+  onRateBad?: (note: NoteSummary) => void;
+  onViewBadRatings?: (note: NoteSummary) => void;
+};
+let mockSheetProps: MockSheetProps | null = null;
+jest.mock('@/features/notes/components/NoteActionsSheet', () => ({ NoteActionsSheet: (props: MockSheetProps) => {
+  mockSheetProps = props;
+  return null;
+} }));
+const mockRateGood = jest.fn((_noteId: string, _onRated?: (counts: { goodCount: number; badCount: number }) => void) => Promise.resolve());
+const mockStartBad = jest.fn((_noteId: string, _onRated?: (counts: { goodCount: number; badCount: number }) => void) => Promise.resolve());
+jest.mock('@/features/notes/rating/note-rating-flow', () => ({
+  rateNoteGood: (...args: [string, never]) => mockRateGood(...args),
+  startBadNoteRating: (...args: [string, never]) => mockStartBad(...args),
+}));
 jest.mock('@/features/notes/components/NoteRemarkSheet', () => ({ NoteRemarkSheet: () => null }));
 jest.mock('@/features/notes/components/NoteGroupPickerSheet', () => ({ NoteGroupPickerSheet: () => null }));
 jest.mock('@/features/notes/components/ShareNoteSheet', () => ({ ShareNoteSheet: () => null }));
@@ -117,5 +135,53 @@ describe.each([['notes', NotesScreen], ['group notes', NoteManagementScreen]] as
     fireEvent.press(await screen.findByTestId('note-group'));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/circle/[id]', params: { id: 'circle' } });
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('好评 / 差评 from the ⋯ sheet', () => {
+  const copy = {
+    id: 'copy-1', ownerId: 'owner', title: 'Collected', contentPreview: '', status: 'ACTIVE', available: true,
+    pinned: false, groups: [], cover: null, imageCount: 0, videoCount: 0, mediaCount: 0,
+    createdAt: '2026-11-03T00:00:00Z', updatedAt: '2026-11-03T00:00:00Z', goodCount: 2, badCount: 0,
+    collectedFrom: { conversationType: 'group', conversationID: 'g', clientMsgID: 'm', sender: { id: 'boss', name: 'Boss' }, sourceNoteId: 'root-1' },
+  } as unknown as NoteSummary;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSheetProps = null;
+    jest.mocked(fetchNoteGroups).mockResolvedValue([]);
+  });
+
+  test("rates the copy's source note and shows the new counters on its card", async () => {
+    jest.mocked(fetchNotes).mockResolvedValue([copy]);
+    render(<NotesScreen />);
+    fireEvent.press(await screen.findByTestId('note-more'));
+    expect(screen.getByTestId('note-rating-counts')).toHaveTextContent('2/0');
+
+    act(() => mockSheetProps?.onRateGood?.(mockSheetProps.note!));
+    expect(mockRateGood).toHaveBeenCalledWith('copy-1', expect.any(Function));
+    act(() => mockRateGood.mock.calls[0][1]?.({ goodCount: 3, badCount: 0 }));
+
+    expect(screen.getByTestId('note-rating-counts')).toHaveTextContent('3/0');
+  });
+
+  test('差评 starts the reason flow for the same note', async () => {
+    jest.mocked(fetchNotes).mockResolvedValue([copy]);
+    render(<NotesScreen />);
+    fireEvent.press(await screen.findByTestId('note-more'));
+
+    act(() => mockSheetProps?.onRateBad?.(mockSheetProps.note!));
+
+    expect(mockStartBad).toHaveBeenCalledWith('copy-1', expect.any(Function));
+  });
+
+  test('查看差评 opens the bad-rating list in the 我的 stack', async () => {
+    jest.mocked(fetchNotes).mockResolvedValue([{ ...copy, id: 'mine', collectedFrom: null }]);
+    render(<NotesScreen />);
+    fireEvent.press(await screen.findByTestId('note-more'));
+
+    act(() => mockSheetProps?.onViewBadRatings?.(mockSheetProps.note!));
+
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/bad-ratings', params: { id: 'mine' } });
   });
 });

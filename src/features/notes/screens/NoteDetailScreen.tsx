@@ -25,7 +25,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
-import { NoteRatingBar } from '@/features/notes/components/NoteRatingBar';
 import { NoteImageViewportContext } from '@/features/notes/components/NoteBlockRenderer';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Avatar } from '@/components/ui/avatar';
@@ -38,7 +37,6 @@ import {
 import type { NoteDetail, NoteExportFormat, NoteSummary } from '@/features/notes/types';
 import {
   getChatDetailHref,
-  getNoteBadRatingsHref,
   getNoteEditHref,
   getUserProfileHref,
   getCircleDetailHref,
@@ -718,12 +716,6 @@ function NoteDetailContent() {
             />
           ) : null}
         </NoteImageViewportContext.Provider>
-        {/* 评分记在收藏链的根笔记上；没有群名片的笔记不能评，评分条自己隐藏。 */}
-        <NoteRatingBar
-          noteId={note.id}
-          refreshKey={addedNote ? 'added' : 'not-added'}
-          onOpenBadRatings={(sourceNoteId) => router.push(getNoteBadRatingsHref(scope, sourceNoteId))}
-        />
       </ScrollView>
 
       {/* 已创建/已添加的笔记提供与列表一致的聊天入口。 */}
