@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { CheckCheck, Search } from 'lucide-react-native';
+import { CheckCheck, Orbit, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -155,6 +155,11 @@ const s = StyleSheet.create({
     height: 24,
     justifyContent: "center",
     alignItems: "center",
+  },
+  circleBellBadge: {
+    position: "absolute",
+    top: -8,
+    right: -12,
   },
   quickAddIcon: {
     width: 24,
@@ -1355,6 +1360,12 @@ export default function MessagesScreen() {
     router.push("/(tabs)/messages/find");
   }, [router]);
 
+  // 与圈子动态右上角的铃铛同一入口：圈子通知 + 报名管理，在消息栈里打开，返回回到消息页。
+  const circleBellUnread = useTabBadgeStore((state) => state.circleUnread + state.signupUnread);
+  const handleOpenCircleNotifications = useCallback(() => {
+    router.push({ pathname: "/(tabs)/messages/notifications", params: { domain: "circle" } });
+  }, [router]);
+
   const handleFilterPress = useCallback(
     (index: number) => {
       if (batchDeleteInFlightRef.current) return;
@@ -1557,6 +1568,12 @@ export default function MessagesScreen() {
       </View> : <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
+          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
+            <Orbit size={23} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            <View style={s.circleBellBadge}>
+              <Badge count={circleBellUnread} />
+            </View>
+          </Pressable>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
             <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
           </Pressable>
@@ -1606,10 +1623,12 @@ export default function MessagesScreen() {
     activeTab,
     allSelected,
     batchDeleting,
+    circleBellUnread,
     colors,
     d,
     filterItems,
     handleFilterPress,
+    handleOpenCircleNotifications,
     handleOpenFind,
     handleOpenGroups,
     handleOpenMenu,

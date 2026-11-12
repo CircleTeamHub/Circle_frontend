@@ -229,17 +229,23 @@ test('messages screen only offers group-wide clear to the group owner', () => {
   assert.match(source, /canClearGroupForEveryone\(conversation\)/);
 });
 
-test('messages screen no longer exposes the notification bell entry', () => {
+test('messages screen has only the circle-notification entry, not the old all-notifications bell', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
+  // The old generic bell (every notification domain, discover unread badge) stays removed.
   assert.doesNotMatch(source, /handleOpenNotifications/);
-  assert.doesNotMatch(source, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.doesNotMatch(source, /name="notifications-outline"/);
   assert.doesNotMatch(source, /<Badge count=\{discoverUnread\} \/>/);
+  // The header's circle button opens the circle domain only, mirroring the bell on 圈子动态.
+  assert.match(
+    source,
+    /pathname: "\/\(tabs\)\/messages\/notifications", params: \{ domain: "circle" \}/,
+  );
+  assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {
