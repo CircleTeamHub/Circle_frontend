@@ -62,9 +62,13 @@ test('post signups screen uses recognition selection instead of chat when recogn
   const source = readScreen();
 
   assert.match(source, /const showRecognition = recognitionOpen/);
-  assert.match(source, /showRecognition \? null : \(/);
-  assert.match(source, /chatbubble-ellipses-outline/);
-  assert.match(source, /onPress=\{\s*rowDisabled \? undefined : \(\) => toggleRecognitionSelection\(item\)\s*\}/);
+  // Rows read like the messages list: the whole row opens the chat, except in recognition
+  // mode where a tap ticks the signer instead.
+  assert.match(
+    source,
+    /showRecognition\s*\?\s*rowDisabled \? undefined : \(\) => toggleRecognitionSelection\(item\)\s*:\s*\(\) => void openChat\(item\)/,
+  );
+  assert.match(source, /chatBySigner/);
 });
 
 test('post signups screen rounds the selected recognition row background', () => {

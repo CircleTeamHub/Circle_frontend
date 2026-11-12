@@ -16,6 +16,9 @@ import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { useChatStore } from '@/chat-core/store';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -45,7 +48,7 @@ import { useNotificationCenterStore } from '@/features/notifications/store/use-n
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useAuthStore } from '@/stores/authStore';
-import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
+import type { CirclePlazaPost, Conversation, PlazaPostCardData, PostSignupItem } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
@@ -344,6 +347,18 @@ export default function PostSignupsScreen() {
     [router, scope, t, post, setPendingChatCard, buildPostCard],
   );
 
+  // 报名行按消息列表的样子展示：和该报名者的单聊（若已有）的最近一条消息、时间与未读。
+  const chatConversations = useChatStore((state) => state.conversations);
+  const chatBySigner = useMemo(() => {
+    const signerIds = new Set(signups.map((signer) => signer.userId));
+    const bySigner = new Map<string, Conversation>();
+    for (const dto of chatConversations) {
+      const peerId = dto.type === 'DIRECT' ? dto.peer?.id : undefined;
+      if (peerId && signerIds.has(peerId)) bySigner.set(peerId, mapChatConversationToUI(dto));
+    }
+    return bySigner;
+  }, [chatConversations, signups]);
+
   const openSignerProfile = useCallback(
     (signer: PostSignupItem) => {
       router.navigate(getUserProfileHref(scope, signer.userId, signer.nickname));
@@ -491,15 +506,20 @@ export default function PostSignupsScreen() {
             item.recognized ||
             recognitionLocked ||
             recognitionSubmitting;
+          const chat = chatBySigner.get(item.userId);
           return (
             <Pressable
               style={[
                 s.row,
                 selected ? [s.selectedRow, { backgroundColor: colors.primaryLight }] : null,
               ]}
+              // 认可模式下点行是勾选；平时整行就是进聊天的入口（同消息列表）。
               onPress={
-                rowDisabled ? undefined : () => toggleRecognitionSelection(item)
+                showRecognition
+                  ? rowDisabled ? undefined : () => toggleRecognitionSelection(item)
+                  : () => void openChat(item)
               }
+              disabled={!showRecognition && openingChatFor === item.userId}
             >
               {showRecognition ? (
                 <View
@@ -532,46 +552,42 @@ export default function PostSignupsScreen() {
                 <Avatar size={48} name={item.nickname} uri={item.avatarUrl ?? undefined} />
               </Pressable>
               <View style={s.body}>
-                <View style={s.nameRow}>
-                  <MemberName
-                    name={item.nickname}
-                    userId={item.userId}
-                    numberOfLines={1}
-                    style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
-                  />
-                  {item.recognized ? (
-                    <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
-                      {t('notifications.signupMgmt.recognizedTag', {
-                        defaultValue: '已认可',
-                      })}
-                    </Text>
-                  ) : null}
-                  {displayIcons.length > 0 ? (
-                    <View style={s.badgeRow}>
-                      <UserIconRow icons={displayIcons} compact compactSize="small" />
-                    </View>
+                <View style={s.rowTop}>
+                  <View style={s.nameRow}>
+                    <MemberName
+                      name={item.nickname}
+                      userId={item.userId}
+                      numberOfLines={1}
+                      style={{ fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 }}
+                    />
+                    {item.recognized ? (
+                      <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
+                        {t('notifications.signupMgmt.recognizedTag', {
+                          defaultValue: '已认可',
+                        })}
+                      </Text>
+                    ) : null}
+                    {displayIcons.length > 0 ? (
+                      <View style={s.badgeRow}>
+                        <UserIconRow icons={displayIcons} compact compactSize="small" />
+                      </View>
+                    ) : null}
+                  </View>
+                  {chat?.time ? (
+                    <Text style={[s.rowTime, { color: colors.textSecondary }]}>{chat.time}</Text>
                   ) : null}
                 </View>
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  {t('notifications.signupMgmt.signedAt', {
-                    time: formatRelativeTime(item.signedAt, t),
-                  })}
-                </Text>
+                <View style={s.rowBottom}>
+                  {/* 还没聊过就显示报名时间，聊过就是最近一条消息。 */}
+                  <Text style={[s.rowPreview, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {chat?.message ||
+                      t('notifications.signupMgmt.signedAt', {
+                        time: formatRelativeTime(item.signedAt, t),
+                      })}
+                  </Text>
+                  {!showRecognition && chat?.unreadCount ? <Badge count={chat.unreadCount} /> : null}
+                </View>
               </View>
-              {showRecognition ? null : (
-                <Pressable
-                  onPress={() => void openChat(item)}
-                  disabled={openingChatFor === item.userId}
-                  hitSlop={8}
-                  style={s.chatButton}
-                >
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={22}
-                    color={colors.textSecondary}
-                  />
-                </Pressable>
-              )}
             </Pressable>
           );
         }}
@@ -714,14 +730,13 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chatButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   body: { flex: 1, gap: 4 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // 同消息列表的会话行：上半 名字（左）+ 时间（右），下半 预览（左）+ 未读（右）。
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: Spacing.sm },
+  rowTime: { fontSize: 12 },
+  rowPreview: { fontSize: 13, flex: 1 },
   badgeRow: { flexShrink: 0 },
   recognizedTag: { fontSize: 11, fontWeight: '700' },
   empty: { paddingTop: 80, alignItems: 'center', gap: Spacing.md },

@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   View,
   Text,
@@ -15,7 +16,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
-import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { useTheme, Spacing, Typography, Radius, withAlpha } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
@@ -141,6 +142,23 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   rowLabel: { ...Typography.bodyRegular },
+  circleSection: { paddingVertical: Spacing.md, gap: Spacing.sm + 2 },
+  circleHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  circleHeaderLabel: { ...Typography.body },
+  circleChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  circleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '100%',
+    height: 32,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  circleChipText: { ...Typography.caption, flexShrink: 1 },
+  circleStatus: { alignSelf: 'flex-start' },
+  circleHint: { ...Typography.caption },
   submitWrap: { paddingTop: Spacing.md, paddingHorizontal: Spacing.lg },
   submitBtn: {
     borderRadius: 25,
@@ -158,6 +176,18 @@ export default function CreatePostScreen() {
 
   const prependPlazaPost = useDiscoverStore((s) => s.prependPlazaPost);
   const fetchMyCircles = useCirclesStore((s) => s.fetchMyCircles);
+  const { joinedCircles, createdCircles, myCirclesLoading, myCirclesError } = useCirclesStore(
+    useShallow((s) => ({
+      joinedCircles: s.joinedCircles,
+      createdCircles: s.createdCircles,
+      myCirclesLoading: s.myCirclesLoading,
+      myCirclesError: s.myCirclesError,
+    })),
+  );
+  useEffect(() => {
+    // 先读本地快照再静默刷新，从不 reject（失败落在 myCirclesError）。
+    void fetchMyCircles();
+  }, [fetchMyCircles]);
   const selectedCircles = usePostFormStore((s) => s.selectedCircles);
   const selectedCities = usePostFormStore((s) => s.selectedCities);
   const selectedNote = usePostFormStore((s) => s.selectedNote);
@@ -206,6 +236,9 @@ export default function CreatePostScreen() {
       submitBtn: { backgroundColor: colors.primary },
       submitBtnDisabled: { backgroundColor: colors.surfaceBorder },
       submitText: { color: colors.white },
+      hint: { color: colors.textSecondary },
+      circleChipOn: { backgroundColor: withAlpha(colors.primary, 0.12), borderColor: colors.iconAccent },
+      circleChipOff: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
     }),
     [colors],
   );
@@ -232,9 +265,25 @@ export default function CreatePostScreen() {
     setMedia((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleSelectCircle = useCallback(() => {
-    router.push('/(tabs)/discover/select-circle');
-  }, [router]);
+  // 圈子直接以标签列在表单里（我创建的 + 我加入的），点一下选中 / 取消，可多选。
+  const availableCircles = useMemo(
+    () => selectablePostFormCircles(createdCircles, joinedCircles),
+    [createdCircles, joinedCircles],
+  );
+  const selectedCircleIds = useMemo(
+    () => new Set(selectedCircles.map((circle) => circle.id)),
+    [selectedCircles],
+  );
+  const handleToggleCircle = useCallback(
+    (circle: { id: string; name: string }) => {
+      setSelectedCircles(
+        selectedCircleIds.has(circle.id)
+          ? selectedCircles.filter((item) => item.id !== circle.id)
+          : [...selectedCircles, { id: circle.id, name: circle.name }],
+      );
+    },
+    [selectedCircleIds, selectedCircles, setSelectedCircles],
+  );
 
   const handleSelectCity = useCallback(() => {
     router.push({
@@ -560,17 +609,56 @@ export default function CreatePostScreen() {
         </View>
         <Divider />
 
-        {/* Circle picker（多选） */}
-        <MenuRow
-          icon="globe-outline"
-          label={t('plaza.create.selectCircle', { defaultValue: '选择圈子' })}
-          rightText={
-            selectedCircles.length > 0
-              ? selectedCircles.map((c) => c.name).join('、')
-              : t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
-          }
-          onPress={handleSelectCircle}
-        />
+        {/* 圈子（多选）：不再跳选择页，参加的圈子直接以标签列出，点标签即选中 / 取消。 */}
+        <View style={s.circleSection}>
+          <View style={s.circleHeader}>
+            <Ionicons name="globe-outline" size={20} color={colors.text} />
+            <Text style={[s.circleHeaderLabel, d.rowLabel]}>
+              {t('plaza.create.selectCircle', { defaultValue: '选择圈子' })}
+            </Text>
+          </View>
+          {availableCircles.length > 0 ? (
+            <View style={s.circleChipRow}>
+              {availableCircles.map((circle) => {
+                const selected = selectedCircleIds.has(circle.id);
+                return (
+                  <Pressable
+                    key={circle.id}
+                    style={[s.circleChip, selected ? d.circleChipOn : d.circleChipOff]}
+                    onPress={() => handleToggleCircle(circle)}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={circle.name}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    {selected ? (
+                      <Ionicons name="checkmark" size={14} color={colors.iconAccent} />
+                    ) : null}
+                    <Text
+                      style={[s.circleChipText, { color: selected ? colors.iconAccent : colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {circle.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : myCirclesLoading ? (
+            <ActivityIndicator color={colors.iconAccent} style={s.circleStatus} />
+          ) : myCirclesError ? (
+            <Pressable
+              style={s.circleStatus}
+              onPress={() => void fetchMyCircles({ force: true })}
+              accessibilityRole="button"
+            >
+              <Text style={[s.circleHint, d.hint]}>
+                {myCirclesError} · {t('common.retry')}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[s.circleHint, s.circleStatus, d.hint]}>{t('plaza.noCirclesJoined')}</Text>
+          )}
+        </View>
         <Divider />
 
         {/* City picker（多选） */}

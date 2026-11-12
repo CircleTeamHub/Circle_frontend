@@ -34,9 +34,39 @@ jest.mock('@/components/ui/option-picker-sheet', () => ({ OptionPickerSheet: () 
 jest.mock('@/components/ui/keyboard-avoiding-container', () => ({
   KeyboardAvoidingContainer: ({ children }: { children: React.ReactNode }) => children,
 }));
+let mockJoinedCircles = [circle];
 jest.mock('@/features/discover/store/use-circles-store', () => ({
-  useCirclesStore: () => mockFetchMyCircles,
+  useCirclesStore: (selector: (state: unknown) => unknown) => selector({
+    fetchMyCircles: mockFetchMyCircles,
+    joinedCircles: mockJoinedCircles,
+    createdCircles: [],
+    myCirclesLoading: false,
+    myCirclesError: null,
+  }),
 }));
+
+beforeEach(() => {
+  mockJoinedCircles = [circle];
+  mockFetchMyCircles.mockResolvedValue({ ok: true, created: [], joined: mockJoinedCircles });
+});
+
+test('joined circles show inline as tags and a tap selects or clears one, without leaving the form', () => {
+  const other = { id: 'c2', name: 'Other' };
+  mockJoinedCircles = [circle, other];
+  usePostFormStore.setState({ selectedCircles: [], selectedCities: [], selectedNote: null });
+  render(<CreatePostScreen />);
+
+  const tag = (name: string) => screen.getByRole('checkbox', { name });
+  expect(tag('Circle')).not.toBeChecked();
+  fireEvent.press(tag('Other'));
+  expect(usePostFormStore.getState().selectedCircles).toEqual([other]);
+  expect(tag('Other')).toBeChecked();
+  fireEvent.press(tag('Circle'));
+  expect(usePostFormStore.getState().selectedCircles).toEqual([other, circle]);
+  fireEvent.press(tag('Other'));
+  expect(usePostFormStore.getState().selectedCircles).toEqual([circle]);
+  expect(mockBack).not.toHaveBeenCalled();
+});
 jest.mock('@/features/discover/store/use-discover-store', () => ({
   useDiscoverStore: () => mockPrepend,
 }));
