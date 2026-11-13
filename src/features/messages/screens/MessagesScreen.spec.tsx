@@ -1,8 +1,8 @@
 import React from 'react';
-import { Blend, CheckCheck, Search } from 'lucide-react-native';
 import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
+import { CircleNotificationsIcon, HeaderSearchIcon, QuickAddIcon, SelectChatsIcon } from '@/features/messages/components/MessagesHeaderIcons';
 import { markConversationRead } from '@/chat-core/socket-manager';
 import { clearChatConversationHistory, updateChatConversationPreferences } from '@/chat-core/api';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -155,6 +155,7 @@ test('returning to messages reads remarks saved while the list was inactive', ()
 test('quick add stays expanded after release until its menu is dismissed', () => {
   render(<MessagesScreen />);
   const add = () => screen.getByRole('button', { name: 'common.add' });
+  expect(screen.UNSAFE_getByType(QuickAddIcon).props.color).toBe(mockColors.text);
   fireEvent.press(add());
   expect(add().props.accessibilityState.expanded).toBe(true);
   expect(screen.getByText('messages.addFriend')).toBeTruthy();
@@ -210,17 +211,17 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
-  // Same size and stroke as the neighbouring double-check icon.
-  expect(screen.UNSAFE_getByType(Blend).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
+  expect(screen.UNSAFE_getByType(CircleNotificationsIcon).props.color).toBe(mockColors.text);
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });
 });
 
-test('header double check enters selection without reading chats or navigating', () => {
+test('header select button enters selection without reading chats or navigating', () => {
   render(<MessagesScreen />);
-  expect(screen.UNSAFE_getByType(CheckCheck).props.strokeWidth).toBe(4);
-  expect(screen.UNSAFE_getByType(Search).props.strokeWidth).toBe(4);
+  // The check is knocked out of the solid dot with the header background, so it must follow the theme.
+  expect(screen.UNSAFE_getByType(SelectChatsIcon).props).toMatchObject({ color: mockColors.text, background: mockColors.background });
+  expect(screen.UNSAFE_getByType(HeaderSearchIcon).props.color).toBe(mockColors.text);
   startSelection();
   selectRow('first');
   expect(screen.getByRole('checkbox', { name: 'first' }).props.accessibilityState.checked).toBe(true);

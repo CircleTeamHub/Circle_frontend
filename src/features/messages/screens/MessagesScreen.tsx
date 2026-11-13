@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { Blend, CheckCheck, Search } from 'lucide-react-native';
+import { CircleNotificationsIcon, HeaderSearchIcon, QuickAddIcon, SelectChatsIcon } from '@/features/messages/components/MessagesHeaderIcons';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -165,7 +165,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickAddStroke: { position: 'absolute', width: 22, height: 4, borderRadius: 2 },
   selectionHeaderSection: { gap: Spacing.md, paddingTop: Spacing.sm },
   selectionTopRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   selectionHeaderAction: { width: 80, minHeight: 44, justifyContent: 'center' },
@@ -1568,18 +1567,18 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 两个相交的圆代表「圈子」；和右边的已读 / 搜索 / + 同一套粗描边线性图标，形状简单，4px 描边下也不糊。 */}
-            <Blend size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            {/* 圈里一只纸飞机（圈子 tab 的标），代表「圈子」；四个按钮同一套双色图标，见 MessagesHeaderIcons。 */}
+            <CircleNotificationsIcon color={colors.text} />
             <View style={s.circleBellBadge}>
               <Badge count={circleBellUnread} />
             </View>
           </Pressable>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
-            <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            <SelectChatsIcon color={colors.text} background={colors.background} />
           </Pressable>
           {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('common.search')} hitSlop={10} onPress={handleOpenFind}>
-            <Search size={24} strokeWidth={4} color={colors.text} />
+            <HeaderSearchIcon color={colors.text} />
           </Pressable>
           {/* 「+」按钮：展开快捷操作菜单 */}
           <Pressable
@@ -1591,8 +1590,7 @@ export default function MessagesScreen() {
             onPress={handleOpenMenu}
           >
             <Animated.View pointerEvents="none" style={[s.quickAddIcon, { transform: [{ rotate: quickAddProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }]}>
-              <View style={[s.quickAddStroke, { backgroundColor: colors.text }]} />
-              <View style={[s.quickAddStroke, { backgroundColor: colors.text, transform: [{ rotate: '90deg' }] }]} />
+              <QuickAddIcon color={colors.text} />
             </Animated.View>
           </Pressable>
         </View>
