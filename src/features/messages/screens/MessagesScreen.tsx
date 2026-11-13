@@ -719,7 +719,7 @@ export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
 
   // useMemo 让 BASE_FILTERS / MENU_ACTIONS 在 `t` 不变时保持同一引用 ——
@@ -1573,9 +1573,10 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），品牌紫、空心。
-                这排里唯一带颜色的入口，一眼对上「圈子」。 */}
-            <PlaneLogoIcon size={24} color={colors.primary} />
+            {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），空心。
+                这排里唯一带颜色的入口，一眼对上「圈子」。浅色用深一档的紫；暗色的深紫压在纯黑上
+                只有 ~3.3:1、发闷，仍用 primary。 */}
+            <PlaneLogoIcon size={24} color={resolvedMode === 'dark' ? colors.primary : colors.primaryDeep} />
             {/* 有未读只点一个红点（和圈子 tab 的「有新帖」同款）：数字角标会把机头整个盖住，飞机就认不出了。
                 具体条数就在正下方的圈子 tab 上，同一个数（圈子通知 + 报名）。外圈是页面底色，像从机头上挖出来的。 */}
             {circleBellUnread > 0 ? (
@@ -1650,6 +1651,7 @@ export default function MessagesScreen() {
     selecting,
     quickAddExpanded,
     quickAddProgress,
+    resolvedMode,
     visibleConversations.length,
     t,
   ]);

@@ -23,7 +23,8 @@ const mockNavigation = { getParent: () => mockTabNavigation };
 const mockSetUnread = jest.fn();
 const mockRemarkReloadGate = { shouldSkip: () => true, markLoaded: jest.fn() };
 const mockTranslate = (key: string) => key;
-const mockColors = { text: '#111', textSecondary: '#666', background: '#fff', dangerFill: '#E5484D', error: '#FF6B6B', primary: '#6366F1' };
+const mockColors = { text: '#111', textSecondary: '#666', background: '#fff', dangerFill: '#E5484D', error: '#FF6B6B', primary: '#6366F1', primaryDeep: '#4F46E5' };
+let mockResolvedMode: 'light' | 'dark' = 'light';
 const mockChatState = () => ({ conversations: mockConversations, currentUserId: mockCurrentUserId, readWatermarks: {}, connected: true, conversationsSnapshotLoaded: mockSnapshotLoaded });
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockNavigate, navigate: mockNavigate }), useNavigation: () => mockNavigation, useFocusEffect: jest.fn() }));
@@ -33,7 +34,7 @@ jest.mock('@expo/vector-icons', () => {
   return { Ionicons: ({ name }: { name: string }) => <Text>{name}</Text> };
 });
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
-jest.mock('@/theme', () => ({ Spacing: {}, Typography: {}, Radius: {}, withAlpha: jest.requireActual('@/theme/tokens').withAlpha, useTheme: () => ({ colors: mockColors }) }));
+jest.mock('@/theme', () => ({ Spacing: {}, Typography: {}, Radius: {}, withAlpha: jest.requireActual('@/theme/tokens').withAlpha, useTheme: () => ({ colors: mockColors, resolvedMode: mockResolvedMode }) }));
 jest.mock('@/chat-core/api', () => ({ canSkipConversationFocusReload: jest.fn(() => true), loadChatConversations: jest.fn(), clearChatConversationHistory: jest.fn(), updateChatConversationPreferences: jest.fn() }));
 jest.mock('@/chat-core/socket-manager', () => ({ markConversationRead: jest.fn() }));
 jest.mock('@/chat-core/store', () => ({
@@ -212,12 +213,19 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
-  // 就是底部圈子 tab 那架 App 自己的纸飞机标,品牌紫、空心(和 tab 未选中同一状态)。
-  expect(screen.UNSAFE_getByType(PlaneLogoIcon).props).toMatchObject({ size: 24, color: mockColors.primary });
+  // 就是底部圈子 tab 那架 App 自己的纸飞机标,空心(和 tab 未选中同一状态)。浅色用深一档的紫。
+  expect(screen.UNSAFE_getByType(PlaneLogoIcon).props).toMatchObject({ size: 24, color: mockColors.primaryDeep });
   expect(screen.UNSAFE_getByType(PlaneLogoIcon).props.filled).toBeFalsy();
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });
+});
+
+test('dark mode keeps the brighter primary purple for the circle plane: the deep purple is too dim on black', () => {
+  mockResolvedMode = 'dark';
+  render(<MessagesScreen />);
+  expect(screen.UNSAFE_getByType(PlaneLogoIcon).props.color).toBe(mockColors.primary);
+  mockResolvedMode = 'light';
 });
 
 test('circle unread shows a ringed red dot on the plane instead of a count, and nothing when all is read', () => {

@@ -235,8 +235,9 @@ test('messages screen has only the circle-notification entry, not the old all-no
   // 和已读 / 搜索同一套粗描边 lucide 图标。试过又被否掉的:Orbit(小卫星点在 4px 描边下糊成一团)、
   // 铃铛(用户不要)、两个相交的圆 Blend(4px 下像一截链条,用户嫌丑)。
   // lucide 的 Send 纸飞机也试过(4px 糊成实心、2.5px 后用户仍要换):现在直接用底部圈子 tab 那架
-  // App 自己的纸飞机标 PlaneLogoIcon,品牌紫(colors.primary),是这排里唯一带颜色的入口。
-  assert.match(source, /<PlaneLogoIcon size=\{24\} color=\{colors\.primary\} \/>/);
+  // App 自己的纸飞机标 PlaneLogoIcon,是这排里唯一带颜色的入口。用户要紫色再深一些:浅色用
+  // primaryDeep;暗色 primaryDeep 压在纯黑上只有 ~3.3:1、发闷,仍用 primary。
+  assert.match(source, /<PlaneLogoIcon size=\{24\} color=\{resolvedMode === 'dark' \? colors\.primary : colors\.primaryDeep\} \/>/);
   assert.doesNotMatch(source, /<Orbit |<Bell |<Blend |<Send /);
 });
 
