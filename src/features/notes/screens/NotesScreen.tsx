@@ -88,10 +88,12 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 
 type TabId = 'all' | 'ungrouped' | string;
 
 const keyExtractor = (item: NoteSummary) => item.id;
+const NO_NOTES: NoteSummary[] = [];
 
 // 这里保留 FlatList 的分隔组件入口，但它只负责留白，不再绘制横线。
 const ItemSeparator = memo(function ItemSeparator() {
@@ -300,6 +302,10 @@ function NotesContent() {
     }
     return [...result].sort((a, b) => Number(b.pinned) - Number(a.pinned));
   }, [notes, activeTab, search]);
+  // 首帧只出页头、分组和搜索框,卡片下一帧再画(见 useDeferredContent):点「笔记」立刻进页。
+  // 列表和定位滚动用同一份,下标才对得上。
+  const listReady = useDeferredContent();
+  const listNotes = listReady ? filteredNotes : NO_NOTES;
 
   /**
    * 「查看」跳进来的定位：滚到那条笔记并短暂高亮。
@@ -326,7 +332,7 @@ function NotesContent() {
 
   useEffect(() => {
     if (!highlightedNoteId) return;
-    const index = filteredNotes.findIndex(
+    const index = listNotes.findIndex(
       (note) => note.id === highlightedNoteId,
     );
     if (index < 0) return;
@@ -343,7 +349,7 @@ function NotesContent() {
       clearTimeout(scrollTimer);
       clearTimeout(clearTimer);
     };
-  }, [filteredNotes, highlightedNoteId]);
+  }, [listNotes, highlightedNoteId]);
 
   const handleScrollToIndexFailed = useCallback(
     (info: { index: number; averageItemLength: number }) => {
@@ -1016,7 +1022,7 @@ function NotesContent() {
 
       <FlatList
         ref={listRef}
-        data={filteredNotes}
+        data={listNotes}
         keyExtractor={keyExtractor}
         renderItem={renderNote}
         ItemSeparatorComponent={ItemSeparator}
@@ -1037,7 +1043,7 @@ function NotesContent() {
         refreshing={refreshing}
         onRefresh={handleRefreshNotes}
         ListEmptyComponent={
-          loading ? null : loadError ? (
+          loading || !listReady ? null : loadError ? (
             <View style={s.emptyWrap}>
               <Text style={[s.emptyText, d.statsText]}>
                 {t('notes.loadFailed', {

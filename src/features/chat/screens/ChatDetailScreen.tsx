@@ -50,6 +50,8 @@ import { useMessageRenderer } from '@/features/chat/chat-detail/hooks/use-messag
 import { useCollectMessage } from '@/features/chat/chat-detail/hooks/use-collect-message';
 import { useMessageActions } from '@/features/chat/chat-detail/hooks/use-message-actions';
 import { useChatTimeline } from '@/features/chat/chat-detail/hooks/use-chat-timeline';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
+import { type ChatMessageDto } from '@/chat-core/protocol';
 import { useNoteCardStatusSync } from '@/features/chat/chat-detail/hooks/use-note-card-status-sync';
 import { useChatConversation } from '@/features/chat/chat-detail/hooks/use-chat-conversation';
 import { useKeyboardVisible } from '@/features/chat/chat-detail/hooks/use-keyboard-visible';
@@ -68,6 +70,8 @@ import { AttachmentPanel } from '@/features/chat/chat-detail/components/Attachme
 
 export type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 export type { ChatSheetActions } from '@/features/chat/chat-detail/types';
+
+const NO_MESSAGES: ChatMessageDto[] = [];
 
 interface ChatDetailScreenProps {
   /**
@@ -292,6 +296,10 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     conversationType,
   });
 
+  // 首帧只出页头和输入栏,消息下一帧再交给时间线(见 useDeferredContent):消息多/重的会话
+  // 也是点下去立刻进页。整份消息一起延后,列表、未读起点、搜索定位拿到的是同一份数据 ——
+  // 只把 FlatList 的 data 置空的话,搜索定位会对着空列表 scrollToIndex 同步抛错。
+  const messagesReady = useDeferredContent();
   const {
     flatListRef,
     scrollRetryCountRef,
@@ -319,7 +327,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     sourceID,
     conversationID,
     setRemoteBurnPolicy,
-    conversationMessages,
+    conversationMessages: messagesReady ? conversationMessages : NO_MESSAGES,
     peerReadHeight,
     peerDeliveredHeight,
     entryUnreadCount,

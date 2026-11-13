@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import NotesScreen from './NotesScreen';
 import NoteManagementScreen from './NoteManagementScreen';
-import { fetchNoteDraft, fetchNotes, fetchNoteGroups } from '@/services/api/notes';
+import { fetchNoteDraft, fetchNotes, fetchNoteGroups, getCachedNotes } from '@/services/api/notes';
 import type { NoteSummary } from '@/features/notes/types';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), setParams: jest.fn() };
@@ -29,8 +29,8 @@ jest.mock('@/features/notes/store/use-notes-tab-order-store', () => ({ useNotesT
 jest.mock('@/storage', () => ({ storage: { getString: () => undefined } }));
 jest.mock('@/features/notes/utils/note-recording-storage', () => ({}));
 jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteGroups: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteDraft: jest.fn(),
-  // No persisted page snapshot: every screen starts from the network load under test.
-  getCachedNotes: () => null, getCachedNoteGroups: () => null }));
+  // No persisted page snapshot by default: every screen starts from the network load under test.
+  getCachedNotes: jest.fn(() => null), getCachedNoteGroups: () => null }));
 jest.mock('@/services/api/client', () => ({ ApiError: class ApiError extends Error { status = 0; } }));
 jest.mock('@/features/notes/components/NoteCard', () => {
   const { Pressable, Text, View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -183,5 +183,30 @@ describe('好评 / 差评 from the ⋯ sheet', () => {
     act(() => mockSheetProps?.onViewBadRatings?.(mockSheetProps.note!));
 
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/bad-ratings', params: { id: 'mine' } });
+  });
+});
+
+describe('进页不卡:首帧只出页面壳', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(fetchNoteGroups).mockResolvedValue([]);
+  });
+
+  test('有缓存笔记时,卡片下一帧才渲染,中间也不闪「暂无笔记」', async () => {
+    const cached = {
+      id: 'cached', ownerId: 'owner', title: 'Cached', contentPreview: '', status: 'ACTIVE', available: true,
+      pinned: false, groups: [], cover: null, imageCount: 0, videoCount: 0, mediaCount: 0,
+      createdAt: '2026-11-03T00:00:00Z', updatedAt: '2026-11-03T00:00:00Z',
+    } as unknown as NoteSummary;
+    jest.mocked(getCachedNotes).mockReturnValueOnce({ value: [cached], at: Date.now() });
+    // 网络一直不回:页面上只有缓存那一份。
+    jest.mocked(fetchNotes).mockReturnValue(new Promise(() => undefined));
+
+    render(<NotesScreen />);
+
+    expect(screen.getByText('notes.title')).toBeTruthy();
+    expect(screen.queryByTestId('note-more')).toBeNull();
+    expect(screen.queryByText('notes.empty.noNotes')).toBeNull();
+    expect(await screen.findByTestId('note-more')).toBeTruthy();
   });
 });
