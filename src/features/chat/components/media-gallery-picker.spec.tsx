@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, FlatList, Linking, View as MockView } from 'react-native';
+import { Alert, FlatList, Linking, Platform, View as MockView } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { MediaGalleryPicker } from './media-gallery-picker';
@@ -174,6 +174,32 @@ test('when nothing can be read the picker stays open and says so', async () => {
   });
   expect(Alert.alert).toHaveBeenCalledWith('chat.mediaPicker.resolveFailed');
   expect(onConfirm).not.toHaveBeenCalled();
+});
+
+test('android hands over the gallery file directly, without the asset-info call that needs photo location access', async () => {
+  // On Android 10+ getAssetInfoAsync also reads each photo's EXIF location from the original,
+  // which throws because the app deliberately does not hold ACCESS_MEDIA_LOCATION (app.json).
+  const original = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  const photo = { ...asset('a'), filename: 'a.jpg', uri: 'file:///storage/emulated/0/DCIM/Camera/a.jpg' } as MediaLibrary.Asset;
+  library.getAssetsAsync.mockResolvedValue({ assets: [photo], endCursor: 'a', hasNextPage: false, totalCount: 1 });
+  library.getAssetInfoAsync.mockRejectedValue(
+    new Error('Cannot access ExifInterface because of missing ACCESS_MEDIA_LOCATION permission'),
+  );
+  try {
+    const { onConfirm } = renderPicker({ mode: 'edit' });
+    fireEvent.press((await cells())[0]);
+    await act(async () => {
+      fireEvent.press(screen.getByText('chat.mediaPicker.confirmCount'));
+    });
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(library.getAssetInfoAsync).not.toHaveBeenCalled();
+    expect(onConfirm.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ assetId: 'a', uri: photo.uri, type: 'image', fileName: 'a.jpg', fileSize: 2048 }),
+    ]);
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
+  }
 });
 
 test('closing while a download is still running cancels the send', async () => {
