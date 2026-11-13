@@ -24,8 +24,9 @@ import { Radius, Spacing, Typography } from '@/theme';
 import { cachedVideoSource } from '@/utils/video-source';
 
 const SKIP_SECONDS = 15;
-/** 倍速按钮依次切换的档位；回到 1 倍是一圈。 */
-const PLAYBACK_RATES = [1, 1.25, 1.5, 2, 0.5] as const;
+/** 倍速菜单里的档位，从慢到快自上而下。 */
+const PLAYBACK_RATES = [0.5, 1, 1.25, 1.5, 2] as const;
+const CONTROL_BAR_HEIGHT = 44;
 const TIME_UPDATE_INTERVAL_SECONDS = 0.25;
 const THUMB_SIZE = 14;
 const SCRUBBER_HEIGHT = 32;
@@ -116,6 +117,7 @@ function VideoControlBar({ player, playing, canResume, onTogglePlay, onScrubbing
   const [time, setTime] = useState({ current: player.currentTime ?? 0, duration: player.duration ?? 0 });
   const [scrubRatio, setScrubRatio] = useState<number | null>(null);
   const [rate, setRate] = useState(1);
+  const [rateMenuOpen, setRateMenuOpen] = useState(false);
 
   useEffect(() => {
     // 时间只在控件条里订阅：每 0.25 秒一次的刷新不该带着整页重渲染。
@@ -140,59 +142,93 @@ function VideoControlBar({ player, playing, canResume, onTogglePlay, onScrubbing
     setTime((previous) => ({ ...previous, current: target }));
   };
   const skip = (direction: 1 | -1) => seekTo(time.current + direction * SKIP_SECONDS);
-  const cycleRate = () => {
-    const next = PLAYBACK_RATES[(PLAYBACK_RATES.indexOf(rate as (typeof PLAYBACK_RATES)[number]) + 1) % PLAYBACK_RATES.length];
+  const pickRate = (next: number) => {
     player.playbackRate = next;
     setRate(next);
+    setRateMenuOpen(false);
   };
+  const barBottom = insets.bottom + Spacing.md;
 
   return (
-    <View testID="viewer-video-controls" style={[s.controlBar, { bottom: insets.bottom + Spacing.md }]}>
-      <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(-1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipBack')}>
-        <MaterialCommunityIcons name="rewind-15" size={22} color="#FFFFFF" />
-      </Pressable>
-      <Pressable
-        style={s.controlButton}
-        hitSlop={6}
-        onPress={onTogglePlay}
-        disabled={!playing && !canResume}
-        accessibilityRole="button"
-        accessibilityLabel={t(playing ? 'chat.detail.pauseVideo' : 'chat.detail.playVideo')}
-      >
-        <Ionicons name={playing ? 'pause' : 'play'} size={22} color="#FFFFFF" />
-      </Pressable>
-      <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipForward')}>
-        <MaterialCommunityIcons name="fast-forward-15" size={22} color="#FFFFFF" />
-      </Pressable>
-      <Text style={s.clock}>{formatClock(shownTime)}</Text>
-      <Scrubber
-        progress={duration > 0 ? shownTime / duration : 0}
-        label={t('chat.detail.videoSeek')}
-        onScrubStart={() => onScrubbingChange(true)}
-        onScrub={setScrubRatio}
-        onScrubEnd={(ratio) => {
-          if (ratio !== null && duration > 0) seekTo(ratio * duration);
-          setScrubRatio(null);
-          onScrubbingChange(false);
-        }}
-        onStep={skip}
-      />
-      {/* 已播取整秒、剩余用总时长减它：两边加起来恒等于总时长（开头 00:00 / -00:14）。 */}
-      <Text style={s.clock}>{`-${formatClock(Math.round(duration) - Math.floor(shownTime))}`}</Text>
-      <Pressable
-        style={s.controlButton}
-        hitSlop={6}
-        onPress={cycleRate}
-        accessibilityRole="button"
-        accessibilityLabel={t('chat.detail.videoPlaybackSpeed', { rate })}
-      >
-        {rate === 1 ? (
-          <Ionicons name="speedometer-outline" size={20} color="#FFFFFF" />
-        ) : (
-          <Text style={s.rateText}>{`${rate}x`}</Text>
-        )}
-      </Pressable>
-    </View>
+    <>
+      {rateMenuOpen ? (
+        // 点菜单外面只收起菜单，不能穿透到下面的画面层去切换播放/暂停。
+        <Pressable
+          testID="viewer-video-speed-backdrop"
+          style={StyleSheet.absoluteFill}
+          onPress={() => setRateMenuOpen(false)}
+          accessible={false}
+        />
+      ) : null}
+      <View testID="viewer-video-controls" style={[s.controlBar, { bottom: barBottom }]}>
+        <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(-1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipBack')}>
+          <MaterialCommunityIcons name="rewind-15" size={22} color="#FFFFFF" />
+        </Pressable>
+        <Pressable
+          style={s.controlButton}
+          hitSlop={6}
+          onPress={onTogglePlay}
+          disabled={!playing && !canResume}
+          accessibilityRole="button"
+          accessibilityLabel={t(playing ? 'chat.detail.pauseVideo' : 'chat.detail.playVideo')}
+        >
+          <Ionicons name={playing ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+        </Pressable>
+        <Pressable style={s.controlButton} hitSlop={6} onPress={() => skip(1)} accessibilityRole="button" accessibilityLabel={t('chat.detail.videoSkipForward')}>
+          <MaterialCommunityIcons name="fast-forward-15" size={22} color="#FFFFFF" />
+        </Pressable>
+        <Text style={s.clock}>{formatClock(shownTime)}</Text>
+        <Scrubber
+          progress={duration > 0 ? shownTime / duration : 0}
+          label={t('chat.detail.videoSeek')}
+          onScrubStart={() => onScrubbingChange(true)}
+          onScrub={setScrubRatio}
+          onScrubEnd={(ratio) => {
+            if (ratio !== null && duration > 0) seekTo(ratio * duration);
+            setScrubRatio(null);
+            onScrubbingChange(false);
+          }}
+          onStep={skip}
+        />
+        {/* 已播取整秒、剩余用总时长减它：两边加起来恒等于总时长（开头 00:00 / -00:14）。 */}
+        <Text style={s.clock}>{`-${formatClock(Math.round(duration) - Math.floor(shownTime))}`}</Text>
+        <Pressable
+          testID="viewer-video-speed"
+          style={s.controlButton}
+          hitSlop={6}
+          onPress={() => setRateMenuOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.videoPlaybackSpeed', { rate })}
+          accessibilityState={{ expanded: rateMenuOpen }}
+        >
+          {rate === 1 ? (
+            <Ionicons name="speedometer-outline" size={20} color="#FFFFFF" />
+          ) : (
+            <Text style={s.rateText}>{`${rate}x`}</Text>
+          )}
+        </Pressable>
+      </View>
+      {rateMenuOpen ? (
+        <View accessibilityRole="menu" style={[s.rateMenu, { bottom: barBottom + CONTROL_BAR_HEIGHT + Spacing.sm }]}>
+          {PLAYBACK_RATES.map((option) => {
+            const selected = option === rate;
+            return (
+              <Pressable
+                key={option}
+                testID={`viewer-video-rate-${option}`}
+                style={[s.rateOption, selected && s.rateOptionSelected]}
+                onPress={() => pickRate(option)}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t('chat.detail.videoPlaybackSpeed', { rate: option })}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[s.rateOptionText, selected && s.rateOptionTextSelected]}>{`${option}x`}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+    </>
   );
 }
 
@@ -474,7 +510,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: Spacing.md,
     right: Spacing.md,
-    height: 44,
+    height: CONTROL_BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
@@ -489,6 +525,19 @@ const s = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   rateText: { ...Typography.tinyRegular, color: '#FFFFFF', fontWeight: '600' },
+  // 倍速菜单贴着控件条右端、浮在它正上方，和倍速按钮对齐。
+  rateMenu: {
+    position: 'absolute',
+    right: Spacing.md,
+    minWidth: 76,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(28,28,30,0.92)',
+  },
+  rateOption: { height: 40, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  rateOptionSelected: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  rateOptionText: { ...Typography.caption, color: 'rgba(255,255,255,0.75)' },
+  rateOptionTextSelected: { color: '#FFFFFF', fontWeight: '700' },
   scrubber: { flex: 1, height: SCRUBBER_HEIGHT, justifyContent: 'center', marginHorizontal: Spacing.xs },
   track: { height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.3)' },
   trackFill: { height: 4, backgroundColor: 'rgba(255,255,255,0.85)' },

@@ -328,14 +328,43 @@ describe('bottom control bar', () => {
     expect(screen.getByText('00:05')).toBeTruthy();
   });
 
-  test('the speed button cycles through playback rates back to normal', async () => {
+  const speedButton = () => screen.getByTestId('viewer-video-speed');
+  const rateOptions = () => screen.queryAllByRole('menuitem');
+
+  test('the speed button opens a menu of rates; picking one sets it and closes the menu', async () => {
     await renderPlayingPage();
-    const speed = () => screen.getByLabelText('chat.detail.videoPlaybackSpeed');
-    const seen = [1, 1.25, 1.5, 2, 0.5].map(() => {
-      fireEvent.press(speed());
-      return mockPlayer.playbackRate;
-    });
-    expect(seen).toEqual([1.25, 1.5, 2, 0.5, 1]);
+    expect(rateOptions()).toHaveLength(0);
+    fireEvent.press(speedButton());
+    expect(speedButton().props.accessibilityState).toMatchObject({ expanded: true });
+    expect(rateOptions().map((option) => option.props.testID)).toEqual([
+      'viewer-video-rate-0.5',
+      'viewer-video-rate-1',
+      'viewer-video-rate-1.25',
+      'viewer-video-rate-1.5',
+      'viewer-video-rate-2',
+    ]);
+    expect(screen.getByTestId('viewer-video-rate-1').props.accessibilityState).toMatchObject({ selected: true });
+    // Opening the menu alone changes nothing.
+    expect(mockPlayer.playbackRate).toBe(1);
+    fireEvent.press(screen.getByTestId('viewer-video-rate-1.5'));
+    expect(mockPlayer.playbackRate).toBe(1.5);
+    expect(rateOptions()).toHaveLength(0);
+    expect(screen.getByText('1.5x')).toBeTruthy();
+    fireEvent.press(speedButton());
+    expect(screen.getByTestId('viewer-video-rate-1.5').props.accessibilityState).toMatchObject({ selected: true });
+  });
+
+  test('tapping outside the speed menu, or the button again, closes it without pausing or changing speed', async () => {
+    await renderPlayingPage();
+    fireEvent.press(speedButton());
+    fireEvent.press(screen.getByTestId('viewer-video-speed-backdrop'));
+    expect(rateOptions()).toHaveLength(0);
+    fireEvent.press(speedButton());
+    fireEvent.press(speedButton());
+    expect(rateOptions()).toHaveLength(0);
+    expect(speedButton().props.accessibilityState).toMatchObject({ expanded: false });
+    expect(mockPlayer.pause).not.toHaveBeenCalled();
+    expect(mockPlayer.playbackRate).toBe(1);
   });
 
   test('a failed load hides the bar and leaves only retry', async () => {
