@@ -193,7 +193,7 @@ test('an uncached standalone group loads its members without looking up or creat
   expect(screen.queryByText('Cached member')).toBeNull();
 
   await act(async () => { metadata.resolve(); directory.resolve(members); });
-  expect(screen.getByText('Live member')).toBeTruthy();
+  expect(await screen.findByText('Live member')).toBeTruthy();
   expect(screen.queryByText('Cached member')).toBeNull();
   expect(readGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation')?.members)
     .toEqual(members);
@@ -315,30 +315,37 @@ test.each(['unmount', 'session change'])('a cold metadata response is discarded 
   expect(reportHandledFailure).not.toHaveBeenCalled();
 });
 
-test('known standalone membership paints warmed members before revalidation', () => {
+// 进页不卡:头像墙(最多 20 格)首帧不画,好让推入动画立刻开始;下一帧从缓存画出,
+// 不等重新拉取(拉取一直挂着,看得到的只能是缓存)。
+test('known standalone membership paints warmed members on the next frame, before revalidation', async () => {
   useChatStore.setState({ conversations: [standaloneConversation] });
   writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
   render(<ChatInfoScreen />);
-  expect(screen.getByText('Live member')).toBeTruthy();
+  expect(screen.queryByText('Live member')).toBeNull();
+  expect(await screen.findByText('Live member')).toBeTruthy();
   expect(fetchChatMembers).toHaveBeenCalledWith('group-conversation');
 });
 
-test('warmed members remain hidden when the current roster policy forbids them', () => {
+test('warmed members remain hidden when the current roster policy forbids them', async () => {
   useChatStore.setState({ conversations: [{ ...standaloneConversation,
     policies: { ...standaloneConversation.policies!, membersCanViewRoster: false },
   }] });
   writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
   render(<ChatInfoScreen />);
+  // 等过头像墙延后的那一帧再断言,否则「没画」可能只是还没到那一帧。
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   expect(screen.queryByText('Live member')).toBeNull();
 });
 
-test('member avatars fit inside their cells on a narrow folding-phone cover screen', () => {
+test('member avatars fit inside their cells on a narrow folding-phone cover screen', async () => {
   const native = jest.requireActual<typeof import('react-native')>('react-native');
   jest.spyOn(native, 'useWindowDimensions').mockReturnValue({ width: 344, height: 882, scale: 2.625, fontScale: 1 });
   useChatStore.setState({ conversations: [standaloneConversation] });
   writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
   render(<ChatInfoScreen />);
-  expect(screen.getByText('Live member')).toBeTruthy();
+  expect(await screen.findByText('Live member')).toBeTruthy();
 
   // Five columns share the card's inner width: page padding (lg) plus card padding (sm) per side.
   const cellWidth = (344 - 2 * (Spacing.lg + Spacing.sm)) / 5;

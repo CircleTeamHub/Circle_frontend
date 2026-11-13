@@ -172,3 +172,14 @@ test('a circle with nothing cached yet shows a spinner in the content area', asy
   const spinner = screen.UNSAFE_getByType(ActivityIndicator);
   expect(spinner.props.color).toMatch(/^#(7C5CF0|B18AFF)$/i);
 });
+
+// 进页不卡:第一次点圈子 tab 时,首帧只出圈子标签栏,缓存的帖子卡片下一帧再画,
+// 中间也不闪「暂无进行中的动态」。
+test('cached posts render on the next frame, without flashing the empty state', async () => {
+  render(<PlazaFeed />);
+
+  expect(screen.getByTestId('circle-filter-bar')).toBeTruthy();
+  expect(screen.queryByText('post p1')).toBeNull();
+  expect(screen.queryByText('暂无进行中的动态')).toBeNull();
+  expect(await screen.findByText('post p1')).toBeTruthy();
+});

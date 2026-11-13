@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
 import { NoteImageViewportContext } from '@/features/notes/components/NoteBlockRenderer';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
@@ -122,6 +123,9 @@ function NoteDetailContent() {
   const noteStatusVersion = useNoteStatusSignalStore((state) => state.version);
 
   const [cached] = useState(() => getCachedNoteDetail(id));
+  // 首帧只出顶栏和底部按钮,整篇正文(所有段落、图片)下一帧再画(见 useDeferredContent):
+  // 长笔记点进来也是立刻进页。定位到某一段靠正文画好后的布局回调,不受影响。
+  const bodyReady = useDeferredContent();
   const [cachedCollected] = useState(() => getCachedCollectedNote(id));
   const [note, setNote] = useState<NoteDetail | null>(cached?.value ?? null);
   const [loading, setLoading] = useState(!cached);
@@ -700,7 +704,7 @@ function NoteDetailContent() {
         onContentSizeChange={scrollToRequestedSection}
       >
         <NoteImageViewportContext.Provider value={imageViewport}>
-          {readOnlySections ? (
+          {readOnlySections && bodyReady ? (
             <NoteDocumentBody
               title={note.title}
               createdAt={note.createdAt}
