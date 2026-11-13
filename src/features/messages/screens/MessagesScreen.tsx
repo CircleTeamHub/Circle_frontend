@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { CheckCheck, Search, Send } from 'lucide-react-native';
+import { CheckCheck, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -65,6 +65,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
 
 const SWIPE_ACTION_WIDTH = 76;
@@ -1572,9 +1573,9 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 圈子在 App 里的符号就是纸飞机（底部圈子 tab、App 图标、启动页同源），用同一个品牌紫。
-                描边 2.5px，比右边已读 / 搜索 / + 的 4px 细一档：飞机内部线多，4px 会把机身糊成一块实心。 */}
-            <Send size={22} strokeWidth={2.5} absoluteStrokeWidth color={colors.primary} />
+            {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），品牌紫、空心。
+                这排里唯一带颜色的入口，一眼对上「圈子」。 */}
+            <PlaneLogoIcon size={24} color={colors.primary} />
             {/* 有未读只点一个红点（和圈子 tab 的「有新帖」同款）：数字角标会把机头整个盖住，飞机就认不出了。
                 具体条数就在正下方的圈子 tab 上，同一个数（圈子通知 + 报名）。外圈是页面底色，像从机头上挖出来的。 */}
             {circleBellUnread > 0 ? (

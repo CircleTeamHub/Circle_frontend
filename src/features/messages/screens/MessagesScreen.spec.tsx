@@ -1,5 +1,6 @@
 import React from 'react';
-import { CheckCheck, Search, Send } from 'lucide-react-native';
+import { CheckCheck, Search } from 'lucide-react-native';
+import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
@@ -211,8 +212,9 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
-  // 圈子的符号是纸飞机(和底部圈子 tab 同一个)。描边比旁边的 4px 细:飞机内部线多,4px 会糊成一块实心。
-  expect(screen.UNSAFE_getByType(Send).props).toMatchObject({ size: 22, strokeWidth: 2.5, absoluteStrokeWidth: true, color: mockColors.primary });
+  // 就是底部圈子 tab 那架 App 自己的纸飞机标,品牌紫、空心(和 tab 未选中同一状态)。
+  expect(screen.UNSAFE_getByType(PlaneLogoIcon).props).toMatchObject({ size: 24, color: mockColors.primary });
+  expect(screen.UNSAFE_getByType(PlaneLogoIcon).props.filled).toBeFalsy();
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });

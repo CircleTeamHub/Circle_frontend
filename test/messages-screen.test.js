@@ -234,11 +234,10 @@ test('messages screen has only the circle-notification entry, not the old all-no
   assert.doesNotMatch(source, /<Badge count=\{circleBellUnread\} \/>/);
   // 和已读 / 搜索同一套粗描边 lucide 图标。试过又被否掉的:Orbit(小卫星点在 4px 描边下糊成一团)、
   // 铃铛(用户不要)、两个相交的圆 Blend(4px 下像一截链条,用户嫌丑)。
-  // 现在用纸飞机 Send:圈子 tab、App 图标、启动页都是纸飞机,一眼对得上。
-  // 描边 2.5px:4px 时飞机内部被填满像一团实心(用户嫌加粗难看),2px 又比旁边细一截。
-  // 品牌紫(colors.primary):和圈子 tab、App 图标同色,是这排里唯一带颜色的入口。
-  assert.match(source, /<Send size=\{22\} strokeWidth=\{2\.5\} absoluteStrokeWidth color=\{colors\.primary\} \/>/);
-  assert.doesNotMatch(source, /<Orbit |<Bell |<Blend /);
+  // lucide 的 Send 纸飞机也试过(4px 糊成实心、2.5px 后用户仍要换):现在直接用底部圈子 tab 那架
+  // App 自己的纸飞机标 PlaneLogoIcon,品牌紫(colors.primary),是这排里唯一带颜色的入口。
+  assert.match(source, /<PlaneLogoIcon size=\{24\} color=\{colors\.primary\} \/>/);
+  assert.doesNotMatch(source, /<Orbit |<Bell |<Blend |<Send /);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {
