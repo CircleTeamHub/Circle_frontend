@@ -211,8 +211,8 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
-  // 圈子的符号是纸飞机(和底部圈子 tab 同一个);笔重和旁边的已读图标一致。
-  expect(screen.UNSAFE_getByType(Send).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
+  // 圈子的符号是纸飞机(和底部圈子 tab 同一个)。描边比旁边的 4px 细:飞机内部线多,4px 会糊成一块实心。
+  expect(screen.UNSAFE_getByType(Send).props).toMatchObject({ size: 22, strokeWidth: 2.5, absoluteStrokeWidth: true });
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });

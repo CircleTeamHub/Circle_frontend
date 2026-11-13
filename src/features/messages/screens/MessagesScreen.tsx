@@ -1572,9 +1572,9 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 圈子在 App 里的符号就是纸飞机（底部圈子 tab、App 图标、启动页同源）；这里画成和右边
-                已读 / 搜索 / + 同一套 4px 粗描边线性图标。 */}
-            <Send size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            {/* 圈子在 App 里的符号就是纸飞机（底部圈子 tab、App 图标、启动页同源）。描边 2.5px，比右边
+                已读 / 搜索 / + 的 4px 细一档：飞机内部线多，4px 会把机身糊成一块实心。 */}
+            <Send size={22} strokeWidth={2.5} absoluteStrokeWidth color={colors.text} />
             {/* 有未读只点一个红点（和圈子 tab 的「有新帖」同款）：数字角标会把机头整个盖住，飞机就认不出了。
                 具体条数就在正下方的圈子 tab 上，同一个数（圈子通知 + 报名）。外圈是页面底色，像从机头上挖出来的。 */}
             {circleBellUnread > 0 ? (
