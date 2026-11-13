@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { Blend, CheckCheck, Search } from 'lucide-react-native';
+import { CheckCheck, Search, Send } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -154,10 +154,14 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  circleBellBadge: {
+  circleBellDot: {
     position: "absolute",
-    top: -8,
-    right: -12,
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   quickAddIcon: {
     width: 24,
@@ -1568,11 +1572,17 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 两个相交的圆代表「圈子」；和右边的已读 / 搜索 / + 同一套粗描边线性图标，形状简单，4px 描边下也不糊。 */}
-            <Blend size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
-            <View style={s.circleBellBadge}>
-              <Badge count={circleBellUnread} />
-            </View>
+            {/* 圈子在 App 里的符号就是纸飞机（底部圈子 tab、App 图标、启动页同源）；这里画成和右边
+                已读 / 搜索 / + 同一套 4px 粗描边线性图标。 */}
+            <Send size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
+            {/* 有未读只点一个红点（和圈子 tab 的「有新帖」同款）：数字角标会把机头整个盖住，飞机就认不出了。
+                具体条数就在正下方的圈子 tab 上，同一个数（圈子通知 + 报名）。外圈是页面底色，像从机头上挖出来的。 */}
+            {circleBellUnread > 0 ? (
+              <View
+                testID="circle-notification-dot"
+                style={[s.circleBellDot, { backgroundColor: colors.error, borderColor: colors.background }]}
+              />
+            ) : null}
           </Pressable>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
             <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />

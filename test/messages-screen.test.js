@@ -229,11 +229,14 @@ test('messages screen has only the circle-notification entry, not the old all-no
     source,
     /pathname: "\/\(tabs\)\/messages\/notifications", params: \{ domain: "circle" \}/,
   );
-  assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
-  // 和已读 / 搜索同一套粗描边 lucide 图标;Orbit 的小卫星点在 4px 描边下糊成一团,
-  // 铃铛用户不要。两个相交的圆(Blend)代表「圈子」,形状简单。
-  assert.match(source, /<Blend size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
-  assert.doesNotMatch(source, /<Orbit |<Bell /);
+  // 未读只点红点:数字角标会盖住机头。条数在圈子 tab 上(同一个数)。
+  assert.match(source, /circleBellUnread > 0 \? \(\s*<View\s+testID="circle-notification-dot"/);
+  assert.doesNotMatch(source, /<Badge count=\{circleBellUnread\} \/>/);
+  // 和已读 / 搜索同一套粗描边 lucide 图标。试过又被否掉的:Orbit(小卫星点在 4px 描边下糊成一团)、
+  // 铃铛(用户不要)、两个相交的圆 Blend(4px 下像一截链条,用户嫌丑)。
+  // 现在用纸飞机 Send:圈子 tab、App 图标、启动页都是纸飞机,一眼对得上。
+  assert.match(source, /<Send size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
+  assert.doesNotMatch(source, /<Orbit |<Bell |<Blend /);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {

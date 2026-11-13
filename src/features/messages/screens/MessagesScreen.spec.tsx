@@ -1,5 +1,5 @@
 import React from 'react';
-import { Blend, CheckCheck, Search } from 'lucide-react-native';
+import { CheckCheck, Search, Send } from 'lucide-react-native';
 import { Alert, BackHandler, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
@@ -22,7 +22,7 @@ const mockNavigation = { getParent: () => mockTabNavigation };
 const mockSetUnread = jest.fn();
 const mockRemarkReloadGate = { shouldSkip: () => true, markLoaded: jest.fn() };
 const mockTranslate = (key: string) => key;
-const mockColors = { text: '#111', textSecondary: '#666', background: '#fff', dangerFill: '#E5484D' };
+const mockColors = { text: '#111', textSecondary: '#666', background: '#fff', dangerFill: '#E5484D', error: '#FF6B6B' };
 const mockChatState = () => ({ conversations: mockConversations, currentUserId: mockCurrentUserId, readWatermarks: {}, connected: true, conversationsSnapshotLoaded: mockSnapshotLoaded });
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockNavigate, navigate: mockNavigate }), useNavigation: () => mockNavigation, useFocusEffect: jest.fn() }));
@@ -56,7 +56,8 @@ jest.mock('@/hooks/use-desktop-split-layout', () => ({ useDesktopSplitLayout: ()
 jest.mock('@/features/messages/store/use-message-groups-store', () => ({ useMessageGroupsStore: (selector: (state: unknown) => unknown) => selector({ groups: [], filterOrder: [] }) }));
 jest.mock('@/features/profile/store/use-app-settings-store', () => ({ useAppSettingsStore: (selector: (state: unknown) => unknown) => selector({ pinnedFoldCount: mockPinnedFoldCount }) }));
 jest.mock('@/stores/splitPaneStore', () => ({ useSplitPaneStore: (selector: (state: unknown) => unknown) => selector({ listPaneWidth: 320 }) }));
-jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: (selector: (state: unknown) => unknown) => selector({ setMessagesUnread: mockSetUnread, circleUnread: 2, signupUnread: 1 }) }));
+let mockCircleUnread = 2;
+jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: (selector: (state: unknown) => unknown) => selector({ setMessagesUnread: mockSetUnread, circleUnread: mockCircleUnread, signupUnread: 1 }) }));
 jest.mock('@/features/chat/screens/ChatDetailScreen', () => () => null);
 jest.mock('@/features/chat/components/ChatConnectionBanner', () => ({ ChatConnectionBanner: () => null }));
 jest.mock('@/components/app/split-pane-resizer', () => ({ SplitPaneResizer: () => null }));
@@ -210,11 +211,24 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('the header circle button opens circle notifications inside the messages tab', () => {
   render(<MessagesScreen />);
-  // Same size and stroke as the neighbouring double-check icon.
-  expect(screen.UNSAFE_getByType(Blend).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
+  // 圈子的符号是纸飞机(和底部圈子 tab 同一个);笔重和旁边的已读图标一致。
+  expect(screen.UNSAFE_getByType(Send).props).toMatchObject({ size: 22, strokeWidth: 4, absoluteStrokeWidth: true });
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });
+});
+
+test('circle unread shows a ringed red dot on the plane instead of a count, and nothing when all is read', () => {
+  mockCircleUnread = 2;
+  const view = render(<MessagesScreen />);
+  // 数字会盖住机头;条数由圈子 tab 显示,这里只提示「有新的」。
+  const dot = StyleSheet.flatten(screen.getByTestId('circle-notification-dot').props.style);
+  expect(dot).toMatchObject({ backgroundColor: mockColors.error, borderColor: mockColors.background, borderWidth: 2, width: 12, height: 12 });
+
+  mockCircleUnread = -1; // 圈子 -1 + 报名 1 = 0 条未读
+  view.rerender(<MessagesScreen />);
+  expect(screen.queryByTestId('circle-notification-dot')).toBeNull();
+  mockCircleUnread = 2;
 });
 
 test('header double check enters selection without reading chats or navigating', () => {
