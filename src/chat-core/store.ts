@@ -780,7 +780,9 @@ function mergeMessageState(
   if (priorEdited > nextEdited) {
     return { ...next, content: prior.content, editedAt: prior.editedAt };
   }
-  return next;
+  // 重拉回来、一字不差的那份沿用原对象:气泡按对象身份跳过重渲染(见 message-mappers 的
+  // WeakMap)。进会话那次重拉最新一页时,原来整屏气泡都重画一遍、图片跟着重载。
+  return structurallyEqual(prior, next) ? prior : next;
 }
 
 function hasStaleLiveRevision(

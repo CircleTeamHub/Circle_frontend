@@ -117,9 +117,10 @@ beforeEach(() => {
 
 async function renderFeed() {
   render(<PlazaFeed />);
-  // 让会员计划查询落地,列表才可交互。
+  // 让会员计划查询落地,列表才可交互;再等过帖子列表延后渲染的那一帧(useDeferredContent)。
   await act(async () => {
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 

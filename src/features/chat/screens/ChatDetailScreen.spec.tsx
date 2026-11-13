@@ -640,6 +640,37 @@ test('a new incoming message renders only its own bubble', async () => {
   expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
 });
 
+// 进会话后会重拉最新一页:和手上那份一字不差的消息沿用原对象,已经画好的气泡不重画
+// (原来整屏重画一遍,图片还跟着重载,正好撞上用户刚开始滑动)。
+test('re-fetching an unchanged page does not re-render the bubbles already on screen', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  mockBubbleRenders.clear();
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [message(1, PEER, '在吗'), message(2, ME, '晚上吃什么')]);
+  });
+
+  expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
+  expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
+});
+
+// 用 msg-2:前面的多选删除用例把 msg-1 记成了本机删除(墓碑在模块里,不随用例清),
+// 再收 msg-1 会被当成删掉的挡下。
+test('a re-fetched message whose content differs still replaces the one on screen', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [message(2, ME, '晚上吃什么呀')]);
+  });
+
+  expect(await screen.findByText('sent:晚上吃什么呀', {}, SETTLE)).toBeTruthy();
+});
+
 function photoMessage(height: number, senderId = PEER): ChatMessageDto {
   return {
     ...message(height, senderId, ''),
