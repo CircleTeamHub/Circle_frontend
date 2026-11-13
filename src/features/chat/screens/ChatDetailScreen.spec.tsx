@@ -12,6 +12,7 @@ import {
 import ChatDetailScreen from './ChatDetailScreen';
 import {
   loadConversationMessages,
+  loadOlderConversationMessages,
   markConversationAsRead,
   sendTextMessage,
   sendQuoteMessage,
@@ -418,6 +419,28 @@ test('the first commit is only the page shell; cached bubbles arrive on the next
   expect(screen.queryByText('sent:晚上吃什么')).toBeNull();
   expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
   expect(screen.getByText('sent:晚上吃什么')).toBeTruthy();
+});
+
+// 首帧消息还没交给列表,空列表量完尺寸就可能触底。那一下不能去翻更早的一页:
+// 繁忙的群消息多、记过翻页起点,每次进会话都会白发一次请求、窗口跟着涨一页。
+test('the empty first frame does not page older history', async () => {
+  useChatStore.setState({ historyFloorByConversation: { [CONVERSATION]: 1 } });
+  render(<ChatDetailScreen />);
+  const list = screen.UNSAFE_getAllByType(FlatList).find((item) => item.props.testID === E2E_TEST_IDS.chatMessageList)!;
+  act(() => {
+    list.props.onEndReached?.({ distanceFromEnd: 0 });
+  });
+  expect(loadOlderConversationMessages).not.toHaveBeenCalled();
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+});
+
+// 从搜索结果进来、目标就在缓存里:搜索定位要等消息交给列表之后才滚,
+// 对着首帧的空列表 scrollToIndex 会同步抛错(只延后 FlatList 的 data 就会这样)。
+test('opening from a search result with cached history mounts cleanly and lands on the message', async () => {
+  mockParams = { ...mockParams, searchedMsgID: 'msg-1' };
+  render(<ChatDetailScreen />);
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+  expect(loadOlderConversationMessages).not.toHaveBeenCalled();
 });
 
 // 文字加密已整体删除:老开发数据里残留的 encrypted-text 消息走未知类型的占位文案,

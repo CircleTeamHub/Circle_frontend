@@ -15,7 +15,10 @@ export const MEDIA_PROGRESS_DELAY_MS = 300;
 type Progress = number | null | false;
 
 interface MediaImageProps extends ImageProps {
-  /** 画在图片上、下载进度下面(比如视频封面的播放键):下载中被进度盖住,显示后露出来。 */
+  /**
+   * 画在图片上的东西(比如视频封面的播放键)。显示下载进度时让位:进度条是半透明小框,
+   * 叠在上面会透出来;只有真在下载(过了 MEDIA_PROGRESS_DELAY_MS)才会切,缓存命中的不闪。
+   */
   overlay?: ReactNode;
 }
 
@@ -71,7 +74,7 @@ export function MediaImage({ style, overlay, onLoadStart, onProgress, onLoadEnd,
         onDisplay={() => { finish(); onDisplay?.(); }}
         onError={(event) => { finish(); onError?.(event); }}
       />
-      {overlay}
+      {progress === false ? overlay : null}
       {progress !== false ? (
         <View style={s.overlay} pointerEvents="none" accessible accessibilityRole="progressbar"
           accessibilityState={{ busy: true }} accessibilityValue={progress === null ? {} : { min: 0, max: 100, now: progress }}>

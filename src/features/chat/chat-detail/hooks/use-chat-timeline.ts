@@ -197,7 +197,9 @@ export function useChatTimeline({
   // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
   // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
   const handleLoadOlder = useCallback(() => {
-    if (!conversationID) return;
+    // 列表上还没有消息(进页首帧消息延后才交过来)时不往前翻:空列表一量完尺寸就会触底,
+    // 记过翻页起点的会话会白发一次更早一页的请求。首屏那页由进会话时的加载负责。
+    if (!conversationID || messagesLengthRef.current === 0) return;
     void loadOlderConversationMessages(conversationID).catch((err) => {
       reportHandledFailure('chatDetail', 'loadOlderMessages', err);
     });

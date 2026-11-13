@@ -121,9 +121,9 @@ test('an expired video says it expired and keeps its long-press menu', () => {
 });
 
 describe('VideoBubble poster', () => {
-  // 封面真在下载时,进度画在播放键上面(层级见 media-image.spec);缓存里的封面马上显示,
-  // 不挂进度,播放键也不跟着卸掉重挂 —— 滑动时每个视频划进来都不再让整个气泡重渲染。
-  it('draws the central poster download progress over the play badge only while it really downloads', () => {
+  // 封面真在下载时播放键让位给中间的下载进度;缓存里的封面马上显示,不挂进度,
+  // 播放键也不跟着卸掉重挂 —— 滑动时每个视频划进来都不再让整个气泡重渲染。
+  it('keeps the play badge from covering the central poster download progress, only while it really downloads', () => {
     jest.useFakeTimers();
     try {
       render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
@@ -134,6 +134,7 @@ describe('VideoBubble poster', () => {
         jest.advanceTimersByTime(MEDIA_PROGRESS_DELAY_MS);
       });
       expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+      expect(screen.queryByText('play')).toBeNull();
       fireEvent(screen.getByTestId('chat-video-poster'), 'loadEnd');
       expect(screen.queryByRole('progressbar')).toBeNull();
       expect(screen.getByText('play')).toBeTruthy();

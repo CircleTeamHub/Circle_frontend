@@ -133,12 +133,16 @@ test('unmounting while waiting to show progress leaves no timer behind', () => {
   expect(jest.getTimerCount()).toBe(0);
 });
 
-// 视频封面要把播放按钮画在图上、进度遮罩下:下载中进度盖住播放键,显示后播放键露出来。
-test('an overlay draws above the image and below the progress badge', () => {
+// 视频封面的播放键画在图上;真在下载、显示进度的时候让位给进度(进度条是半透明小框,
+// 叠在播放键上会透出三角),显示出来后再回来。缓存命中的封面播放键一直在,不跟着闪。
+test('an overlay draws on the image and gives way to the progress badge while it shows', () => {
   render(<MediaImage testID="photo" source={{ uri: 'https://image.test/poster' }} overlay={<Text>play</Text>} />);
+  expect(screen.getByText('play')).toBeTruthy();
   fireEvent(screen.getByTestId('photo'), 'loadStart');
+  expect(screen.getByText('play')).toBeTruthy();
   showDelayedProgress();
-  const frame = screen.toJSON() as { children: { type: string; props: { testID?: string; accessibilityRole?: string } }[] };
-  const order = frame.children.map((child) => child.props.testID ?? child.props.accessibilityRole ?? child.type);
-  expect(order).toEqual(['photo', 'Text', 'progressbar']);
+  expect(screen.queryByText('play')).toBeNull();
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  fireEvent(screen.getByTestId('photo'), 'display');
+  expect(screen.getByText('play')).toBeTruthy();
 });

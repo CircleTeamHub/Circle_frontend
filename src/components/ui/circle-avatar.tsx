@@ -56,8 +56,8 @@ export function CircleAvatar({
           contentFit="cover"
             cachePolicy="memory-disk"
             transition={0}
-          // 按头像框的像素直接解码(见 Avatar)。
-          enforceEarlyResizing
+          // 不开 enforceEarlyResizing(Avatar 开了):圈子头像选图不裁,非正方形原图靠 cover 铺满;
+          // iOS 早缩放按长边缩到框的像素,cover 再把短边放大回去,圆框里会发糊。
           onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
           onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
         />

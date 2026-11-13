@@ -174,7 +174,7 @@ export function VideoBubble({
           {videoUrl ? (
             <View style={{ aspectRatio }}>
               {posterUrl ? (
-                // 播放键交给 MediaImage 画在封面上、下载进度下面:下载慢时进度盖住它,显示后露出来。
+                // 播放键交给 MediaImage 画在封面上:真在下载、显示进度时让位给进度,显示后回来。
                 // 原来这里自己记「封面加载中」,每个视频划进来都要让整个气泡多渲染两遍。
                 <MediaImage
                   testID="chat-video-poster"
