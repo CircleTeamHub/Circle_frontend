@@ -22,7 +22,7 @@ const mockChat: {
   conversations: [],
   removeMessage: mockRemoveMessage,
 };
-const mockAuth = { sessionEpoch: 1 };
+const mockAuth: { sessionEpoch: number; user?: { id: string } } = { sessionEpoch: 1 };
 jest.mock('@/chat-core/client', () => ({ retryFailedChatMessage: (...args: unknown[]) => mockRetry(...args) }));
 jest.mock('@/chat-core/store', () => ({ useChatStore: { getState: () => mockChat } }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: { getState: () => mockAuth } }));
@@ -34,6 +34,12 @@ const mockSetPinned = jest.fn(() => Promise.resolve());
 jest.mock('@/chat-core/api', () => ({ setChatPinnedMessage: (...args: unknown[]) => mockSetPinned(...(args as [])) }));
 jest.mock('@/chat-core/send-errors', () => ({ getChatSendErrorMessage: () => '发送失败' }));
 jest.mock('@/features/chat/screens/ForwardPickerScreen', () => ({ canForwardMessage: () => false }));
+const mockRateGood = jest.fn((_noteId: string, _onRated?: (counts: { goodCount: number; badCount: number }) => void) => Promise.resolve());
+const mockStartBad = jest.fn((_noteId: string, _onRated?: (counts: { goodCount: number; badCount: number }) => void) => Promise.resolve());
+jest.mock('@/features/notes/rating/note-rating-flow', () => ({
+  rateNoteGood: (...args: [string, never]) => mockRateGood(...args),
+  startBadNoteRating: (...args: [string, never]) => mockStartBad(...args),
+}));
 
 const failed: ChatMessage = { id: 'local-1', type: 'sent', sendStatus: 3, deliveryId: 'd-1' };
 let buttons: AlertButton[];
@@ -432,5 +438,73 @@ describe('pinning from the long-press menu', () => {
     const { result } = renderHook(() => useMessageActions(params));
     act(() => result.current.setActionMenu({ message: fields as ChatMessage, x: 0, y: 0 }));
     expect(menuKeys(result.current)).not.toContain('pin');
+  });
+});
+
+describe('好评 / 差评 on a chat note card', () => {
+  const noteCardMessage = (card: Record<string, unknown>): ChatMessage =>
+    ({ id: 'm-note', type: 'note-card', noteCard: { noteId: 'copy-9', title: 'Shop', ...card } }) as unknown as ChatMessage;
+
+  beforeEach(() => {
+    mockRateGood.mockClear();
+    mockStartBad.mockClear();
+    mockAuth.user = { id: 'me' };
+  });
+
+  test("offers both on someone else's note and rates the card's note", () => {
+    const message = noteCardMessage({ ownerId: 'boss' });
+    params.messages = [message];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+
+    const keys = result.current.messageActions.map((action) => action.key);
+    expect(keys).toEqual(expect.arrayContaining(['rate-good', 'rate-bad']));
+    // 好评 is a firework, 差评 a rain cloud (MaterialCommunityIcons) — no thumbs.
+    expect(result.current.messageActions.find((action) => action.key === 'rate-good')).toMatchObject({ mciIcon: 'firework' });
+    expect(result.current.messageActions.find((action) => action.key === 'rate-bad')).toMatchObject({ mciIcon: 'weather-pouring' });
+    act(() => result.current.messageActions.find((action) => action.key === 'rate-good')?.onPress());
+    act(() => result.current.messageActions.find((action) => action.key === 'rate-bad')?.onPress());
+    expect(mockRateGood).toHaveBeenCalledWith('copy-9', expect.any(Function));
+    expect(mockStartBad).toHaveBeenCalledWith('copy-9', expect.any(Function));
+  });
+
+  test('the counters on the card follow the answer', () => {
+    const { useNoteRatingCountsStore } = jest.requireActual<
+      typeof import('@/features/notes/store/use-note-rating-counts-store')
+    >('@/features/notes/store/use-note-rating-counts-store');
+    const message = noteCardMessage({ ownerId: 'boss' });
+    params.messages = [message];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+    act(() => result.current.messageActions.find((action) => action.key === 'rate-good')?.onPress());
+
+    act(() => mockRateGood.mock.calls[0][1]?.({ goodCount: 8, badCount: 2 }));
+
+    expect(useNoteRatingCountsStore.getState().counts['copy-9']).toEqual({ goodCount: 8, badCount: 2 });
+  });
+
+  test.each([
+    ['my own source note', { ownerId: 'me' }, false],
+    ['my own source note (source id equals note id)', { ownerId: 'me', sourceNoteId: 'copy-9' }, false],
+    ['my collected copy of a note from someone else', { ownerId: 'me', sourceNoteId: 'root-1' }, true],
+    ['a deleted note', { ownerId: 'boss', publicationStatus: 'DELETED' }, false],
+  ])('%s', (_label, card, offered) => {
+    const message = noteCardMessage(card);
+    params.messages = [message];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+
+    const keys = result.current.messageActions.map((action) => action.key);
+    expect(keys.includes('rate-good')).toBe(offered);
+    expect(keys.includes('rate-bad')).toBe(offered);
+  });
+
+  test('other message types get no rating actions', () => {
+    const message: ChatMessage = { id: 'm1', type: 'received', text: 'hi' };
+    params.messages = [message];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+
+    expect(result.current.messageActions.some((action) => action.key.startsWith('rate-'))).toBe(false);
   });
 });

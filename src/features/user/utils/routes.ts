@@ -301,6 +301,24 @@ export function getNoteEditHref(
   }
 }
 
+/** 主人的「查看差评」页:压进笔记详情所在的同一个栈,back 回到详情。 */
+export function getNoteBadRatingsHref(scope: UserProfileScope, id: string): Href {
+  const params = { id };
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/notes/bad-ratings', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/notes/bad-ratings', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/notes/bad-ratings', params };
+    case 'messages':
+      return { pathname: '/(tabs)/messages/notes/bad-ratings', params };
+    case 'profile':
+    default:
+      return { pathname: '/(tabs)/profile/notes/bad-ratings', params };
+  }
+}
+
 /** 编辑页里的选位置页:跟编辑页在同一个栈,选完 back 回到编辑页。 */
 export function getNoteLocationPickerHref(
   scope: UserProfileScope,

@@ -60,12 +60,14 @@ import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-orde
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
 import { createNoteDraftId } from '@/features/notes/utils/note-editor-drafts';
+import { rateNoteGood, startBadNoteRating } from '@/features/notes/rating/note-rating-flow';
 import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
 } from '@/features/notes/utils/note-sync';
 import {
   getChatDetailHref,
+  getNoteBadRatingsHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
   toCircleScope,
@@ -467,6 +469,34 @@ function NotesContent() {
       );
     },
     [t],
+  );
+
+  // 好评 / 差评 on a collected copy rate its source note; the answer carries the
+  // source's monthly counters, which every copy shows.
+  const applyRatingCounts = useCallback(
+    (noteId: string) => (result: { goodCount: number; badCount: number }) => {
+      if (!mountedRef.current) return;
+      setNotes((prev) =>
+        prev.map((item) =>
+          item.id === noteId
+            ? { ...item, goodCount: result.goodCount, badCount: result.badCount }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
+  const handleRateGood = useCallback(
+    (note: NoteSummary) => void rateNoteGood(note.id, applyRatingCounts(note.id)),
+    [applyRatingCounts],
+  );
+  const handleRateBad = useCallback(
+    (note: NoteSummary) => void startBadNoteRating(note.id, applyRatingCounts(note.id)),
+    [applyRatingCounts],
+  );
+  const handleViewBadRatings = useCallback(
+    (note: NoteSummary) => router.push(getNoteBadRatingsHref(scope, note.id)),
+    [router, scope],
   );
 
   const handleSetWorkStatus = useCallback(
@@ -1098,6 +1128,9 @@ function NotesContent() {
         onClose={closeMenu}
         onPin={handlePin}
         onMultiSelect={handleMultiSelectFromMenu}
+        onRateGood={handleRateGood}
+        onRateBad={handleRateBad}
+        onViewBadRatings={handleViewBadRatings}
         onRemark={handleRemark}
         onEdit={openNoteEditor}
         onEditGroups={handleEditGroups}

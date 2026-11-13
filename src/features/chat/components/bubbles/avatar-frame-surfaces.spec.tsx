@@ -72,6 +72,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: Object.assign(() => null, { glyphMap: {} }),
+  MaterialCommunityIcons: Object.assign(() => null, { glyphMap: {} }),
 }));
 
 jest.mock('@/theme', () => ({

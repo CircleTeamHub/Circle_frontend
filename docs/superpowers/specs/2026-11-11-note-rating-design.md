@@ -124,11 +124,15 @@ rating so a later mutual-pair / ring check can be added without a backfill.
 
 ## 9. App (Circle_frontend)
 
-- Note detail (own note, collected copy, opened from a chat card): a rating bar
-  "👍 好评 N · 👎 差评 M", labelled as this month's counts (本月). 👍 rates immediately. 👎 opens a sheet with the reasons (text box
-  for 其他). When the user can't rate, the buttons are greyed out and tapping explains why
+Entry points (revised 2026-11-11: no rating UI on the note detail page):
+
+- Chat note card: the long-press menu gains 好评 and 差评 (not on cards of the viewer's
+  own source note). The card shows a "👍 N 👎 M" area with this month's counters.
+- 我的笔记: the ⋯ sheet of a collected copy gains 好评 and 差评; on the owner's own source
+  note it offers 查看差评 instead. List cards show the same "👍 N 👎 M" area.
+- 👍 rates immediately. 👎 first checks eligibility, then opens a sheet with the reasons
+  (text box for 其他). When the user can't rate, an alert explains why
   (需要加入笔记里的群 / 3 天后可再评 / 今天已经打过分 / 今日好评名额已满 / 信用分不足 …).
-- Notes list cards and chat note cards show small counters.
 - Owner view: "查看差评" list with an 申诉 button per entry and the appeal result.
 - Strings in zh / en / es / ja / ko.
 

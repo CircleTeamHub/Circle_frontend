@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
 import {
   NOTE_WORK_STATUS_ICON,
@@ -25,6 +26,11 @@ interface NoteActionsSheetProps {
   onPin: (note: NoteSummary) => void;
   /** 进入多选模式（并选中当前笔记） */
   onMultiSelect?: (note: NoteSummary) => void;
+  /** 收藏副本：给来源笔记打好评 / 差评。 */
+  onRateGood?: (note: NoteSummary) => void;
+  onRateBad?: (note: NoteSummary) => void;
+  /** 自己的源笔记：查看收到的差评（不能给自己打分）。 */
+  onViewBadRatings?: (note: NoteSummary) => void;
   /** 打开备注编辑弹层 */
   onRemark?: (note: NoteSummary) => void;
   onEdit: (note: NoteSummary) => void;
@@ -50,11 +56,14 @@ interface NoteActionsSheetProps {
 
 type NoteAction = {
   key: string;
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   destructive?: boolean;
   run: () => void;
-};
+} & (
+  | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: never }
+  /** For glyphs Ionicons lacks (the note rating 烟花 / 乌云). */
+  | { mciIcon: keyof typeof MaterialCommunityIcons.glyphMap; icon?: never }
+);
 
 export function NoteActionsSheet({
   note,
@@ -63,6 +72,9 @@ export function NoteActionsSheet({
   onClose,
   onPin,
   onMultiSelect,
+  onRateGood,
+  onRateBad,
+  onViewBadRatings,
   onRemark,
   onEdit,
   onEditGroups,
@@ -187,6 +199,34 @@ export function NoteActionsSheet({
             : t('notes.actions.pin', { defaultValue: '置顶' }),
           run: () => onPin(note),
         },
+        // Ratings belong to the source note: a collected copy rates it, the
+        // owner's own source note lists what it received instead.
+        ...(note.collectedFrom && onRateGood && onRateBad
+          ? [
+              {
+                key: 'rate-good',
+                mciIcon: NOTE_RATING_GOOD_ICON,
+                label: t('notes.rating.actionGood', { defaultValue: '好评' }),
+                run: () => onRateGood(note),
+              },
+              {
+                key: 'rate-bad',
+                mciIcon: NOTE_RATING_BAD_ICON,
+                label: t('notes.rating.actionBad', { defaultValue: '差评' }),
+                run: () => onRateBad(note),
+              },
+            ]
+          : []),
+        ...(!note.collectedFrom && onViewBadRatings
+          ? [
+              {
+                key: 'view-bad-ratings',
+                mciIcon: NOTE_RATING_BAD_ICON,
+                label: t('notes.rating.viewBad', { defaultValue: '查看差评' }),
+                run: () => onViewBadRatings(note),
+              },
+            ]
+          : []),
         ...(onMultiSelect
           ? [
               {
@@ -319,11 +359,19 @@ export function NoteActionsSheet({
             accessibilityRole="button"
             accessibilityLabel={action.label}
           >
-            <Ionicons
-              name={action.icon}
-              size={20}
-              color={action.destructive ? colors.error : colors.text}
-            />
+            {action.mciIcon ? (
+              <MaterialCommunityIcons
+                name={action.mciIcon}
+                size={20}
+                color={action.destructive ? colors.error : colors.text}
+              />
+            ) : (
+              <Ionicons
+                name={action.icon}
+                size={20}
+                color={action.destructive ? colors.error : colors.text}
+              />
+            )}
             <Text
               style={[s.label, action.destructive ? d.destructive : d.label]}
             >

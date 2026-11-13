@@ -248,3 +248,20 @@ test('ignores a response from an unmounted chat after a newer chat reconciles', 
   });
   expect(mockApply).toHaveBeenCalledTimes(1);
 });
+
+test("records the source's monthly rating counters for the cards from the same batch", async () => {
+  const { useNoteRatingCountsStore } = jest.requireActual<
+    typeof import('@/features/notes/store/use-note-rating-counts-store')
+  >('@/features/notes/store/use-note-rating-counts-store');
+  mockFetch.mockResolvedValue([
+    { noteId: 'rated', workStatus: 'UNSET', publicationStatus: 'ACTIVE', goodCount: 6, badCount: 2 },
+    // An older server without counters leaves nothing behind.
+    { noteId: 'legacy', workStatus: 'UNSET', publicationStatus: 'ACTIVE' },
+  ]);
+  renderHook(() => useNoteCardStatusSync('conv-1', [noteCard('m1', 'rated'), noteCard('m2', 'legacy')]));
+
+  await waitFor(() =>
+    expect(useNoteRatingCountsStore.getState().counts.rated).toEqual({ goodCount: 6, badCount: 2 }),
+  );
+  expect(useNoteRatingCountsStore.getState().counts.legacy).toBeUndefined();
+});

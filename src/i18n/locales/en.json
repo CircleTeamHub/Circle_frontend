@@ -1824,6 +1824,7 @@
     "scoreAfter": "Now {{score}}",
     "reasons": {
       "friendReport": "Report upheld",
+      "noteRatingAbuse": "Note rating abuse confirmed",
       "other": "Reputation adjustment"
     }
   },
@@ -3253,6 +3254,66 @@
       "chooseGroup": "Choose a group",
       "editTitle": "Edit the title",
       "collectHint": "With “Choose a group” off, notes go to Ungrouped. With “Edit the title” off, the original title is kept."
+    },
+    "rating": {
+      "actionGood": "Good",
+      "actionBad": "Bad",
+      "ratedTitle": "Rated",
+      "countsA11y": "This month: {{good}} good, {{bad}} bad",
+      "viewBad": "View bad ratings",
+      "heldNotice": "Your rating was submitted and is under review. It will count once approved.",
+      "failedTitle": "Couldn't rate",
+      "blockedTitle": "You can't rate yet",
+      "blocked": {
+        "NOTE_RATING_NOT_COLLECTED": "Add this note to your notes first to rate it.",
+        "NOTE_RATING_NOT_IN_GROUP": "Join one of the groups in this note to rate it.",
+        "NOTE_RATING_LOW_CREDIT": "Your reputation is below 90, so you can’t rate for now.",
+        "NOTE_RATING_ACCOUNT_TOO_NEW": "You can rate once your account is 7 days old.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "You’ve already rated today. Come back tomorrow.",
+        "cooldownDays": "You can rate this note again in {{count}} days.",
+        "cooldownHours": "You can rate this note again in {{count}} hours.",
+        "NOTE_RATING_NOTE_GOOD_FULL": "This note has reached today’s limit of good ratings. Try tomorrow.",
+        "NOTE_RATING_NOTE_BAD_FULL": "This note has reached today’s limit of bad ratings. Try tomorrow.",
+        "unknown": "You can’t rate right now. Please try again later."
+      },
+      "reasons": {
+        "INACCURATE": "Inaccurate",
+        "EXPIRED": "No longer valid",
+        "BAD_EXPERIENCE": "Bad experience",
+        "OTHER": "Other"
+      },
+      "reasonSheet": {
+        "title": "Why a bad rating?",
+        "otherPlaceholder": "Tell us what happened (required)",
+        "submit": "Submit bad rating",
+        "submitting": "Submitting..."
+      },
+      "badList": {
+        "title": "Bad ratings",
+        "subtitle": "Only the reason and time are shown, never who rated",
+        "empty": "No bad ratings",
+        "loadFailed": "Couldn’t load bad ratings",
+        "loadMore": "Load more",
+        "appealsRemaining": "{{count}} appeals left this month",
+        "appeal": "Appeal",
+        "appealFailedTitle": "Appeal failed",
+        "status": {
+          "HELD": "Under review",
+          "VOID": "Removed"
+        },
+        "appealStatus": {
+          "PENDING": "Appeal in review",
+          "UPHELD": "Appeal rejected, rating kept",
+          "REVOKED": "Appeal accepted, rating removed"
+        },
+        "appealSheet": {
+          "title": "Appeal this bad rating",
+          "hint": "The rating still counts this month while the appeal is reviewed.",
+          "placeholder": "Explain why (required)",
+          "submit": "Submit appeal",
+          "submitting": "Submitting..."
+        }
+      }
     }
   },
   "search": {
@@ -3641,6 +3702,22 @@
     "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
     "NOTE_SHARE_LINK_UNAVAILABLE": "Note sharing isn't available yet",
+    "NOTE_RATING_OWNER": "You can't rate your own note",
+    "NOTE_RATING_NOT_COLLECTED": "Add this note to your notes first to rate it",
+    "NOTE_RATING_NOT_IN_GROUP": "Join one of the groups in this note to rate it",
+    "NOTE_RATING_NO_GROUP": "This note has no group, so it can’t be rated",
+    "NOTE_RATING_LOW_CREDIT": "Your reputation is below 90, so you can’t rate for now",
+    "NOTE_RATING_ACCOUNT_TOO_NEW": "You can rate once your account is 7 days old",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "You’ve already rated today. Come back tomorrow",
+    "NOTE_RATING_COOLDOWN": "You can rate the same note only once every 3 days",
+    "NOTE_RATING_NOTE_GOOD_FULL": "This note has reached today’s limit of good ratings",
+    "NOTE_RATING_NOTE_BAD_FULL": "This note has reached today’s limit of bad ratings",
+    "NOTE_RATING_NOT_FOUND": "This rating doesn’t exist",
+    "NOTE_RATING_NOT_APPEALABLE": "This bad rating can’t be appealed right now",
+    "NOTE_RATING_ALREADY_APPEALED": "You’ve already appealed this bad rating",
+    "NOTE_RATING_APPEAL_QUOTA": "You’ve used all your appeals this month",
+    "NOTE_RATING_CASE_RESOLVED": "This review has already been handled",
+    "NOTE_RATING_CASE_ACTION_INVALID": "This action doesn’t apply to this review",
     "UPLOAD_INVALID_CONTENT_TYPE": "This file type is not supported",
     "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "Messages in a disappearing-message chat cannot be collected",

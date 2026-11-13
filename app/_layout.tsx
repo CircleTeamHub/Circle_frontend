@@ -58,6 +58,7 @@ import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
+import { NoteRatingFlowHost } from '@/features/notes/rating/NoteRatingFlowHost';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
 import { ThemeProvider, useTheme } from '@/theme';
@@ -441,6 +442,8 @@ function RootLayout() {
           <NotificationSnackbarHost />
           {/* 顶部提醒（操作回执 toast），与消息横幅同一套外壳。 */}
           <TopNoticeHost />
+          {/* 聊天笔记卡片长按 / 我的笔记 ⋯ 面板里打差评的原因面板。 */}
+          <NoteRatingFlowHost />
           <UploadProgressHost />
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />

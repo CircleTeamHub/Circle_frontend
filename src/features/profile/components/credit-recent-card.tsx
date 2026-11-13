@@ -19,6 +19,7 @@ interface CreditEventRowProps {
 // 服务端 reason → 标题词条；新来源上线前一律按「信誉值调整」展示，不露出原始枚举。
 const REASON_TITLE_KEYS: Record<string, string> = {
   FRIEND_REPORT: "credit.reasons.friendReport",
+  NOTE_RATING_ABUSE: "credit.reasons.noteRatingAbuse",
 };
 const FALLBACK_REASON_TITLE_KEY = "credit.reasons.other";
 
