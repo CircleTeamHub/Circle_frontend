@@ -53,12 +53,15 @@ test('a failed copy reports and falls back to the library file instead of droppi
   expect(reportHandledFailure).toHaveBeenCalledWith('chatMediaPicker', 'copyAsset', expect.any(Error));
 });
 
-test('Android keeps the media store file as is', async () => {
+test('Android keeps the media store file as is, without reading asset info', async () => {
   jest.replaceProperty(Platform, 'OS', 'android');
-  jest.mocked(MediaLibrary.getAssetInfoAsync).mockResolvedValueOnce({ localUri: 'file:///storage/emulated/0/DCIM/a.mp4' } as never);
+  const androidAsset = { ...videoAsset, uri: 'file:///storage/emulated/0/DCIM/a.mp4' } as MediaLibrary.Asset;
 
-  const [resolved] = await resolveGalleryAssets([videoAsset]);
+  const [resolved] = await resolveGalleryAssets([androidAsset]);
 
+  // getAssetInfoAsync also reads each photo's EXIF location on Android 10+, which needs
+  // ACCESS_MEDIA_LOCATION — app.json leaves it off, so asset.uri is used directly.
+  expect(MediaLibrary.getAssetInfoAsync).not.toHaveBeenCalled();
   expect(FileSystem.copyAsync).not.toHaveBeenCalled();
   expect(resolved?.uri).toBe('file:///storage/emulated/0/DCIM/a.mp4');
 });
