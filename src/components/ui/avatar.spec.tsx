@@ -92,3 +92,10 @@ test.each([Avatar, CircleAvatar, GroupChatAvatar])('retries a previously failed 
 
   expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/a');
 });
+
+// 头像上传不缩图(裁出来常是两三千像素见方)。不开早缩放的话 iOS 先整张解码、显示时再在主线程
+// 缩到几十点的头像框里,聊天记录里每个头像划进来都要来一次。早缩放让解码直接按头像框的像素来。
+test.each([Avatar, CircleAvatar, GroupChatAvatar])('decodes the photo at the avatar size instead of full resolution', (Component) => {
+  render(<Component uri="https://image.test/big" name="x" size={40} />);
+  expect(screen.getByTestId('avatar-image').props.enforceEarlyResizing).toBe(true);
+});

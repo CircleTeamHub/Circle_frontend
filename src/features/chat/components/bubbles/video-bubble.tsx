@@ -1,6 +1,6 @@
 import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { MediaImage } from '@/components/ui/media-image';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -119,7 +119,6 @@ export function VideoBubble({
 }: VideoBubbleProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [posterLoading, setPosterLoading] = useState(false);
 
   const aspectRatio = useMemo(() => {
     const width = message.videoWidth ?? 0;
@@ -145,6 +144,19 @@ export function VideoBubble({
       onPress={outgoing ? onAvatarPress : undefined}
     />
   );
+  const playOverlay = (
+    <View
+      style={[s.poster, posterUrl ? s.posterOverImage : null]}
+      pointerEvents="none"
+    >
+      <View style={s.playBadge}>
+        <Ionicons name="play" size={26} color="#FFFFFF" />
+      </View>
+      {durationLabel ? (
+        <Text style={s.duration}>{durationLabel}</Text>
+      ) : null}
+    </View>
+  );
   const body = (
     <View style={[s.body, outgoing ? s.bodyOutgoing : null]}>
       <View style={[s.frame, message.mediaExpired ? s.frameExpired : null]}>
@@ -161,7 +173,9 @@ export function VideoBubble({
         >
           {videoUrl ? (
             <View style={{ aspectRatio }}>
-              {!posterUrl ? null : (
+              {posterUrl ? (
+                // 播放键交给 MediaImage 画在封面上、下载进度下面:下载慢时进度盖住它,显示后露出来。
+                // 原来这里自己记「封面加载中」,每个视频划进来都要让整个气泡多渲染两遍。
                 <MediaImage
                   testID="chat-video-poster"
                   source={
@@ -173,21 +187,9 @@ export function VideoBubble({
                   contentFit="cover"
                   cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
                   pointerEvents="none"
-                  onLoadStart={() => setPosterLoading(true)}
-                  onLoadEnd={() => setPosterLoading(false)}
+                  overlay={playOverlay}
                 />
-              )}
-              {posterUrl && posterLoading ? null : <View
-                style={[s.poster, posterUrl ? s.posterOverImage : null]}
-                pointerEvents="none"
-              >
-                <View style={s.playBadge}>
-                  <Ionicons name="play" size={26} color="#FFFFFF" />
-                </View>
-                {durationLabel ? (
-                  <Text style={s.duration}>{durationLabel}</Text>
-                ) : null}
-              </View>}
+              ) : playOverlay}
             </View>
           ) : message.mediaExpired ? (
             <ExpiredMediaPlaceholder kind="video" style={{ aspectRatio }} />

@@ -56,6 +56,8 @@ export function CircleAvatar({
           contentFit="cover"
             cachePolicy="memory-disk"
             transition={0}
+          // 按头像框的像素直接解码(见 Avatar)。
+          enforceEarlyResizing
           onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
           onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
         />
