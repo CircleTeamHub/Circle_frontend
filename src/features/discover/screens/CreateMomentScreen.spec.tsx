@@ -65,28 +65,38 @@ test('selects and publishes multiple videos mixed with images in selection order
     expect.objectContaining({ type: 'video', key: 'posts/me/clip2.mov' }),
   ] }), { idempotencyKey: 'key-1' });
   expect(prepareChatImageForUpload).toHaveBeenCalledTimes(1);
+  const progress = { progressKey: expect.any(String), foreground: true };
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
-    'https://upload.test', 'video/mp4', 'file:///clip.mp4', expect.any(Object), 5 * 60_000,
+    'https://upload.test', 'video/mp4', 'file:///clip.mp4', expect.any(Object), 5 * 60_000, progress,
   );
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
-    'https://upload.test', 'image/jpeg', 'file:///photo.jpg', expect.any(Object), undefined,
+    'https://upload.test', 'image/jpeg', 'file:///photo.jpg', expect.any(Object), undefined, progress,
   );
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
-    'https://upload.test', 'video/quicktime', 'file:///clip2.mov', expect.any(Object), 5 * 60_000,
+    'https://upload.test', 'video/quicktime', 'file:///clip2.mov', expect.any(Object), 5 * 60_000, progress,
   );
 });
 
-test('rejects video over the server 100 MB limit before uploading', async () => {
-  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets: [{ ...assets[0], fileSize: 101 * 1024 * 1024 }] } as never);
+test('starts uploading picked media before publish is pressed', async () => {
+  render(<CreateMomentScreen />);
+  fireEvent.press(screen.getByText('0/9'));
+  await waitFor(() => expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(3));
+  expect(createMoment).not.toHaveBeenCalled();
+
+  fireEvent.changeText(screen.getByPlaceholderText('moment.contentPlaceholder'), 'ready');
+  fireEvent.press(screen.getByText('moment.publish'));
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(1));
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(3);
+});
+
+test('turns away a video over the server 100 MB limit when it is picked', async () => {
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets: [{ ...assets[0], fileSize: 101 * 1024 * 1024 }, assets[1]] } as never);
   render(<CreateMomentScreen />);
   fireEvent.press(screen.getByText('0/9'));
   await waitFor(() => expect(screen.getByText('1/9')).toBeTruthy());
-  fireEvent.changeText(screen.getByPlaceholderText('moment.contentPlaceholder'), 'big');
-  fireEvent.press(screen.getByText('moment.publish'));
-  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-  expect(Alert.alert).toHaveBeenCalledWith('moment.publishFailed', 'upload.errors.fileTooLarge:100');
-  expect(requestUploadPresign).not.toHaveBeenCalled();
-  expect(createMoment).not.toHaveBeenCalled();
+  expect(Alert.alert).toHaveBeenCalledWith('plaza.create.pickerFailed', 'upload.errors.fileTooLarge:100');
+  await waitFor(() => expect(requestUploadPresign).toHaveBeenCalledTimes(1));
+  expect(requestUploadPresign).toHaveBeenCalledWith(expect.objectContaining({ filename: 'photo.jpg' }));
 });
 
 test.each(['image', 'video', 'mixed'])('limits %s selections to nine total media and publishes all nine', async (kind) => {

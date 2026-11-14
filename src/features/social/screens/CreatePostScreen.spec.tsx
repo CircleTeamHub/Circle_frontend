@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 import CreatePostScreen from './CreatePostScreen';
@@ -46,6 +47,8 @@ jest.mock('@/features/discover/store/use-circles-store', () => ({
 }));
 
 beforeEach(() => {
+  jest.clearAllMocks();
+  jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   mockJoinedCircles = [circle];
   mockFetchMyCircles.mockResolvedValue({ ok: true, created: [], joined: mockJoinedCircles });
 });
@@ -127,6 +130,82 @@ test('publishes a selected video with photos in separate media fields', async ()
     'file:///clip.mov',
     expect.any(Object),
     5 * 60_000,
+    { progressKey: expect.any(String), foreground: true },
   );
   expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+function mockPresign() {
+  jest.mocked(requestUploadPresign).mockImplementation(async ({ filename, contentType }) => ({
+    uploadUrl: 'https://upload.test',
+    fileUrl: `https://cdn.test/posts/me/${filename}`,
+    key: `posts/me/${filename}`,
+    requiredHeaders: { 'Content-Type': contentType, 'Content-Length': '12', 'If-None-Match': '*' },
+  }));
+}
+
+test('uploads photos right after they are picked and publishing does not upload them again', async () => {
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
+    canceled: false,
+    assets: [{ type: 'image', uri: 'file:///photo.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg', width: 1200, height: 800 }],
+  });
+  mockPresign();
+  jest.mocked(createPlazaPost).mockResolvedValue({ id: 'published' } as never);
+  render(<CreatePostScreen />);
+
+  fireEvent.press(screen.getByText('0 / 9'));
+  await screen.findByText('1 / 9');
+  await waitFor(() => expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1));
+  expect(createPlazaPost).not.toHaveBeenCalled();
+
+  fireEvent.changeText(screen.getByPlaceholderText('plaza.create.contentPlaceholder'), 'Hello');
+  fireEvent.press(screen.getByText('plaza.create.submit'));
+
+  await waitFor(() => expect(createPlazaPost).toHaveBeenCalledWith(
+    expect.objectContaining({ images: ['https://cdn.test/posts/me/photo.jpg'] }),
+    { idempotencyKey: 'post-key' },
+  ));
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);
+});
+
+test('a photo that failed in the background is uploaded again on publish', async () => {
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
+    canceled: false,
+    assets: [{ type: 'image', uri: 'file:///photo.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg', width: 1200, height: 800 }],
+  });
+  mockPresign();
+  jest.mocked(uploadLocalFileToPresignedUrl).mockRejectedValueOnce(new Error('network'));
+  jest.mocked(createPlazaPost).mockResolvedValue({ id: 'published' } as never);
+  render(<CreatePostScreen />);
+
+  fireEvent.press(screen.getByText('0 / 9'));
+  await screen.findByLabelText('common.retry');
+  fireEvent.changeText(screen.getByPlaceholderText('plaza.create.contentPlaceholder'), 'Hello');
+  fireEvent.press(screen.getByText('plaza.create.submit'));
+
+  await waitFor(() => expect(createPlazaPost).toHaveBeenCalledTimes(1));
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(2);
+});
+
+test('media over the size limit is turned away when picked, not when publishing', async () => {
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
+    canceled: false,
+    assets: [
+      { type: 'video', uri: 'file:///big.mov', fileName: 'big.mov', mimeType: 'video/quicktime', width: 720, height: 1280, fileSize: 101 * 1024 * 1024 },
+      { type: 'image', uri: 'file:///photo.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg', width: 1200, height: 800 },
+    ],
+  });
+  mockPresign();
+  render(<CreatePostScreen />);
+
+  fireEvent.press(screen.getByText('0 / 9'));
+  await screen.findByText('1 / 9');
+
+  expect(Alert.alert).toHaveBeenCalledWith('plaza.create.pickerFailed', 'upload.errors.fileTooLarge');
+  await waitFor(() => expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1));
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
+    'https://upload.test', 'image/jpeg', 'file:///photo.jpg', expect.any(Object), undefined, expect.any(Object),
+  );
 });

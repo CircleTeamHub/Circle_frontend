@@ -19,12 +19,6 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
-import {
-  requestUploadPresign,
-  resolveUploadContentType,
-  sanitizeUploadFilename,
-  uploadLocalFileToPresignedUrl,
-} from '@/services/api/upload';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
@@ -33,7 +27,6 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { resolveMembershipEntitlementLevel } from '@/features/profile/membership-plans';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
-import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -80,10 +73,9 @@ export default function CreateCircleScreen() {
   const [submitting, setSubmitting] = useState(false);
   // state 要等下一次渲染才生效,连点两下都会以 submitting=false 进来:ref 在入口同步拦。
   const inFlightRef = useRef(false);
-  // 重试同一个圈子沿用同一个幂等键;头像只传一次,否则每次重试的 avatarUrl 都不同,
-  // 请求体一变就成了「新的一个圈子」。
+  // 重试同一个圈子沿用同一个幂等键;头像只传一次(传好的结果由 useCircleForm 记住),
+  // 否则每次重试的 avatarUrl 都不同,请求体一变就成了「新的一个圈子」。
   const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
-  const uploadedAvatarRef = useRef<{ uri: string; url: string } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -115,32 +107,10 @@ export default function CreateCircleScreen() {
     setSubmitting(true);
     try {
       let uploadedAvatarUrl: string | undefined;
-      if (form.pickedAvatarUri && uploadedAvatarRef.current?.uri === form.pickedAvatarUri) {
-        uploadedAvatarUrl = uploadedAvatarRef.current.url;
-      } else if (form.pickedAvatarUri) {
-        try {
-          const fileName =
-            form.pickedAvatarUri.split('/').pop() ?? 'avatar.jpg';
-          const contentType =
-            resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(fileName),
-            contentType,
-            folder: 'avatars',
-            fileUri: form.pickedAvatarUri,
-          });
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            contentType,
-            form.pickedAvatarUri,
-            presign.requiredHeaders,
-          );
-          uploadedAvatarUrl = presign.fileUrl;
-          uploadedAvatarRef.current = { uri: form.pickedAvatarUri, url: presign.fileUrl };
-        } catch (error) {
-          // 头像上传是非阻塞的 —— 失败时圈子还能创建（avatarUrl 留空）。
-          reportHandledFailure('circle', 'avatarUpload', error);
-        }
+      if (form.pickedAvatarUri) {
+        // 头像选中时就开始传了，这里只等它传完。上传是非阻塞的 —— 仍失败时圈子
+        // 照样创建（avatarUrl 留空），失败已在上传时上报。
+        uploadedAvatarUrl = (await form.settleAvatar()) ?? undefined;
       }
 
       const input = {

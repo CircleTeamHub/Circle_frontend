@@ -28,7 +28,8 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
-import { mapWithConcurrency } from '@/utils/concurrency';
+import { useEagerMediaUploads } from '@/features/discover/hooks/use-eager-media-uploads';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -43,6 +44,68 @@ import type { MomentAttachmentInput } from '@/types';
 const MOMENT_VIDEO_MAX_SIZE_MB = 100;
 
 type UploadedMomentMedia = { attachment: MomentAttachmentInput; url: string };
+
+/** 选中即传(见 useEagerMediaUploads):进度画在缩略图上,走 iOS 前台会话,人就停在页面上等。 */
+async function uploadMomentMedia(
+  asset: ImagePicker.ImagePickerAsset,
+  progressKey: string,
+): Promise<UploadedMomentMedia> {
+  const isVideo = asset.type === 'video';
+  const fileName = asset.fileName ?? (asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg'));
+  const contentType =
+    resolveUploadContentType({
+      mimeType: asset.mimeType,
+      fileName,
+    }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+  const input = {
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+    contentType,
+    filename: fileName,
+  };
+  const prepared = isVideo ? input : await prepareChatImageForUpload(input);
+  const presign = await requestUploadPresign({
+    filename: sanitizeUploadFilename(prepared.filename),
+    contentType: prepared.contentType,
+    folder: 'posts',
+    fileUri: prepared.uri,
+  });
+  await uploadLocalFileToPresignedUrl(
+    presign.uploadUrl,
+    prepared.contentType,
+    prepared.uri,
+    presign.requiredHeaders,
+    isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+    { progressKey, foreground: true },
+  );
+  const duration = typeof asset.duration === 'number' ? asset.duration / 1000 : undefined;
+  const poster = isVideo
+    ? await uploadChatVideoPoster(asset.uri, duration, fileName, 'posts', undefined, progressKey)
+    : null;
+  return {
+    url: presign.fileUrl,
+    attachment: {
+      type: isVideo ? 'video' : 'image',
+      key: presign.key,
+      ...(poster ? { posterKey: poster.key } : {}),
+      ...((prepared.width ?? 0) > 0 ? { width: prepared.width } : {}),
+      ...((prepared.height ?? 0) > 0 ? { height: prepared.height } : {}),
+      ...(isVideo && duration !== undefined ? { duration } : {}),
+    },
+  };
+}
+
+function reportMomentMediaUploadFailure(error: unknown) {
+  reportHandledFailure('moments', 'mediaUpload', error);
+}
+
+/** 选的时候就拦下超限的条目,不要等写完正文点发布才说。 */
+function oversizeLimitMb(asset: ImagePicker.ImagePickerAsset): number | null {
+  if (typeof asset.fileSize !== 'number') return null;
+  const maxMb = asset.type === 'video' ? MOMENT_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB;
+  return asset.fileSize > maxMb * 1024 * 1024 ? maxMb : null;
+}
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -75,6 +138,12 @@ const s = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbClip: { borderRadius: Radius.md, overflow: 'hidden' },
+  failedOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -122,15 +191,23 @@ export default function CreateMomentScreen() {
   const prependMoment = useMomentsStore((s) => s.prependMoment);
 
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const {
+    items: mediaItems,
+    add: addMedia,
+    remove: removeMedia,
+    retry: retryMedia,
+    settle: settleMedia,
+  } = useEagerMediaUploads({
+    upload: uploadMomentMedia,
+    onError: reportMomentMediaUploadFailure,
+  });
   const [visibility, setVisibility] = useState<'FRIENDS_ONLY' | 'PRIVATE'>('FRIENDS_ONLY');
   const [submitting, setSubmitting] = useState(false);
   // state 要等下一次渲染才生效,连点两下都会以 submitting=false 进来:ref 在入口同步拦。
   const inFlightRef = useRef(false);
   // 重试同一条动态沿用同一个幂等键(超时那次可能已经发出去了)。已传好的媒体按所选
-  // 条目记住、重试不再上传:每次重传 key 都不同,请求体一变就成了「另一条动态」。
+  // 条目记住(useEagerMediaUploads)、重试不再上传:每次重传 key 都不同,请求体一变就成了「另一条动态」。
   const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
-  const uploadedMediaRef = useRef(new Map<ImagePicker.ImagePickerAsset, UploadedMomentMedia>());
 
   const d = useMemo(
     () => ({
@@ -143,6 +220,7 @@ export default function CreateMomentScreen() {
       submitBtn: { backgroundColor: colors.primary },
       submitBtnDisabled: { backgroundColor: colors.surfaceBorder },
       submitText: { color: colors.white },
+      failedOverlay: { backgroundColor: colors.overlay },
     }),
     [colors],
   );
@@ -150,7 +228,7 @@ export default function CreateMomentScreen() {
   const canSubmit = content.trim().length > 0;
 
   const handlePickImages = useCallback(async () => {
-    const remaining = LIMITS.POST_MAX_MEDIA - images.length;
+    const remaining = LIMITS.POST_MAX_MEDIA - mediaItems.length;
     if (remaining <= 0) return;
     // review 修复：先开 picker、失败才引导（#109 的门禁反了）。iOS PHPicker /
     // Android 13+ 系统 photo picker 无需相册权限即可返回所选图片 —— 前置的
@@ -165,114 +243,36 @@ export default function CreateMomentScreen() {
         quality: 0.8,
       });
       if (result.canceled) return;
-      setImages((prev) => [
-        ...prev,
-        ...result.assets.slice(0, LIMITS.POST_MAX_MEDIA - prev.length),
-      ]);
+      const limits = result.assets.map(oversizeLimitMb);
+      const maxMb = limits.find((limit) => limit !== null);
+      if (maxMb != null) {
+        Alert.alert(t('plaza.create.pickerFailed'), t('upload.errors.fileTooLarge', { maxMb }));
+      }
+      addMedia(result.assets.filter((_, index) => limits[index] === null), LIMITS.POST_MAX_MEDIA);
     } catch {
       Alert.alert(
         t('validation.cannotSelectImage'),
         t('validation.albumPermission'),
       );
     }
-  }, [images.length, t]);
-
-  const handleRemoveImage = useCallback((index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [addMedia, mediaItems.length, t]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || submitting || inFlightRef.current) return;
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const hasOversizedImage = images.some(
-        (asset) =>
-          asset.type !== 'video' &&
-          typeof asset.fileSize === 'number' &&
-          asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024,
-      );
-      if (hasOversizedImage) {
-        Alert.alert(
-          t('moment.publishFailed'),
-          t('upload.errors.fileTooLarge', {
-            maxMb: LIMITS.IMAGE_MAX_SIZE_MB,
-          }),
-        );
-        return;
-      }
-      if (images.some((asset) => asset.type === 'video' && typeof asset.fileSize === 'number' && asset.fileSize > MOMENT_VIDEO_MAX_SIZE_MB * 1024 * 1024)) {
-        Alert.alert(t('moment.publishFailed'), t('upload.errors.fileTooLarge', { maxMb: MOMENT_VIDEO_MAX_SIZE_MB }));
-        return;
-      }
-
-      // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
-      // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
-      const outcomes = await mapWithConcurrency(images, 3, async (asset): Promise<UploadedMomentMedia | null> => {
-        const uploaded = uploadedMediaRef.current.get(asset);
-        if (uploaded) return uploaded;
-        try {
-          const isVideo = asset.type === 'video';
-          const fileName = asset.fileName ?? (asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg'));
-          const contentType =
-            resolveUploadContentType({
-              mimeType: asset.mimeType,
-              fileName,
-            }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
-          const input = {
-            uri: asset.uri,
-            width: asset.width,
-            height: asset.height,
-            contentType,
-            filename: fileName,
-          };
-          const prepared = isVideo ? input : await prepareChatImageForUpload(input);
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(prepared.filename),
-            contentType: prepared.contentType,
-            folder: 'posts',
-            fileUri: prepared.uri,
-          });
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            prepared.contentType,
-            prepared.uri,
-            presign.requiredHeaders,
-            isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
-          );
-          const duration = typeof asset.duration === 'number' ? asset.duration / 1000 : undefined;
-          const poster = isVideo ? await uploadChatVideoPoster(asset.uri, duration, fileName, 'posts') : null;
-          const result: UploadedMomentMedia = {
-            url: presign.fileUrl,
-            attachment: {
-              type: isVideo ? 'video' : 'image',
-              key: presign.key,
-              ...(poster ? { posterKey: poster.key } : {}),
-              ...((prepared.width ?? 0) > 0 ? { width: prepared.width } : {}),
-              ...((prepared.height ?? 0) > 0 ? { height: prepared.height } : {}),
-              ...(isVideo && duration !== undefined ? { duration } : {}),
-            },
-          };
-          uploadedMediaRef.current.set(asset, result);
-          return result;
-        } catch (error) {
-          reportHandledFailure('moments', 'mediaUpload', error);
-          return null;
-        }
-      });
-      const uploaded = outcomes.filter(
-        (item): item is NonNullable<typeof item> => item !== null,
-      );
-      const failedUploads = images.length - uploaded.length;
-
-      if (failedUploads > 0) {
+      // 媒体在选中时就开始传了,这里只等还没传完的;失败的会补传一次。
+      const settled = await settleMedia();
+      if (!settled.ok) {
         const reason =
-          failedUploads === images.length
+          settled.failedCount === mediaItems.length
             ? t('moment.uploadFailed')
-            : t('moment.partialUploadFailed', { count: failedUploads });
+            : t('moment.partialUploadFailed', { count: settled.failedCount });
         Alert.alert(t('moment.publishFailed'), reason);
         return;
       }
+      const uploaded = settled.results;
 
       const input = {
         content: content.trim(),
@@ -293,7 +293,7 @@ export default function CreateMomentScreen() {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [canSubmit, submitting, intentKeys, content, images, visibility, prependMoment, router, t]);
+  }, [canSubmit, submitting, intentKeys, content, settleMedia, mediaItems.length, visibility, prependMoment, router, t]);
 
   return (
     <KeyboardAvoidingContainer
@@ -319,26 +319,39 @@ export default function CreateMomentScreen() {
           />
 
           <View style={s.photoRow}>
-            {images.map((asset, i) => (
-              <View key={`${asset.uri}-${i}`}>
-                {asset.type === 'video' ? (
-                  <View style={[s.photoThumb, { backgroundColor: colors.textSecondary, alignItems: 'center', justifyContent: 'center' }]}>
-                    <Ionicons name="videocam" size={28} color={colors.white} />
-                  </View>
-                ) : <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />}
+            {mediaItems.map(({ id, asset, status }) => (
+              <View key={id}>
+                <View style={s.thumbClip}>
+                  {asset.type === 'video' ? (
+                    <View style={[s.photoThumb, { backgroundColor: colors.textSecondary, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Ionicons name="videocam" size={28} color={colors.white} />
+                    </View>
+                  ) : <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />}
+                  {status === 'uploading' ? <NoteMediaUploadRing progressKey={id} /> : null}
+                  {status === 'failed' ? (
+                    <Pressable
+                      style={[s.failedOverlay, d.failedOverlay]}
+                      onPress={() => retryMedia(id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.retry')}
+                    >
+                      <Ionicons name="refresh" size={24} color={colors.white} />
+                    </Pressable>
+                  ) : null}
+                </View>
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
-                  onPress={() => handleRemoveImage(i)}
+                  onPress={() => removeMedia(id)}
                   accessibilityLabel={t('moment.removeMedia', { defaultValue: '移除图片或视频' })}
                 >
                   <Ionicons name="close" size={12} color={colors.white} />
                 </Pressable>
               </View>
             ))}
-            {images.length < LIMITS.POST_MAX_MEDIA ? (
+            {mediaItems.length < LIMITS.POST_MAX_MEDIA ? (
               <Pressable style={[s.photoBtn, d.photoBtn]} onPress={handlePickImages} accessibilityLabel={t('moment.selectMedia', { defaultValue: '添加图片或视频' })}>
                 <Ionicons name="add" size={24} color={colors.textSecondary} />
-                <Text style={[s.photoCount, d.photoCount]}>{images.length}/{LIMITS.POST_MAX_MEDIA}</Text>
+                <Text style={[s.photoCount, d.photoCount]}>{mediaItems.length}/{LIMITS.POST_MAX_MEDIA}</Text>
               </Pressable>
             ) : null}
           </View>

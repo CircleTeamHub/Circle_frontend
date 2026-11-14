@@ -404,3 +404,22 @@ test('keeps upload progress visible inside its existing native modal', () => {
   render(<MomentCommentInput replyTo={null} onSubmit={jest.fn()} onDismiss={jest.fn()} />);
   expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });
+
+test('the picked image starts uploading before send and send does not upload it again', async () => {
+  const onSubmit = jest.fn().mockResolvedValue(undefined);
+  render(<MomentCommentInput replyTo={null} onSubmit={onSubmit} onDismiss={jest.fn()} />);
+
+  fireEvent.press(screen.getByLabelText('添加图片'));
+  await waitFor(() => expect(mockUpload).toHaveBeenCalledTimes(1));
+  expect(mockUpload).toHaveBeenCalledWith(
+    expect.any(String), expect.any(String), expect.any(String), expect.any(Object), undefined,
+    { progressKey: expect.any(String), foreground: true },
+  );
+  expect(onSubmit).not.toHaveBeenCalled();
+
+  await act(async () => {
+    fireEvent(screen.getByPlaceholderText('写评论...'), 'submitEditing');
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('', undefined, [expect.any(String)], []));
+  expect(mockUpload).toHaveBeenCalledTimes(1);
+});
