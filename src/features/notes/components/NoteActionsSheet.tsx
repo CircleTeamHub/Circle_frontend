@@ -6,10 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
-import {
-  NOTE_WORK_STATUS_ICON,
-  type SetNoteWorkStatus,
-} from '@/features/notes/utils/work-status';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface NoteActionsSheetProps {
@@ -61,7 +58,7 @@ type NoteAction = {
   run: () => void;
 } & (
   | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: never }
-  /** For glyphs Ionicons lacks (the note rating 烟花 / 乌云). */
+  /** For glyphs Ionicons lacks (the note rating 礼花 / 乌云). */
   | { mciIcon: keyof typeof MaterialCommunityIcons.glyphMap; icon?: never }
 );
 
@@ -282,16 +279,6 @@ export function NoteActionsSheet({
                   defaultValue: '开工',
                 }),
                 run: () => onSetWorkStatus?.(note, 'WORKING'),
-              },
-              {
-                key: 'work-status-off-shelf',
-                // 场地「下架」只是一个状态标记,笔记照样对所有人可见;和下面真正把
-                // 笔记下架(UNLISTED)的那一项用不同的图标和文案,避免误以为已隐藏。
-                icon: NOTE_WORK_STATUS_ICON.OFF_SHELF,
-                label: t('notes.actions.venueOffShelf', {
-                  defaultValue: '场地下架',
-                }),
-                run: () => onSetWorkStatus?.(note, 'OFF_SHELF'),
               },
             ]
           : []),

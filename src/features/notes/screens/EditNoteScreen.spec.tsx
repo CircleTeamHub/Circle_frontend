@@ -16,6 +16,7 @@ import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { resetUploadProgress, startUploadProgress } from '@/stores/upload-progress-store';
 import * as noteSections from '@/features/notes/utils/note-sections';
 import { recordMetric } from '@/observability/metrics';
+import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
 // 图片格子里只有图本身:不再在底部垫一条写着「图片 / 视频」的白条。
@@ -208,6 +209,15 @@ test('loads old mixed media into independent regions and deleting images preserv
   ]));
 });
 
+test('the city survives the server draft round trip and counts as an edit', () => {
+  const withCity = draftRecordFromServer(reviewDraft({ city: '上海' }), 'city-draft');
+  const withoutCity = draftRecordFromServer(reviewDraft(), 'city-draft');
+  expect(withCity.city).toBe('上海');
+  // 旧服务端的草稿没有这个字段：按未选处理。
+  expect(withoutCity.city).toBeNull();
+  expect(draftFingerprint(withCity)).not.toBe(draftFingerprint(withoutCity));
+});
+
 test('server drafts recover a separate video region from old mixed ownership', () => {
   const record = draftRecordFromServer(reviewDraft({ sections: {
     text: { content: '', contentJson: [{ type: 'noteLayout', props: {
@@ -315,7 +325,7 @@ jest.mock('@/storage', () => ({
   },
 }));
 
-const mockNavigation = { dispatch: jest.fn() };
+const mockNavigation = { dispatch: jest.fn(), setOptions: jest.fn() };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
@@ -628,6 +638,51 @@ test('an accepted publication does not wait for an older cloud autosave', async 
     await act(async () => { autosave.resolve(reviewDraft()); await autosave.promise; });
     rendered.unmount();
   }
+});
+
+test('the title card picks a city with the shared picker, can clear it, and saves the chosen city', async () => {
+  render(<EditNoteScreen />);
+  pressComposer('title');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.cityLabel' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith(
+    expect.objectContaining({ params: { target: 'note' } }),
+  );
+
+  // 城市页选完回到编辑页：focus 时取走结果。
+  useCityPickStore.getState().pick('note', '成都');
+  await act(async () => { mockFocusCallback?.(); });
+  expect(screen.getByText('成都')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.cityLabel' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith(
+    expect.objectContaining({ params: { target: 'note', city: '成都' } }),
+  );
+
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.cityClear' }));
+  expect(screen.queryByText('成都')).toBeNull();
+  useCityPickStore.getState().pick('note', '杭州');
+  await act(async () => { mockFocusCallback?.(); });
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '西湖边的茶馆');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(createNote).toHaveBeenCalledWith(
+    expect.objectContaining({ title: '西湖边的茶馆', city: '杭州' }),
+  ));
+});
+
+test('a note saved without a city leaves the field out, so an older server still accepts it', async () => {
+  render(<EditNoteScreen />);
+  pressComposer('title');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '没选城市');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(createNote).toHaveBeenCalledWith(
+    expect.objectContaining({ title: '没选城市' }),
+  ));
+  expect(jest.mocked(createNote).mock.calls[0][0]).not.toHaveProperty('city');
+});
+
+// 守卫一直挂着；iOS 侧滑不看守卫，会把页面滑走而导航状态还留着它，之后每次返回都再弹确认框。
+test('the editor turns off swipe-back so leaving always goes through the unsaved-changes prompt', () => {
+  render(<EditNoteScreen />);
+  expect(mockNavigation.setOptions).toHaveBeenCalledWith({ gestureEnabled: false });
 });
 
 test('saving a blank note reveals the required title so it can be corrected', async () => {

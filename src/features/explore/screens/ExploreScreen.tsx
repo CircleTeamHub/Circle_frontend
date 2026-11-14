@@ -1,12 +1,14 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useFonts } from 'expo-font';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExploreTile } from '@/features/explore/components/explore-tile';
 import {
   AssistantTileArt,
   MomentsTileArt,
+  RankingTileArt,
 } from '@/features/explore/components/explore-tile-art';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Gradients, Spacing, Typography, useTheme } from '@/theme';
@@ -18,6 +20,12 @@ import { useChatStore } from '@/chat-core/store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
 import type { AssistantBootstrapResponse } from '@/features/assistant/types';
+
+// 卡片标题用站酷快乐体（OFL，见 assets/legal/asset-notices.json）。打包的是裁过的子集：只含
+// 中英文标题用到的字和基本拉丁字母；日文、韩文、带重音的西语字母不在里面，那几种语言仍用系统粗体，
+// 免得一个标题里混两种字体。改标题文案要重新裁字体（fontTools pyftsubset）。
+const TILE_TITLE_FONT = 'ZCOOLKuaiLe-Subset';
+const TILE_TITLE_FONT_LANGUAGES = ['zh', 'en'];
 
 const s = StyleSheet.create({
   // tab 根屏头部：大标题，没有返回箭头（对齐圈子广场 / 联系人）。
@@ -37,12 +45,19 @@ const s = StyleSheet.create({
   },
 });
 
-/** 探索 tab 首页：两块整行入口磁贴，朋友圈在上、AI小助手在下，只写名字。 */
+/** 探索 tab 首页：三块整行入口磁贴，依次是朋友圈、AI小助手、大众点评，只写名字。 */
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [titleFontLoaded] = useFonts({
+    [TILE_TITLE_FONT]: require('../../../../assets/fonts/ZCOOLKuaiLe-Subset.ttf'),
+  });
+  const titleFontFamily =
+    titleFontLoaded && TILE_TITLE_FONT_LANGUAGES.includes(i18n.language?.slice(0, 2))
+      ? TILE_TITLE_FONT
+      : undefined;
   // 朋友圈磁贴的红点 = 朋友圈铃铛的未读（与探索 tab 的红点同一口径）。
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
 
@@ -115,8 +130,13 @@ export default function ExploreScreen() {
     router.push('/(tabs)/explore/assistant');
   }, [assistantLock, router, sessionEpoch]);
 
+  const handleOpenRanking = useCallback(() => {
+    router.push('/(tabs)/explore/note-ranking');
+  }, [router]);
+
   const momentsTitle = t('discover.moments');
   const assistantTitle = t('assistant.name');
+  const rankingTitle = t('explore.ranking.title', { defaultValue: '大众点评' });
 
   return (
     <View testID={E2E_TEST_IDS.exploreScreen} style={d.container}>
@@ -131,6 +151,7 @@ export default function ExploreScreen() {
             testID={E2E_TEST_IDS.exploreMomentsEntry}
             title={momentsTitle}
             gradient={Gradients.exploreMoments}
+            titleFontFamily={titleFontFamily}
             art={<MomentsTileArt gradient={Gradients.exploreMoments} />}
             badgeCount={momentsUnread}
             accessibilityLabel={
@@ -144,9 +165,19 @@ export default function ExploreScreen() {
             testID={E2E_TEST_IDS.exploreAssistantEntry}
             title={assistantTitle}
             gradient={Gradients.exploreAssistant}
+            titleFontFamily={titleFontFamily}
             art={<AssistantTileArt />}
             accessibilityLabel={assistantTitle}
             onPress={handleOpenAssistant}
+          />
+          <ExploreTile
+            testID={E2E_TEST_IDS.exploreRankingEntry}
+            title={rankingTitle}
+            gradient={Gradients.exploreRanking}
+            titleFontFamily={titleFontFamily}
+            art={<RankingTileArt gradient={Gradients.exploreRanking} />}
+            accessibilityLabel={rankingTitle}
+            onPress={handleOpenRanking}
           />
         </View>
       </ScrollView>

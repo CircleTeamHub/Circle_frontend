@@ -52,9 +52,9 @@ test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => 
   assert.match(screen, /cloud-upload-outline/);
   assert.match(screen, /notes\.unlistedAutoDeleteHint/);
   assert.match(screen, /notes\.empty\.noUnlisted/);
-  // 语义拍板（2026-08-16）：下架是长期仓库不再自动删除；到期清理只发生在回收站。
-  assert.match(zh, /已下架笔记不会自动删除，可随时重新上架。/);
-  assert.doesNotMatch(zh, /已下架笔记会在一个月后自动删除/);
+  // 语义拍板（2026-11-13，取代 08-16 的「不自动删除」）：下架 60 天后自动删除，回收站取消。
+  assert.match(zh, /下架 60 天后自动删除，期间可随时重新上架/);
+  assert.doesNotMatch(zh, /已下架笔记不会自动删除/);
   assert.match(zh, /上架/);
 });
 

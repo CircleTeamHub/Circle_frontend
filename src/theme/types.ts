@@ -69,7 +69,7 @@ export interface ThemeColors {
   warningText: string;
   orange: string;
   blue: string;
-  /** 笔记好评(烟花)图标。 */
+  /** 笔记好评(礼花)图标。 */
   ratingGood: string;
   /** 笔记差评(雨云)图标。 */
   ratingBad: string;

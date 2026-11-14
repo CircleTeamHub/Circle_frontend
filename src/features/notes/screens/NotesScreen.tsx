@@ -432,10 +432,6 @@ function NotesContent() {
   }, [groups, t, tabOrderIds]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
-  const openRecycleBin = useCallback(
-    () => router.push('/(tabs)/profile/notes/recycle-bin' as never),
-    [router],
-  );
   const openUnlisted = useCallback(
     () => router.push('/(tabs)/profile/notes/unlisted' as never),
     [router],
@@ -952,7 +948,6 @@ function NotesContent() {
             ) : (
               <NotesHeaderActions
                 compact={compactActions}
-                onOpenRecycleBin={openRecycleBin}
                 onOpenUnlisted={openUnlisted}
                 onOpenDrafts={openDrafts}
                 onOpenSettings={openSettings}

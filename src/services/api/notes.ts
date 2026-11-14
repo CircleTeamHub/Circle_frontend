@@ -15,6 +15,7 @@ import type {
   NoteDraftSummary,
   NoteExportResult,
   NoteGroup,
+  NoteRanking,
   NoteSummary,
   SaveNoteDraftInput,
   NoteWorkStatus,
@@ -52,10 +53,6 @@ export function getCachedCollectedNote(sourceNoteId: string | undefined) {
 
 export function getCachedNoteDrafts() {
   return readPageSnapshot<NoteDraftSummary[]>(useAuthStore.getState().user?.id, 'drafts:summaries');
-}
-
-export function getCachedDeletedNotes() {
-  return readPageSnapshot<NoteSummary[]>(useAuthStore.getState().user?.id, 'notes:recycle');
 }
 
 function sanitizeNoteMediaItem<T extends Record<string, unknown>>(item: T): T {
@@ -220,6 +217,13 @@ export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
     }
     throw error;
   }
+}
+
+/** 大众点评月榜。city 不传 = 全国；只有选了城市的源笔记会上榜。 */
+export async function fetchNoteRanking(city: string | null): Promise<NoteRanking> {
+  const qs = city ? `?city=${encodeURIComponent(city)}` : '';
+  const ranking = await apiClient<NoteRanking>(`/note/ranking${qs}`);
+  return { ...ranking, items: ranking.items.map(sanitizeNoteSummary) };
 }
 
 export async function fetchNoteDrafts(): Promise<NoteDraftSummary[]> {
@@ -521,29 +525,7 @@ export async function setNoteSourceGroup(
   ));
 }
 
-/** FE#92 回收站：已软删笔记列表。 */
-export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
-  const { user, sessionEpoch } = useAuthStore.getState();
-  const version = noteMutationVersion;
-  const revision = getPageSnapshotRevision();
-  const startedAt = Date.now();
-  const notes = (await apiClient<NoteSummary[]>('/note/recycle-bin')).map(sanitizeNoteSummary);
-  if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
-    writePageSnapshot(user?.id, 'notes:recycle', notes, startedAt);
-  }
-  return notes;
-}
-
-/** FE#92 回收站：恢复软删笔记（后端恢复为 ACTIVE）。 */
-/** 回收站「立即删除」：不等 30 天到期，直接永久删除（只接受已在回收站的笔记）。 */
-export async function purgeNote(id: string): Promise<void> {
-  await markNoteWrite(apiClient<void>(`/note/${id}/permanent`, { method: 'DELETE' }));
-}
-
-export async function restoreNote(id: string): Promise<void> {
-  return markNoteWrite(apiClient<void>(`/note/${id}/restore`, { method: 'POST' }));
-}
-
+/** 删除即永久删除（回收站已取消）；想留后悔余地用下架，60 天内可重新上架。 */
 export async function deleteNote(id: string): Promise<void> {
   await markNoteWrite(apiClient<void>(`/note/${id}`, { method: 'DELETE' }));
 }

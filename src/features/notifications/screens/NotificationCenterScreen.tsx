@@ -37,6 +37,10 @@ import {
 } from '@/features/notifications/utils/snackbar-route';
 import { isCurrentRoute } from '@/utils/current-route';
 import {
+  getCircleNotificationSettingsHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
+import {
   NotificationTabBar,
   type NotificationTabItem,
   type NotificationTabKey,
@@ -110,6 +114,9 @@ export default function NotificationCenterScreen() {
   const cursorScopeRef = useRef({ domain, ownerId, sessionEpoch });
   const [loadError, setLoadError] = useState<string | null>(null);
   const notificationScope = getNotificationScope(segments);
+  const handleOpenCircleSettings = useCallback(() => {
+    router.push(getCircleNotificationSettingsHref(getUserProfileScopeFromSegments(segments)));
+  }, [router, segments]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -410,7 +417,20 @@ export default function NotificationCenterScreen() {
         <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>
           {title}
         </Text>
-        <View style={{ width: 26 }} />
+        {/* 圈子通知设置就放在圈子通知页里；消息页飞机进来的同一页按当前栈跳，不甩去别的 tab。 */}
+        {domain === 'circle' ? (
+          <Pressable
+            style={s.headerAction}
+            onPress={handleOpenCircleSettings}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('discover.notifications.title')}
+          >
+            <Ionicons name="settings-outline" size={22} color={colors.text} />
+          </Pressable>
+        ) : (
+          <View style={s.headerAction} />
+        )}
       </View>
 
       <NotificationTabBar active={tab} tabs={tabs} onSelect={setTab} />
@@ -492,4 +512,5 @@ const s = StyleSheet.create({
   },
   // 和空状态的图标同一高度,加载完换成内容或空状态时不跳位。
   loading: { paddingTop: 80, alignItems: 'center' },
+  headerAction: { width: 26, alignItems: 'flex-end' },
 });

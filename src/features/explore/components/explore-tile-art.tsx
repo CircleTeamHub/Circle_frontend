@@ -16,6 +16,15 @@ const SPARKLE_PATH =
 const HEART_PATH =
   'M0 3.2C-1.6 1.6 -4 0.2 -4 -1.6C-4 -3 -2.9 -4 -1.7 -4C-0.9 -4 -0.3 -3.6 0 -3C0.3 -3.6 0.9 -4 1.7 -4C2.9 -4 4 -3 4 -1.6C4 0.2 1.6 1.6 0 3.2Z';
 const MASCOT_LAYERS = ['back', 'front', 'overlap'] as const;
+// 单位大小的五角星，中心在原点。
+const STAR_PATH =
+  'M0 -1L0.265 -0.364L0.951 -0.309L0.428 0.139L0.588 0.809L0 0.45L-0.588 0.809L-0.428 0.139L-0.951 -0.309L-0.265 -0.364Z';
+// 领奖台三级：2 号在左、1 号居中最高、3 号在右；底边伸出画布被裁掉。
+const PODIUM_STEPS = [
+  { x: 236, y: 52, width: 32 },
+  { x: 268, y: 36, width: 34 },
+  { x: 302, y: 62, width: 32 },
+] as const;
 
 interface Sparkle {
   x: number;
@@ -170,6 +179,48 @@ export function AssistantTileArt() {
         <Ellipse cx={76} cy={160} rx={18} ry={10} fill={colors.error} fillOpacity={0.55} />
         <Ellipse cx={240} cy={160} rx={18} ry={10} fill={colors.error} fillOpacity={0.55} />
       </G>
+    </>
+  );
+}
+
+/** 大众点评：三级领奖台，冠军台上一颗星。 */
+export function RankingTileArt({ gradient }: { gradient: readonly [string, string] }) {
+  const { colors } = useTheme();
+  return (
+    <>
+      <TileDecor
+        bubbles={[
+          { x: 206, y: 80, r: 9 },
+          { x: 192, y: 22, r: 4 },
+          { x: 338, y: 16, r: 5, ring: true },
+        ]}
+        sparkles={[
+          { x: 220, y: 30, size: 6 },
+          { x: 252, y: 26, size: 4, opacity: 0.85 },
+          { x: 326, y: 40, size: 5 },
+        ]}
+      />
+      {PODIUM_STEPS.map((step, index) => (
+        <G key={step.x}>
+          <Rect x={step.x} y={step.y + 4} width={step.width} height={110} rx={6} fill={colors.black} fillOpacity={0.12} />
+          <Rect x={step.x} y={step.y} width={step.width} height={110} rx={6} fill={colors.white} />
+          <Circle
+            cx={step.x + step.width / 2}
+            cy={step.y + 14}
+            r={6}
+            fill={gradient[index === 1 ? 0 : 1]}
+            fillOpacity={index === 1 ? 0.9 : 0.35}
+          />
+        </G>
+      ))}
+      <Path
+        d={STAR_PATH}
+        transform="translate(285 18) rotate(-8) scale(13)"
+        fill={colors.warning}
+        stroke={colors.white}
+        strokeWidth={0.16}
+        strokeLinejoin="round"
+      />
     </>
   );
 }

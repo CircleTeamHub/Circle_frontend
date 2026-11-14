@@ -764,7 +764,7 @@ export default function MessagesScreen() {
   );
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const filterOrder = useMessageGroupsStore((state) => state.filterOrder);
-  const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
+  const [selectedFilterId, setActiveFilterId] = useState("all"); // 用户点选的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [quickAddExpanded, setQuickAddExpanded] = useState(false);
   const quickAddProgress = useRef(new Animated.Value(0)).current;
@@ -1085,6 +1085,12 @@ export default function MessagesScreen() {
       .map((g) => ({ id: `custom:${g.id}`, label: g.name }));
     return orderMessageFilters([...BASE_FILTERS, ...customTabs], filterOrder);
   }, [BASE_FILTERS, conversationGroups, filterOrder]);
+
+  // 选中的分组在分组管理里被隐藏或删除后回到「全部」：否则高亮落在第一个标签上，
+  // 列表却还按那个分组过滤。
+  const activeFilterId = filterItems.some((item) => item.id === selectedFilterId)
+    ? selectedFilterId
+    : "all";
 
   // 当前激活标签在 filterItems 中的下标，供 FilterTabs 高亮使用
   const activeTab = useMemo(

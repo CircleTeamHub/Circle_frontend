@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 import {
   MAX_CITY_SELECTION,
   buildInitialCityPickerState,
@@ -148,18 +149,23 @@ export default function SelectCityScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const user = useAuthStore((st) => st.user);
-  const params = useLocalSearchParams<{ multiSelect?: string; target?: string }>();
-  // 三个入口都走多选：发帖(post)、建圈(circle)、筛选(filter)。
+  const params = useLocalSearchParams<{ multiSelect?: string; target?: string; city?: string }>();
+  // 发帖(post)、建圈(circle)、筛选(filter)走多选；笔记城市(note)、大众点评榜(ranking)单选，
+  // 当前值从 city 参数带进来，选完交给 useCityPickStore。
   // circle-form 仅传 multiSelect=true（无 target）→ 归为 circle，保持原行为。
-  const target: 'post' | 'circle' | 'filter' =
+  const target: 'post' | 'circle' | 'filter' | 'note' | 'ranking' =
     params.target === 'filter'
       ? 'filter'
       : params.target === 'post'
         ? 'post'
-        : params.multiSelect === 'true'
-          ? 'circle'
-          : 'post';
-  const isMultiSelect = params.multiSelect === 'true';
+        : params.target === 'note' || params.target === 'ranking'
+          ? params.target
+          : params.multiSelect === 'true'
+            ? 'circle'
+            : 'post';
+  const singlePick = target === 'note' || target === 'ranking';
+  const isMultiSelect = params.multiSelect === 'true' && !singlePick;
+  const pickCity = useCityPickStore((st) => st.pick);
   const formCities = usePostFormStore((st) => st.selectedCities);
   const setFormCities = usePostFormStore((st) => st.setSelectedCities);
   const circleCities = useCreateCircleFormStore((st) => st.selectedCities);
@@ -212,7 +218,7 @@ export default function SelectCityScreen() {
           : circleCities;
     const nextState = buildInitialCityPickerState({
       isMultiSelect,
-      singleCity: null,
+      singleCity: singlePick ? (params.city ?? null) : null,
       multiCities,
       // 发帖城市为可选标签，空 = 不限定（非「全国」）；仅建圈空选才视为全国。
       emptyMultiSelectIsNationwide: target === 'circle',
@@ -229,6 +235,8 @@ export default function SelectCityScreen() {
     filterNationwide,
     formCities,
     isMultiSelect,
+    params.city,
+    singlePick,
     target,
   ]);
 
@@ -281,6 +289,12 @@ export default function SelectCityScreen() {
   }, [isVip, t]);
 
   const handleConfirm = useCallback(() => {
+    if (target === 'note' || target === 'ranking') {
+      // 单选入口没有「全国」：没选就是不改，原样返回。
+      if (selected[0]) pickCity(target, selected[0]);
+      router.back();
+      return;
+    }
     const resolved = resolveMultiCitySelection(selected, isNationwide);
     if (target === 'filter') {
       // 「全国」= 不限地区、展示全部，不塞进 cities（保持为空、不参与筛选），改用独立标记记住，
@@ -300,6 +314,7 @@ export default function SelectCityScreen() {
   }, [
     isNationwide,
     maxCities,
+    pickCity,
     router,
     selected,
     setCircleCities,
@@ -358,26 +373,30 @@ export default function SelectCityScreen() {
         </View>
       ) : null}
 
-      {/* Nationwide option */}
-      <Pressable style={s.nationwideRow} onPress={toggleNationwide}>
-        <View style={s.nationwideLeft}>
-          <Ionicons name="globe-outline" size={20} color={colors.text} />
-          <Text style={{ color: colors.text, ...Typography.body, fontWeight: '600' }}>
-            {t('city.nationwide')}
-          </Text>
-          {!isVip ? (
-            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.full }}>
-              <Text style={{ color: colors.white, ...Typography.tinyRegular, fontWeight: '600' }}>VIP</Text>
+      {/* Nationwide option：单选入口（笔记城市、大众点评榜）自己处理「不选/全国」，这里不出现。 */}
+      {singlePick ? null : (
+        <>
+          <Pressable style={s.nationwideRow} onPress={toggleNationwide}>
+            <View style={s.nationwideLeft}>
+              <Ionicons name="globe-outline" size={20} color={colors.text} />
+              <Text style={{ color: colors.text, ...Typography.body, fontWeight: '600' }}>
+                {t('city.nationwide')}
+              </Text>
+              {!isVip ? (
+                <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.full }}>
+                  <Text style={{ color: colors.white, ...Typography.tinyRegular, fontWeight: '600' }}>VIP</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-        <View style={s.checkIcon}>
-          {isNationwide ? (
-            <Ionicons name="checkmark-circle" size={20} color={colors.iconAccent} />
-          ) : null}
-        </View>
-      </Pressable>
-      <Divider />
+            <View style={s.checkIcon}>
+              {isNationwide ? (
+                <Ionicons name="checkmark-circle" size={20} color={colors.iconAccent} />
+              ) : null}
+            </View>
+          </Pressable>
+          <Divider />
+        </>
+      )}
 
       {/* City list */}
       <SectionList

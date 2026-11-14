@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions, type GestureRes
 import { useTranslation } from 'react-i18next';
 import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
 import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
-import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
+import { displayedNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
 import { splitNoteVideoCounts } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteCardData } from '@/types';
@@ -70,7 +70,7 @@ const s = StyleSheet.create({
   // 与笔记页的开工/打烊/下架标签同一套实心底(noteWorkStatusFill + onStatusFill)。
   statusPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   statusText: { ...Typography.small, fontWeight: '700' },
-  unlisted: { ...Typography.small, fontWeight: '600' },
+  deletedText: { ...Typography.small, fontWeight: '600' },
   grid: { flexDirection: 'row', gap: GRID_GAP },
   tile: { borderRadius: Radius.sm, overflow: 'hidden' },
   tileImage: { width: '100%', height: '100%' },
@@ -100,7 +100,9 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   const onCardMuted = outgoing ? 'rgba(255,255,255,0.78)' : colors.text;
   const previewUrls = note.previewUrls ?? [];
   const hasPreviews = previewUrls.length > 0;
-  const unlisted = note.publicationStatus === 'UNLISTED' || note.publicationStatus === 'DELETED';
+  // 下架(UNLISTED)的笔记别人照常能看，显示「下架」状态；只有删除了才换成提示文字。
+  const deleted = note.publicationStatus === 'DELETED';
+  const shownWorkStatus = displayedNoteWorkStatus(note.workStatus, note.publicationStatus);
   // This month's counters of the source note. They arrive with the conversation's
   // source-state reconciliation, or right after the viewer rates from the menu;
   // until then the area shows 0 so the card keeps its height.
@@ -129,16 +131,16 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
       : null,
   ].filter((segment): segment is string => segment !== null);
 
-  const statusNode = unlisted ? (
-    <Text style={[s.unlisted, { color: colors.warning }]} numberOfLines={1}>
-      {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
+  const statusNode = deleted ? (
+    <Text style={[s.deletedText, { color: colors.warning }]} numberOfLines={1}>
+      {t('chat.noteCard.workStatus.deleted', { defaultValue: '笔记已删除' })}
     </Text>
-  ) : isSetNoteWorkStatus(note.workStatus) ? (
-    <View style={[s.statusPill, { backgroundColor: noteWorkStatusFill(note.workStatus, colors) }]}>
+  ) : shownWorkStatus ? (
+    <View style={[s.statusPill, { backgroundColor: noteWorkStatusFill(shownWorkStatus, colors) }]}>
       <Text style={[s.statusText, { color: colors.onStatusFill }]}>
-        {note.workStatus === 'WORKING'
+        {shownWorkStatus === 'WORKING'
           ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
-          : note.workStatus === 'CLOSED'
+          : shownWorkStatus === 'CLOSED'
             ? t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })
             : t('chat.noteCard.workStatus.offShelf', { defaultValue: '下架' })}
       </Text>
@@ -174,9 +176,9 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
             <Text style={[s.title, { color: onCard }]} numberOfLines={1}>
               {note.title}
             </Text>
-            {unlisted ? null : statusNode}
+            {deleted ? null : statusNode}
           </View>
-          {unlisted ? statusNode : null}
+          {deleted ? statusNode : null}
           {note.contentPreview ? (
             <Text style={[s.preview, { color: onCardMuted }]} numberOfLines={1}>
               {note.contentPreview}

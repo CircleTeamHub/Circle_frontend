@@ -144,8 +144,8 @@ test("always shows the source's monthly rating counters, updated once reconciled
   // Not reconciled yet: the area is there with zeros, so the card keeps its height.
   expect(screen.getByTestId('note-card-rating-good')).toHaveTextContent('0');
   expect(screen.getByTestId('note-card-rating-bad')).toHaveTextContent('0');
-  // 好评 is a firework, 差评 a rain cloud — no thumbs.
-  expect(screen.getByTestId('mci:firework')).toBeTruthy();
+  // 好评 is a party popper (礼花), 差评 a rain cloud — no thumbs.
+  expect(screen.getByTestId('mci:party-popper')).toBeTruthy();
   expect(screen.getByTestId('mci:weather-pouring')).toBeTruthy();
 
   React.act(() => {
@@ -183,10 +183,10 @@ test('rating icons are coloured, with a pale variant on the purple outgoing card
   // 没有 ThemeProvider 时 useTheme 回落到暗色主题。
   const { darkColors } = jest.requireActual<typeof import('@/theme/colors')>('@/theme/colors');
   const { rerender } = render(<NoteCardBubble message={message(card())} outgoing={false} />);
-  expect(screen.getByTestId('mci:firework').props.accessibilityHint).toBe(darkColors.ratingGood);
+  expect(screen.getByTestId('mci:party-popper').props.accessibilityHint).toBe(darkColors.ratingGood);
   expect(screen.getByTestId('mci:weather-pouring').props.accessibilityHint).toBe(darkColors.ratingBad);
 
   rerender(<NoteCardBubble message={message(card())} outgoing />);
-  expect(screen.getByTestId('mci:firework').props.accessibilityHint).toBe(darkColors.ratingGoodOnAccent);
+  expect(screen.getByTestId('mci:party-popper').props.accessibilityHint).toBe(darkColors.ratingGoodOnAccent);
   expect(screen.getByTestId('mci:weather-pouring').props.accessibilityHint).toBe(darkColors.ratingBadOnAccent);
 });

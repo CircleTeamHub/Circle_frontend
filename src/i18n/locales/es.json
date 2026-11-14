@@ -987,8 +987,8 @@
       "workStatus": {
         "working": "En servicio",
         "closed": "Cerrado",
-        "unlisted": "Retirado; el estado puede haber cambiado",
-        "offShelf": "Retirado"
+        "offShelf": "Retirado",
+        "deleted": "Nota eliminada"
       },
       "sectionSendFailed": "No se pudo enviar. Inténtalo de nuevo.",
       "noLocation": "Esta nota no tiene una ubicación para enviar"
@@ -1174,42 +1174,47 @@
     "inviteGroupMembersLoadFailed": "No se pudieron cargar los amigos. Inténtalo de nuevo.",
     "groups": {
       "title": "Gestionar grupos",
-      "createSection": "Crear grupo",
-      "orderSection": "Orden de grupos",
-      "orderHint": "Mantén pulsado y arrastra para ordenar las pestañas de Mensajes",
-      "builtInGroup": "Fijo",
-      "customGroup": "Personalizado",
+      "orderHint": "Mantén pulsado ≡ y arrastra para ordenar. Las pestañas de Mensajes siguen este orden. Toca un grupo personalizado para cambiarle el nombre o elegir conversaciones.",
+      "builtInGroup": "Pestaña predeterminada",
       "reorderA11y": "Ajustar la posición de {{name}}",
       "reorderFailedTitle": "Error al reordenar",
       "reorderFailedMessage": "No se pudo guardar el orden de los grupos, inténtalo de nuevo.",
       "moveUp": "Subir",
       "moveDown": "Bajar",
       "namePlaceholder": "Ej.: Familia / Trabajo",
-      "nameRequired": "Introduce un nombre de grupo",
-      "myGroups": "Mis grupos",
-      "empty": "Aún no hay grupos personalizados. Crea uno.",
       "conversationCount": "{{count}} conversaciones",
-      "memberHint": "Selecciona chats grupales o privados para añadirlos a «{{name}}» (selección múltiple)",
       "noConversations": "No hay conversaciones disponibles para añadir",
       "filterAll": "Todo",
       "filterSelected": "Seleccionados",
       "searchPlaceholder": "Buscar chats grupales o directos",
-      "selectedCount": "{{selected}} / {{total}} seleccionados",
+      "selectedCount": "{{count}} seleccionados",
       "resultCount": "{{count}} resultados",
       "selectResults": "Seleccionar todos los resultados",
       "deselectResults": "Deseleccionar los resultados actuales",
       "noMatchingConversations": "No hay conversaciones coincidentes",
       "groupChat": "Chat de grupo",
       "directChat": "Chat directo",
-      "renameTitle": "Renombrar grupo",
       "deleteTitle": "Eliminar grupo",
       "deleteConfirm": "¿Eliminar «{{name}}»? Las conversaciones del grupo no se eliminarán.",
-      "createFailed": "Error al crear",
-      "renameFailed": "Error al renombrar",
       "deleteFailed": "Error al eliminar",
       "saveFailed": "Error al guardar",
       "loadFailed": "Error al cargar",
-      "nameEmpty": "El nombre del grupo no puede estar vacío"
+      "nameEmpty": "El nombre del grupo no puede estar vacío",
+      "create": "Nuevo grupo",
+      "editTitle": "Editar grupo",
+      "editHint": "Editar nombre y conversaciones",
+      "nameLabel": "Nombre del grupo",
+      "showInTabs": "Mostrar en Mensajes",
+      "showInTabsHint": "Si lo desactivas, el grupo se conserva pero no aparece en las pestañas de Mensajes",
+      "hiddenFromTabs": "Oculto en Mensajes",
+      "membersSection": "Elegir conversaciones",
+      "emptyHint": "Crea un grupo para reunir los chats grupales y privados que más usas.",
+      "discardTitle": "¿Descartar los cambios?",
+      "discardMessage": "Los cambios no se han guardado y se perderán.",
+      "discard": "Descartar",
+      "keepEditing": "Seguir editando",
+      "notFound": "Este grupo se ha eliminado",
+      "membersFailedAfterCreate": "El grupo se creó, pero no se pudieron añadir las conversaciones. Vuelve a tocar Guardar."
     },
     "mutedA11y": "Silenciado"
   },
@@ -1227,11 +1232,8 @@
       "unpin": "Dejar de fijar",
       "edit": "Editar",
       "unlist": "Retirar",
-      "venueOffShelf": "Marcar local como retirado",
       "relist": "Volver a publicar",
       "more": "Más",
-      "restore": "Restaurar",
-      "purge": "Eliminar ahora",
       "multiSelect": "Selección múltiple",
       "remark": "Comentario",
       "editNote": "Editar nota",
@@ -1258,20 +1260,18 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas y volver a publicarla cuando quieras.",
+      "unlistConfirm": "Los demás seguirán viendo la nota, marcada como «Retirado». Se elimina a los 60 días; hasta entonces puedes volver a publicarla desde Retiradas.",
       "refreshFailedTitle": "Error al actualizar",
-      "restoreFailedTitle": "No se pudo restaurar",
       "remarkFailedTitle": "No se pudo guardar el comentario",
       "deleteTitle": "Eliminar nota",
-      "deleteConfirm": "Las notas eliminadas se pueden recuperar desde la papelera y se borran definitivamente a los 30 días.",
-      "purgeTitle": "¿Eliminar la nota ahora?",
-      "purgeConfirm": "La nota se eliminará de forma permanente y no se podrá recuperar.",
+      "deleteConfirm": "Una nota eliminada no se puede recuperar. Si quieres poder volver atrás, retírala: podrás volver a publicarla durante 60 días.",
       "batchFailedTitle": "Algunas acciones fallaron",
       "batchPartialFailed": "Falló la operación en {{count}} notas; siguen seleccionadas, inténtalo de nuevo.",
       "batchUnlistTitle": "Retirar notas",
-      "batchUnlistConfirm": "¿Retirar las {{count}} notas seleccionadas? Podrás volver a publicarlas cuando quieras.",
+      "batchUnlistConfirm": "¿Retirar las {{count}} notas seleccionadas? Se eliminan a los 60 días; puedes volver a publicarlas en cualquier momento antes.",
       "batchDeleteTitle": "Eliminar notas",
-      "batchDeleteConfirm": "¿Eliminar las {{count}} notas seleccionadas? Podrás recuperarlas desde la papelera."
+      "batchDeleteConfirm": "¿Eliminar las {{count}} notas seleccionadas? No se puede deshacer.",
+      "deleteUnlistedConfirm": "Una nota eliminada no se puede recuperar. Si no la eliminas, se borra sola al cumplirse sus 60 días."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -1407,7 +1407,9 @@
         "moveUp": "Subir {{label}}",
         "moveDown": "Bajar {{label}}"
       },
-      "unsupportedAudio": "Formato de audio no compatible. Elige un archivo M4A, MP3, AAC, WAV, OGG o WebM."
+      "unsupportedAudio": "Formato de audio no compatible. Elige un archivo M4A, MP3, AAC, WAV, OGG o WebM.",
+      "cityLabel": "Ciudad",
+      "cityClear": "Quitar ciudad"
     },
     "editor": {
       "mediaUploadFailedMessage": "Inténtalo de nuevo",
@@ -1437,8 +1439,7 @@
     "empty": {
       "noMatch": "No hay notas coincidentes",
       "noNotes": "Aún no hay notas",
-      "noUnlisted": "No hay notas retiradas",
-      "noDeleted": "La papelera está vacía"
+      "noUnlisted": "No hay notas retiradas"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
@@ -1485,7 +1486,7 @@
     "title": "Mis notas",
     "unlisted": "Retirada",
     "unlistedTitle": "Notas retiradas",
-    "unlistedAutoDeleteHint": "Las notas retiradas no se eliminan automáticamente. Puedes volver a publicarlas cuando quieras.",
+    "unlistedAutoDeleteHint": "Las notas retiradas se eliminan a los 60 días y puedes volver a publicarlas antes. Los demás las siguen viendo, marcadas como «Retirado».",
     "format": {
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -1563,9 +1564,6 @@
       "batchPreview": "{{count}} notas",
       "singlePreview": "[Nota] {{title}}"
     },
-    "recycleBin": "Papelera",
-    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí y se borran automáticamente a los 30 días.",
-    "recycleBinTitle": "Papelera",
     "selection": {
       "selectedCount": "{{count}} seleccionadas",
       "selectAll": "Seleccionar todo",
@@ -1609,12 +1607,14 @@
         "NOTE_RATING_NOT_IN_GROUP": "Únete a uno de los grupos de esta nota para valorarla.",
         "NOTE_RATING_LOW_CREDIT": "Tu reputación es inferior a 90; por ahora no puedes valorar.",
         "NOTE_RATING_ACCOUNT_TOO_NEW": "Podrás valorar cuando tu cuenta tenga 7 días.",
-        "NOTE_RATING_RATER_DAILY_LIMIT": "Ya valoraste hoy. Vuelve mañana.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "Puedes dar una valoración positiva y una negativa al día, y ya usaste la de hoy. Vuelve mañana.",
         "cooldownDays": "Podrás volver a valorar esta nota en {{count}} días.",
         "cooldownHours": "Podrás volver a valorar esta nota en {{count}} horas.",
         "NOTE_RATING_NOTE_GOOD_FULL": "Esta nota alcanzó hoy el límite de valoraciones positivas. Prueba mañana.",
         "NOTE_RATING_NOTE_BAD_FULL": "Esta nota alcanzó hoy el límite de valoraciones negativas. Prueba mañana.",
-        "unknown": "Ahora no puedes valorar. Inténtalo más tarde."
+        "unknown": "Ahora no puedes valorar. Inténtalo más tarde.",
+        "RATER_DAILY_GOOD_USED": "Ya diste la valoración positiva de hoy. Vuelve mañana.",
+        "RATER_DAILY_BAD_USED": "Ya diste la valoración negativa de hoy. Vuelve mañana."
       },
       "reasons": {
         "INACCURATE": "Información falsa",
@@ -1654,7 +1654,8 @@
           "submitting": "Enviando..."
         }
       }
-    }
+    },
+    "unlistedDaysLeft": "Se elimina en {{count}} días"
   },
   "tempChats": {
     "title": "Puestos",
@@ -3142,7 +3143,19 @@
     "unreadCount": "{{count}} sin leer"
   },
   "explore": {
-    "title": "Explorar"
+    "title": "Explorar",
+    "ranking": {
+      "title": "Lo más valorado",
+      "nationwide": "Todo el país",
+      "chooseCity": "Elegir ciudad",
+      "subtitle": "Más valoradas del mes {{month}} · se reinicia el día 1",
+      "subtitleNoMonth": "Más valoradas de este mes · se reinicia el día 1",
+      "empty": "Aún no hay notas en la clasificación este mes",
+      "emptyCity": "Aún no hay notas de {{city}} en la clasificación este mes",
+      "emptyHint": "Elige una ciudad en el título de una nota; cuando reciba buenas valoraciones aparecerá aquí.",
+      "loadFailed": "No se pudo cargar la clasificación",
+      "rankA11y": "Puesto {{rank}}"
+    }
   },
   "onboarding": {
     "profileTitle": "Completa tu perfil",
@@ -3717,7 +3730,7 @@
     "NOTE_RATING_NO_GROUP": "Esta nota no tiene grupo, así que no se puede valorar",
     "NOTE_RATING_LOW_CREDIT": "Tu reputación es inferior a 90; por ahora no puedes valorar",
     "NOTE_RATING_ACCOUNT_TOO_NEW": "Podrás valorar cuando tu cuenta tenga 7 días",
-    "NOTE_RATING_RATER_DAILY_LIMIT": "Ya valoraste hoy. Vuelve mañana",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "Una valoración positiva y una negativa al día; la de hoy ya está usada",
     "NOTE_RATING_COOLDOWN": "Solo puedes valorar la misma nota una vez cada 3 días",
     "NOTE_RATING_NOTE_GOOD_FULL": "Esta nota alcanzó hoy el límite de valoraciones positivas",
     "NOTE_RATING_NOTE_BAD_FULL": "Esta nota alcanzó hoy el límite de valoraciones negativas",

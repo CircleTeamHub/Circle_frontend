@@ -44,6 +44,17 @@ test('the contacts stack mounts both screens it can now reach', () => {
   );
 });
 
+test('the messages stack mounts both screens, since its plane button opens the same circle notifications page', () => {
+  assert.match(
+    read('app/(tabs)/messages/circle-notifications.tsx'),
+    /CircleNotificationSettingsScreen/,
+  );
+  assert.match(read('app/(tabs)/messages/circle-guide.tsx'), /CircleGuideScreen/);
+  const routes = read('src/features/user/utils/routes.ts');
+  assert.match(routes, /case 'messages':\s*return '\/\(tabs\)\/messages\/circle-notifications'/);
+  assert.match(routes, /case 'messages':\s*return '\/\(tabs\)\/messages\/circle-guide'/);
+});
+
 test('both hrefs keep a discover variant for the discover stack', () => {
   const routes = read('src/features/user/utils/routes.ts');
 

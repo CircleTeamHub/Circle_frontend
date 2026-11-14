@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NoteCard } from '@/features/notes/components/NoteCard';
+import { unlistedDaysLeft } from '@/features/notes/utils/unlisted-retention';
 import type { NoteSummary } from '@/features/notes/types';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import {
@@ -188,9 +189,7 @@ function UnlistedNotesContent() {
     closeMenu();
     Alert.alert(
       t('notes.alerts.deleteTitle', { defaultValue: '删除笔记' }),
-      t('notes.alerts.deleteConfirm', {
-        defaultValue: '删除后可在回收站找回，30 天后自动清除。',
-      }),
+      t('notes.alerts.deleteUnlistedConfirm', { defaultValue: '删除后无法恢复。不删的话，下架到期也会自动删除。' }),
       [
         { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
         {
@@ -232,15 +231,26 @@ function UnlistedNotesContent() {
       handle: { backgroundColor: colors.surfaceBorder },
       sheetAction: { color: colors.iconAccent },
       sheetDanger: { color: colors.danger },
+      daysLeft: { color: colors.textSecondary },
     }),
     [colors],
   );
 
   const renderNote = useCallback(
-    ({ item }: { item: NoteSummary }) => (
-      <NoteCard note={item} onPress={openNote} onMorePress={openMenu} />
-    ),
-    [openMenu, openNote],
+    ({ item }: { item: NoteSummary }) => {
+      const daysLeft = unlistedDaysLeft(item.unlistedAt, Date.now());
+      return (
+        <View>
+          <NoteCard note={item} onPress={openNote} onMorePress={openMenu} />
+          {daysLeft === null ? null : (
+            <Text style={[s.daysLeft, d.daysLeft]} testID={`unlisted-days-left-${item.id}`}>
+              {t('notes.unlistedDaysLeft', { defaultValue: '{{count}} 天后自动删除', count: daysLeft })}
+            </Text>
+          )}
+        </View>
+      );
+    },
+    [d.daysLeft, openMenu, openNote, t],
   );
 
   return (
@@ -256,7 +266,7 @@ function UnlistedNotesContent() {
       </Text>
       <Text style={[s.hint, d.hint]}>
         {t('notes.unlistedAutoDeleteHint', {
-          defaultValue: '已下架笔记不会自动删除，可随时重新上架。',
+          defaultValue: '下架 60 天后自动删除，期间可随时重新上架；别人仍能看到，显示为「下架」。',
         })}
       </Text>
 
@@ -352,6 +362,7 @@ const s = StyleSheet.create({
   },
   pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   hint: { ...Typography.small, marginTop: Spacing.xs },
+  daysLeft: { ...Typography.small, marginTop: Spacing.xs, marginLeft: Spacing.md },
   emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',

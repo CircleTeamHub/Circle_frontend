@@ -6,7 +6,7 @@
  *   - 本地缓存：MMKV（key `circle-im-conversation-groups`）—— 启动时先显本地，
  *     后台 `load()` 拉服务端，最终一致。
  *
- * 写操作（create / rename / remove / setMembers）一律乐观更新 + 失败回滚 +
+ * 写操作（update / remove / setMembers / reorder）一律乐观更新 + 失败回滚 +
  * 收尾 reconcile（用服务端返回值覆盖临时数据）。失败时打 dev warn，
  * 真实错误用 throw 抛给调用方决定 UI 怎么提示。
  */
@@ -37,8 +37,11 @@ interface ConversationGroupsState {
     name: string;
     pinnedToTabs?: boolean;
   }) => Promise<CustomConversationGroup>;
-  rename: (id: string, name: string) => Promise<void>;
-  setPinnedToTabs: (id: string, pinnedToTabs: boolean) => Promise<void>;
+  /** 改名 / 显示开关合成一次 PATCH（编辑页「保存」只发一次）。 */
+  update: (
+    id: string,
+    patch: { name?: string; pinnedToTabs?: boolean },
+  ) => Promise<void>;
   remove: (id: string) => Promise<void>;
   setMembers: (id: string, conversationIDs: string[]) => Promise<void>;
   reorder: (groupIds: string[]) => Promise<void>;
@@ -106,7 +109,14 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
         // 乐观：先用一个临时 id 占位（不入持久化是为了避免重启后看到"鬼" group），
         // 但 zustand persist 是按 state 整存的，没办法不持久化某一项。所以我们等服务端
         // 返回后再 upsert —— 创建路径不做乐观插入，create 是低频操作，等服务端 OK。
-        const created = await createConversationGroup({ name, pinnedToTabs });
+        // 服务端缺省 sortOrder=0：排过序之后新分组会插到第二位。显式排到最后。
+        const sortOrder =
+          Math.max(-1, ...get().groups.map((group) => group.sortOrder)) + 1;
+        const created = await createConversationGroup({
+          name,
+          pinnedToTabs,
+          sortOrder,
+        });
         set((state) => ({
           groups: upsertGroup(state.groups, created),
           lastSyncedAt: Date.now(),
@@ -114,45 +124,28 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
         return created;
       },
 
-      rename: async (id, name) => {
-        const trimmed = name.trim();
-        if (!trimmed) {
+      update: async (id, patch) => {
+        const next =
+          patch.name === undefined ? patch : { ...patch, name: patch.name.trim() };
+        if (next.name === '') {
           throw new Error(
             i18n.t('messages.groups.nameEmpty', { defaultValue: '分组名称不能为空' }),
           );
         }
         const previous = get().groups;
-        const optimistic = previous.map((g) =>
-          g.id === id ? { ...g, name: trimmed } : g,
-        );
-        set({ groups: sortGroups(optimistic) });
+        set({
+          groups: sortGroups(
+            previous.map((g) => (g.id === id ? { ...g, ...next } : g)),
+          ),
+        });
         try {
-          const updated = await updateConversationGroup(id, { name: trimmed });
+          const updated = await updateConversationGroup(id, next);
           set((state) => ({
             groups: upsertGroup(state.groups, updated),
             lastSyncedAt: Date.now(),
           }));
         } catch (err) {
-          reportHandledFailure('messageGroups', 'rename', err);
-          set({ groups: previous });
-          throw err;
-        }
-      },
-
-      setPinnedToTabs: async (id, pinnedToTabs) => {
-        const previous = get().groups;
-        const optimistic = previous.map((g) =>
-          g.id === id ? { ...g, pinnedToTabs } : g,
-        );
-        set({ groups: sortGroups(optimistic) });
-        try {
-          const updated = await updateConversationGroup(id, { pinnedToTabs });
-          set((state) => ({
-            groups: upsertGroup(state.groups, updated),
-            lastSyncedAt: Date.now(),
-          }));
-        } catch (err) {
-          reportHandledFailure('messageGroups', 'setPinnedToTabs', err);
+          reportHandledFailure('messageGroups', 'update', err);
           set({ groups: previous });
           throw err;
         }

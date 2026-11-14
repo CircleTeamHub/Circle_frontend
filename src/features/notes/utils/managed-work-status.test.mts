@@ -13,3 +13,9 @@ test('explicit WORKING, CLOSED and OFF_SHELF pass through', () => {
   assert.equal(resolveManagedWorkStatus({ workStatus: 'CLOSED' }), 'CLOSED');
   assert.equal(resolveManagedWorkStatus({ workStatus: 'OFF_SHELF' }), 'OFF_SHELF');
 });
+
+test('a 下架 note (status UNLISTED) shows as OFF_SHELF whatever its old work status was', () => {
+  assert.equal(resolveManagedWorkStatus({ status: 'UNLISTED', workStatus: 'WORKING' }), 'OFF_SHELF');
+  assert.equal(resolveManagedWorkStatus({ status: 'UNLISTED', workStatus: null }), 'OFF_SHELF');
+  assert.equal(resolveManagedWorkStatus({ status: 'ACTIVE', workStatus: 'CLOSED' }), 'CLOSED');
+});

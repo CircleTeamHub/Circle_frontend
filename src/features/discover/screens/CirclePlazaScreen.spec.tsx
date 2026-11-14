@@ -15,14 +15,17 @@ jest.mock('@/stores/tabBadgeStore', () => ({
 
 beforeEach(() => mockPush.mockClear());
 
-test('the circle feed header opens circle notification settings', () => {
+test('circle notification settings moved off the feed header into the bell page', () => {
   render(<CirclePlazaScreen />);
-  fireEvent.press(screen.getByLabelText('discover.notifications.title'));
-  expect(mockPush).toHaveBeenCalledTimes(1);
-  expect(mockPush).toHaveBeenCalledWith('/(tabs)/discover/notifications');
+  expect(screen.queryByLabelText('discover.notifications.title')).toBeNull();
+  fireEvent.press(screen.getByLabelText('notifications.title'));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/discover/notification-center',
+    params: { domain: 'circle' },
+  });
 });
 
-test('adding settings keeps the circle management entry in the header', () => {
+test('the circle management entry stays in the header', () => {
   render(<CirclePlazaScreen />);
   fireEvent.press(screen.getByLabelText('discover.management'));
   expect(mockPush).toHaveBeenCalledWith('/(tabs)/discover/management');

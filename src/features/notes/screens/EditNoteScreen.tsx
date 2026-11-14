@@ -9,11 +9,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import {
+  getNoteCityPickerHref,
   getNoteDetailHref,
   getNoteLocationPickerHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +62,7 @@ import {
   hasValidLocationCoordinates,
 } from '@/features/location/utils/location-map';
 import { useNoteLocationPickerStore } from '@/features/notes/store/use-note-location-picker-store';
+import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 import type {
   CreateNoteMediaInput,
   EditorNoteMediaDraft,
@@ -341,6 +343,7 @@ export function draftFingerprint(record: NoteEditorDraftRecord): string {
     mediaItems: mediaSnapshot(record.mediaItems), showcaseItems: mediaSnapshot(record.showcaseItems),
     audioItems: mediaSnapshot(record.audioItems), contactItems: record.contactItems,
     groupCardItems: record.groupCardItems, location: record.location,
+    city: record.city ?? null,
   });
 }
 
@@ -419,6 +422,7 @@ export function draftRecordFromServer(
     contactItems: ((sections.contacts?.items ?? []) as NoteCardDraft[]),
     groupCardItems: ((sections.groups?.items ?? []) as NoteCardDraft[]),
     location: buildLocationDraft(sections.location),
+    city: draft.city ?? null,
     createdAt: Date.parse(draft.createdAt) || Date.now(),
     updatedAt: Date.parse(draft.updatedAt) || Date.now(),
   };
@@ -452,6 +456,7 @@ function emptyDraftRecord(id: string, noteId: string | null): NoteEditorDraftRec
     contactItems: [],
     groupCardItems: [],
     location: { title: '', address: '', latitude: null, longitude: null },
+    city: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -499,6 +504,12 @@ export default function EditNoteScreen() {
   }>();
   const isEdit = Boolean(id);
   const navigation = useNavigation();
+  // 编辑页整个生命周期都挂着「未保存先确认」的守卫。iOS 的侧滑返回（尤其全屏侧滑）不看这个守卫：
+  // 手势先把页面滑走、事后再靠原生把它放回来，放不回来时页面看着已经退出，导航状态里却还在，
+  // 之后每次返回或点 tab 都会再弹「保存未完成的笔记？」。编辑页只走返回按钮，弹窗和页面才一致。
+  useLayoutEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+  }, [navigation]);
   const editorContext = `${currentUser?.id ?? 'anonymous'}:${sessionEpoch}:${id ?? 'new'}`;
   const generatedDraftRef = useRef<{ context: string; id: string } | null>(null);
   if (generatedDraftRef.current?.context !== editorContext) {
@@ -516,6 +527,7 @@ export default function EditNoteScreen() {
   useEffect(() => () => draftRemoteQueue.cancel(), [draftRemoteQueue]);
 
   const [title, setTitle] = useState('');
+  const [city, setCity] = useState<string | null>(null);
   const [titleAdded, setTitleAdded] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -678,6 +690,7 @@ export default function EditNoteScreen() {
   // 瓦片要按像素绝对定位，需要一个具体宽度。预览卡片是撑满内容区的，所以量出来
   // 而不是把内边距抄一遍 —— 未展开时先渲染占位图，点开时宽度早已就绪。
   const [mapWidth, setMapWidth] = useState(0);
+  const consumePickedCity = useCityPickStore((state) => state.consume);
   const consumePickedLocation = useNoteLocationPickerStore(
     (state) => state.consumePickedLocation,
   );
@@ -973,12 +986,14 @@ export default function EditNoteScreen() {
         latitude: locationDraft.latitude,
         longitude: locationDraft.longitude,
       },
+      city,
       createdAt: Date.parse(createdAtIso) || Date.now(),
       updatedAt: Date.now(),
       pendingSubmission: pendingSubmissionRef.current ?? undefined,
     };
   }, [
     audioItems,
+    city,
     contactItems,
     createdAtIso,
     editorDraftId,
@@ -1064,6 +1079,7 @@ export default function EditNoteScreen() {
       setGroupSheetVisible(false);
       setLoadedNoteId(resumePending ? id ?? null : null);
       setTitle('');
+      setCity(null);
       setSelectedGroupIds([]);
       pickerPreviewDisposerRef.current.disposeAll();
       setMediaItems([]);
@@ -1104,6 +1120,7 @@ export default function EditNoteScreen() {
     textStatsStore.reset();
     setGroupSheetVisible(false);
     setTitle('');
+    setCity(null);
     pickerPreviewDisposerRef.current.disposeAll();
     setMediaItems([]);
     setShowcaseItems([]);
@@ -1133,6 +1150,7 @@ export default function EditNoteScreen() {
       .then((note) => {
         if (cancelled) return;
         setTitle(note.title);
+        setCity(note.city ?? null);
         existingSectionsRef.current = note.sections ?? null;
 
         // 只编辑库里真实存着的名片：旧收藏补出来的来源发送方/群未必是本人好友或
@@ -1267,6 +1285,7 @@ export default function EditNoteScreen() {
           contactItems: ((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[],
           groupCardItems: ((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[],
           location: buildLocationDraft(note.sections?.location),
+          city: note.city ?? null,
           createdAt: Date.parse(note.createdAt) || Date.now(),
           updatedAt: Date.parse(note.updatedAt) || Date.now(),
         });
@@ -1370,6 +1389,7 @@ export default function EditNoteScreen() {
         record = { ...record, composerBlocks: restoredBlocks, mediaOwnerByClientId: restoredOwners };
         draftPersistedFingerprintRef.current = draftFingerprint(record);
         setTitle(record.title);
+        setCity(record.city ?? null);
         composerBlocksRef.current = record.composerBlocks;
         setComposerBlocks(record.composerBlocks);
         composerIdRef.current = record.composerBlocks.length;
@@ -1738,6 +1758,8 @@ export default function EditNoteScreen() {
         completeNavigation(undefined, true);
         return leaveEditor;
       }
+      const pickedCity = consumePickedCity('note');
+      if (pickedCity && !pendingSubmissionRef.current && !saveInFlightRef.current) setCity(pickedCity);
       const picked = consumePickedLocation();
       if (picked && !pendingSubmissionRef.current && !saveInFlightRef.current) {
         setLocationDraft({
@@ -1752,7 +1774,7 @@ export default function EditNoteScreen() {
         setMapRevealed(true);
       }
       return leaveEditor;
-    }, [completeNavigation, currentUser?.id, draftRemoteQueue, editorDraftId, consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
+    }, [completeNavigation, currentUser?.id, draftRemoteQueue, editorDraftId, consumePickedCity, consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
   const handleContentChange = useCallback((blockId: string, newBlocks: Record<string, unknown>[]) => {
@@ -2496,6 +2518,11 @@ export default function EditNoteScreen() {
     closeCardPicker();
   }, [cardPickerKind, groupOptions, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
 
+  const handleOpenCityPicker = useCallback(() => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady) return;
+    router.push(getNoteCityPickerHref(scope, city));
+  }, [city, isRouteDataReady, router, scope]);
+
   const handleOpenLocationPicker = useCallback(() => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
     router.push(getNoteLocationPickerHref(scope, {
@@ -2843,6 +2870,9 @@ export default function EditNoteScreen() {
           : null;
       const input = {
         title: trimmedTitle,
+        // 只在选了城市时带上：新后端把「不带」当成没有城市（更新是整份替换），
+        // 旧后端不认这个字段，带了就整单 400。
+        ...(city ? { city } : {}),
         content: plainText,
         contentJson: persistedContentJson,
         sections: sanitizeNoteSectionsForServer({
@@ -2955,6 +2985,7 @@ export default function EditNoteScreen() {
   }, [
     getTextError,
     buildCurrentDraftRecord,
+    city,
     draftRemoteQueue,
     id,
     isEdit,
@@ -3307,6 +3338,35 @@ export default function EditNoteScreen() {
               </Text>
               <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
             </Pressable>
+            {/* 城市：选了才参加该城市的大众点评月榜；点 × 清除。 */}
+            <View style={[s.groupButton, s.cityChip, d.groupButton]}>
+              <Pressable
+                style={s.cityChipMain}
+                disabled={isEditingLocked}
+                onPress={handleOpenCityPicker}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={t('notes.edit.cityLabel', { defaultValue: '城市' })}
+                accessibilityValue={city ? { text: city } : undefined}
+              >
+                <Ionicons name="location-outline" size={14} color={colors.iconAccent} />
+                <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
+                  {city ?? t('notes.edit.cityLabel', { defaultValue: '城市' })}
+                </Text>
+                {city ? null : <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />}
+              </Pressable>
+              {city ? (
+                <Pressable
+                  disabled={isEditingLocked}
+                  onPress={() => setCity(null)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('notes.edit.cityClear', { defaultValue: '不选城市' })}
+                >
+                  <Ionicons name="close-circle" size={15} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         );
       case 'text':
@@ -4392,6 +4452,9 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   groupButtonText: { ...Typography.small, fontWeight: '500', flexShrink: 1 },
+  // 城市胶囊沿用分组胶囊的外观，排在它下面；主体可点开选择，右侧 × 清除。
+  cityChip: { marginTop: Spacing.xs, maxWidth: 220 },
+  cityChipMain: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexShrink: 1 },
   groupSheetWrap: { width: '100%', maxHeight: '70%' },
   groupSheet: {
     borderTopLeftRadius: Radius.xl,

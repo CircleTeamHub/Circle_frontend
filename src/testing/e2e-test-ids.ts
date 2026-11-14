@@ -29,6 +29,7 @@ export const E2E_TEST_IDS = Object.freeze({
   exploreScreen: 'windnote.explore.screen',
   exploreMomentsEntry: 'windnote.explore.moments-entry',
   exploreAssistantEntry: 'windnote.explore.assistant-entry',
+  exploreRankingEntry: 'windnote.explore.ranking-entry',
   momentsScreen: 'windnote.moments.screen',
   momentsCreate: 'windnote.moments.create',
   circlePlazaScreen: 'windnote.circle-plaza.screen',

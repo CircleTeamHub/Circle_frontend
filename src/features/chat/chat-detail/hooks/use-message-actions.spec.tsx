@@ -459,8 +459,8 @@ describe('好评 / 差评 on a chat note card', () => {
 
     const keys = result.current.messageActions.map((action) => action.key);
     expect(keys).toEqual(expect.arrayContaining(['rate-good', 'rate-bad']));
-    // 好评 is a firework, 差评 a rain cloud (MaterialCommunityIcons) — no thumbs.
-    expect(result.current.messageActions.find((action) => action.key === 'rate-good')).toMatchObject({ mciIcon: 'firework' });
+    // 好评 is a party popper (礼花), 差评 a rain cloud (MaterialCommunityIcons) — no thumbs.
+    expect(result.current.messageActions.find((action) => action.key === 'rate-good')).toMatchObject({ mciIcon: 'party-popper' });
     expect(result.current.messageActions.find((action) => action.key === 'rate-bad')).toMatchObject({ mciIcon: 'weather-pouring' });
     act(() => result.current.messageActions.find((action) => action.key === 'rate-good')?.onPress());
     act(() => result.current.messageActions.find((action) => action.key === 'rate-bad')?.onPress());

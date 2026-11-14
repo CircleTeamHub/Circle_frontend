@@ -179,6 +179,19 @@ export interface NoteSummary {
   /** 来源笔记本月（上海时区）的好评 / 差评数；旧接口缺省按 0。 */
   goodCount?: number;
   badCount?: number;
+  /** 作者在标题里选的城市；选了城市才参加该城市的大众点评月榜。旧接口缺省按未选。 */
+  city?: string | null;
+  /** 下架时间（status=UNLISTED 时有值）；60 天后服务端自动永久删除。 */
+  unlistedAt?: string | null;
+}
+
+/** 大众点评月榜：本月（上海时区）好评最多的笔记，已按名次排好。 */
+export interface NoteRanking {
+  /** YYYY-MM */
+  month: string;
+  /** null = 全国 */
+  city: string | null;
+  items: NoteSummary[];
 }
 
 export interface NoteDetail extends NoteSummary {
@@ -197,6 +210,7 @@ export interface NoteDraftSummary {
   mediaCount: number;
   updatedAt: string;
   createdAt: string;
+  city?: string | null;
 }
 
 export interface NoteDraftDetail extends NoteDraftSummary {
@@ -215,6 +229,7 @@ export interface SaveNoteDraftInput {
   groupIds?: string[];
   sourceNoteId?: string | null;
   mediaKeys?: string[];
+  city?: string | null;
 }
 
 export interface CreateNoteMediaInput {
@@ -255,6 +270,11 @@ export interface CreateNoteInput {
   media: CreateNoteMediaInput[];
   /** Stable local draft id; the server removes it atomically after formal save. */
   clientDraftID?: string;
+  /**
+   * 只在选了城市时带上。后端写入是整份替换：不带 = 没有城市（编辑时即清除）；
+   * 旧后端不认识这个字段，带了会整单 400。
+   */
+  city?: string | null;
 }
 
 export interface ListNotesParams {

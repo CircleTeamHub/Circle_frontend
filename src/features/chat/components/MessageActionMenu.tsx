@@ -16,7 +16,7 @@ export type MessageAction = {
   onPress: () => void;
 } & (
   | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: never }
-  /** For glyphs Ionicons lacks (the note rating 烟花 / 乌云). */
+  /** For glyphs Ionicons lacks (the note rating 礼花 / 乌云). */
   | { mciIcon: keyof typeof MaterialCommunityIcons.glyphMap; icon?: never }
 );
 

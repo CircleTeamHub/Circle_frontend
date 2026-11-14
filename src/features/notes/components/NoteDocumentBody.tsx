@@ -25,6 +25,8 @@ export type NoteDocumentGroup = {
 
 type NoteDocumentBodyProps = {
   title: string;
+  /** 作者在标题里选的城市，跟在日期后面。 */
+  city?: string | null;
   createdAt: string;
   groups: readonly NoteDocumentGroup[];
   sections: NoteSections;
@@ -49,6 +51,7 @@ type VirtualizedNoteRow =
 
 export const NoteDocumentBody = memo(function NoteDocumentBody({
   title,
+  city,
   createdAt,
   groups,
   sections,
@@ -316,6 +319,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
         <Text style={[s.meta, { color: colors.text }]}>
           {formatNoteFullDate(createdAt, t)}
         </Text>
+        {city ? <Text style={[s.meta, { color: colors.text }]}>· {city}</Text> : null}
         {groups.length > 0 ? <Text style={[s.meta, { color: colors.text }]}>·</Text> : null}
         {groups.map((group) => (
           <View key={group.id} style={[s.groupTag, { backgroundColor: colors.brandPurple }]}>

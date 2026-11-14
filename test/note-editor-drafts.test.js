@@ -26,6 +26,15 @@ function loadDraftUtils(recordings = {}, storageOverride, reportHandledFailure =
   });
 }
 
+test('server draft payload carries a chosen city and leaves the field out otherwise', () => {
+  const { localDraftSummaryToServerInput } = loadDraftUtils();
+  const base = { title: 't', content: '', contentJson: [], groupIds: [], mediaKeys: [], noteId: null, sections: {} };
+  assert.equal(localDraftSummaryToServerInput({ ...base, city: '成都' }).city, '成都');
+  // 后端草稿整份覆盖：不带即没有城市；旧后端不认这个字段，带 null 也会 400。
+  assert.equal('city' in localDraftSummaryToServerInput(base), false);
+  assert.equal('city' in localDraftSummaryToServerInput({ ...base, city: null }), false);
+});
+
 test('server draft payload strips local editor metadata from nested sections', () => {
   const { localDraftSummaryToServerInput } = loadDraftUtils();
   const input = localDraftSummaryToServerInput({

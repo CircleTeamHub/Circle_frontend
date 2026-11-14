@@ -84,21 +84,12 @@ test('网络错误日志只使用已归一化的路由，不记录请求 URL (re
   );
 });
 
-test('回收站：列表 + 恢复接线 (FE#92)', () => {
+test('回收站（FE#92）已于 2026-11-13 取消：删除即永久删除，后悔路改为下架 60 天', () => {
   const api = read('src/services/api/notes.ts');
-  assert.match(api, /\/note\/recycle-bin/);
-  assert.match(api, /\/note\/\$\{id\}\/restore/);
-
-  const screen = read('src/features/notes/screens/RecycleBinScreen.tsx');
-  assert.match(screen, /fetchDeletedNotes/);
-  assert.match(screen, /restoreNote\(note\.id\)/);
-
-  const notesScreen = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(notesScreen, /profile\/notes\/recycle-bin/);
-  assert.ok(
-    fs.existsSync(
-      path.join(process.cwd(), 'app/(tabs)/profile/notes/recycle-bin.tsx'),
-    ),
+  assert.doesNotMatch(api, /\/note\/recycle-bin|\/restore`/);
+  assert.equal(
+    fs.existsSync(path.join(process.cwd(), 'app/(tabs)/profile/notes/recycle-bin.tsx')),
+    false,
   );
 });
 
@@ -126,31 +117,6 @@ test('转账只做扣款，卡片回执整套挂账已出清', () => {
   const api = read('src/services/api/coin.ts');
   assert.doesNotMatch(api, /card-sent/);
   assert.doesNotMatch(api, /markGiftCardSent/);
-});
-
-test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (round 2)', () => {
-  const screen = read('src/features/notes/screens/RecycleBinScreen.tsx');
-  // 恢复失败先 return —— 之后的列表刷新失败绝不再弹「恢复失败」
-  const restore = screen.slice(
-    screen.indexOf('const handleRestore'),
-    screen.indexOf('const d = useMemo'),
-  );
-  assert.match(restore, /restoreFailedTitle[\s\S]*return;/);
-  // 服务端已恢复：本地先移行，刷新失败静默保留（恢复与立即删除共用 removeSettledNote；
-  // 行为测试见 RecycleBinScreen.spec.tsx）。
-  assert.match(restore, /await removeSettledNote\(note\.id\)/);
-  const settle = screen.slice(
-    screen.indexOf('const removeSettledNote'),
-    screen.indexOf('const handlePurge'),
-  );
-  assert.match(settle, /setNotes\(\(prev\) => prev\.filter/);
-  assert.match(settle, /await load\(\);\s*\} catch(?: \(error\))? \{/);
-  // 下拉刷新失败被捕获并提示（不再 unhandled rejection）
-  const refresh = screen.slice(
-    screen.indexOf('const handleRefresh'),
-    screen.indexOf('const closeMenu'),
-  );
-  assert.match(refresh, /catch[\s\S]*refreshFailedTitle/);
 });
 
 test('忘记密码提交前校验密码长度（round 2）', () => {

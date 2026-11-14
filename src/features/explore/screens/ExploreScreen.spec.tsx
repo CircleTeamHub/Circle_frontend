@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import ExploreScreen from './ExploreScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -37,12 +38,16 @@ const bootstrap = (subscribed: boolean) => ({
   contextCircle: null,
 });
 
+const mockI18n = { language: 'zh' };
+let mockFontLoaded = true;
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { count?: number }) =>
       key === 'tabs.unreadCount' ? `unread:${options?.count ?? 0}` : key,
+    i18n: mockI18n,
   }),
 }));
+jest.mock('expo-font', () => ({ useFonts: () => [mockFontLoaded] }));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -103,6 +108,38 @@ describe('ExploreScreen', () => {
     expect(assistant).toHaveTextContent('assistant.name');
     const tiles = screen.getAllByRole('button');
     expect(tiles.indexOf(moments)).toBeLessThan(tiles.indexOf(assistant));
+  });
+
+  it('the 大众点评 tile comes last and opens the monthly ranking inside the explore stack', () => {
+    render(<ExploreScreen />);
+    const ranking = screen.getByTestId(E2E_TEST_IDS.exploreRankingEntry);
+    const tiles = screen.getAllByRole('button');
+    expect(tiles.indexOf(ranking)).toBe(tiles.indexOf(screen.getByTestId(E2E_TEST_IDS.exploreAssistantEntry)) + 1);
+    fireEvent.press(ranking);
+    expect(mockRouter.push.mock.calls).toEqual([['/(tabs)/explore/note-ranking']]);
+  });
+
+  it('tile titles use the cute font in Chinese and English, and the system bold font elsewhere', () => {
+    const titleFont = () =>
+      screen.getAllByText(/discover\.moments|assistant\.name|explore\.ranking\.title/).map(
+        (node) => StyleSheet.flatten(node.props.style).fontFamily,
+      );
+    try {
+      const view = render(<ExploreScreen />);
+      expect(titleFont()).toEqual(['ZCOOLKuaiLe-Subset', 'ZCOOLKuaiLe-Subset', 'ZCOOLKuaiLe-Subset']);
+      // 裁过的字体没有韩文 / 日文：那几种语言整句用系统字体，不混字体。
+      mockI18n.language = 'ko';
+      view.rerender(<ExploreScreen />);
+      expect(titleFont()).toEqual([undefined, undefined, undefined]);
+      // 字体还没加载完时也先用系统字体。
+      mockI18n.language = 'en';
+      mockFontLoaded = false;
+      view.rerender(<ExploreScreen />);
+      expect(titleFont()).toEqual([undefined, undefined, undefined]);
+    } finally {
+      mockI18n.language = 'zh';
+      mockFontLoaded = true;
+    }
   });
 
   it('opens moments inside the explore stack', () => {

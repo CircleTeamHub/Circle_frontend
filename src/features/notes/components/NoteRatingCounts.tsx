@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Typography, useTheme } from '@/theme';
 
-/** 好评 is a firework, 差评 a rain cloud: the same pair in every rating entry point. */
-export const NOTE_RATING_GOOD_ICON = 'firework' as const;
+/** 好评 is a party popper (礼花), 差评 a rain cloud: the same pair in every rating entry point. */
+export const NOTE_RATING_GOOD_ICON = 'party-popper' as const;
 export const NOTE_RATING_BAD_ICON = 'weather-pouring' as const;
 
 interface NoteRatingCountsProps {
@@ -20,7 +20,7 @@ interface NoteRatingCountsProps {
 /**
  * The 好评 / 差评 area (this month's counters of the source note) on list and
  * chat note cards: icon, then the number. Zeros are shown too, so every card
- * has the same layout. 烟花是橙色、雨云是蓝色,一眼分出好坏。
+ * has the same layout. 礼花是橙色、雨云是蓝色,一眼分出好坏。
  */
 export function NoteRatingCounts({ goodCount = 0, badCount = 0, color, onAccent = false, testID }: NoteRatingCountsProps) {
   const { t } = useTranslation();

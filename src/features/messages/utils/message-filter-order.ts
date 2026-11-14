@@ -50,3 +50,51 @@ export function reorderMessageFilter(
   next.splice(nextIndex, 0, moved);
   return next;
 }
+
+/** 消息页固定的四个标签；自定义分组的标签 id 是 `custom:<groupId>`。 */
+export const BUILT_IN_MESSAGE_FILTER_IDS = ['all', 'unread', 'group', 'private'] as const;
+
+const CUSTOM_FILTER_PREFIX = 'custom:';
+
+export function customFilterId(groupId: string): string {
+  return `${CUSTOM_FILTER_PREFIX}${groupId}`;
+}
+
+export function groupIdFromFilterId(filterId: string): string | null {
+  return filterId.startsWith(CUSTOM_FILTER_PREFIX)
+    ? filterId.slice(CUSTOM_FILTER_PREFIX.length)
+    : null;
+}
+
+/**
+ * 分组管理页那一条列表的顺序：固定标签 + 全部自定义分组（含暂不显示在消息页的），
+ * 顺序以本地保存的 filterOrder 为准，没排过的分组按服务端 sortOrder 追加在尾部。
+ * 消息页拿同一份 filterOrder 过滤掉隐藏分组，所以两处顺序永远一致。
+ */
+export function buildManagedFilterOrder(
+  groupIds: readonly string[],
+  storedOrder: string[],
+): string[] {
+  const items = [...BUILT_IN_MESSAGE_FILTER_IDS, ...groupIds.map(customFilterId)].map(
+    (id) => ({ id }),
+  );
+  return normalizeMessageFilterOrder(items, storedOrder);
+}
+
+/**
+ * 拖完一行后分组之间的相对顺序（写回服务端 sortOrder，换设备也保留）。
+ * 只挪了固定标签、分组相对顺序没变时返回 null，不必发请求。
+ */
+export function changedGroupOrder(
+  previousOrder: readonly string[],
+  nextOrder: readonly string[],
+): string[] | null {
+  const toGroupIds = (order: readonly string[]) =>
+    order.flatMap((id) => {
+      const groupId = groupIdFromFilterId(id);
+      return groupId ? [groupId] : [];
+    });
+  const previous = toGroupIds(previousOrder);
+  const next = toGroupIds(nextOrder);
+  return next.some((id, index) => id !== previous[index]) ? next : null;
+}

@@ -244,7 +244,19 @@
     "unreadCount": "{{count}} 条未读"
   },
   "explore": {
-    "title": "探索"
+    "title": "探索",
+    "ranking": {
+      "title": "大众点评",
+      "nationwide": "全国",
+      "chooseCity": "选择城市",
+      "subtitle": "{{month}} 月好评榜 · 每月 1 号重新排",
+      "subtitleNoMonth": "本月好评榜 · 每月 1 号重新排",
+      "empty": "这个月还没有上榜的笔记",
+      "emptyCity": "{{city}}这个月还没有上榜的笔记",
+      "emptyHint": "在笔记标题里选上城市，收到好评就会上榜。",
+      "loadFailed": "榜单加载失败",
+      "rankA11y": "第 {{rank}} 名"
+    }
   },
   "messages": {
     "title": "消息",
@@ -325,42 +337,47 @@
     "inviteGroupMembersLoadFailed": "好友列表加载失败，请重试",
     "groups": {
       "title": "分组管理",
-      "createSection": "创建分组",
-      "orderSection": "分组排序",
-      "orderHint": "按住右侧拖动，消息页会按这个顺序显示",
-      "builtInGroup": "固定",
-      "customGroup": "自定义",
+      "orderHint": "按住 ≡ 拖动排序，消息页顶部标签按这个顺序显示。点自定义分组可以改名、选会话。",
+      "builtInGroup": "默认标签",
       "reorderA11y": "调整「{{name}}」的位置",
       "reorderFailedTitle": "排序失败",
       "reorderFailedMessage": "分组顺序保存失败，请稍后再试。",
       "moveUp": "上移",
       "moveDown": "下移",
       "namePlaceholder": "例如：家人 / 工作",
-      "nameRequired": "请输入分组名称",
-      "myGroups": "我的分组",
-      "empty": "还没有自定义分组。建一个吧。",
       "conversationCount": "{{count}} 个会话",
-      "memberHint": "选择要加入「{{name}}」的群聊或私聊（可多选）",
       "noConversations": "暂无会话可加入",
       "filterAll": "全部",
       "filterSelected": "已选",
       "searchPlaceholder": "搜索群聊或私聊",
-      "selectedCount": "已选 {{selected}} / {{total}}",
+      "selectedCount": "已选 {{count}} 个",
       "resultCount": "{{count}} 个结果",
       "selectResults": "选择全部结果",
       "deselectResults": "取消当前结果",
       "noMatchingConversations": "没有匹配的会话",
       "groupChat": "群聊",
       "directChat": "私聊",
-      "renameTitle": "重命名分组",
       "deleteTitle": "删除分组",
       "deleteConfirm": "确认删除「{{name}}」？分组内的会话不会被删除。",
-      "createFailed": "创建失败",
-      "renameFailed": "重命名失败",
       "deleteFailed": "删除失败",
       "saveFailed": "保存失败",
       "loadFailed": "加载失败",
-      "nameEmpty": "分组名称不能为空"
+      "nameEmpty": "分组名称不能为空",
+      "create": "新建分组",
+      "editTitle": "编辑分组",
+      "editHint": "编辑名称和会话",
+      "nameLabel": "分组名称",
+      "showInTabs": "在消息页显示",
+      "showInTabsHint": "关闭后分组保留，只是不出现在消息页顶部",
+      "hiddenFromTabs": "未在消息页显示",
+      "membersSection": "选择会话",
+      "emptyHint": "新建分组，把常联系的群聊和私聊归到一起。",
+      "discardTitle": "放弃这次修改？",
+      "discardMessage": "修改还没有保存，离开后会丢失。",
+      "discard": "放弃",
+      "keepEditing": "继续编辑",
+      "notFound": "这个分组已被删除",
+      "membersFailedAfterCreate": "分组已建好，但会话没能加进去，请再点一次保存。"
     },
     "mutedA11y": "消息免打扰"
   },
@@ -1054,8 +1071,8 @@
       "workStatus": {
         "working": "开工",
         "closed": "打烊",
-        "unlisted": "已下架，状态可能变化",
-        "offShelf": "下架"
+        "offShelf": "下架",
+        "deleted": "笔记已删除"
       },
       "sectionSendFailed": "发送失败，请重试",
       "noLocation": "这条笔记没有可发送的位置"
@@ -2890,11 +2907,8 @@
       "unpin": "取消置顶",
       "edit": "编辑",
       "unlist": "下架",
-      "venueOffShelf": "场地下架",
       "relist": "上架",
       "more": "更多",
-      "restore": "恢复",
-      "purge": "立即删除",
       "multiSelect": "多选",
       "remark": "备注",
       "editNote": "编辑笔记",
@@ -2921,20 +2935,18 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，并可随时重新上架。",
+      "unlistConfirm": "下架后别人仍能看到这条笔记，显示为「下架」；60 天后自动删除，期间可在已下架列表重新上架。",
       "refreshFailedTitle": "刷新失败",
-      "restoreFailedTitle": "恢复失败",
       "remarkFailedTitle": "备注保存失败",
       "deleteTitle": "删除笔记",
-      "deleteConfirm": "删除后可在回收站找回，30 天后自动清除。",
-      "purgeTitle": "立即删除笔记？",
-      "purgeConfirm": "笔记会被永久删除，无法恢复。",
+      "deleteConfirm": "删除后无法恢复。想留个后悔余地可以先下架，60 天内都能重新上架。",
       "batchFailedTitle": "部分操作失败",
       "batchPartialFailed": "有 {{count}} 条笔记操作失败，已保留选中，请重试。",
       "batchUnlistTitle": "批量下架",
-      "batchUnlistConfirm": "确定下架所选 {{count}} 条笔记吗？下架后可随时重新上架。",
+      "batchUnlistConfirm": "确定下架所选 {{count}} 条笔记吗？下架 60 天后自动删除，期间可随时重新上架。",
       "batchDeleteTitle": "批量删除",
-      "batchDeleteConfirm": "确定删除所选 {{count}} 条笔记吗？删除后可在回收站找回。"
+      "batchDeleteConfirm": "确定删除所选 {{count}} 条笔记吗？删除后无法恢复。",
+      "deleteUnlistedConfirm": "删除后无法恢复。不删的话，下架到期也会自动删除。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -3068,7 +3080,9 @@
         "moveUp": "{{label}}上移",
         "moveDown": "{{label}}下移"
       },
-      "unsupportedAudio": "不支持此音频格式，请选择 M4A、MP3、AAC、WAV、OGG 或 WebM 文件"
+      "unsupportedAudio": "不支持此音频格式，请选择 M4A、MP3、AAC、WAV、OGG 或 WebM 文件",
+      "cityLabel": "城市",
+      "cityClear": "不选城市"
     },
     "editor": {
       "mediaUploadFailedMessage": "请稍后重试",
@@ -3098,8 +3112,7 @@
     "empty": {
       "noMatch": "没有匹配的笔记",
       "noNotes": "暂无笔记",
-      "noUnlisted": "暂无已下架笔记",
-      "noDeleted": "回收站是空的"
+      "noUnlisted": "暂无已下架笔记"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
@@ -3146,7 +3159,7 @@
     "title": "我的笔记",
     "unlisted": "已下架",
     "unlistedTitle": "已下架笔记",
-    "unlistedAutoDeleteHint": "已下架笔记不会自动删除，可随时重新上架。",
+    "unlistedAutoDeleteHint": "下架 60 天后自动删除，期间可随时重新上架；别人仍能看到，显示为「下架」。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -3245,9 +3258,6 @@
       "batchPreview": "共 {{count}} 条笔记",
       "singlePreview": "[笔记] {{title}}"
     },
-    "recycleBin": "回收站",
-    "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",
-    "recycleBinTitle": "回收站",
     "settings": {
       "entry": "设置",
       "title": "笔记设置",
@@ -3270,12 +3280,14 @@
         "NOTE_RATING_NOT_IN_GROUP": "需要加入笔记里的群才能评分。",
         "NOTE_RATING_LOW_CREDIT": "信用分不足 90，暂时不能评分。",
         "NOTE_RATING_ACCOUNT_TOO_NEW": "注册满 7 天后才能评分。",
-        "NOTE_RATING_RATER_DAILY_LIMIT": "今天已经打过分了，明天再来。",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "好评和差评每天各能打一次，今天这一种已经用过了，明天再来。",
         "cooldownDays": "{{count}} 天后可再评这条笔记。",
         "cooldownHours": "{{count}} 小时后可再评这条笔记。",
         "NOTE_RATING_NOTE_GOOD_FULL": "这条笔记今日好评名额已满，明天再来。",
         "NOTE_RATING_NOTE_BAD_FULL": "这条笔记今日差评名额已满，明天再来。",
-        "unknown": "暂时不能评分，请稍后再试。"
+        "unknown": "暂时不能评分，请稍后再试。",
+        "RATER_DAILY_GOOD_USED": "今天的好评已经用过了，明天再来。",
+        "RATER_DAILY_BAD_USED": "今天的差评已经用过了，明天再来。"
       },
       "reasons": {
         "INACCURATE": "信息不实",
@@ -3315,7 +3327,8 @@
           "submitting": "提交中..."
         }
       }
-    }
+    },
+    "unlistedDaysLeft": "{{count}} 天后自动删除"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -3709,7 +3722,7 @@
     "NOTE_RATING_NO_GROUP": "这条笔记没有关联群，不能评分",
     "NOTE_RATING_LOW_CREDIT": "信用分不足 90，暂时不能评分",
     "NOTE_RATING_ACCOUNT_TOO_NEW": "注册满 7 天后才能评分",
-    "NOTE_RATING_RATER_DAILY_LIMIT": "今天已经打过分了，明天再来",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "好评和差评每天各一次，今天这一种已经用过了",
     "NOTE_RATING_COOLDOWN": "3 天内只能给同一条笔记评一次分",
     "NOTE_RATING_NOTE_GOOD_FULL": "这条笔记今日好评名额已满",
     "NOTE_RATING_NOTE_BAD_FULL": "这条笔记今日差评名额已满",

@@ -49,6 +49,13 @@ const s = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  // 可爱字体只有一个字重：字重回到 400（写 800 时 iOS 会退回系统字体），字号略大一点压住手写感。
+  titleCute: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '400',
+    letterSpacing: 0.6,
+  },
 });
 
 interface ExploreTileProps {
@@ -57,6 +64,8 @@ interface ExploreTileProps {
   /** 画布坐标系里的 SVG 插画（见 explore-tile-art）。 */
   art: ReactNode;
   badgeCount?: number;
+  /** 标题字体；不传用系统粗体。 */
+  titleFontFamily?: string;
   accessibilityLabel: string;
   onPress: () => void;
   testID?: string;
@@ -68,6 +77,7 @@ export function ExploreTile({
   gradient,
   art,
   badgeCount = 0,
+  titleFontFamily,
   accessibilityLabel,
   onPress,
   testID,
@@ -123,7 +133,11 @@ export function ExploreTile({
         </Svg>
         <View style={s.footer}>
           <Text
-            style={[s.title, { color: white, textShadowColor: withAlpha(colors.black, 0.18) }]}
+            style={[
+              s.title,
+              titleFontFamily ? [s.titleCute, { fontFamily: titleFontFamily }] : null,
+              { color: white, textShadowColor: withAlpha(colors.black, 0.18) },
+            ]}
             numberOfLines={2}
           >
             {title}

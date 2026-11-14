@@ -339,6 +339,24 @@ export function getNoteLocationPickerHref(
   }
 }
 
+/** 笔记标题里的城市：同栈打开城市选择（单选），当前城市带过去用于回显。 */
+export function getNoteCityPickerHref(scope: UserProfileScope, city: string | null): Href {
+  const params = { target: 'note', ...(city ? { city } : {}) };
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/notes/city-picker', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/notes/city-picker', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/notes/city-picker', params };
+    case 'messages':
+      return { pathname: '/(tabs)/messages/notes/city-picker', params };
+    case 'profile':
+    default:
+      return { pathname: '/(tabs)/profile/notes/city-picker', params };
+  }
+}
+
 export function getNoteDetailHref(
   scope: UserProfileScope,
   id: string,
@@ -522,14 +540,17 @@ export function getEditGroupNoticeHref(
 }
 
 /**
- * 圈子通知设置。入口在联系人页的圈子页（#195 把圈子管理迁到了联系人栈），但
- * 屏幕本身仍住在 discover 域下，所以要按当前栈解析 —— 从联系人页直接 push
- * discover 路由会把用户甩进另一个 tab，返回时也回不到他出发的那一栈。
+ * 圈子通知设置。入口在联系人页的圈子页（#195 把圈子管理迁到了联系人栈）和
+ * 圈子通知页右上角（圈子动态的铃铛、消息页的飞机都进这一页），但屏幕本身仍住在
+ * discover 域下，所以要按当前栈解析 —— 直接 push discover 路由会把用户甩进
+ * 另一个 tab，返回时也回不到他出发的那一栈。
  */
 export function getCircleNotificationSettingsHref(
   scope: UserProfileScope,
 ): Href {
   switch (scope) {
+    case 'messages':
+      return '/(tabs)/messages/circle-notifications' as unknown as Href;
     case 'contacts':
       return '/(tabs)/contacts/circle-notifications' as unknown as Href;
     case 'discover':
@@ -541,6 +562,8 @@ export function getCircleNotificationSettingsHref(
 /** 圈子玩法说明。与上面同理：它是从通知设置页里点进去的，得留在同一栈。 */
 export function getCircleGuideHref(scope: UserProfileScope): Href {
   switch (scope) {
+    case 'messages':
+      return '/(tabs)/messages/circle-guide' as unknown as Href;
     case 'contacts':
       return '/(tabs)/contacts/circle-guide' as unknown as Href;
     case 'discover':

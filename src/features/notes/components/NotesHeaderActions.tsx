@@ -8,7 +8,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface HeaderAction {
-  key: 'recycleBin' | 'unlisted' | 'drafts' | 'settings';
+  key: 'unlisted' | 'drafts' | 'settings';
   icon: IoniconName;
   label: string;
   onPress: () => void;
@@ -17,30 +17,23 @@ interface HeaderAction {
 interface NotesHeaderActionsProps {
   /** 窄屏（手机）图标在上、文字在下，宽屏图标和文字横排。 */
   compact: boolean;
-  onOpenRecycleBin: () => void;
   onOpenUnlisted: () => void;
   onOpenDrafts: () => void;
   onOpenSettings: () => void;
 }
 
 /**
- * 我的笔记页右上角的入口（回收站 / 已下架 / 草稿箱 / 设置）。
+ * 我的笔记页右上角的入口（已下架 / 草稿箱 / 设置）。
  *
  * 手机上几个「图标+文字」横排放不下（英文标签更长），改成图标在上、文字在下。只给图标会看不出用途，每个入口都必须带文字。
  */
 export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
-  function NotesHeaderActions({ compact, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings }) {
+  function NotesHeaderActions({ compact, onOpenUnlisted, onOpenDrafts, onOpenSettings }) {
     const { colors } = useTheme();
     const { t } = useTranslation();
 
     const actions = useMemo<HeaderAction[]>(
       () => [
-        {
-          key: 'recycleBin',
-          icon: 'trash-outline',
-          label: t('notes.recycleBin', { defaultValue: '回收站' }),
-          onPress: onOpenRecycleBin,
-        },
         {
           key: 'unlisted',
           icon: 'archive-outline',
@@ -60,7 +53,7 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
           onPress: onOpenSettings,
         },
       ],
-      [t, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings],
+      [t, onOpenUnlisted, onOpenDrafts, onOpenSettings],
     );
 
     // 入口不再垫底色块:只留图标和文字,按下时变淡做反馈。

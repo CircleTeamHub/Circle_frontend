@@ -299,69 +299,49 @@ test('messages screen compacts the tab gap and reserves a separate trailing slot
   assert.match(filterTabsSource, /\.\.\.Typography\.caption/);
 });
 
-test('group management reorders built-in and custom message filters together', () => {
-  const source = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      'src/features/messages/screens/GroupManagementScreen.tsx',
-    ),
-    'utf8',
-  );
+const readGroupSource = (rel) =>
+  fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-  assert.match(source, /id: 'all'.*builtIn: true/);
-  assert.match(source, /id: 'private'.*builtIn: true/);
-  assert.match(source, /id: `custom:\$\{group\.id\}`/);
-  assert.match(source, /PanResponder\.create/);
-  assert.match(source, /reorderMessageFilter/);
-  assert.match(source, /setFilterOrder\(finalOrder\)/);
-  assert.match(
-    source,
-    /scrollEnabled=\{!draggingFilterId && !draggingGroupId\}/,
-  );
-  assert.match(source, /displayGroups\.map\(\(group, index\)/);
-  assert.match(source, /getGroupDragResponder\(group\.id\)/);
-  assert.match(source, /reorderGroups\(groupIds\)/);
-  assert.match(source, /transform: \[\{ translateY: groupDragY \}\]/);
+test('group management has exactly one sortable list for built-in and custom tabs', () => {
+  const screen = readGroupSource('src/features/messages/screens/GroupManagementScreen.tsx');
+  const order = readGroupSource('src/features/messages/hooks/use-group-tab-order.ts');
+
+  // 以前「分组排序」和「我的分组」各有一套拖柄，两边还互相同步；现在只剩一条。
+  assert.equal((screen.match(/useDragReorder\(/g) ?? []).length, 1);
+  assert.match(screen, /ids: order,/);
+  assert.match(screen, /onCommit: commitOrder/);
+  assert.match(screen, /scrollEnabled=\{!draggingId\}/);
+  assert.doesNotMatch(screen, /reorderGroups|setFilterOrder|PanResponder/);
+  assert.match(order, /buildManagedFilterOrder\(/);
+  assert.match(order, /changedGroupOrder\(order, nextOrder\)/);
+  assert.match(order, /setFilterOrder\(previousStored\)/);
 });
 
 test('new custom groups are pinned to the messages filters by default', () => {
-  const source = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      'src/features/messages/screens/GroupManagementScreen.tsx',
-    ),
-    'utf8',
-  );
+  const draft = readGroupSource('src/features/messages/utils/group-edit-draft.ts');
+  const editor = readGroupSource('src/features/messages/hooks/use-group-editor.ts');
 
-  assert.match(source, /createGroup\(\{ name: trimmed, pinnedToTabs: true \}\)/);
-
+  assert.match(draft, /EMPTY_GROUP_DRAFT: GroupDraft = \{\s*name: '',\s*pinnedToTabs: true,/);
+  assert.match(editor, /useState\(group\?\.pinnedToTabs \?\? true\)/);
+  assert.match(editor, /createGroup\(\{ name: trimmed, pinnedToTabs \}\)/);
 });
 
-test('group management lets users add group and direct chats to a custom group', () => {
-  const source = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      'src/features/messages/screens/GroupManagementScreen.tsx',
-    ),
-    'utf8',
-  );
+test('group editor lets users add group and direct chats to a custom group', () => {
+  const screen = readGroupSource('src/features/messages/screens/GroupEditScreen.tsx');
+  const toolbar = readGroupSource('src/features/messages/components/group-member-toolbar.tsx');
+  const row = readGroupSource('src/features/messages/components/group-member-row.tsx');
 
-  assert.match(source, /handleToggleMember\(activeGroup\.id, conversation\)/);
-  assert.match(source, /await setMembers\(groupId, nextIDs\)/);
-  assert.match(source, /messages\.groups\.groupChat/);
-  assert.match(source, /messages\.groups\.directChat/);
-  assert.match(source, /name=\{checked \? 'checkbox' : 'square-outline'\}/);
-  assert.match(source, /<FlatList/);
-  assert.match(source, /filterConversationMembers/);
-  assert.match(source, /messages\.groups\.searchPlaceholder/);
-  assert.match(source, /messages\.groups\.filterSelected/);
-  assert.match(source, /handleToggleVisibleMembers/);
-  assert.match(source, /initialNumToRender=\{12\}/);
-  assert.doesNotMatch(source, /conversations\.map\(/);
-  assert.match(source, /selected \? d\.groupRowSelected : null/);
-  assert.match(source, /selected \? d\.rowLabelSelected : null/);
-  assert.match(source, /accessibilityState=\{\{ selected \}\}/);
-  assert.match(source, /backgroundColor: colors\.primaryLight/);
+  assert.match(screen, /<FlatList/);
+  assert.match(screen, /filterConversationMembers/);
+  assert.match(screen, /toggleFilteredConversationMembers/);
+  assert.match(screen, /initialNumToRender=\{12\}/);
+  assert.doesNotMatch(screen, /conversations\.map\(/);
+  assert.match(toolbar, /messages\.groups\.searchPlaceholder/);
+  assert.match(toolbar, /messages\.groups\.filterSelected/);
+  assert.match(row, /messages\.groups\.groupChat/);
+  assert.match(row, /messages\.groups\.directChat/);
+  assert.match(row, /name=\{checked \? 'checkbox' : 'square-outline'\}/);
+  assert.match(row, /accessibilityState=\{\{ checked, disabled \}\}/);
 });
 
 test('会话行静止时不画滑动操作层——否则红色删除键会从前景圆角里透出来', () => {
