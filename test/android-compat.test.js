@@ -67,17 +67,15 @@ test('Alert.prompt calls are guarded for Android compatibility', () => {
   assert.deepEqual(unguarded, []);
 });
 
-test('Android group rename fallback guards duplicate submits while pending', () => {
-  const source = readSource('src/features/messages/screens/GroupManagementScreen.tsx');
+test('group rename is an inline field on every platform, saved by one guarded submit', () => {
+  // 以前 iOS 走 Alert.prompt、安卓走自绘弹窗兜底；现在名称就在编辑页里，两端同一条路。
+  const screen = readSource('src/features/messages/screens/GroupEditScreen.tsx');
+  const form = readSource('src/features/messages/components/group-edit-form.tsx');
+  const editor = readSource('src/features/messages/hooks/use-group-editor.ts');
 
-  assert.match(source, /const renameInFlightRef = useRef\(false\)/);
-  assert.match(source, /const \[renameSubmitting, setRenameSubmitting\] = useState\(false\)/);
-  assert.match(source, /if \(!renameTarget \|\| renameInFlightRef\.current\) return;/);
-  assert.match(source, /renameInFlightRef\.current = true/);
-  assert.match(source, /setRenameSubmitting\(true\)/);
-  assert.match(source, /renameInFlightRef\.current = false/);
-  assert.match(source, /setRenameSubmitting\(false\)/);
-  assert.match(source, /disabled=\{renameSubmitting\}/);
-  assert.match(source, /editable=\{!renameSubmitting\}/);
-  assert.match(source, /onSubmitEditing=\{handleSubmitRename\}/);
+  assert.doesNotMatch(screen, /Alert\.prompt/);
+  assert.match(form, /<TextInput[\s\S]*onChangeText=\{onChangeName\}/);
+  assert.match(editor, /if \(savingRef\.current \|\| !trimmed\) return false;/);
+  assert.match(editor, /savingRef\.current = false/);
+  assert.match(screen, /disabled=\{!editor\.canSave\}/);
 });

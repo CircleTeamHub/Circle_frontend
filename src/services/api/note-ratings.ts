@@ -31,6 +31,9 @@ export interface NoteRatingSummary extends NoteRatingCounts {
   /** NOTE_RATING_* code explaining why the viewer cannot rate. */
   reason: string | null;
   nextRatableAt: string | null;
+  /** 今天已经打过好评 / 差评：每天各一次（旧后端不回这两个字段）。 */
+  goodRatedToday?: boolean;
+  badRatedToday?: boolean;
   goodFull: boolean;
   badFull: boolean;
 }

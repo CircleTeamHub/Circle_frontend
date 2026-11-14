@@ -5,12 +5,18 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('圈子通知设置入口在圈子动态头部，且只跳整页设置', () => {
-  const src = read('src/features/discover/screens/CirclePlazaScreen.tsx');
+test('圈子通知设置入口在铃铛进入的圈子通知页右上角，且只跳整页设置', () => {
+  const center = read('src/features/notifications/screens/NotificationCenterScreen.tsx');
 
-  // 入口从圈子管理页挪到了外面一层的动态页头部，两处不并存（跳转见 CirclePlazaScreen.spec）。
-  assert.match(src, /name="settings-outline"/);
-  assert.doesNotMatch(src, /CircleNotificationSettingsSheet/);
+  // 入口先从圈子管理页挪到动态页头部，又挪进铃铛点开的圈子通知页（跳转见
+  // NotificationCenterScreen.spec）。动态页头部和圈子管理页都不再放齿轮。
+  assert.match(center, /name="settings-outline"/);
+  assert.match(center, /getCircleNotificationSettingsHref\(getUserProfileScopeFromSegments\(segments\)\)/);
+  assert.doesNotMatch(center, /CircleNotificationSettingsSheet/);
+  assert.doesNotMatch(
+    read('src/features/discover/screens/CirclePlazaScreen.tsx'),
+    /settings-outline/,
+  );
   assert.doesNotMatch(
     read('src/features/discover/screens/CircleManagementScreen.tsx'),
     /settings-outline/,

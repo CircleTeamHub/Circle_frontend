@@ -14,6 +14,9 @@ const BLOCK_MESSAGE_KEYS: Record<string, string> = {
   NOTE_RATING_LOW_CREDIT: 'notes.rating.blocked.NOTE_RATING_LOW_CREDIT',
   NOTE_RATING_ACCOUNT_TOO_NEW: 'notes.rating.blocked.NOTE_RATING_ACCOUNT_TOO_NEW',
   NOTE_RATING_RATER_DAILY_LIMIT: 'notes.rating.blocked.NOTE_RATING_RATER_DAILY_LIMIT',
+  // 好评、差评每天各一次：摘要里分别告诉今天哪一种已经用过（客户端自己的代码，不是服务端错误码）。
+  RATER_DAILY_GOOD_USED: 'notes.rating.blocked.RATER_DAILY_GOOD_USED',
+  RATER_DAILY_BAD_USED: 'notes.rating.blocked.RATER_DAILY_BAD_USED',
   NOTE_RATING_NOTE_GOOD_FULL: 'notes.rating.blocked.NOTE_RATING_NOTE_GOOD_FULL',
   NOTE_RATING_NOTE_BAD_FULL: 'notes.rating.blocked.NOTE_RATING_NOTE_BAD_FULL',
 };
@@ -23,10 +26,12 @@ const TIMED_BLOCKS = new Set(['NOTE_RATING_COOLDOWN', 'NOTE_RATING_RATER_DAILY_L
 
 /** The NOTE_RATING_* code that greys this button out, or null when it can be pressed. */
 export function ratingButtonBlock(
-  summary: Pick<NoteRatingSummary, 'reason' | 'goodFull' | 'badFull'>,
+  summary: Pick<NoteRatingSummary, 'reason' | 'goodFull' | 'badFull' | 'goodRatedToday' | 'badRatedToday'>,
   value: NoteRatingValue,
 ): string | null {
   if (summary.reason) return summary.reason;
+  if (value === 'GOOD' && summary.goodRatedToday) return 'RATER_DAILY_GOOD_USED';
+  if (value === 'BAD' && summary.badRatedToday) return 'RATER_DAILY_BAD_USED';
   if (value === 'GOOD' && summary.goodFull) return 'NOTE_RATING_NOTE_GOOD_FULL';
   if (value === 'BAD' && summary.badFull) return 'NOTE_RATING_NOTE_BAD_FULL';
   return null;

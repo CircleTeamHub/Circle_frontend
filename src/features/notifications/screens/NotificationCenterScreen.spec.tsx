@@ -76,10 +76,36 @@ beforeEach(() => {
   jest.mocked(markAllNotificationsRead).mockReset();
   jest.mocked(markMyPostSignupsRead).mockReset();
   mockDomain = 'moments';
+  mockSegments.splice(0, mockSegments.length, '(tabs)', 'messages');
   useAuthStore.setState({ user: { id: 'account-a' } as AuthUser, isAuthenticated: true, sessionEpoch: 1 });
   useNotificationCenterStore.getState().reset();
   useNotificationCenterStore.setState({ appendInteractivePage: mockAppendPage });
   Object.assign(mockBadges, { discoverUnread: 0, momentsUnread: 0, circleUnread: 0, signupUnread: 0 });
+});
+
+test('the circle notifications page carries the settings gear and opens settings in the same tab', async () => {
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  mockDomain = 'circle';
+  const view = render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  // 消息页的飞机进来：留在消息栈。
+  fireEvent.press(screen.getByRole('button', { name: 'discover.notifications.title' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/messages/circle-notifications');
+
+  // 圈子动态的铃铛进来：留在发现栈。
+  view.unmount();
+  mockSegments.splice(0, mockSegments.length, '(tabs)', 'discover', 'notification-center');
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByRole('button', { name: 'discover.notifications.title' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/discover/notifications');
+});
+
+test('the moments notifications page has no circle settings gear', async () => {
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.queryByRole('button', { name: 'discover.notifications.title' })).toBeNull();
 });
 
 test('a failed cursor page stops automatic requests until an explicit retry', async () => {

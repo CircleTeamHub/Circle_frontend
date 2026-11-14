@@ -53,7 +53,7 @@ test('a collected copy offers 好评 and 差评 for its source note', () => {
   const handlers = renderSheet(copy);
 
   expect(screen.queryByLabelText('notes.rating.viewBad')).toBeNull();
-  expect(screen.getByLabelText('notes.rating.actionGood')).toHaveTextContent(/mci:firework/);
+  expect(screen.getByLabelText('notes.rating.actionGood')).toHaveTextContent(/mci:party-popper/);
   expect(screen.getByLabelText('notes.rating.actionBad')).toHaveTextContent(/mci:weather-pouring/);
   fireEvent.press(screen.getByLabelText('notes.rating.actionGood'));
   expect(handlers.onRateGood).toHaveBeenCalledWith(copy);

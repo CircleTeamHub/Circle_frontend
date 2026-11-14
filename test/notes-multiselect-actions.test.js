@@ -283,21 +283,15 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
   }
 });
 
-test('lifecycle copy: unlisted never auto-deletes, recycle bin purges after 30 days', () => {
+test('lifecycle copy: 下架 60 天后自动删除，回收站已取消', () => {
   const zh = read('src/i18n/locales/zh.json');
   const unlistedScreen = read('src/features/notes/screens/UnlistedNotesScreen.tsx');
-  const recycleScreen = read('src/features/notes/screens/RecycleBinScreen.tsx');
 
-  // 下架不再宣称自动删除；回收站承接 30 天到期清理（后端 note-recycle-bin.cleanup 落地）。
-  assert.match(zh, /已下架笔记不会自动删除/);
-  assert.doesNotMatch(zh, /已下架笔记会在一个月后自动删除/);
-  assert.match(zh, /已删除的笔记可在这里恢复，30 天后自动清除。/);
-  assert.match(unlistedScreen, /不会自动删除/);
-  assert.match(recycleScreen, /30 天后自动清除/);
-
-  // 恢复/上架入口仍在两个屏幕上。
+  // 语义拍板（2026-11-13）：两种下架合并，下架 60 天后服务端永久删除；删除即永久删除。
+  assert.doesNotMatch(zh, /已下架笔记不会自动删除|回收站/);
+  assert.match(zh, /下架 60 天后自动删除/);
+  assert.match(unlistedScreen, /unlistedDaysLeft\(item\.unlistedAt, Date\.now\(\)\)/);
   assert.match(unlistedScreen, /relistNote/);
-  assert.match(recycleScreen, /restoreNote/);
 });
 
 test('collecting a note offers 查看 that locates it in the notes list', () => {

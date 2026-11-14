@@ -244,7 +244,19 @@
     "unreadCount": "{{count}} unread"
   },
   "explore": {
-    "title": "Explore"
+    "title": "Explore",
+    "ranking": {
+      "title": "Top Rated",
+      "nationwide": "All cities",
+      "chooseCity": "Choose city",
+      "subtitle": "Most liked in month {{month}} · resets on the 1st",
+      "subtitleNoMonth": "Most liked this month · resets on the 1st",
+      "empty": "No notes on the chart this month yet",
+      "emptyCity": "No notes from {{city}} on the chart this month yet",
+      "emptyHint": "Pick a city in a note's title; once it gets good ratings it shows up here.",
+      "loadFailed": "Couldn't load the chart",
+      "rankA11y": "Rank {{rank}}"
+    }
   },
   "messages": {
     "title": "Messages",
@@ -325,42 +337,47 @@
     "inviteGroupMembersLoadFailed": "Failed to load friends. Please retry.",
     "groups": {
       "title": "Group Management",
-      "createSection": "Create Group",
-      "orderSection": "Group Order",
-      "orderHint": "Hold and drag the handle to reorder the tabs on Messages",
-      "builtInGroup": "Built-in",
-      "customGroup": "Custom",
+      "orderHint": "Hold ≡ and drag to reorder. The tabs on Messages follow this order. Tap a custom group to rename it or pick conversations.",
+      "builtInGroup": "Default tab",
       "reorderA11y": "Adjust the position of {{name}}",
       "reorderFailedTitle": "Failed to reorder",
       "reorderFailedMessage": "Failed to save group order, please try again.",
       "moveUp": "Move up",
       "moveDown": "Move down",
       "namePlaceholder": "e.g. Family / Work",
-      "nameRequired": "Please enter a group name",
-      "myGroups": "My Groups",
-      "empty": "No custom groups yet. Create one.",
       "conversationCount": "{{count}} conversations",
-      "memberHint": "Select group or direct chats to add to \"{{name}}\" (multiple allowed)",
       "noConversations": "No conversations available to add",
       "filterAll": "All",
       "filterSelected": "Selected",
       "searchPlaceholder": "Search group or direct chats",
-      "selectedCount": "{{selected}} / {{total}} selected",
+      "selectedCount": "{{count}} selected",
       "resultCount": "{{count}} results",
       "selectResults": "Select all results",
       "deselectResults": "Deselect current results",
       "noMatchingConversations": "No matching conversations",
       "groupChat": "Group chat",
       "directChat": "Direct chat",
-      "renameTitle": "Rename Group",
       "deleteTitle": "Delete Group",
       "deleteConfirm": "Delete 「{{name}}」? Conversations in the group will not be deleted.",
-      "createFailed": "Failed to create",
-      "renameFailed": "Failed to rename",
       "deleteFailed": "Failed to delete",
       "saveFailed": "Failed to save",
       "loadFailed": "Failed to load",
-      "nameEmpty": "Group name cannot be empty"
+      "nameEmpty": "Group name cannot be empty",
+      "create": "New Group",
+      "editTitle": "Edit Group",
+      "editHint": "Edit name and conversations",
+      "nameLabel": "Group name",
+      "showInTabs": "Show on Messages",
+      "showInTabsHint": "When off, the group is kept but hidden from the tabs on Messages",
+      "hiddenFromTabs": "Hidden from Messages",
+      "membersSection": "Choose conversations",
+      "emptyHint": "Create a group to keep the group chats and direct chats you use most in one place.",
+      "discardTitle": "Discard changes?",
+      "discardMessage": "Your changes haven't been saved and will be lost.",
+      "discard": "Discard",
+      "keepEditing": "Keep Editing",
+      "notFound": "This group has been deleted",
+      "membersFailedAfterCreate": "The group was created, but the conversations couldn't be added. Tap Save again."
     },
     "mutedA11y": "Muted"
   },
@@ -1058,8 +1075,8 @@
       "workStatus": {
         "working": "Working",
         "closed": "Closed",
-        "unlisted": "Unlisted; status may have changed",
-        "offShelf": "Off shelf"
+        "offShelf": "Off shelf",
+        "deleted": "Note deleted"
       },
       "sectionSendFailed": "Couldn't send. Please try again.",
       "noLocation": "This note has no location to send"
@@ -2895,11 +2912,8 @@
       "unpin": "Unpin",
       "edit": "Edit",
       "unlist": "Unlist",
-      "venueOffShelf": "Mark venue off shelf",
       "relist": "Relist",
       "more": "More",
-      "restore": "Restore",
-      "purge": "Delete now",
       "multiSelect": "Select multiple",
       "remark": "Remark",
       "editNote": "Edit note",
@@ -2926,20 +2940,18 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted and relist it anytime.",
+      "unlistConfirm": "Others can still see an unlisted note, marked \"Off shelf\". It is deleted after 60 days; until then you can relist it from Unlisted.",
       "refreshFailedTitle": "Refresh failed",
-      "restoreFailedTitle": "Restore failed",
       "remarkFailedTitle": "Failed to save remark",
       "deleteTitle": "Delete note",
-      "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
-      "purgeTitle": "Delete note now?",
-      "purgeConfirm": "The note will be permanently deleted and cannot be recovered.",
+      "deleteConfirm": "Deleted notes can't be recovered. To keep a way back, unlist it instead: you can relist it within 60 days.",
       "batchFailedTitle": "Some actions failed",
       "batchPartialFailed": "{{count}} notes failed and remain selected. Please try again.",
       "batchUnlistTitle": "Unlist notes",
-      "batchUnlistConfirm": "Unlist the {{count}} selected notes? You can relist them anytime.",
+      "batchUnlistConfirm": "Unlist the {{count}} selected notes? Unlisted notes are deleted after 60 days; you can relist them any time before that.",
       "batchDeleteTitle": "Delete notes",
-      "batchDeleteConfirm": "Delete the {{count}} selected notes? They can be recovered from the recycle bin."
+      "batchDeleteConfirm": "Delete the {{count}} selected notes? This can't be undone.",
+      "deleteUnlistedConfirm": "Deleted notes can't be recovered. If you leave it, it is deleted automatically when its 60 days are up."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -3075,7 +3087,9 @@
         "moveUp": "Move {{label}} up",
         "moveDown": "Move {{label}} down"
       },
-      "unsupportedAudio": "Unsupported audio format. Choose an M4A, MP3, AAC, WAV, OGG or WebM file."
+      "unsupportedAudio": "Unsupported audio format. Choose an M4A, MP3, AAC, WAV, OGG or WebM file.",
+      "cityLabel": "City",
+      "cityClear": "Remove city"
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",
@@ -3105,8 +3119,7 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes",
-      "noDeleted": "The recycle bin is empty"
+      "noUnlisted": "No unlisted notes"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -3153,7 +3166,7 @@
     "title": "My notes",
     "unlisted": "Unlisted",
     "unlistedTitle": "Unlisted notes",
-    "unlistedAutoDeleteHint": "Unlisted notes are never deleted automatically. You can relist them anytime.",
+    "unlistedAutoDeleteHint": "Unlisted notes are deleted after 60 days and can be relisted any time before that. Others still see them, marked \"Off shelf\".",
     "format": {
       "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -3252,9 +3265,6 @@
       "batchPreview": "{{count}} notes",
       "singlePreview": "[Note] {{title}}"
     },
-    "recycleBin": "Recycle bin",
-    "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
-    "recycleBinTitle": "Recycle bin",
     "settings": {
       "entry": "Settings",
       "title": "Note settings",
@@ -3277,12 +3287,14 @@
         "NOTE_RATING_NOT_IN_GROUP": "Join one of the groups in this note to rate it.",
         "NOTE_RATING_LOW_CREDIT": "Your reputation is below 90, so you can’t rate for now.",
         "NOTE_RATING_ACCOUNT_TOO_NEW": "You can rate once your account is 7 days old.",
-        "NOTE_RATING_RATER_DAILY_LIMIT": "You’ve already rated today. Come back tomorrow.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "You can give one good and one bad rating a day, and you've used today's. Come back tomorrow.",
         "cooldownDays": "You can rate this note again in {{count}} days.",
         "cooldownHours": "You can rate this note again in {{count}} hours.",
         "NOTE_RATING_NOTE_GOOD_FULL": "This note has reached today’s limit of good ratings. Try tomorrow.",
         "NOTE_RATING_NOTE_BAD_FULL": "This note has reached today’s limit of bad ratings. Try tomorrow.",
-        "unknown": "You can’t rate right now. Please try again later."
+        "unknown": "You can’t rate right now. Please try again later.",
+        "RATER_DAILY_GOOD_USED": "You've already given today's good rating. Come back tomorrow.",
+        "RATER_DAILY_BAD_USED": "You've already given today's bad rating. Come back tomorrow."
       },
       "reasons": {
         "INACCURATE": "Inaccurate",
@@ -3322,7 +3334,8 @@
           "submitting": "Submitting..."
         }
       }
-    }
+    },
+    "unlistedDaysLeft": "Deleted in {{count}} days"
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -3716,7 +3729,7 @@
     "NOTE_RATING_NO_GROUP": "This note has no group, so it can’t be rated",
     "NOTE_RATING_LOW_CREDIT": "Your reputation is below 90, so you can’t rate for now",
     "NOTE_RATING_ACCOUNT_TOO_NEW": "You can rate once your account is 7 days old",
-    "NOTE_RATING_RATER_DAILY_LIMIT": "You’ve already rated today. Come back tomorrow",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "One good and one bad rating a day; today's is already used",
     "NOTE_RATING_COOLDOWN": "You can rate the same note only once every 3 days",
     "NOTE_RATING_NOTE_GOOD_FULL": "This note has reached today’s limit of good ratings",
     "NOTE_RATING_NOTE_BAD_FULL": "This note has reached today’s limit of bad ratings",

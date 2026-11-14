@@ -707,6 +707,7 @@ function NoteDetailContent() {
           {readOnlySections && bodyReady ? (
             <NoteDocumentBody
               title={note.title}
+              city={note.city}
               createdAt={note.createdAt}
               groups={note.groups}
               sections={readOnlySections}

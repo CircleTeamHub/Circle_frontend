@@ -142,10 +142,15 @@ test('circle pages opened from explore stay in the explore stack', () => {
   assert.deepEqual(walk('src').filter((rel) => twoWay.test(read(rel))), []);
 });
 
-test('explore home is two tiles with names only: moments first, then the assistant', () => {
+test('explore home is three tiles with names only: moments, the assistant, then 大众点评', () => {
   const screen = read('src/features/explore/screens/ExploreScreen.tsx');
   const cards = [...screen.matchAll(/<ExploreTile\n[\s\S]*?\n {10}\/>/g)].map((match) => match[0]);
-  assert.equal(cards.length, 2);
+  assert.equal(cards.length, 3);
+  assert.match(cards[2], /E2E_TEST_IDS\.exploreRankingEntry/);
+  assert.match(cards[2], /onPress=\{handleOpenRanking\}/);
+  assert.match(cards[2], /art=\{<RankingTileArt /);
+  assert.match(screen, /router\.push\('\/\(tabs\)\/explore\/note-ranking'\)/);
+  assert.match(read('app/(tabs)/explore/note-ranking.tsx'), /NoteRankingScreen/);
   assert.match(cards[0], /E2E_TEST_IDS\.exploreMomentsEntry/);
   assert.match(cards[0], /onPress=\{handleOpenMoments\}/);
   assert.match(cards[1], /E2E_TEST_IDS\.exploreAssistantEntry/);
@@ -159,6 +164,7 @@ test('explore home is two tiles with names only: moments first, then the assista
   assert.doesNotMatch(screen, /hint=|Hint'/);
   assert.match(read('src/theme/tokens.ts'), /exploreMoments: \[/);
   assert.match(read('src/theme/tokens.ts'), /exploreAssistant: \[/);
+  assert.match(read('src/theme/tokens.ts'), /exploreRanking: \[/);
 });
 
 test('legacy discover moment routes keep resolving after the move', () => {

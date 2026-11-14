@@ -97,10 +97,6 @@ export default function CirclePlazaScreen() {
     router.push('/(tabs)/discover/management');
   }, [router]);
 
-  const handleOpenNotificationSettings = useCallback(() => {
-    router.push('/(tabs)/discover/notifications');
-  }, [router]);
-
   return (
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <View style={[s.header, { paddingTop: Spacing.md }]}>
@@ -128,18 +124,6 @@ export default function CirclePlazaScreen() {
           >
             <Ionicons
               name="options-outline"
-              size={22}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-          <Pressable
-            onPress={handleOpenNotificationSettings}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('discover.notifications.title')}
-          >
-            <Ionicons
-              name="settings-outline"
               size={22}
               color={colors.textSecondary}
             />

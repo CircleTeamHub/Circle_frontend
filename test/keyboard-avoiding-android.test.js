@@ -82,7 +82,7 @@ const SCREENS_WITH_LOW_INPUTS_OR_ACTIONS = [
   'src/features/chat/screens/NewGroupScreen.tsx',
   'src/features/chat/screens/InviteGroupMembersScreen.tsx',
   'src/features/chat/screens/SharePickerScreen.tsx',
-  'src/features/messages/screens/GroupManagementScreen.tsx',
+  'src/features/messages/screens/GroupEditScreen.tsx',
   'src/features/discover/components/moment-comment-input.tsx',
   'src/features/discover/screens/CreateMomentScreen.tsx',
   'src/features/discover/screens/CreateCircleScreen.tsx',
@@ -135,7 +135,6 @@ const MODAL_HOSTED_AUTO_FOCUS_INPUTS = [
   'src/features/notes/components/GroupManagerSheet.tsx',
   'src/features/notes/components/NoteRemarkSheet.tsx',
   'src/features/notes/components/NoteGroupPickerSheet.tsx',
-  'src/features/messages/screens/GroupManagementScreen.tsx',
 ];
 
 test('inputs that open with a modal focus only after the Android dialog window is up', () => {

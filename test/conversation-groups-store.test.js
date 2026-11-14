@@ -119,7 +119,7 @@ test('load() surfaces error message and keeps loading=false on failure', async (
   );
 });
 
-test('rename() optimistically updates and rolls back on server error', async () => {
+test('update() renames optimistically and rolls back on server error', async () => {
   let shouldFail = false;
   const apiMocks = {
     fetchConversationGroups: async () => [makeGroup({ name: '原名' })],
@@ -134,18 +134,76 @@ test('rename() optimistically updates and rolls back on server error', async () 
   const { useMessageGroupsStore } = loadStore(apiMocks);
 
   await useMessageGroupsStore.getState().load();
-  await useMessageGroupsStore.getState().rename('g-1', '新名');
+  await useMessageGroupsStore.getState().update('g-1', { name: ' 新名 ' });
   assert.equal(useMessageGroupsStore.getState().groups[0].name, '新名');
 
   shouldFail = true;
   await assert.rejects(() =>
-    useMessageGroupsStore.getState().rename('g-1', '再改'),
+    useMessageGroupsStore.getState().update('g-1', { name: '再改' }),
   );
   // 回滚到上一个成功的状态
   assert.equal(useMessageGroupsStore.getState().groups[0].name, '新名');
 });
 
-test('rename() rejects empty/whitespace name without hitting the server', async () => {
+test('update() sends rename and visibility together in a single PATCH', async () => {
+  const calls = [];
+  const apiMocks = {
+    fetchConversationGroups: async () => [makeGroup({ name: '原名' })],
+    updateConversationGroup: async (id, patch) => {
+      calls.push({ id, patch });
+      return makeGroup({ id, ...patch });
+    },
+    createConversationGroup: async () => makeGroup(),
+    deleteConversationGroup: async () => undefined,
+    setConversationGroupMembers: async () => makeGroup(),
+  };
+  const { useMessageGroupsStore } = loadStore(apiMocks);
+  await useMessageGroupsStore.getState().load();
+
+  await useMessageGroupsStore
+    .getState()
+    .update('g-1', { name: ' 工作 ', pinnedToTabs: false });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { id: 'g-1', patch: { name: '工作', pinnedToTabs: false } },
+  ]);
+  const [group] = useMessageGroupsStore.getState().groups;
+  assert.equal(group.name, '工作');
+  assert.equal(group.pinnedToTabs, false);
+});
+
+test('create() places the new group after every existing one', async () => {
+  let createPayload = null;
+  const apiMocks = {
+    fetchConversationGroups: async () => [
+      makeGroup({ id: 'g-1', sortOrder: 0 }),
+      makeGroup({ id: 'g-2', name: '工作', sortOrder: 4 }),
+    ],
+    createConversationGroup: async (payload) => {
+      createPayload = payload;
+      return makeGroup({ id: 'g-3', name: payload.name, sortOrder: payload.sortOrder });
+    },
+    updateConversationGroup: async () => makeGroup(),
+    deleteConversationGroup: async () => undefined,
+    setConversationGroupMembers: async () => makeGroup(),
+  };
+  const { useMessageGroupsStore } = loadStore(apiMocks);
+  await useMessageGroupsStore.getState().load();
+
+  await useMessageGroupsStore.getState().create({ name: '同学', pinnedToTabs: true });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(createPayload)), {
+    name: '同学',
+    pinnedToTabs: true,
+    sortOrder: 5,
+  });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useMessageGroupsStore.getState().groups.map((g) => g.id))),
+    ['g-1', 'g-2', 'g-3'],
+  );
+});
+
+test('update() rejects an empty/whitespace name without hitting the server', async () => {
   let updateCalled = false;
   const apiMocks = {
     fetchConversationGroups: async () => [makeGroup()],
@@ -161,7 +219,7 @@ test('rename() rejects empty/whitespace name without hitting the server', async 
   await useMessageGroupsStore.getState().load();
 
   await assert.rejects(
-    () => useMessageGroupsStore.getState().rename('g-1', '   '),
+    () => useMessageGroupsStore.getState().update('g-1', { name: '   ' }),
     /不能为空/,
   );
   assert.equal(updateCalled, false);
@@ -226,7 +284,7 @@ test('setMembers() dedupes + sorts client-side, uses server response as truth', 
   );
 });
 
-test('setPinnedToTabs() rolls back on server error and keeps prior value', async () => {
+test('update() rolls the visibility switch back on server error', async () => {
   let shouldFail = false;
   const apiMocks = {
     fetchConversationGroups: async () => [makeGroup({ pinnedToTabs: true })],
@@ -243,7 +301,7 @@ test('setPinnedToTabs() rolls back on server error and keeps prior value', async
 
   shouldFail = true;
   await assert.rejects(() =>
-    useMessageGroupsStore.getState().setPinnedToTabs('g-1', false),
+    useMessageGroupsStore.getState().update('g-1', { pinnedToTabs: false }),
   );
   assert.equal(useMessageGroupsStore.getState().groups[0].pinnedToTabs, true);
 });

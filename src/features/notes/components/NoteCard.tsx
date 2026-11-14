@@ -8,7 +8,7 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
 import {
-  isSetNoteWorkStatus,
+  displayedNoteWorkStatus,
   NOTE_WORK_STATUS_ICON,
   noteWorkStatusFill,
 } from '@/features/notes/utils/work-status';
@@ -90,6 +90,9 @@ function NoteCardInner({
     },
     t,
   );
+  const shownWorkStatus = displayedNoteWorkStatus(note.workStatus, note.status);
+  // 选了城市的笔记在元信息最前面带上城市（大众点评榜按城市排）。
+  const metaText = note.city ? `${note.city} · ${meta}` : meta;
 
   // 底部两个按钮 = 这条笔记的个人名片（→私聊）和群名片（→群聊）。收藏来的笔记由
   // 后端用来源发送者/群预填，自己写的笔记就是编辑器里添加的名片。
@@ -209,19 +212,19 @@ function NoteCardInner({
             {note.contentPreview}
           </Text>
         ) : null}
-        {/* 已下架的笔记只出现在「已下架」页，那里不再重复挂状态标签。 */}
-        {note.status === 'UNLISTED' || !isSetNoteWorkStatus(note.workStatus) ? null : (
+        {/* 下架（status=UNLISTED）压过开工/打烊：收藏者和群里看到的也是「下架」。 */}
+        {shownWorkStatus === null ? null : (
           <View
             style={[
               s.statusBadge,
               {
-                backgroundColor: noteWorkStatusFill(note.workStatus, colors),
-                borderColor: noteWorkStatusFill(note.workStatus, colors),
+                backgroundColor: noteWorkStatusFill(shownWorkStatus, colors),
+                borderColor: noteWorkStatusFill(shownWorkStatus, colors),
               },
             ]}
           >
             <Ionicons
-              name={NOTE_WORK_STATUS_ICON[note.workStatus]}
+              name={NOTE_WORK_STATUS_ICON[shownWorkStatus]}
               size={13}
               color={colors.onStatusFill}
             />
@@ -232,16 +235,16 @@ function NoteCardInner({
               ]}
               numberOfLines={1}
             >
-              {note.workStatus === 'WORKING'
+              {shownWorkStatus === 'WORKING'
                 ? t('notes.list.statusWorking', { defaultValue: '开工' })
-                : note.workStatus === 'CLOSED'
+                : shownWorkStatus === 'CLOSED'
                   ? t('notes.list.statusClosed', { defaultValue: '打烊' })
                   : t('notes.list.statusOffShelf', { defaultValue: '下架' })}
             </Text>
           </View>
         )}
         <Text testID={`note-card-meta-${note.id}`} style={[s.meta, d.meta]} numberOfLines={1}>
-          {meta}
+          {metaText}
         </Text>
       </View>
 

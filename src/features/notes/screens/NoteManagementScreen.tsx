@@ -471,11 +471,14 @@ function NoteManagementContent() {
 
   const handleSetNoteWorkStatus = useCallback(
     (note: NoteSummary, workStatus: NoteWorkStatus | null) => {
-      void updateManagedNote(
-        note,
-        () => setNoteWorkStatus(note.id, workStatus),
-        { workStatus },
-      );
+      // 下架走 work-status OFF_SHELF，服务端转成真正的下架（UNLISTED）；开工/打烊会把已下架的笔记重新上架。
+      const patch: Partial<NoteSummary> =
+        workStatus === 'OFF_SHELF'
+          ? { status: 'UNLISTED', workStatus: null }
+          : workStatus === 'WORKING' || workStatus === 'CLOSED'
+            ? { status: 'ACTIVE', workStatus }
+            : { workStatus };
+      void updateManagedNote(note, () => setNoteWorkStatus(note.id, workStatus), patch);
     },
     [updateManagedNote],
   );

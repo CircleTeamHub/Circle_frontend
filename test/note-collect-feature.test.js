@@ -123,13 +123,16 @@ test('NoteCard makes the source work status visible on every notes list', () => 
   assert.match(src, /defaultValue: '打烊'/);
   assert.doesNotMatch(src, /statusClosed', \{ defaultValue: '打烊，状态可能变化' \}/);
   assert.match(src, /notes\.list\.statusOffShelf/);
-  assert.match(src, /NOTE_WORK_STATUS_ICON\[note\.workStatus\]/);
+  // 下架（status=UNLISTED）压过开工/打烊，收藏者和群里也显示「下架」。
+  assert.match(src, /displayedNoteWorkStatus\(note\.workStatus, note\.status\)/);
+  assert.match(src, /NOTE_WORK_STATUS_ICON\[shownWorkStatus\]/);
   const workStatus = read('src/features/notes/utils/work-status.ts');
   assert.match(workStatus, /CLOSED: 'moon-outline'/);
   assert.match(workStatus, /OFF_SHELF: 'pause-circle-outline'/);
-  // 场地下架和真正下架笔记(archive-outline)必须一眼能分开。
+  // 两种下架已合并成一种（status=UNLISTED）：菜单里只剩一个「下架」，不再单独设 OFF_SHELF。
   const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
-  assert.match(sheet, /notes\.actions\.venueOffShelf/);
+  assert.doesNotMatch(sheet, /work-status-off-shelf|onSetWorkStatus\?\.\(note, 'OFF_SHELF'\)/);
+  assert.equal((sheet.match(/key: 'unlist'/g) ?? []).length, 2); // 单选 + 批量各一个
   assert.doesNotMatch(sheet, /chat\.groupManagement\.noteOffShelf/);
 });
 

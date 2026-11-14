@@ -54,6 +54,8 @@ export type NoteEditorDraftRecord = {
   createdAt: number;
   updatedAt: number;
   pendingSubmission?: PendingNoteSubmission;
+  /** 加城市之前存下的草稿没有这个字段，按未选处理。 */
+  city?: string | null;
 };
 
 export type NoteLocalDraftSummary = {
@@ -536,5 +538,7 @@ export function localDraftSummaryToServerInput(record: NoteEditorDraftRecord) {
     groupIds: record.groupIds,
     sourceNoteId: record.noteId,
     mediaKeys: record.mediaKeys,
+    // 没选城市就不带：后端草稿是整份覆盖，不带即没有城市；旧后端不认这个字段。
+    ...(record.city ? { city: record.city } : {}),
   };
 }

@@ -983,8 +983,8 @@
       "workStatus": {
         "working": "영업 중",
         "closed": "영업 종료",
-        "unlisted": "게시 중지, 상태가 바뀌었을 수 있음",
-        "offShelf": "판매 중지"
+        "offShelf": "판매 중지",
+        "deleted": "노트가 삭제되었습니다"
       },
       "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요",
       "noLocation": "이 노트에는 보낼 수 있는 위치가 없습니다"
@@ -1170,42 +1170,47 @@
     "inviteGroupMembersLoadFailed": "친구 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
     "groups": {
       "title": "그룹 관리",
-      "createSection": "그룹 만들기",
-      "orderSection": "그룹 순서",
-      "orderHint": "오른쪽을 길게 눌러 드래그하면 메시지 탭 순서를 바꿀 수 있습니다",
-      "builtInGroup": "고정",
-      "customGroup": "사용자 지정",
+      "orderHint": "≡ 를 길게 눌러 드래그하면 순서를 바꿀 수 있습니다. 메시지 상단 탭이 이 순서로 표시됩니다. 사용자 지정 그룹을 누르면 이름과 대화를 편집할 수 있습니다.",
+      "builtInGroup": "기본 탭",
       "reorderA11y": "{{name}} 위치 조정",
       "reorderFailedTitle": "순서 변경 실패",
       "reorderFailedMessage": "그룹 순서를 저장하지 못했습니다. 다시 시도해 주세요.",
       "moveUp": "위로",
       "moveDown": "아래로",
       "namePlaceholder": "예: 가족 / 직장",
-      "nameRequired": "그룹 이름을 입력하세요",
-      "myGroups": "내 그룹",
-      "empty": "아직 사용자 지정 그룹이 없습니다. 하나 만들어 보세요.",
       "conversationCount": "대화 {{count}}개",
-      "memberHint": "'{{name}}'에 추가할 그룹 또는 개인 채팅을 선택하세요(복수 선택 가능)",
       "noConversations": "추가할 수 있는 대화가 없습니다",
       "filterAll": "전체",
       "filterSelected": "선택됨",
       "searchPlaceholder": "그룹 또는 1:1 채팅 검색",
-      "selectedCount": "{{selected}} / {{total}} 선택",
+      "selectedCount": "{{count}}개 선택",
       "resultCount": "결과 {{count}}개",
       "selectResults": "모든 결과 선택",
       "deselectResults": "현재 결과 선택 해제",
       "noMatchingConversations": "일치하는 대화가 없습니다",
       "groupChat": "그룹 채팅",
       "directChat": "1:1 채팅",
-      "renameTitle": "그룹 이름 변경",
       "deleteTitle": "그룹 삭제",
       "deleteConfirm": "'{{name}}'을(를) 삭제할까요? 그룹 내 대화는 삭제되지 않습니다.",
-      "createFailed": "만들기에 실패했습니다",
-      "renameFailed": "이름 변경에 실패했습니다",
       "deleteFailed": "삭제에 실패했습니다",
       "saveFailed": "저장에 실패했습니다",
       "loadFailed": "불러오기 실패",
-      "nameEmpty": "그룹 이름을 입력해 주세요"
+      "nameEmpty": "그룹 이름을 입력해 주세요",
+      "create": "새 그룹",
+      "editTitle": "그룹 편집",
+      "editHint": "이름과 대화 편집",
+      "nameLabel": "그룹 이름",
+      "showInTabs": "메시지에 표시",
+      "showInTabsHint": "끄면 그룹은 유지되고 메시지 상단 탭에서만 숨겨집니다",
+      "hiddenFromTabs": "메시지에 표시 안 함",
+      "membersSection": "대화 선택",
+      "emptyHint": "그룹을 만들어 자주 쓰는 그룹 채팅과 1:1 채팅을 한곳에 모아 보세요.",
+      "discardTitle": "변경 사항을 버릴까요?",
+      "discardMessage": "변경 사항이 아직 저장되지 않았습니다. 나가면 사라집니다.",
+      "discard": "버리기",
+      "keepEditing": "계속 편집",
+      "notFound": "이 그룹은 삭제되었습니다",
+      "membersFailedAfterCreate": "그룹은 만들어졌지만 대화를 추가하지 못했습니다. 다시 저장해 주세요."
     },
     "mutedA11y": "알림 끔"
   },
@@ -1223,11 +1228,8 @@
       "unpin": "고정 해제",
       "edit": "편집",
       "unlist": "내리기",
-      "venueOffShelf": "매장 판매 중지로 표시",
       "relist": "올리기",
       "more": "더보기",
-      "restore": "복원",
-      "purge": "지금 삭제",
       "multiSelect": "다중 선택",
       "remark": "메모",
       "editNote": "노트 편집",
@@ -1254,20 +1256,18 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 언제든지 다시 올릴 수 있습니다.",
+      "unlistConfirm": "내린 노트도 다른 사람에게는 계속 보이며 「판매 중지」로 표시됩니다. 60일 후 자동으로 삭제되며, 그 전에는 내린 목록에서 다시 올릴 수 있습니다.",
       "refreshFailedTitle": "새로고침 실패",
-      "restoreFailedTitle": "복원 실패",
       "remarkFailedTitle": "메모 저장 실패",
       "deleteTitle": "노트 삭제",
-      "deleteConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
-      "purgeTitle": "노트를 지금 삭제할까요?",
-      "purgeConfirm": "노트가 영구적으로 삭제되며 복구할 수 없습니다.",
+      "deleteConfirm": "삭제하면 복구할 수 없습니다. 되돌릴 여지를 남기려면 내리기를 사용하세요. 60일 안에 다시 올릴 수 있습니다.",
       "batchFailedTitle": "일부 작업 실패",
       "batchPartialFailed": "노트 {{count}}개의 작업이 실패했습니다. 선택이 유지되니 다시 시도해 주세요.",
       "batchUnlistTitle": "일괄 내리기",
-      "batchUnlistConfirm": "선택한 노트 {{count}}개를 내릴까요? 언제든지 다시 올릴 수 있습니다.",
+      "batchUnlistConfirm": "선택한 노트 {{count}}개를 내릴까요? 60일 후 자동으로 삭제되며, 그 전에는 언제든 다시 올릴 수 있습니다.",
       "batchDeleteTitle": "일괄 삭제",
-      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 휴지통에서 복원할 수 있습니다."
+      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 삭제하면 복구할 수 없습니다.",
+      "deleteUnlistedConfirm": "삭제하면 복구할 수 없습니다. 그대로 두어도 60일이 지나면 자동으로 삭제됩니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -1401,7 +1401,9 @@
         "moveUp": "{{label}} 위로",
         "moveDown": "{{label}} 아래로"
       },
-      "unsupportedAudio": "지원하지 않는 오디오 형식입니다. M4A, MP3, AAC, WAV, OGG 또는 WebM 파일을 선택해 주세요."
+      "unsupportedAudio": "지원하지 않는 오디오 형식입니다. M4A, MP3, AAC, WAV, OGG 또는 WebM 파일을 선택해 주세요.",
+      "cityLabel": "도시",
+      "cityClear": "도시 선택 해제"
     },
     "editor": {
       "mediaUploadFailedMessage": "다시 시도해 주세요",
@@ -1431,8 +1433,7 @@
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
       "noNotes": "아직 노트가 없습니다",
-      "noUnlisted": "내린 노트가 없습니다",
-      "noDeleted": "휴지통이 비어 있습니다"
+      "noUnlisted": "내린 노트가 없습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
@@ -1479,7 +1480,7 @@
     "title": "내 노트",
     "unlisted": "내림",
     "unlistedTitle": "내린 노트",
-    "unlistedAutoDeleteHint": "내린 노트는 자동 삭제되지 않으며 언제든지 다시 올릴 수 있습니다.",
+    "unlistedAutoDeleteHint": "내린 노트는 60일 후 자동으로 삭제되며, 그 전에는 언제든 다시 올릴 수 있습니다. 다른 사람에게는 「판매 중지」로 표시됩니다.",
     "format": {
       "fullDate": "{{year}}년 {{month}}월 {{day}}일 · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
@@ -1578,9 +1579,6 @@
       "batchPreview": "노트 {{count}}개",
       "singlePreview": "[노트] {{title}}"
     },
-    "recycleBin": "휴지통",
-    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
-    "recycleBinTitle": "휴지통",
     "settings": {
       "entry": "설정",
       "title": "노트 설정",
@@ -1603,12 +1601,14 @@
         "NOTE_RATING_NOT_IN_GROUP": "노트에 있는 그룹에 참여해야 평가할 수 있습니다.",
         "NOTE_RATING_LOW_CREDIT": "신용 점수가 90 미만이라 지금은 평가할 수 없습니다.",
         "NOTE_RATING_ACCOUNT_TOO_NEW": "가입 후 7일이 지나면 평가할 수 있습니다.",
-        "NOTE_RATING_RATER_DAILY_LIMIT": "오늘은 이미 평가했습니다. 내일 다시 오세요.",
+        "NOTE_RATING_RATER_DAILY_LIMIT": "좋은 평가와 나쁜 평가는 하루에 한 번씩 할 수 있으며 오늘은 이미 사용했습니다. 내일 다시 오세요.",
         "cooldownDays": "{{count}}일 후에 이 노트를 다시 평가할 수 있습니다.",
         "cooldownHours": "{{count}}시간 후에 이 노트를 다시 평가할 수 있습니다.",
         "NOTE_RATING_NOTE_GOOD_FULL": "이 노트는 오늘 좋아요 한도에 도달했습니다. 내일 다시 시도하세요.",
         "NOTE_RATING_NOTE_BAD_FULL": "이 노트는 오늘 별로예요 한도에 도달했습니다. 내일 다시 시도하세요.",
-        "unknown": "지금은 평가할 수 없습니다. 잠시 후 다시 시도하세요."
+        "unknown": "지금은 평가할 수 없습니다. 잠시 후 다시 시도하세요.",
+        "RATER_DAILY_GOOD_USED": "오늘의 좋은 평가는 이미 사용했습니다. 내일 다시 오세요.",
+        "RATER_DAILY_BAD_USED": "오늘의 나쁜 평가는 이미 사용했습니다. 내일 다시 오세요."
       },
       "reasons": {
         "INACCURATE": "정보가 사실과 다름",
@@ -1648,7 +1648,8 @@
           "submitting": "제출 중..."
         }
       }
-    }
+    },
+    "unlistedDaysLeft": "{{count}}일 후 자동 삭제"
   },
   "tempChats": {
     "title": "좌석",
@@ -3133,7 +3134,19 @@
     "unreadCount": "읽지 않음 {{count}}개"
   },
   "explore": {
-    "title": "탐색"
+    "title": "탐색",
+    "ranking": {
+      "title": "인기 랭킹",
+      "nationwide": "전국",
+      "chooseCity": "도시 선택",
+      "subtitle": "{{month}}월 좋은 평가 랭킹 · 매월 1일 갱신",
+      "subtitleNoMonth": "이번 달 좋은 평가 랭킹 · 매월 1일 갱신",
+      "empty": "이번 달 랭킹에 오른 노트가 아직 없습니다",
+      "emptyCity": "이번 달 {{city}} 랭킹에 오른 노트가 아직 없습니다",
+      "emptyHint": "노트 제목에서 도시를 선택하고 좋은 평가를 받으면 랭킹에 오릅니다.",
+      "loadFailed": "랭킹을 불러오지 못했습니다",
+      "rankA11y": "{{rank}}위"
+    }
   },
   "onboarding": {
     "profileTitle": "프로필 완성하기",
@@ -3708,7 +3721,7 @@
     "NOTE_RATING_NO_GROUP": "이 노트에는 그룹이 없어 평가할 수 없습니다",
     "NOTE_RATING_LOW_CREDIT": "신용 점수가 90 미만이라 지금은 평가할 수 없습니다",
     "NOTE_RATING_ACCOUNT_TOO_NEW": "가입 후 7일이 지나면 평가할 수 있습니다",
-    "NOTE_RATING_RATER_DAILY_LIMIT": "오늘은 이미 평가했습니다. 내일 다시 오세요",
+    "NOTE_RATING_RATER_DAILY_LIMIT": "좋은 평가와 나쁜 평가는 하루 한 번씩이며 오늘은 이미 사용했습니다",
     "NOTE_RATING_COOLDOWN": "같은 노트는 3일에 한 번만 평가할 수 있습니다",
     "NOTE_RATING_NOTE_GOOD_FULL": "이 노트는 오늘 좋아요 한도에 도달했습니다",
     "NOTE_RATING_NOTE_BAD_FULL": "이 노트는 오늘 별로예요 한도에 도달했습니다",

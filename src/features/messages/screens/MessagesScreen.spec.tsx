@@ -9,6 +9,7 @@ import { clearChatConversationHistory, updateChatConversationPreferences } from 
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import type { ChatConversationDto } from '@/chat-core/protocol';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
+import type { CustomConversationGroup } from '@/types';
 
 let mockConversations: ChatConversationDto[];
 let mockSplitLayout = false;
@@ -16,6 +17,7 @@ let mockCurrentUserId = 'me';
 let mockPinnedFoldCount = 0;
 let mockScreenLive = true;
 let mockSnapshotLoaded = true;
+let mockMessageGroups: CustomConversationGroup[] = [];
 const mockNavigate = jest.fn();
 const mockSetTabOptions = jest.fn();
 const mockTabNavigation = { setOptions: mockSetTabOptions };
@@ -55,7 +57,7 @@ jest.mock('@/hooks/use-focus-reload-gate', () => ({ useFocusReloadGate: () => mo
 jest.mock('@/services/api/friends', () => ({ fetchFriends: jest.fn(), friendsMutatedSince: () => false }));
 jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => mockScreenLive }));
 jest.mock('@/hooks/use-desktop-split-layout', () => ({ useDesktopSplitLayout: () => mockSplitLayout }));
-jest.mock('@/features/messages/store/use-message-groups-store', () => ({ useMessageGroupsStore: (selector: (state: unknown) => unknown) => selector({ groups: [], filterOrder: [] }) }));
+jest.mock('@/features/messages/store/use-message-groups-store', () => ({ useMessageGroupsStore: (selector: (state: unknown) => unknown) => selector({ groups: mockMessageGroups, filterOrder: [] }) }));
 jest.mock('@/features/profile/store/use-app-settings-store', () => ({ useAppSettingsStore: (selector: (state: unknown) => unknown) => selector({ pinnedFoldCount: mockPinnedFoldCount }) }));
 jest.mock('@/stores/splitPaneStore', () => ({ useSplitPaneStore: (selector: (state: unknown) => unknown) => selector({ listPaneWidth: 320 }) }));
 let mockCircleUnread = 2;
@@ -88,6 +90,7 @@ beforeEach(() => {
   mockPinnedFoldCount = 0;
   mockScreenLive = true;
   mockSnapshotLoaded = true;
+  mockMessageGroups = [];
   useFriendRemarkStore.getState().reset();
   jest.mocked(clearChatConversationHistory).mockReset().mockResolvedValue(0);
   jest.mocked(updateChatConversationPreferences).mockReset().mockResolvedValue({} as ChatConversationDto);
@@ -270,6 +273,21 @@ test('select all can be undone and only includes the current filter', () => {
   expect(screen.getByRole('checkbox', { name: 'group' }).props.accessibilityState.checked).toBe(false);
   fireEvent.press(screen.getByRole('button', { name: 'messages.private' }));
   expect(screen.getByRole('checkbox', { name: 'first' }).props.accessibilityState.checked).toBe(false);
+});
+
+test('when the selected group tab is hidden or deleted, the list falls back to all chats', () => {
+  const family: CustomConversationGroup = { id: 'g-1', name: '家人', sortOrder: 0, pinnedToTabs: true, conversationIDs: ['first'], createdAt: '', updatedAt: '' };
+  mockMessageGroups = [family];
+  const view = render(<MessagesScreen />);
+  fireEvent.press(screen.getByRole('button', { name: '家人' }));
+  expect(screen.queryByTestId(E2E_TEST_IDS.messagesConversation('second'))).toBeNull();
+
+  // 在分组管理里把它关掉：标签消失，列表不能还按这个分组过滤。
+  mockMessageGroups = [{ ...family, pinnedToTabs: false }];
+  view.rerender(<MessagesScreen />);
+  expect(screen.queryByRole('button', { name: '家人' })).toBeNull();
+  expect(screen.getByTestId(E2E_TEST_IDS.messagesConversation('first'))).toBeTruthy();
+  expect(screen.getByTestId(E2E_TEST_IDS.messagesConversation('second'))).toBeTruthy();
 });
 
 test('selection expands folded pinned conversations so select all has no hidden targets', () => {

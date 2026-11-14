@@ -31,7 +31,7 @@ test('all group conversation surfaces use the shared default avatar', () => {
     'src/features/contacts/screens/GroupsScreen.tsx',
     // 转发 / 笔记分享 / 圈子名片分享共用「选择一个聊天」页,头像统一走 ChatTargetAvatar。
     'src/features/chat/components/chat-target-picker/ChatTargetAvatar.tsx',
-    'src/features/messages/screens/GroupManagementScreen.tsx',
+    'src/features/messages/components/group-member-row.tsx',
   ];
 
   for (const rel of surfaces) {

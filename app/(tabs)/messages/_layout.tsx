@@ -55,6 +55,7 @@ export default function MessagesLayout() {
       <Stack.Screen name="add-friend" />
       <Stack.Screen name="find" />
       <Stack.Screen name="groups" />
+      <Stack.Screen name="group-edit" />
       <Stack.Screen name="temp-chats" />
       <Stack.Screen
         name="scan"
@@ -70,6 +71,8 @@ export default function MessagesLayout() {
       <Stack.Screen name="search-group-members" />
       <Stack.Screen name="edit-group-notice" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="circle-notifications" />
+      <Stack.Screen name="circle-guide" />
       <Stack.Screen name="post-signups" />
       {/* 编辑笔记里的选位置页:往右拖地图不能被当成全屏右滑返回。 */}
       <Stack.Screen

@@ -257,6 +257,28 @@ describe('rating block helpers', () => {
     );
   });
 
+  // 好评、差评每天各一次：今天打过好评，差评仍可以打；反之亦然。
+  test('a used 好评 only greys out 好评 today, a used 差评 only 差评', () => {
+    expect(ratingButtonBlock(summary({ goodRatedToday: true }), 'GOOD')).toBe('RATER_DAILY_GOOD_USED');
+    expect(ratingButtonBlock(summary({ goodRatedToday: true }), 'BAD')).toBeNull();
+    expect(ratingButtonBlock(summary({ badRatedToday: true }), 'BAD')).toBe('RATER_DAILY_BAD_USED');
+    expect(ratingButtonBlock(summary({ badRatedToday: true }), 'GOOD')).toBeNull();
+    expect(describeRatingBlock(t, 'RATER_DAILY_GOOD_USED', null, NOW)).toBe('notes.rating.blocked.RATER_DAILY_GOOD_USED');
+    expect(describeRatingBlock(t, 'RATER_DAILY_BAD_USED', null, NOW)).toBe('notes.rating.blocked.RATER_DAILY_BAD_USED');
+  });
+
+  test('a 差评 is still offered after today\'s 好评', async () => {
+    jest.mocked(fetchNoteRatingSummary).mockResolvedValue(summary({ goodRatedToday: true }));
+    render(<NoteRatingFlowHost />);
+
+    const started = startBadNoteRating('copy-1');
+    await settle();
+    await started;
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('sheet')).toBeTruthy();
+  });
+
   test('turns the wait into days or hours, and covers every code', () => {
     expect(
       describeRatingBlock(t, 'NOTE_RATING_COOLDOWN', new Date(NOW + 49 * 3600_000).toISOString(), NOW),
