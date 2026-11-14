@@ -679,8 +679,8 @@ test('a note saved without a city leaves the field out, so an older server still
   expect(jest.mocked(createNote).mock.calls[0][0]).not.toHaveProperty('city');
 });
 
-// 守卫一直挂着；iOS 侧滑不看守卫，会把页面滑走而导航状态还留着它，之后每次返回都再弹确认框。
-test('the editor turns off swipe-back so leaving always goes through the unsaved-changes prompt', () => {
+// 守卫一直挂着；iOS 侧滑不看守卫，会把页面滑走而导航状态还留着它，草稿来不及落定。
+test('the editor turns off swipe-back so leaving always goes through the draft-saving exit', () => {
   render(<EditNoteScreen />);
   expect(mockNavigation.setOptions).toHaveBeenCalledWith({ gestureEnabled: false });
 });
@@ -2319,10 +2319,7 @@ test('save and exit stays in the editor when both local and server persistence f
     jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'unsaved');
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
-    act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    const save = alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.save');
-    expect(save).toBeDefined();
-    await act(async () => { save?.onPress?.(); await Promise.resolve(); });
+    await act(async () => { guard?.({ data: { action: { type: 'GO_BACK' } } } as never); await Promise.resolve(); });
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
     expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.any(Error));
     expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftRemoteSave', expect.any(Error));
@@ -2948,8 +2945,6 @@ test('failed recording storage and upload keep the playable item but cannot clai
     expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording:'))).toBe(false);
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
     act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    const choices = alert.mock.calls.at(-1)?.[2];
-    act(() => choices?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
     expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'audioLocalStorage', storageError);
     expect(mockReportHandledFailure).not.toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.anything());
@@ -3102,13 +3097,10 @@ test('a restored Blob from stale hydration is revoked without entering the new a
   } finally { await act(async () => { pending.resolve('blob:stale-hydration'); await pending.promise; rendered.unmount(); }); Object.defineProperty(global, 'window', { configurable: true, value: previousWindow }); Object.defineProperty(global, 'URL', { configurable: true, value: previousURL }); }
 });
 
-test.each(['discard', 'publish'] as const)('%s cleans a durable recording that has not reached local draft autosave', async (action) => {
+test('publish cleans a durable recording that has not reached local draft autosave', async () => {
   signedInDraft();
-  if (action === 'discard') mockRouteDraftId = 'unsaved-recording-discard';
   mockFetchDraft.mockResolvedValue(reviewDraft());
-  mockRequestPresign.mockReset();
-  if (action === 'discard') mockRequestPresign.mockRejectedValue(new Error('offline'));
-  else mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/uploaded.m4a', requiredHeaders: {} });
+  mockRequestPresign.mockReset().mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/uploaded.m4a', requiredHeaders: {} });
   mockUploadFile.mockReset().mockResolvedValue(undefined);
   jest.mocked(createNote).mockImplementation(async (input) => noteResult(input));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -3118,18 +3110,10 @@ test.each(['discard', 'publish'] as const)('%s cleans a durable recording that h
     fireEvent.press(screen.getByText('notes.edit.startRecording'));
     await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
     fireEvent.press(screen.getByText('notes.edit.stopRecording'));
-    if (action === 'discard') {
-      await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
-      expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(false);
-      const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
-      act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-      act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
-    } else {
-      await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
-      expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(false);
-      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
-      await waitFor(() => expect(createNote).toHaveBeenCalled());
-    }
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
+    expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(false);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
     await waitFor(() => expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-test.m4a'));
   } finally { rendered.unmount(); alert.mockRestore(); }
 });
@@ -3531,11 +3515,13 @@ test('a resumed uncertain submit stays frozen on a later HTTP 400/429 instead of
   } finally { rendered.unmount(); alert.mockRestore(); }
 });
 
-test('text autosaves coalesce delayed remote requests and Save/Exit flushes the latest text', async () => {
+// 退出不等网络：本机副本落定就放行；最后一份排在在途的自动保存之后补发，页面卸载了也照发。
+test('text autosaves coalesce delayed remote requests, and Back leaves at once while the latest text is sent after the in-flight save', async () => {
   jest.useFakeTimers(); signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: 'Initial', styles: {} }] }] }));
   const values = durableDraftStorage(); const firstSave = createDeferred<unknown>(); mockSaveDraft.mockReturnValueOnce(firstSave.promise);
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const rendered = render(<EditNoteScreen />);
+  let mounted = true;
   try {
     await waitFor(() => expect(mockEditorProps).toBeTruthy());
     for (let index = 0; index < 6; index++) {
@@ -3550,14 +3536,15 @@ test('text autosaves coalesce delayed remote requests and Save/Exit flushes the 
     expect(mockSaveDraft).toHaveBeenCalledTimes(1);
     act(() => mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Final before exit', styles: {} }] }]));
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
-    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(false);
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
+    expect(JSON.stringify(storedReviewDraft(values))).toContain('Final before exit');
+    expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+    rendered.unmount(); mounted = false;
     await act(async () => { firstSave.resolve({}); await firstSave.promise; });
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(2));
     expect(mockSaveDraft.mock.calls[1][1].content).toBe('Final before exit');
-    expect(JSON.stringify(storedReviewDraft(values))).toContain('Final before exit');
-    await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
-  } finally { firstSave.resolve({}); rendered.unmount(); alert.mockRestore(); jest.useRealTimers(); }
+    expect(alert).not.toHaveBeenCalled();
+  } finally { firstSave.resolve({}); if (mounted) rendered.unmount(); alert.mockRestore(); jest.useRealTimers(); }
 });
 
 test.each(['account', 'epoch', 'route'].flatMap((change) => ['success', 'error'].map((outcome) => [change, outcome] as const)))('group create %s %s continuation is fenced', async (change, outcome) => {
@@ -3658,8 +3645,8 @@ test('late consumed draft cleanup cannot navigate away from the next account edi
   } finally { deletion.resolve(); rendered.unmount(); }
 });
 
-// 自动保存只给闪退兜底：已经写进本地的改动，点返回也要先问，选「保存到草稿箱」才落定。
-test('Back asks before keeping an autosaved edit, and Save flushes the latest snapshot', async () => {
+// 返回不弹窗：改动直接存进草稿箱再退出。
+test('Back keeps an autosaved edit without asking and flushes the latest snapshot', async () => {
   jest.useFakeTimers(); signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: 'Initial', styles: {} }] }] }));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
@@ -3668,38 +3655,33 @@ test('Back asks before keeping an autosaved edit, and Save flushes the latest sn
     await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Latest before Back', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
     expect(mockSaveDraft).not.toHaveBeenCalled();
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    expect(alert).toHaveBeenCalledWith('notes.drafts.unsavedTitle', 'notes.drafts.unsavedMessage', expect.any(Array));
-    expect(mockSaveDraft).not.toHaveBeenCalled();
-    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
     expect(mockSaveDraft.mock.calls[0][1].content).toBe('Latest before Back');
     await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
+    expect(alert).not.toHaveBeenCalled();
   } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
 });
 
-test('discarding edits to a draft from the drafts box restores it as opened instead of deleting it', async () => {
+test('Back on a draft opened from the drafts box keeps the edits instead of restoring it as opened', async () => {
   jest.useFakeTimers(); signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: 'Opened text', styles: {} }] }] }));
   const values = durableDraftStorage();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(mockEditorProps).toBeTruthy());
-    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Edit to throw away', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
-    expect(JSON.stringify(storedReviewDraft(values))).toContain('Edit to throw away');
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Edit to keep', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
-    expect(JSON.stringify(mockSaveDraft.mock.calls[0][1])).toContain('Opened text');
-    expect(JSON.stringify(mockSaveDraft.mock.calls[0][1])).not.toContain('Edit to throw away');
+    expect(JSON.stringify(mockSaveDraft.mock.calls[0][1])).toContain('Edit to keep');
     expect(mockDeleteDraft).not.toHaveBeenCalled();
-    expect(JSON.stringify(storedReviewDraft(values))).toContain('Opened text');
-    expect(JSON.stringify(storedReviewDraft(values))).not.toContain('Edit to throw away');
+    expect(JSON.stringify(storedReviewDraft(values))).toContain('Edit to keep');
+    expect(alert).not.toHaveBeenCalled();
   } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
 });
 
-test('discarding a new note on Back removes the autosave so nothing lands in the drafts box', async () => {
+test('Back on a new note with content saves it into the drafts box without asking', async () => {
   jest.useFakeTimers();
-  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' }; mockRouteDraftId = 'fresh-note-discard'; mockDraftMode = 'new';
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' }; mockRouteDraftId = 'fresh-note-keep'; mockDraftMode = 'new';
   const values = durableDraftStorage();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
@@ -3708,12 +3690,12 @@ test('discarding a new note on Back removes the autosave so nothing lands in the
     pressComposer('text');
     await waitFor(() => expect(mockEditorProps).toBeTruthy());
     await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Half written', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
-    expect([...values.keys()].some((key) => key.endsWith(':fresh-note-discard'))).toBe(true);
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
-    expect(alert).toHaveBeenCalledWith('notes.drafts.unsavedTitle', 'notes.drafts.unsavedMessage', expect.any(Array));
-    act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
     await act(async () => { jest.runOnlyPendingTimers(); await Promise.resolve(); });
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('fresh-note-discard'));
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledWith('fresh-note-keep', expect.objectContaining({ content: 'Half written' })));
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+    expect([...values.keys()].some((key) => key.endsWith(':fresh-note-keep'))).toBe(true);
+    expect(alert).not.toHaveBeenCalled();
   } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
 });
 

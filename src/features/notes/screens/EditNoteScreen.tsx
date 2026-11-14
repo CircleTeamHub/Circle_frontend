@@ -1456,7 +1456,7 @@ export default function EditNoteScreen() {
     removeUnreferencedLocalNoteRecordings(currentUser?.id, audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []), editorDraftId);
   }, [audioItems, currentUser?.id, editorDraftId]);
 
-  const persistDraft = useCallback(async (flush = false): Promise<boolean> => {
+  const persistDraft = useCallback(async (flush = false, leaving = false): Promise<boolean> => {
     const auth = useAuthStore.getState();
     if (!currentUser?.id || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch ||
       !draftHydratedRef.current || navigationRequestedRef.current || draftRouteKeyRef.current !== draftRouteKey || isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) { draftRemoteQueue.cancel(); return false; }
@@ -1529,6 +1529,18 @@ export default function EditNoteScreen() {
     // snapshot. Deferred copies are fenced by account and route.
     const localSaved = await prepareAndSaveLocal();
     if (!isCurrentSession() || navigationRequestedRef.current || record.pendingSubmission) return localSaved;
+    if (leaving && localSaved) {
+      // 退出不等网络：本机副本已落定就放行，服务端那份在后台补。先丢掉排队的旧快照、等在途的
+      // 自动保存回来再写这最后一份，免得旧的后到把它盖掉；页面卸载也照发，只在换号或草稿已删时作罢。
+      const finalRecord = record;
+      draftRemoteQueue.cancel();
+      void draftRemoteQueue.flush().then(async () => {
+        if (!isCurrentSession()) return;
+        try { await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(finalRecord)); }
+        catch (error) { reportHandledFailure('noteEditor', 'draftRemoteSave', error); }
+      });
+      return true;
+    }
     const pending = draftRemoteQueue.schedule(async () => {
       if (!isCurrentSession() || navigationRequestedRef.current || pendingSubmissionRef.current) return false;
       const hasLocalRecording = record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED');
@@ -1597,7 +1609,7 @@ export default function EditNoteScreen() {
     [invalidateUploadOwnership],
   );
 
-  const promptDraftExit = useCallback(
+  const exitEditor = useCallback(
     (action?: NavigationAction) => {
       const isCurrentEditor = () => {
         const auth = useAuthStore.getState();
@@ -1615,7 +1627,7 @@ export default function EditNoteScreen() {
         saveInFlightRef.current = true;
         setIsSubmitting(true);
         setTextBlocksById({ ...textBlocksByIdRef.current });
-        void persistDraft(true).then((saved) => {
+        void persistDraft(true, true).then((saved) => {
           if (!isCurrentEditor()) return;
           if (saved) completeNavigation(action);
           else {
@@ -1629,83 +1641,33 @@ export default function EditNoteScreen() {
         saveAndExit();
         return;
       }
-      // 本来就没有草稿：自动保存替闪退写下的那份删掉，草稿箱里不留东西。
-      const discardDraft = () => {
-        if (currentUser?.id) {
-          try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-          catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
-        } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
-        draftRemoteQueue.cancel();
-        completeNavigation(action);
-        // Delete after in-flight saves, so their late response cannot revive a discarded draft.
-        void draftSavePromiseRef.current.catch(() => false).then(async () => {
-          if (!isCurrentEditor() || !currentUser?.id) return;
-          try {
-            const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
-            if (!isCurrentEditor()) return;
-            await deleteNoteDraft(editorDraftId);
-            if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
-          } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
-        });
-      };
-      // 从草稿箱打开的草稿：不保存 = 退回打开时的样子，草稿本身留着，不能整份删掉。
-      const revertDraft = (entry: NoteEditorDraftRecord) => {
-        if (!currentUser?.id) return;
-        // 本地副本盖上「现在」，比任何已经写到服务端的自动保存都新，下次打开以它为准。
-        const reverted = { ...entry, updatedAt: Date.now() };
-        try { saveLocalNoteDraft(currentUser.id, reverted); }
-        catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed')); return; }
-        // 这次新录、退回后不再被引用的录音：本地持久副本一并清掉。
-        const keptRecordings = new Set(reverted.audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []));
-        removeUnreferencedLocalNoteRecordings(currentUser.id, buildCurrentDraftRecord().audioItems.flatMap((item) =>
-          item.localRecordingId && !keptRecordings.has(item.localRecordingId) ? [item.localRecordingId] : []));
-        draftRemoteQueue.cancel();
-        completeNavigation(action);
-        // Rewrite the server copy after in-flight autosaves, so a late one cannot keep the edits.
-        void draftSavePromiseRef.current.catch(() => false).then(async () => {
-          if (!isCurrentEditor()) return;
-          try { await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(reverted)); }
-          catch (error) { reportHandledFailure('noteEditor', 'draftRevert', error); }
-        });
-      };
+      const userId = currentUser?.id;
+      if (!userId) { completeNavigation(action); return; }
       const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
       const changedThisSession = hasUndurableRecording || (
         draftHydratedRef.current &&
         entryFingerprintRef.current != null &&
         entryFingerprintRef.current !== currentFingerprint);
-      if (!changedThisSession) {
-        if (!currentUser?.id) completeNavigation(action);
-        // 改了又全部改回去：自动保存留下的中间状态不该变成一份草稿。
-        else if (!entryDraftRecordRef.current && draftPersistedFingerprintRef.current !== currentFingerprint) discardDraft();
-        else saveAndExit();
+      // 有改动就直接存进草稿箱再退出，不弹窗问。
+      if (changedThisSession || entryDraftRecordRef.current || draftPersistedFingerprintRef.current === currentFingerprint) {
+        saveAndExit();
         return;
       }
-      Alert.alert(
-        t('notes.drafts.unsavedTitle', { defaultValue: '保存未完成的笔记？' }),
-        t('notes.drafts.unsavedMessage', {
-          defaultValue: '未保存的内容会放入草稿箱，之后可以继续编辑。',
-        }),
-        [
-          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          {
-            text: t('notes.drafts.discard', { defaultValue: '直接退出' }),
-            style: 'destructive',
-            onPress: () => {
-              if (!isCurrentEditor()) return;
-              const entryDraft = entryDraftRecordRef.current;
-              if (entryDraft) revertDraft(entryDraft);
-              else discardDraft();
-            },
-          },
-          {
-            text: t('notes.drafts.save', { defaultValue: '保存到草稿箱' }),
-            onPress: () => {
-              if (!isCurrentEditor()) return;
-              saveAndExit();
-            },
-          },
-        ],
-      );
+      // 新笔记改了又全部改回去：自动保存替闪退写下的中间状态删掉，草稿箱里不留东西。
+      try { if (!stageLocalNoteDraftDeletion(userId, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
+      catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+      draftRemoteQueue.cancel();
+      completeNavigation(action);
+      // Delete after in-flight saves, so their late response cannot revive a discarded draft.
+      void draftSavePromiseRef.current.catch(() => false).then(async () => {
+        if (!isCurrentEditor()) return;
+        try {
+          const cleanedRecordings = await finishLocalNoteDraftDeletion(userId, editorDraftId);
+          if (!isCurrentEditor()) return;
+          await deleteNoteDraft(editorDraftId);
+          if (isCurrentEditor()) confirmNoteDraftDeletion(userId, editorDraftId, cleanedRecordings);
+        } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
+      });
     },
     [
       completeNavigation,
@@ -1726,14 +1688,14 @@ export default function EditNoteScreen() {
   // computes the latest fingerprint when navigation is actually attempted.
   usePreventRemove(editorMounted && !navigationRequestedRef.current, ({ data }) => {
     // 已经决定离开(草稿已存、编辑器在卸载),这次被拦只是重新渲染慢了一拍、守卫还是旧值:
-    // 挂起这次返回,放行后再发。不能再走 promptDraftExit —— 那里看到「保存进行中」只会弹
+    // 挂起这次返回,放行后再发。不能再走 exitEditor —— 那里看到「保存进行中」只会弹
     // 「请先完成当前操作」,人就卡在一个正文空白、按钮一直「保存中」的页面上。
     if (navigationRequestedRef.current) {
       pendingExitActionRef.current = data.action;
       setExitRequest((request) => request + 1);
       return;
     }
-    promptDraftExit(data.action);
+    exitEditor(data.action);
   });
 
   // 放在守卫之后:同一次提交里守卫先拿到「不拦」,这里再重发返回。编辑器(WebView)在这一次
@@ -2667,8 +2629,8 @@ export default function EditNoteScreen() {
   }, [composerBlocks, sourceGroupCardLocked]);
 
   const navigateBack = useCallback(() => {
-    promptDraftExit();
-  }, [promptDraftExit]);
+    exitEditor();
+  }, [exitEditor]);
 
   const toggleGroup = useCallback((groupId: string) => {
     if (pendingSubmissionRef.current || saveInFlightRef.current) return;
