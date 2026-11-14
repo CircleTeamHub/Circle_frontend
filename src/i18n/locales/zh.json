@@ -3084,7 +3084,15 @@
       "videoRejectedTitle": "视频无法上传",
       "videosRejectedMessage": "已跳过 {{count}} 个不符合要求的视频",
       "videoTooLargeMessage": "请选择 200MB 以内的视频",
-      "videoTooLongMessage": "请选择 10 分钟以内的视频"
+      "videoTooLongMessage": "请选择 10 分钟以内的视频",
+      "mediaTypeLimitTitle": "已达上限",
+      "mediaTypeLimitFull": "{{limit}}，已经加满了。",
+      "mediaTypeLimitTrimmed": "{{limit}}，已添加前 {{kept}} 个，其余 {{overflow}} 个已忽略。",
+      "mediaTypeLimit": {
+        "photos": "每条笔记最多 {{count}} 张照片",
+        "videos": "每条笔记最多 {{count}} 个视频",
+        "verificationVideos": "每条笔记最多 {{count}} 个验证视频"
+      }
     },
     "empty": {
       "noMatch": "没有匹配的笔记",
@@ -4022,7 +4030,8 @@
     "AUTH_SECURITY_QUESTIONS_INVALID": "请选择两个不同的问题并填写答案",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "未设置密保问题，请在受信任设备上确认登录",
     "AUTH_SECURITY_ANSWERS_INVALID": "密保答案不正确",
-    "CHAT_CLEAR_REQUEST_HANDLED": "这条申请已经处理过了"
+    "CHAT_CLEAR_REQUEST_HANDLED": "这条申请已经处理过了",
+    "NOTE_MEDIA_TYPE_LIMIT": "每条笔记最多 9 张照片、5 个视频、5 个验证视频"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

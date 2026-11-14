@@ -8,10 +8,10 @@ import {
 import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing, Typography } from '@/theme';
+import { useTheme, Radius, Spacing, Typography } from '@/theme';
+import { GlassSurface } from '@/components/ui/glass-surface';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { BlurTargetView } from 'expo-blur';
-import { Divider } from '@/components/ui/divider';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
@@ -88,6 +88,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const messageBlurTarget = useRef<View>(null);
   // 首帧估值（输入行 + 快捷键行），挂载后由 onLayout 量准。
   const [composerDockHeight, setComposerDockHeight] = useState(110 + Math.max(insets.bottom, 12));
+  // 悬浮顶栏 + 横幅的高度,首帧估值(状态栏 + 44 的控件 + 上下留白),挂载后由 onLayout 量准。
+  const [topDockHeight, setTopDockHeight] = useState(insets.top + 56);
   // 私聊清空确认框（和聊天信息页同一个，可勾「双向清空」）。
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const { colors } = useTheme();
@@ -278,7 +280,6 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   } = useChatDetailThemedStyles({
     colors,
     backgroundStyle,
-    statusColor,
   });
 
   const {
@@ -698,10 +699,63 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     />
   );
 
+  const header = (
+    <ChatDetailHeader
+      embedded={embedded}
+      sheet={sheet}
+      colors={colors}
+      scope={scope}
+      sourceID={sourceID}
+      conversationID={conversationID}
+      isTempChat={isTempChat}
+      isAssistant={isAssistantConversation}
+      isGroupChat={isGroupChat}
+      conversationTitle={assistantDisplayName}
+      avatarUrl={avatarUrl}
+      handleBack={handleBack}
+      handleOpenHeaderTarget={handleOpenHeaderTarget}
+      headerStatusText={headerStatusText}
+      statusColor={statusColor}
+      fadeColor={backgroundStyle.backgroundColor}
+      blurTarget={messageBlurTarget}
+      assistantSpinning={assistantSpinning}
+    />
+  );
+  const topBanners = (
+    <>
+      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} scope={scope} /> : null}
+      <PinnedMessageBanner conversationID={conversationID} onJump={jumpToMessage} />
+      {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
+      {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
+      {conversationBurnNoticeText ? (
+        <View testID="chat-disappearing-message-notice" style={s.disappearingMessageNotice}>
+          {/* 浮在消息上,得是玻璃而不是半透明紫,否则字和后面的消息叠在一起。 */}
+          <GlassSurface
+            material="banner"
+            radius={Radius.lg}
+            blurTarget={messageBlurTarget}
+            style={s.disappearingMessageNoticePill}
+          >
+            <Ionicons name="flame-outline" size={16} color={colors.iconAccent} />
+            <Text
+              style={[
+                s.disappearingMessageNoticeText,
+                d.disappearingMessageNoticeText,
+              ]}
+            >
+              {conversationBurnNoticeText}
+            </Text>
+          </GlassSurface>
+        </View>
+      ) : null}
+    </>
+  );
+
   return (
     <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
-      style={[s.composerPanelStack, d.container, { paddingTop: sheet ? 0 : insets.top }]}
+      // 普通会话的顶栏悬浮在消息上、自己让开状态栏;小助手的角色头部仍按老布局排在上面。
+      style={[s.composerPanelStack, d.container, { paddingTop: sheet || !isAssistantConversation ? 0 : insets.top }]}
       // The note-collection sheet is a separate full-screen modal. Keeping the
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.
@@ -709,48 +763,12 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
       enabled={!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen && !expandedComposer}
       // 共享容器统一处理键盘避让，两端都把输入栏顶到键盘上方。
     >
-      <ChatDetailHeader
-        embedded={embedded}
-        sheet={sheet}
-        colors={colors}
-        scope={scope}
-        sourceID={sourceID}
-        conversationID={conversationID}
-        isTempChat={isTempChat}
-        isAssistant={isAssistantConversation}
-        isGroupChat={isGroupChat}
-        conversationTitle={assistantDisplayName}
-        avatarUrl={avatarUrl}
-        handleBack={handleBack}
-        handleOpenHeaderTarget={handleOpenHeaderTarget}
-        headerStatusText={headerStatusText}
-        assistantSpinning={assistantSpinning}
-        d={d}
-      />
-      {isAssistantConversation ? null : <Divider />}
-      {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} scope={scope} /> : null}
-      <PinnedMessageBanner conversationID={conversationID} onJump={jumpToMessage} />
-      {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
-      {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
-      {conversationBurnNoticeText ? (
-        <View
-          testID="chat-disappearing-message-notice"
-          style={[s.disappearingMessageNotice, d.disappearingMessageNotice]}
-        >
-          <Ionicons name="flame-outline" size={16} color={colors.iconAccent} />
-          <Text
-            style={[
-              s.disappearingMessageNoticeText,
-              d.disappearingMessageNoticeText,
-            ]}
-          >
-            {conversationBurnNoticeText}
-          </Text>
-        </View>
-      ) : null}
+      {isAssistantConversation ? header : null}
+      {isAssistantConversation ? topBanners : null}
       <View style={s.chatBody}>
         <BlurTargetView ref={messageBlurTarget} style={s.messageArea}>
           <ChatMessageArea
+            headerInset={isAssistantConversation ? 0 : topDockHeight}
             composerInset={composerDockHeight}
             colors={colors}
             t={t}
@@ -778,6 +796,17 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
             closeInputPanels={closeInputPanels}
           />
         </BlurTargetView>
+        {isAssistantConversation ? null : (
+          <View
+            testID="chat-top-dock"
+            pointerEvents="box-none"
+            style={s.topDock}
+            onLayout={(event) => setTopDockHeight(event.nativeEvent.layout.height)}
+          >
+            {header}
+            {topBanners}
+          </View>
+        )}
         <View
           testID="chat-composer-dock"
           pointerEvents="box-none"

@@ -1418,7 +1418,15 @@
       "videoRejectedTitle": "動画をアップロードできません",
       "videosRejectedMessage": "要件を満たさない動画を {{count}} 件スキップしました。",
       "videoTooLargeMessage": "200MB以内の動画を選んでください",
-      "videoTooLongMessage": "10分以内の動画を選んでください"
+      "videoTooLongMessage": "10分以内の動画を選んでください",
+      "mediaTypeLimitTitle": "上限に達しました",
+      "mediaTypeLimitFull": "{{limit}}。これ以上追加できません。",
+      "mediaTypeLimitTrimmed": "{{limit}}。最初の {{kept}} 件を追加し、残りの {{overflow}} 件はスキップしました。",
+      "mediaTypeLimit": {
+        "photos": "1つのノートに追加できる写真は最大 {{count}} 枚です",
+        "videos": "1つのノートに追加できる動画は最大 {{count}} 本です",
+        "verificationVideos": "1つのノートに追加できる認証動画は最大 {{count}} 本です"
+      }
     },
     "empty": {
       "noMatch": "一致するノートがありません",
@@ -4022,7 +4030,8 @@
     "AUTH_SECURITY_QUESTIONS_INVALID": "異なる質問を 2 つ選び、答えを入力してください",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "秘密の質問が設定されていません。信頼済みデバイスでログインを確認してください",
     "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません",
-    "CHAT_CLEAR_REQUEST_HANDLED": "この申請はすでに処理されています"
+    "CHAT_CLEAR_REQUEST_HANDLED": "この申請はすでに処理されています",
+    "NOTE_MEDIA_TYPE_LIMIT": "1つのノートには写真9枚、動画5本、認証動画5本まで追加できます"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

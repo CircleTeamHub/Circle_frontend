@@ -7,7 +7,8 @@ const { readChatDetailSource } = require('./helpers/chat-detail-source');
 test('chat detail screen uses the aligned header and composer structure', () => {
   const source = readChatDetailSource();
 
-  assert.match(source, /headerMeta/);
+  // 悬浮顶栏:头像 + 标题 + 状态收在一颗胶囊里。
+  assert.match(source, /titlePill/);
   assert.match(source, /headerStatusText/);
   assert.match(source, /messageListContent/);
   assert.match(source, /composerShell/);
@@ -91,7 +92,8 @@ test('chat detail screen exposes refined message insets and composer action hier
   // Composer: an input row (text + send) above a row of shortcut buttons.
   assert.match(source, /composerInputRow/);
   assert.match(source, /composerToolbar/);
-  assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset, \{ paddingTop: composerInset \+ Spacing\.sm \}\]\}/);
+  // 倒序列表:paddingTop 给悬浮输入栏、paddingBottom 给悬浮顶栏留位。
+  assert.match(source, /\{ paddingTop: composerInset \+ Spacing\.sm, paddingBottom: headerInset \+ Spacing\.xl \}/);
 });
 
 test('new messages follow the latest position without hijacking history reading', () => {

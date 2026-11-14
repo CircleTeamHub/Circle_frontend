@@ -69,6 +69,13 @@ export interface ThemeColors {
   warningText: string;
   orange: string;
   blue: string;
+  /** 笔记好评(烟花)图标。 */
+  ratingGood: string;
+  /** 笔记差评(雨云)图标。 */
+  ratingBad: string;
+  /** 好评 / 差评图标落在紫色已发送气泡上时的浅色版:原色在紫底上对比度只有 1.5:1 左右。 */
+  ratingGoodOnAccent: string;
+  ratingBadOnAccent: string;
   purple: string;
   deepPurple: string;
   /** 圈子加入门槛徽章（restriction-badge）实心底色。 */

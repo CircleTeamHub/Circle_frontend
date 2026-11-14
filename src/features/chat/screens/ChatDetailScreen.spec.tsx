@@ -8,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
 import ChatDetailScreen from './ChatDetailScreen';
 import {
@@ -481,6 +482,23 @@ test('the floating composer leaves scrollable space for the latest message as it
     // 倒序列表的 paddingTop 在视觉底部，给输入栏/回复预览留位，但视口仍延伸到屏幕底。
     expect(StyleSheet.flatten(list.props.contentContainerStyle).paddingTop).toBe(height + 8);
     expect(StyleSheet.flatten(list.props.style).paddingBottom).toBeUndefined();
+  }
+});
+
+test('the floating header and banners leave room for the oldest message as their height changes', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  const dock = screen.getByTestId('chat-top-dock');
+  // 顶栏悬浮在消息上:和输入栏一样是绝对定位,消息区一直铺到屏幕顶。
+  expect(dock).toHaveStyle({ position: 'absolute', top: 0 });
+  expect(within(dock).getByTestId(E2E_TEST_IDS.chatBack)).toBeTruthy();
+  for (const height of [104, 160]) {
+    fireEvent(dock, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 390, height } },
+    });
+    const list = screen.getByTestId(E2E_TEST_IDS.chatMessageList);
+    // 倒序列表的 paddingBottom 在视觉顶部(Spacing 桩恒为 8)。
+    expect(StyleSheet.flatten(list.props.contentContainerStyle).paddingBottom).toBe(height + 8);
   }
 });
 

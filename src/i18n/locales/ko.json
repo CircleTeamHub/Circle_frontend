@@ -1418,7 +1418,15 @@
       "videoRejectedTitle": "동영상을 업로드할 수 없습니다",
       "videosRejectedMessage": "요건을 충족하지 않는 동영상 {{count}}개를 건너뛰었습니다.",
       "videoTooLargeMessage": "200MB 이하의 동영상을 선택하세요",
-      "videoTooLongMessage": "10분 이하의 동영상을 선택하세요"
+      "videoTooLongMessage": "10분 이하의 동영상을 선택하세요",
+      "mediaTypeLimitTitle": "한도에 도달했어요",
+      "mediaTypeLimitFull": "{{limit}}. 더 이상 추가할 수 없어요.",
+      "mediaTypeLimitTrimmed": "{{limit}}. 처음 {{kept}}개만 추가하고 나머지 {{overflow}}개는 건너뛰었어요.",
+      "mediaTypeLimit": {
+        "photos": "노트 하나에 사진은 최대 {{count}}장까지 추가할 수 있어요",
+        "videos": "노트 하나에 동영상은 최대 {{count}}개까지 추가할 수 있어요",
+        "verificationVideos": "노트 하나에 인증 동영상은 최대 {{count}}개까지 추가할 수 있어요"
+      }
     },
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
@@ -4022,7 +4030,8 @@
     "AUTH_SECURITY_QUESTIONS_INVALID": "서로 다른 질문 2개를 선택하고 답을 입력하세요",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "설정된 보안 질문이 없습니다. 신뢰할 수 있는 기기에서 로그인을 확인하세요",
     "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다",
-    "CHAT_CLEAR_REQUEST_HANDLED": "이미 처리된 요청입니다"
+    "CHAT_CLEAR_REQUEST_HANDLED": "이미 처리된 요청입니다",
+    "NOTE_MEDIA_TYPE_LIMIT": "노트 하나에 사진 9장, 동영상 5개, 인증 동영상 5개까지 추가할 수 있어요"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

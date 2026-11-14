@@ -782,7 +782,7 @@ test('releases a late native thumbnail when its tile unmounts during generation'
   expect(mockVideoThumbnailRelease).toHaveBeenCalledTimes(1);
 });
 
-test('caps section media web-overflow uploads in picker order and reports omitted files', async () => {
+test('caps a web-overflow photo pick at the 9-photo note limit in picker order and says what was skipped', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockRequestPermission.mockResolvedValue({ granted: true });
   mockLaunchPicker.mockResolvedValue({
@@ -804,14 +804,66 @@ test('caps section media web-overflow uploads in picker order and reports omitte
   render(<EditNoteScreen />);
   pressComposer('image');
 
-  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(10));
+  // 每条笔记最多 9 张照片:选择器只给 9 个名额,网页端多选了也只上传前 9 张。
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(9));
+  expect(mockLaunchPicker).toHaveBeenCalledWith(expect.objectContaining({ selectionLimit: 9 }));
   expect(mockRequestPresign.mock.calls.map(([request]) => request.filename)).toEqual(
-    Array.from({ length: 10 }, (_, index) => `section-${index}.jpg`),
+    Array.from({ length: 9 }, (_, index) => `section-${index}.jpg`),
   );
   expect(alert).toHaveBeenCalledWith(
-    'notes.editor.selectionLimitExceededTitle',
-    'notes.editor.selectionLimitExceededMessage',
+    'notes.editor.mediaTypeLimitTitle',
+    'notes.editor.mediaTypeLimitTrimmed',
   );
+});
+
+test('each add button opens the picker with only the slots left for that kind (9 photos / 5 videos / 5 verification videos)', async () => {
+  mockRouteId = 'limit-slots';
+  const photos = Array.from({ length: 7 }, (_, index) => ({
+    id: `p${index}`, type: 'IMAGE', objectKey: `notes/p${index}.jpg`, url: `https://cdn.example/p${index}.jpg`, sortOrder: index,
+  }));
+  const showcase = Array.from({ length: 4 }, (_, index) => ({
+    id: `s${index}`, type: 'VIDEO', objectKey: `notes/s${index}.mp4`, url: `https://cdn.example/s${index}.mp4`, sortOrder: index,
+  }));
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Limits', contentJson: [], media: [...photos, ...showcase],
+    sections: { media: { items: photos }, showcase: { items: showcase } }, groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  });
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({ canceled: true });
+  render(<EditNoteScreen />);
+  await screen.findAllByTestId('note-media-preview-image');
+
+  pressComposer('image');
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 2 })));
+  pressComposer('video');
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 5 })));
+  const showcaseAdds = screen.getAllByRole('button', { name: 'notes.edit.addShowcaseVideo' });
+  fireEvent.press(showcaseAdds[showcaseAdds.length - 1]);
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenCalledTimes(3));
+  expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 1 }));
+});
+
+test('a note that already has 9 photos does not open the photo picker and says it is full', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockRouteId = 'full-photos';
+  const photos = Array.from({ length: 9 }, (_, index) => ({
+    id: `p${index}`, type: 'IMAGE', objectKey: `notes/p${index}.jpg`, url: `https://cdn.example/p${index}.jpg`, sortOrder: index,
+  }));
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Full', contentJson: [], media: photos, sections: { media: { items: photos } }, groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  });
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  render(<EditNoteScreen />);
+  await screen.findAllByTestId('note-media-preview-image');
+
+  pressComposer('image');
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(
+    'notes.editor.mediaTypeLimitTitle',
+    'notes.editor.mediaTypeLimitFull',
+  ));
+  expect(mockLaunchPicker).not.toHaveBeenCalled();
 });
 
 test('keeps an active web picker preview until the editor unmounts, then revokes it once', async () => {
@@ -860,8 +912,9 @@ test('releases overflow and removed main-editor blob previews without revoking a
   mockLaunchPicker.mockResolvedValue({
     canceled: false,
     assets: [
+      // 每条笔记最多 9 张照片:前 9 张留下,第 10 张超出名额。
       { uri: 'blob:main-active', width: 100, height: 80 },
-      ...Array.from({ length: 9 }, (_, index) => ({ uri: `blob:main-kept-${index}` })),
+      ...Array.from({ length: 8 }, (_, index) => ({ uri: `blob:main-kept-${index}` })),
       { uri: 'blob:main-overflow' },
     ],
   });
@@ -880,7 +933,7 @@ test('releases overflow and removed main-editor blob previews without revoking a
 
     resolveUpload();
     await upload;
-    await waitFor(() => expect(screen.getAllByText('close')).toHaveLength(10));
+    await waitFor(() => expect(screen.getAllByText('close')).toHaveLength(9));
     fireEvent.press(screen.getAllByText('close')[0]);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:main-active');
 
