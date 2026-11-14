@@ -1178,6 +1178,7 @@
     "loadFailed": "Failed to load contacts, please try again",
     "loadingContacts": "Loading contacts...",
     "noFriends": "No friends yet",
+    "indexJumpHint": "Jumps to this section",
     "friendActivity": {
       "title": "New Friends",
       "loadFailed": "Failed to load friend activities",

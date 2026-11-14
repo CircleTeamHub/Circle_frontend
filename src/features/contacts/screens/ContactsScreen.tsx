@@ -5,11 +5,13 @@ import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { SearchBar } from '@/components/ui/search-bar';
+import { ContactIndexBar } from '@/features/contacts/components/ContactIndexBar';
 import {
   buildContactSections,
   getFriendDisplayName,
   type ContactFriendSection,
 } from '@/features/contacts/contact-friends';
+import { getContactListItemLayout } from '@/features/contacts/utils/contact-list-layout';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
@@ -25,6 +27,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  type LayoutChangeEvent,
   Platform,
   Pressable,
   SectionList,
@@ -32,6 +35,7 @@ import {
   SectionListRenderItemInfo,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,7 +54,13 @@ const QUICK_ACTION_KEYS: {
   { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
+// 字母索引要算出远处分组的准确位置(getItemLayout),所以好友行和分组标题都是定高:
+// 默认字号下与原先一致(头像 40 上下各 14 = 68,分组标题 32),系统调大字号时按比例加高。
+const CONTACT_AVATAR_SIZE = 40;
+const CONTACT_ROW_PADDING = 14;
+/** 昵称 + 账号两行文字的高度上限估算(默认字号实际约 32)。 */
+const CONTACT_ROW_TEXT_HEIGHT = 36;
+const SECTION_HEADER_TEXT_HEIGHT = Spacing.md;
 
 const s = StyleSheet.create({
   listContent: {
@@ -71,13 +81,13 @@ const s = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   sectionHeader: {
-    paddingVertical: Spacing.sm,
+    justifyContent: 'center',
   },
   contactRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    paddingVertical: 14,
   },
   contactMeta: {
     flex: 1,
@@ -97,18 +107,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
-  alphabetIndex: {
-    position: 'absolute',
-    right: 4,
-    width: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 1,
-  },
 });
 
 export default function ContactsScreen() {
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -207,10 +210,40 @@ export default function ContactsScreen() {
   }, [loadFriends, refreshUnreadFriendActivityCount]);
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);
-  const alphabet = useMemo(() => {
-    const sectionTitles = new Set(sections.map((section) => section.title));
-    return ALPHABET.filter((letter) => sectionTitles.has(letter));
-  }, [sections]);
+  // 只列出有好友的字母(微信同款):每个字母都对应一个真实分组,点哪个就落到哪个的标题上。
+  const indexLetters = useMemo(() => sections.map((section) => section.title), [sections]);
+  const listRef = useRef<SectionList<FriendProfile, ContactFriendSection>>(null);
+  const listHeaderHeightRef = useRef(0);
+
+  const rowMetrics = useMemo(
+    () => ({
+      rowHeight:
+        Math.max(CONTACT_AVATAR_SIZE, Math.ceil(CONTACT_ROW_TEXT_HEIGHT * fontScale)) +
+        CONTACT_ROW_PADDING * 2,
+      sectionHeaderHeight: Math.ceil(SECTION_HEADER_TEXT_HEIGHT * fontScale) + Spacing.sm * 2,
+    }),
+    [fontScale],
+  );
+
+  const getItemLayout = useCallback(
+    (data: SectionListData<FriendProfile, ContactFriendSection>[] | null, index: number) =>
+      getContactListItemLayout(data ?? [], index, {
+        listHeaderHeight: listHeaderHeightRef.current,
+        ...rowMetrics,
+      }),
+    [rowMetrics],
+  );
+
+  const handleListHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    listHeaderHeightRef.current = event.nativeEvent.layout.height;
+  }, []);
+
+  // 不带动画:按住滑动时每过一个字母就要立刻到位,动画只会让列表追着手指晃。
+  const handleSelectIndexLetter = useCallback((sectionIndex: number) => {
+    listRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: false });
+  }, []);
+
+  const indexAreaStyle = useMemo(() => ({ top: insets.top + 200, bottom: 100 }), [insets.top]);
 
   const d = useMemo(
     () => ({
@@ -221,6 +254,12 @@ export default function ContactsScreen() {
       title: {
         color: colors.text,
         ...Typography.title,
+      },
+      sectionHeader: {
+        height: rowMetrics.sectionHeaderHeight,
+      },
+      contactItem: {
+        height: rowMetrics.rowHeight,
       },
       sectionLetter: {
         color: colors.textSecondary,
@@ -233,10 +272,6 @@ export default function ContactsScreen() {
         fontWeight: '500' as const,
       },
       contactAccountId: {
-        color: colors.textSecondary,
-        ...Typography.tiny,
-      },
-      alphabetLetter: {
         color: colors.textSecondary,
         ...Typography.tiny,
       },
@@ -253,7 +288,7 @@ export default function ContactsScreen() {
         fontWeight: '600' as const,
       },
     }),
-    [colors],
+    [colors, rowMetrics],
   );
 
   const handleAddFriend = useCallback(() => {
@@ -298,10 +333,10 @@ export default function ContactsScreen() {
       index,
       section,
     }: SectionListRenderItemInfo<FriendProfile, ContactFriendSection>) => (
-      <View>
+      <View testID={`contacts-row-${item.id}`} style={d.contactItem}>
         <Pressable style={s.contactRow} onPress={() => handleOpenFriend(item)}>
           <Avatar
-            size={40}
+            size={CONTACT_AVATAR_SIZE}
             name={getFriendDisplayName(item)}
             uri={item.avatarUrl ?? undefined}
           />
@@ -310,8 +345,11 @@ export default function ContactsScreen() {
               name={getFriendDisplayName(item)}
               userId={item.id}
               style={d.contactName}
+              numberOfLines={1}
             />
-            <Text style={d.contactAccountId}>{t('contacts.accountId', { id: item.accountId })}</Text>
+            <Text style={d.contactAccountId} numberOfLines={1}>
+              {t('contacts.accountId', { id: item.accountId })}
+            </Text>
           </View>
         </Pressable>
         {index < section.data.length - 1 && <Divider />}
@@ -322,8 +360,8 @@ export default function ContactsScreen() {
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: SectionListData<FriendProfile, ContactFriendSection> }) => (
-      <View style={s.sectionHeader}>
-        <Text style={d.sectionLetter}>{section.title}</Text>
+      <View testID={`contacts-section-${section.title}`} style={[s.sectionHeader, d.sectionHeader]}>
+        <Text style={d.sectionLetter} numberOfLines={1}>{section.title}</Text>
       </View>
     ),
     [d],
@@ -332,7 +370,7 @@ export default function ContactsScreen() {
   const keyExtractor = useCallback((item: FriendProfile) => item.id, []);
 
   const ListHeader = (
-    <View style={s.headerSection}>
+    <View testID="contacts-list-header" style={s.headerSection} onLayout={handleListHeaderLayout}>
       <View style={s.titleRow}>
         <Text style={d.title}>{t('contacts.title')}</Text>
         <Pressable
@@ -390,10 +428,12 @@ export default function ContactsScreen() {
       style={[d.container, { paddingTop: insets.top }]}
     >
       <SectionList
+        ref={listRef}
         sections={sections}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
+        getItemLayout={getItemLayout}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={stateBlock}
         contentContainerStyle={s.listContent}
@@ -406,16 +446,12 @@ export default function ContactsScreen() {
         refreshing={refreshing}
         onRefresh={handleRefreshFriends}
       />
-      {alphabet.length > 0 ? (
-        <View
-          style={[s.alphabetIndex, { top: insets.top + 200, bottom: 100 }]}
-        >
-          {alphabet.map((letter) => (
-            <Text key={letter} style={d.alphabetLetter}>
-              {letter}
-            </Text>
-          ))}
-        </View>
+      {indexLetters.length > 0 ? (
+        <ContactIndexBar
+          letters={indexLetters}
+          onSelect={handleSelectIndexLetter}
+          style={indexAreaStyle}
+        />
       ) : null}
     </View>
   );

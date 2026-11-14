@@ -2302,6 +2302,7 @@
     "loadFailed": "No se pudieron cargar los contactos, inténtalo de nuevo",
     "loadingContacts": "Cargando contactos...",
     "noFriends": "Aún no tienes amigos",
+    "indexJumpHint": "Salta a esta sección",
     "friendActivity": {
       "title": "Nuevos amigos",
       "loadFailed": "No se pudo cargar la actividad de amigos",

@@ -2294,6 +2294,7 @@
     "loadFailed": "연락처를 불러오지 못했습니다. 다시 시도해 주세요",
     "loadingContacts": "연락처를 불러오는 중...",
     "noFriends": "아직 친구가 없습니다",
+    "indexJumpHint": "이 그룹으로 이동합니다",
     "friendActivity": {
       "title": "새로운 친구",
       "loadFailed": "친구 활동을 불러오지 못했습니다",
