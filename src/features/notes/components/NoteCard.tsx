@@ -149,6 +149,8 @@ function NoteCardInner({
       accessibilityState={selectionMode ? { selected } : undefined}
     >
       <View style={s.topRow}>
+      {/* 封面 + 下面的好评/差评:评价不再和时间、分组、图片数挤在一行,那一行的字才显示得全。 */}
+      <View testID={`note-card-cover-column-${note.id}`} style={s.coverColumn}>
       {note.cover ? (
         <Image
           source={{ uri: note.cover.url, cacheKey: `note:${note.id}:cover:${note.cover.id}` }}
@@ -171,6 +173,16 @@ function NoteCardInner({
           />
         </View>
       )}
+        {/* 旧服务端不回计数时不显示，免得把「没数据」显示成 0。 */}
+        {note.goodCount === undefined ? null : (
+          <NoteRatingCounts
+            goodCount={note.goodCount}
+            badCount={note.badCount}
+            color={colors.textSecondary}
+            testID={`note-card-rating-${note.id}`}
+          />
+        )}
+      </View>
 
       <View style={s.content}>
         <View style={s.titleRow}>
@@ -228,20 +240,9 @@ function NoteCardInner({
             </Text>
           </View>
         )}
-        <View style={s.metaRow}>
-          <Text style={[s.meta, s.metaText, d.meta]} numberOfLines={1}>
-            {meta}
-          </Text>
-          {/* 旧服务端不回计数时不显示，免得把「没数据」显示成 0。 */}
-          {note.goodCount === undefined ? null : (
-            <NoteRatingCounts
-              goodCount={note.goodCount}
-              badCount={note.badCount}
-              color={colors.textSecondary}
-              testID={`note-card-rating-${note.id}`}
-            />
-          )}
-        </View>
+        <Text testID={`note-card-meta-${note.id}`} style={[s.meta, d.meta]} numberOfLines={1}>
+          {meta}
+        </Text>
       </View>
 
       {selectionMode ? (
@@ -352,6 +353,8 @@ const s = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Spacing.md,
   },
+  // 封面在上、评价在下,水平居中;评价数字变长时这一列跟着变宽,不会被压成两行。
+  coverColumn: { alignItems: 'center', gap: Spacing.sm },
   thumbnail: {
     width: 72,
     height: 72,
@@ -405,8 +408,6 @@ const s = StyleSheet.create({
   meta: {
     ...Typography.small,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  metaText: { flexShrink: 1 },
   // 来源双按钮：通栏等分，名字占满剩余宽度，尾部 chevron 提示可点。
   sourceRow: {
     flexDirection: 'row',

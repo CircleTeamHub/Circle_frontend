@@ -22,3 +22,42 @@ export function getNoteVideoUploadPolicyViolation({
   }
   return null;
 }
+
+/**
+ * 每条笔记各类媒体的数量上限,与服务端 circle_be src/note/note-media-limits.ts 同一组数字。
+ * 这里只负责选择器限量和提示;真正的闸门在服务端(上限前就已超的旧笔记,编辑时不拦,只拦再往上加)。
+ */
+export const NOTE_MEDIA_TYPE_LIMITS = {
+  photos: 9,
+  videos: 5,
+  verificationVideos: 5,
+} as const;
+
+export type NoteMediaLimitType = keyof typeof NOTE_MEDIA_TYPE_LIMITS;
+
+/** 「添加图片」算照片,「添加视频」算视频,验证区的「添加验证视频」算验证视频。 */
+export function noteMediaLimitTypeFor(
+  target: 'media' | 'showcase',
+  kind: 'image' | 'video',
+): NoteMediaLimitType {
+  if (target === 'showcase') return 'verificationVideos';
+  return kind === 'image' ? 'photos' : 'videos';
+}
+
+/** 这条笔记这一类还能再加几个;上限前就已超的旧笔记是 0。 */
+export function remainingNoteMediaSlots(
+  type: NoteMediaLimitType,
+  mediaItems: readonly { type: string }[],
+  showcaseItems: readonly { type: string }[],
+): number {
+  const used =
+    type === 'photos'
+      ? [...mediaItems, ...showcaseItems].filter((item) => item.type === 'IMAGE').length
+      : (type === 'videos' ? mediaItems : showcaseItems).filter((item) => item.type === 'VIDEO').length;
+  return Math.max(0, NOTE_MEDIA_TYPE_LIMITS[type] - used);
+}
+
+/** 选多了(网页端/安卓的选择器不一定守 selectionLimit):按选择顺序留前 remaining 个。 */
+export function fitPickedAssetsToNoteMediaLimit<T>(assets: readonly T[], remaining: number) {
+  return { kept: assets.slice(0, remaining), dropped: assets.slice(remaining) };
+}

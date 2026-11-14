@@ -483,7 +483,8 @@ test('EditNoteScreen batches bounded media selection and keeps local previews ou
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /allowsMultipleSelection:\s*true/);
-  assert.match(src, /selectionLimit:\s*MAX_NOTE_MEDIA_SELECTION/);
+  // 单次最多 10 个,且不超过这一类剩下的名额(照片 9 / 视频 5 / 验证视频 5)。
+  assert.match(src, /selectionLimit:\s*Math\.min\(MAX_NOTE_MEDIA_SELECTION, remaining\)/);
   assert.match(src, /splitPickerAssets/);
   assert.match(src, /overflowAssets/);
   assert.match(src, /selectionLimitExceededMessage/);

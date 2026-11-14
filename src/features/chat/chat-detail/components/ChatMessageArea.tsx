@@ -24,6 +24,8 @@ import { Ionicons } from '@expo/vector-icons';
 const UNREAD_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 1 } as const;
 
 export interface ChatMessageAreaProps {
+  /** 悬浮顶栏(+ 横幅)的高度;小助手的头部不悬浮,传 0。 */
+  headerInset: number;
   composerInset: number;
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
@@ -57,6 +59,7 @@ export interface ChatMessageAreaProps {
  * 还没测量的行上,失败后按上限重试并在开火时重新校验列表边界。
  */
 export function ChatMessageArea({
+  headerInset,
   composerInset,
   colors,
   t,
@@ -155,8 +158,14 @@ export function ChatMessageArea({
         }
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
-        // inverted 的 paddingTop 是视觉底部：最新消息停在悬浮栏上方，滚动时仍能从后面经过。
-        contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset, { paddingTop: composerInset + Spacing.sm }]}
+        // inverted 的 paddingTop 是视觉底部、paddingBottom 是视觉顶部:最新消息停在输入栏上方、
+        // 最旧的一条翻到头时停在顶栏下方,滚动时两头都能从悬浮栏后面经过。
+        contentContainerStyle={[
+          s.messageList,
+          s.messageListContent,
+          s.messageListInset,
+          { paddingTop: composerInset + Spacing.sm, paddingBottom: headerInset + Spacing.xl },
+        ]}
         showsVerticalScrollIndicator={false}
         // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
         keyboardDismissMode="on-drag"

@@ -21,6 +21,8 @@ interface GroupChatAvatarProps {
   temporary?: boolean;
   /** 让临时角标外圈融入所在列表或标题栏的背景。 */
   badgeBorderColor?: string;
+  /** 默认圆角方块(与列表里的单聊头像一致);聊天页顶栏的胶囊里用圆形。 */
+  shape?: 'circle' | 'square';
 }
 
 const FALLBACK_BADGE_BORDER = '#FFFFFF';
@@ -36,6 +38,7 @@ export function GroupChatAvatar({
   onImageReady,
   temporary = false,
   badgeBorderColor = FALLBACK_BADGE_BORDER,
+  shape = 'square',
 }: GroupChatAvatarProps) {
   const gradientId = `group-chat-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [failedUri, setFailedUri] = useState<string | null>(null);
@@ -61,7 +64,7 @@ export function GroupChatAvatar({
           {
             width: size,
             height: size,
-            borderRadius: Radius.sm,
+            borderRadius: shape === 'circle' ? size / 2 : Radius.sm,
           },
         ]}
       >
