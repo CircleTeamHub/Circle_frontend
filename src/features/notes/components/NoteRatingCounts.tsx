@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Typography } from '@/theme';
+import { Typography, useTheme } from '@/theme';
 
 /** 好评 is a firework, 差评 a rain cloud: the same pair in every rating entry point. */
 export const NOTE_RATING_GOOD_ICON = 'firework' as const;
@@ -10,17 +10,23 @@ export const NOTE_RATING_BAD_ICON = 'weather-pouring' as const;
 interface NoteRatingCountsProps {
   goodCount?: number;
   badCount?: number;
+  /** 数字的颜色;两个图标固定用自己的彩色(好评橙、差评蓝)。 */
   color: string;
+  /** 落在紫色已发送气泡上:图标换浅色版,否则蓝色雨云在紫底上几乎看不见。 */
+  onAccent?: boolean;
   testID?: string;
 }
 
 /**
  * The 好评 / 差评 area (this month's counters of the source note) on list and
  * chat note cards: icon, then the number. Zeros are shown too, so every card
- * has the same layout.
+ * has the same layout. 烟花是橙色、雨云是蓝色,一眼分出好坏。
  */
-export function NoteRatingCounts({ goodCount = 0, badCount = 0, color, testID }: NoteRatingCountsProps) {
+export function NoteRatingCounts({ goodCount = 0, badCount = 0, color, onAccent = false, testID }: NoteRatingCountsProps) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const goodIconColor = onAccent ? colors.ratingGoodOnAccent : colors.ratingGood;
+  const badIconColor = onAccent ? colors.ratingBadOnAccent : colors.ratingBad;
   return (
     <View
       style={s.row}
@@ -33,13 +39,13 @@ export function NoteRatingCounts({ goodCount = 0, badCount = 0, color, testID }:
       })}
     >
       <View style={s.item}>
-        <MaterialCommunityIcons name={NOTE_RATING_GOOD_ICON} size={ICON_SIZE} color={color} />
+        <MaterialCommunityIcons name={NOTE_RATING_GOOD_ICON} size={ICON_SIZE} color={goodIconColor} />
         <Text style={[s.count, { color }]} testID={testID ? `${testID}-good` : undefined}>
           {goodCount}
         </Text>
       </View>
       <View style={s.item}>
-        <MaterialCommunityIcons name={NOTE_RATING_BAD_ICON} size={ICON_SIZE} color={color} />
+        <MaterialCommunityIcons name={NOTE_RATING_BAD_ICON} size={ICON_SIZE} color={badIconColor} />
         <Text style={[s.count, { color }]} testID={testID ? `${testID}-bad` : undefined}>
           {badCount}
         </Text>

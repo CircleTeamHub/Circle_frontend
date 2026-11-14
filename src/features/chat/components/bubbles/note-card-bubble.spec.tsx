@@ -1,6 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { NoteCardBubble } from './note-card-bubble';
+import { noteCardWidth } from './note-card-body';
 import type { ChatMessage, NoteCardData } from '@/types';
 
 jest.mock('expo-image', () => {
@@ -11,11 +13,19 @@ jest.mock('@expo/vector-icons', () => {
   const { View } = jest.requireActual('react-native');
   return {
     Ionicons: () => null,
-    MaterialCommunityIcons: ({ name }: { name: string }) => <View testID={`mci:${name}`} />,
+    MaterialCommunityIcons: ({ name, color }: { name: string; color: string }) => (
+      <View testID={`mci:${name}`} accessibilityHint={color} />
+    ),
   };
 });
+let mockWindowWidth = 390;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 900, scale: 3, fontScale: 1 }),
+}));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('./shared', () => ({
+  AVATAR_COLUMN_SIZE: 44,
   BubbleStatusText: () => null,
   CHAT_CARD_GAP: 8,
   CHAT_CARD_PADDING_VERTICAL: 8,
@@ -144,4 +154,39 @@ test("always shows the source's monthly rating counters, updated once reconciled
 
   expect(screen.getByTestId('note-card-rating-good')).toHaveTextContent('3');
   expect(screen.getByTestId('note-card-rating-bad')).toHaveTextContent('1');
+});
+
+test('the note card grows with the screen instead of staying at the 260pt chat-card width', () => {
+  // 列表左右留白 18×2 + 头像列 44 + 间距 8 + 对侧留 16 = 104。
+  expect(noteCardWidth(440)).toBe(336); // iPhone Pro Max
+  expect(noteCardWidth(393)).toBe(289); // iPhone 标准尺寸
+  expect(noteCardWidth(360)).toBe(260); // 窄屏不比原来更窄
+  expect(noteCardWidth(1280)).toBe(360); // 桌面网页版封顶,四宫格不至于太大
+});
+
+test('on a wide phone the card and its four thumbnails are laid out at the wider size', () => {
+  mockWindowWidth = 440;
+  render(
+    <NoteCardBubble
+      message={message(card({ previewUrls: ['https://cdn/a.jpg', 'https://cdn/b.jpg'] }))}
+      outgoing={false}
+    />,
+  );
+  expect(StyleSheet.flatten(screen.getByTestId('note-card-body').props.style).width).toBe(336);
+  // (336 - 左右内边距 12×2 - 三道 4 的缝) / 4 = 75。
+  for (const tile of screen.getAllByTestId('note-card-tile')) {
+    expect(StyleSheet.flatten(tile.props.style)).toMatchObject({ width: 75, height: 75 });
+  }
+});
+
+test('rating icons are coloured, with a pale variant on the purple outgoing card', () => {
+  // 没有 ThemeProvider 时 useTheme 回落到暗色主题。
+  const { darkColors } = jest.requireActual<typeof import('@/theme/colors')>('@/theme/colors');
+  const { rerender } = render(<NoteCardBubble message={message(card())} outgoing={false} />);
+  expect(screen.getByTestId('mci:firework').props.accessibilityHint).toBe(darkColors.ratingGood);
+  expect(screen.getByTestId('mci:weather-pouring').props.accessibilityHint).toBe(darkColors.ratingBad);
+
+  rerender(<NoteCardBubble message={message(card())} outgoing />);
+  expect(screen.getByTestId('mci:firework').props.accessibilityHint).toBe(darkColors.ratingGoodOnAccent);
+  expect(screen.getByTestId('mci:weather-pouring').props.accessibilityHint).toBe(darkColors.ratingBadOnAccent);
 });

@@ -57,6 +57,10 @@ export const darkColors: ThemeColors = {
   glassBorder: 'rgba(255, 255, 255, 0.24)',
   glassButton: 'rgba(255, 255, 255, 0.10)',
   blue: '#3B82F6',
+  ratingGood: '#F97316',
+  ratingBad: '#3B82F6',
+  ratingGoodOnAccent: '#FED7AA',
+  ratingBadOnAccent: '#BFDBFE',
   purple: '#A855F7',
   deepPurple: '#8B5CF6',
   // 圈子加入门槛徽章（restriction-badge）：实心底 + 白字，两个主题同值。
@@ -128,6 +132,10 @@ export const lightColors: ThemeColors = {
   glassBorder: 'rgba(26, 27, 35, 0.10)',
   glassButton: 'rgba(26, 27, 35, 0.06)',
   blue: '#3B82F6',
+  ratingGood: '#F97316',
+  ratingBad: '#3B82F6',
+  ratingGoodOnAccent: '#FED7AA',
+  ratingBadOnAccent: '#BFDBFE',
   purple: '#A855F7',
   deepPurple: '#8B5CF6',
   // 圈子加入门槛徽章（restriction-badge）：实心底 + 白字，两个主题同值。

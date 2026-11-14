@@ -4,7 +4,6 @@ import type { ChatMessage, NoteCardData } from '@/types';
 import { NoteCardBody, type NoteCardSection } from './note-card-body';
 import {
   BubbleStatusText,
-  CHAT_CARD_STANDARD_WIDTH,
   MessageAvatar,
 } from './shared';
 
@@ -31,9 +30,6 @@ const sNote = StyleSheet.create({
   },
   rowOutgoing: {
     justifyContent: 'flex-end',
-  },
-  body: {
-    maxWidth: CHAT_CARD_STANDARD_WIDTH,
   },
   bodyOutgoing: {
     alignItems: 'flex-end',
@@ -79,8 +75,9 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
   if (!note) return null;
 
+  // 宽度由卡片自己定(随屏幕变宽,见 noteCardWidth),这里不再卡 260。
   const cardNode = (
-    <View style={[sNote.body, outgoing ? sNote.bodyOutgoing : null]}>
+    <View style={outgoing ? sNote.bodyOutgoing : null}>
       <NoteCardBody
         note={note}
         outgoing={outgoing}

@@ -63,8 +63,16 @@ test('chat card bubbles keep their width while reducing vertical height', () => 
   assert.match(shared, /const LOCATION_CARD_WIDTH = 248;/);
   assert.match(shared, /const CHAT_CARD_PADDING_VERTICAL = 10;/);
 
+  // 笔记卡片不在这里:它的宽度随屏幕变宽(不低于 260、桌面封顶 360),
+  // 行为由 note-card-bubble.spec.tsx 的 noteCardWidth 用例守住。
+  const noteBody = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/components/bubbles/note-card-body.tsx'),
+    'utf8',
+  );
+  assert.match(noteBody, /Math.max\(CHAT_CARD_STANDARD_WIDTH, windowWidth - NOTE_CARD_RESERVED_WIDTH\)/);
+  assert.match(noteBody, /paddingVertical:\s*CHAT_CARD_PADDING_VERTICAL/);
+
   const styleFiles = {
-    sNote: 'src/features/chat/components/bubbles/note-card-bubble.tsx',
     sFriendCard: 'src/features/chat/components/bubbles/shared.tsx',
     sCircleCard: 'src/features/chat/components/bubbles/shared.tsx',
     sTransfer: 'src/features/chat/components/bubbles/transfer-card-bubble.tsx',
@@ -75,17 +83,7 @@ test('chat card bubbles keep their width while reducing vertical height', () => 
     const start = source.indexOf(`const ${styleName} = StyleSheet.create`);
     assert.notEqual(start, -1, `${styleName} should exist`);
     const nextStyle = source.indexOf('const s', start + 1);
-    let block = source.slice(start, nextStyle === -1 ? undefined : nextStyle);
-    if (styleName === 'sNote') {
-      // 笔记卡片的主体(定宽、上下留白)拆在 note-card-body.tsx,外壳只管最大宽度。
-      const body = fs.readFileSync(
-        path.join(process.cwd(), 'src/features/chat/components/bubbles/note-card-body.tsx'),
-        'utf8',
-      );
-      const bodyStart = body.indexOf('const s = StyleSheet.create');
-      assert.notEqual(bodyStart, -1, 'note card body styles should exist');
-      block += body.slice(bodyStart);
-    }
+    const block = source.slice(start, nextStyle === -1 ? undefined : nextStyle);
     assert.match(block, /width:\s*CHAT_CARD_STANDARD_WIDTH/);
     assert.match(block, /maxWidth:\s*CHAT_CARD_STANDARD_WIDTH/);
     assert.match(block, /paddingVertical:\s*CHAT_CARD_PADDING_VERTICAL/);

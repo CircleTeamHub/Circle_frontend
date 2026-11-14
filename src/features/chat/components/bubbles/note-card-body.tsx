@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
 import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
@@ -8,7 +8,7 @@ import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/
 import { splitNoteVideoCounts } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteCardData } from '@/types';
-import { CHAT_CARD_PADDING_VERTICAL, CHAT_CARD_STANDARD_WIDTH } from './shared';
+import { AVATAR_COLUMN_SIZE, CHAT_CARD_PADDING_VERTICAL, CHAT_CARD_STANDARD_WIDTH } from './shared';
 
 export type NoteCardSection = 'text' | 'media' | 'showcase' | 'location';
 
@@ -24,9 +24,18 @@ const NOTE_CARD_ACTIVE_GREEN = '#16A34A';
 const GRID_GAP = 4;
 /** 左右内边距收到 12,把宽度让给四宫格:标题区和图片是主角,按钮只是小标签。 */
 const CARD_PADDING_HORIZONTAL = Spacing.sm + Spacing.xs;
-const CARD_INNER_WIDTH = CHAT_CARD_STANDARD_WIDTH - CARD_PADDING_HORIZONTAL * 2;
-/** 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。 */
-const TILE_SIZE = Math.floor((CARD_INNER_WIDTH - GRID_GAP * 3) / 4);
+/** 再宽四宫格的图就太大了;桌面网页版的窗口很宽,也到此为止。 */
+const NOTE_CARD_MAX_WIDTH = 360;
+/** 卡片以外要让出的宽度:消息列表左右留白(16 + 2)、头像列、头像与卡片的间距,对侧再留一点空。 */
+const NOTE_CARD_RESERVED_WIDTH = (Spacing.md + 2) * 2 + AVATAR_COLUMN_SIZE + Spacing.sm + Spacing.md;
+
+/**
+ * 笔记卡片的宽度跟着屏幕走:其他聊天卡片固定 260,大屏手机上笔记卡片左边空出一大块,
+ * 标题、简介和数量都挤得要截断。窄屏不比原来更窄,桌面封顶。
+ */
+export function noteCardWidth(windowWidth: number) {
+  return Math.min(NOTE_CARD_MAX_WIDTH, Math.max(CHAT_CARD_STANDARD_WIDTH, windowWidth - NOTE_CARD_RESERVED_WIDTH));
+}
 
 const SECTIONS: {
   id: NoteCardSection;
@@ -41,7 +50,6 @@ const SECTIONS: {
 
 const s = StyleSheet.create({
   card: {
-    width: CHAT_CARD_STANDARD_WIDTH,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingVertical: CHAT_CARD_PADDING_VERTICAL,
@@ -64,7 +72,7 @@ const s = StyleSheet.create({
   statusText: { ...Typography.small, fontWeight: '700' },
   unlisted: { ...Typography.small, fontWeight: '600' },
   grid: { flexDirection: 'row', gap: GRID_GAP },
-  tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: Radius.sm, overflow: 'hidden' },
+  tile: { borderRadius: Radius.sm, overflow: 'hidden' },
   tileImage: { width: '100%', height: '100%' },
   // 按钮是小方块标签:宽度随文字、靠左排,不和图片抢视觉。
   chips: { flexDirection: 'row', gap: Spacing.xs + 2 },
@@ -97,6 +105,9 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   // source-state reconciliation, or right after the viewer rates from the menu;
   // until then the area shows 0 so the card keeps its height.
   const ratingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
+  const cardWidth = noteCardWidth(useWindowDimensions().width);
+  // 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。
+  const tileSize = Math.floor((cardWidth - CARD_PADDING_HORIZONTAL * 2 - GRID_GAP * 3) / 4);
 
   const available: Record<NoteCardSection, boolean> = {
     text: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
@@ -136,7 +147,8 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
 
   return (
     <Pressable
-      style={[s.card, { backgroundColor: outgoing ? colors.sentBubble : colors.receivedBubble }]}
+      testID="note-card-body"
+      style={[s.card, { width: cardWidth, backgroundColor: outgoing ? colors.sentBubble : colors.receivedBubble }]}
       onPress={onPress ? () => onPress(note) : undefined}
       onLongPress={onLongPress}
       delayLongPress={350}
@@ -180,6 +192,7 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
               goodCount={ratingCounts?.goodCount}
               badCount={ratingCounts?.badCount}
               color={onCardMuted}
+              onAccent={outgoing}
               testID="note-card-rating"
             />
           </View>
@@ -189,7 +202,11 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
       {hasPreviews ? (
         <View style={s.grid} testID="note-card-previews">
           {previewUrls.map((uri) => (
-            <View key={uri} style={[s.tile, { backgroundColor: 'rgba(0,0,0,0.12)' }]}>
+            <View
+              key={uri}
+              testID="note-card-tile"
+              style={[s.tile, { width: tileSize, height: tileSize, backgroundColor: 'rgba(0,0,0,0.12)' }]}
+            >
               <Image
                 source={{ uri }}
                 style={s.tileImage}
