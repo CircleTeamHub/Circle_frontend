@@ -227,3 +227,26 @@ test('badge artwork stays within the mobile asset budget', () => {
     assert.ok(png.height <= maxHeight, `${name} height is ${png.height}`);
   }
 });
+
+test('badge artwork carries no baked-in drop shadow', () => {
+  // 原图带一层烤进去的灰色投影:白色主题下徽章底下一片灰,super.png 的投影还在画布底边
+  // 被截断成一条横线。投影像素是近乎纯黑的半透明像素(真正的抗锯齿边带着徽章自己的颜色)。
+  // 设计给的新徽章图要先去掉投影、画布尺寸不变(艺术框比例在 user-badge-assets.ts 里)。
+  const { PNG } = require('pngjs');
+  const dir = path.join(root, 'assets/badges');
+  for (const name of fs.readdirSync(dir).filter((file) => file.endsWith('.png'))) {
+    const { width, height, data } = PNG.sync.read(fs.readFileSync(path.join(dir, name)));
+    let shadowInk = 0;
+    for (let i = 0; i < width * height; i += 1) {
+      const alpha = data[i * 4 + 3];
+      const brightest = Math.max(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+      if (alpha > 0 && alpha < 230 && brightest <= 45) shadowInk += 1;
+    }
+    let bottomRowAlpha = 0;
+    for (let x = 0; x < width; x += 1) {
+      bottomRowAlpha = Math.max(bottomRowAlpha, data[((height - 1) * width + x) * 4 + 3]);
+    }
+    assert.equal(shadowInk, 0, `${name} 还带着投影像素`);
+    assert.equal(bottomRowAlpha, 0, `${name} 的画面碰到了画布底边,会被截成一条直线`);
+  }
+});
