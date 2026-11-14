@@ -1424,7 +1424,15 @@
       "videoRejectedTitle": "No se puede subir el video",
       "videosRejectedMessage": "Se omitieron {{count}} videos que no cumplen los requisitos de carga.",
       "videoTooLargeMessage": "Elige un video de menos de 200MB",
-      "videoTooLongMessage": "Elige un video de menos de 10 minutos"
+      "videoTooLongMessage": "Elige un video de menos de 10 minutos",
+      "mediaTypeLimitTitle": "Límite alcanzado",
+      "mediaTypeLimitFull": "{{limit}}. Ya no caben más.",
+      "mediaTypeLimitTrimmed": "{{limit}}. Se añadieron los primeros {{kept}}; los otros {{overflow}} se omitieron.",
+      "mediaTypeLimit": {
+        "photos": "Una nota puede tener hasta {{count}} fotos",
+        "videos": "Una nota puede tener hasta {{count}} vídeos",
+        "verificationVideos": "Una nota puede tener hasta {{count}} vídeos de verificación"
+      }
     },
     "empty": {
       "noMatch": "No hay notas coincidentes",
@@ -4030,7 +4038,8 @@
     "AUTH_SECURITY_QUESTIONS_INVALID": "Elige dos preguntas distintas y escribe ambas respuestas",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "No hay preguntas de seguridad configuradas. Confirma el inicio de sesión en un dispositivo de confianza",
     "AUTH_SECURITY_ANSWERS_INVALID": "Las respuestas de seguridad no son correctas",
-    "CHAT_CLEAR_REQUEST_HANDLED": "Esta solicitud ya se gestionó"
+    "CHAT_CLEAR_REQUEST_HANDLED": "Esta solicitud ya se gestionó",
+    "NOTE_MEDIA_TYPE_LIMIT": "Una nota puede tener hasta 9 fotos, 5 vídeos y 5 vídeos de verificación"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

@@ -80,7 +80,14 @@ import {
   MAX_NOTE_TITLE_LENGTH,
   type NoteTextStats,
 } from '@/features/notes/utils/note-text-stats';
-import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
+import {
+  NOTE_MEDIA_TYPE_LIMITS,
+  fitPickedAssetsToNoteMediaLimit,
+  getNoteVideoUploadPolicyViolation,
+  noteMediaLimitTypeFor,
+  remainingNoteMediaSlots,
+  type NoteMediaLimitType,
+} from '@/features/notes/utils/note-media-policy';
 import {
   createPickerPreviewDisposer,
   splitPickerAssets,
@@ -214,7 +221,13 @@ function getNoteCardAvatar(card: NoteCardDraft) {
 }
 
 type SectionMediaTarget = 'media' | 'showcase';
-type SectionUploadKind = 'media' | 'image' | 'video';
+type SectionUploadKind = 'image' | 'video';
+/** 「已达上限」提示里那半句的中文兜底;各语言文案在 notes.editor.mediaTypeLimit.*。 */
+const NOTE_MEDIA_TYPE_LIMIT_DEFAULTS: Record<NoteMediaLimitType, string> = {
+  photos: '每条笔记最多 {{count}} 张照片',
+  videos: '每条笔记最多 {{count}} 个视频',
+  verificationVideos: '每条笔记最多 {{count}} 个验证视频',
+};
 type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | 'audio' | null;
 
 const COMPOSER_ACTIONS: readonly {
@@ -1777,18 +1790,31 @@ export default function EditNoteScreen() {
       const blockIsMounted = () =>
         !blockId || composerBlocksRef.current.some((block) => block.id === blockId);
       const uploadKey: UploadingSection = `${target}:${kind}`;
+      // 每条笔记照片 9 / 视频 5 / 验证视频 5:加满了就不打开相册,选择器也只给剩余名额。
+      const limitType = noteMediaLimitTypeFor(target, kind);
+      const remaining = remainingNoteMediaSlots(limitType, mediaItems, showcaseItems);
+      const limitText = t(`notes.editor.mediaTypeLimit.${limitType}`, {
+        defaultValue: NOTE_MEDIA_TYPE_LIMIT_DEFAULTS[limitType],
+        count: NOTE_MEDIA_TYPE_LIMITS[limitType],
+      });
       try {
         if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+        if (remaining === 0) {
+          Alert.alert(
+            t('notes.editor.mediaTypeLimitTitle', { defaultValue: '已达上限' }),
+            t('notes.editor.mediaTypeLimitFull', {
+              defaultValue: '{{limit}}，已经加满了。',
+              limit: limitText,
+            }),
+          );
+          return;
+        }
         // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
         const outcome = await launchImageLibraryFast(ImagePicker, {
-          mediaTypes: kind === 'media'
-            ? ['images', 'videos']
-            : kind === 'video'
-              ? ['videos']
-              : ['images'],
+          mediaTypes: kind === 'video' ? ['videos'] : ['images'],
           quality: 0.85,
           allowsMultipleSelection: true,
-          selectionLimit: MAX_NOTE_MEDIA_SELECTION,
+          selectionLimit: Math.min(MAX_NOTE_MEDIA_SELECTION, remaining),
           orderedSelection: true,
         });
         if (outcome.status === 'denied') return;
@@ -1802,20 +1828,23 @@ export default function EditNoteScreen() {
         if (result.canceled || !pickerAssets.length) return;
 
         pickerPreviewDisposerRef.current.retainAssets(pickerAssets);
-        const { selectedAssets, overflowAssets } = splitPickerAssets(pickerAssets);
-        if (overflowAssets.length) {
-          pickerPreviewDisposerRef.current.disposeAssets(overflowAssets);
+        // 剩余名额(≤ 9)总比单次选择上限(10)严,网页端 / 安卓选择器不守 selectionLimit 时按它截。
+        const { kept: selectedAssets, dropped: overLimitAssets } =
+          fitPickedAssetsToNoteMediaLimit(pickerAssets, remaining);
+        if (overLimitAssets.length) {
+          pickerPreviewDisposerRef.current.disposeAssets(overLimitAssets);
           Alert.alert(
-            t('notes.editor.selectionLimitExceededTitle', { defaultValue: '选择数量已达上限' }),
-            t('notes.editor.selectionLimitExceededMessage', {
-              defaultValue: '最多可选择 {{count}} 个文件，已忽略其余 {{overflow}} 个。',
-              count: MAX_NOTE_MEDIA_SELECTION,
-              overflow: overflowAssets.length,
+            t('notes.editor.mediaTypeLimitTitle', { defaultValue: '已达上限' }),
+            t('notes.editor.mediaTypeLimitTrimmed', {
+              defaultValue: '{{limit}}，已添加前 {{kept}} 个，其余 {{overflow}} 个已忽略。',
+              limit: limitText,
+              kept: selectedAssets.length,
+              overflow: overLimitAssets.length,
             }),
           );
         }
         const acceptedAssets = selectedAssets.filter((asset) => {
-          const isVideo = kind === 'video' || (kind === 'media' && asset.type === 'video');
+          const isVideo = kind === 'video';
           return !isVideo || !getNoteVideoUploadPolicyViolation({
             fileSize: asset.fileSize,
             duration: asset.duration,
@@ -1850,9 +1879,7 @@ export default function EditNoteScreen() {
           'IMAGE',
         ).map((draft, index): EditorNoteMediaDraft => ({
           ...draft,
-          type: kind === 'video' || (kind === 'media' && acceptedAssets[index]?.type === 'video')
-            ? 'VIDEO' as const
-            : 'IMAGE' as const,
+          type: kind === 'video' ? 'VIDEO' as const : 'IMAGE' as const,
         }));
         batchDraftIds = new Set(pendingDrafts.map((item) => item.clientId));
         if (blockId && pendingDrafts.length) {
@@ -1878,7 +1905,7 @@ export default function EditNoteScreen() {
         const batch = await uploadNoteMediaBatch(
           acceptedAssets.map((asset, index) => ({ asset, clientId: pendingDrafts[index].clientId })),
           async ({ asset, clientId }) => {
-          const isVideo = kind === 'video' || (kind === 'media' && asset.type === 'video');
+          const isVideo = kind === 'video';
           const fallbackName = isVideo ? 'video.mp4' : 'image.jpg';
           const fallbackType = isVideo ? 'video/mp4' : 'image/jpeg';
           const filename = asset.uri.split('/').pop() ?? fallbackName;
@@ -1994,7 +2021,7 @@ export default function EditNoteScreen() {
         }
       }
     },
-    [isRouteDataReady, markClientUploaded, t],
+    [isRouteDataReady, markClientUploaded, mediaItems, showcaseItems, t],
   );
 
   const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {
