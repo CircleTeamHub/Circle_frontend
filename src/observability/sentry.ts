@@ -1339,6 +1339,9 @@ function safeErrorMessage(context: Record<string, unknown> | undefined, error?: 
   if (context?.operation === 'render' && context.kind === 'route') {
     return `页面显示或退出失败｜${explanation}`;
   }
+  if (context?.operation === 'jsThread' && context.kind === 'stall') {
+    return requestSummary('JS 线程卡顿', context);
+  }
   if (context && readTagValue(context, 'endpointPath')) {
     const retryOutcome = context.retry === 'recovered' ? '｜重试已救回' : context.retry === 'failed' ? '｜重试也失败' : '';
     return `${requestSummary('接口请求失败', context)}｜${explanation}${retryOutcome}`;
