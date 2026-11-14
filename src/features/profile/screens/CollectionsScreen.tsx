@@ -25,10 +25,12 @@ import { saveMediaToLibrary } from '@/utils/save-image';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 
 type CollectionRow = { item: UserCollection; content: CollectionContent };
 type CachedCollectionRow = { item: UserCollection; content: Omit<CollectionContent, 'dto'> };
+const NO_ROWS: CollectionRow[] = [];
 type BatchProgress = { action: 'save' | 'delete'; current: number; total: number };
 
 const s = StyleSheet.create({
@@ -90,6 +92,9 @@ function CollectionsContent() {
     (activeType === 'ALL' || item.type === activeType) &&
     (!query.trim() || `${item.title} ${item.summary ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())))
     .map(item => ({ item, content: restoredPreviews?.[item.id] ?? resolveCollectionContent(item, userID) })), [activeType, items, query, restoredPreviews, userID]);
+  // 首帧只出标题、分类和搜索框,收藏卡片(图片/视频封面/笔记卡)下一帧再画(见 useDeferredContent)。
+  const listReady = useDeferredContent();
+  const listRows = listReady ? rows : NO_ROWS;
   const selectedRows = useMemo(() => rows.filter(row => selectedIds?.has(row.item.id)), [rows, selectedIds]);
   const imageRows = useMemo(() => rows.filter(row => row.content.imageUri), [rows]);
   const imageIndex = imageRows.findIndex(row => row.item.id === imageId);
@@ -313,10 +318,10 @@ function CollectionsContent() {
       <NavHeader fallbackHref="/(tabs)/profile" title={t('profile.collections.menuLabel', { defaultValue: '我的收藏' })} onBackPress={selectionMode ? () => { logClientDiagnostic('collections.back', { reason: 'header', selectedCount: selectedIds.size }); if (!busy) setSelectedIds(null); } : undefined}
         rightSlot={selectionMode ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} style={s.button} onPress={() => setSelectedIds(null)}><Text style={{ color: colors.primary }}>{t('common.cancel', { defaultValue: '取消' })}</Text></Pressable> : undefined} />
       {header}
-      <FlatList data={rows} keyExtractor={row => row.item.id} renderItem={renderItem} extraData={selectedIds} contentContainerStyle={s.content}
+      <FlatList data={listRows} keyExtractor={row => row.item.id} renderItem={renderItem} extraData={selectedIds} contentContainerStyle={s.content}
         ItemSeparatorComponent={ItemSeparator} refreshing={pull.refreshing}
         onRefresh={busy ? undefined : pull.onRefresh}
-        ListEmptyComponent={<View style={s.state}>
+        ListEmptyComponent={!listReady ? null : <View style={s.state}>
           {loading && !loadedRef.current ? <ActivityIndicator color={colors.primary} /> : loadError ? <>
             <Text style={{ color: colors.textSecondary }}>{loadError}</Text>
             <Pressable accessibilityRole="button" style={s.button} onPress={() => void load()}><Text style={{ color: colors.primary }}>{t('common.retry', { defaultValue: '重试' })}</Text></Pressable>

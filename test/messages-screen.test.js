@@ -229,11 +229,16 @@ test('messages screen has only the circle-notification entry, not the old all-no
     source,
     /pathname: "\/\(tabs\)\/messages\/notifications", params: \{ domain: "circle" \}/,
   );
-  assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
-  // 和已读 / 搜索同一套粗描边 lucide 图标;Orbit 的小卫星点在 4px 描边下糊成一团,
-  // 铃铛用户不要。两个相交的圆(Blend)代表「圈子」,形状简单。
-  assert.match(source, /<Blend size=\{22\} strokeWidth=\{4\} absoluteStrokeWidth color=\{colors\.text\} \/>/);
-  assert.doesNotMatch(source, /<Orbit |<Bell /);
+  // 未读只点红点:数字角标会盖住机头。条数在圈子 tab 上(同一个数)。
+  assert.match(source, /circleBellUnread > 0 \? \(\s*<View\s+testID="circle-notification-dot"/);
+  assert.doesNotMatch(source, /<Badge count=\{circleBellUnread\} \/>/);
+  // 和已读 / 搜索同一套粗描边 lucide 图标。试过又被否掉的:Orbit(小卫星点在 4px 描边下糊成一团)、
+  // 铃铛(用户不要)、两个相交的圆 Blend(4px 下像一截链条,用户嫌丑)。
+  // lucide 的 Send 纸飞机也试过(4px 糊成实心、2.5px 后用户仍要换):现在直接用底部圈子 tab 那架
+  // App 自己的纸飞机标 PlaneLogoIcon,是这排里唯一带颜色的入口。用户要紫色再深一些:浅色用
+  // primaryDeep;暗色 primaryDeep 压在纯黑上只有 ~3.3:1、发闷,仍用 primary。
+  assert.match(source, /<PlaneLogoIcon size=\{24\} color=\{resolvedMode === 'dark' \? colors\.primary : colors\.primaryDeep\} \/>/);
+  assert.doesNotMatch(source, /<Orbit |<Bell |<Blend |<Send /);
 });
 
 test('messages screen plus menu no longer exposes group management', () => {

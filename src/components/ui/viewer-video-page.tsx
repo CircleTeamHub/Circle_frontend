@@ -365,7 +365,6 @@ export function ViewerVideoPage({
   const { t } = useTranslation();
   const translateY = useRef(new Animated.Value(0)).current;
   const [started, setStarted] = useState(autoPlay);
-  const [posterLoading, setPosterLoading] = useState(false);
   // 手势回调要同步读这些值；responder 只建一次，重渲染不能清掉正在累计的 dx/dy。
   const lock = useRef({ playing: false, dragging: false, scrubbing: false });
   const callbacks = useRef({ onPagerLockChange, onSwipeDown });
@@ -423,7 +422,14 @@ export function ViewerVideoPage({
     });
   }, [syncPagerLock, translateY]);
 
-  const poster = posterUrl ? (
+  const playBadge = (
+    <View testID="viewer-video-play-badge" style={s.playBadge}>
+      <Ionicons name="play" size={32} color="#FFFFFF" />
+    </View>
+  );
+  // 开播前的播放键交给 MediaImage 画在封面上:封面真在下载、显示进度时让位给进度,显示后回来。
+  // 原来这里自己记「封面加载中」,缓存命中的封面也要让播放键闪一下、整页多渲染两遍。
+  const renderPoster = (overlay?: ReactNode) => posterUrl ? (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <MediaImage
         testID="viewer-video-poster"
@@ -431,8 +437,7 @@ export function ViewerVideoPage({
         style={StyleSheet.absoluteFill}
         contentFit="contain"
         cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
-        onLoadStart={() => setPosterLoading(true)}
-        onLoadEnd={() => setPosterLoading(false)}
+        overlay={overlay}
       />
     </View>
   ) : null;
@@ -445,20 +450,16 @@ export function ViewerVideoPage({
             key={videoUrl}
             videoUrl={videoUrl}
             ephemeral={ephemeral}
-            poster={poster}
+            poster={renderPoster()}
             onPlayingChange={handlePlayingChange}
             onScrubbingChange={handleScrubbingChange}
             onMediaError={onMediaError}
           />
         ) : (
           <>
-            {poster}
+            {renderPoster(<View style={s.center} pointerEvents="none">{playBadge}</View>)}
             <Pressable style={s.center} onPress={() => setStarted(true)} accessibilityRole="button" accessibilityLabel={t('chat.detail.playVideo')}>
-              {posterUrl && posterLoading ? null : (
-                <View testID="viewer-video-play-badge" style={s.playBadge}>
-                  <Ionicons name="play" size={32} color="#FFFFFF" />
-                </View>
-              )}
+              {posterUrl ? null : playBadge}
             </Pressable>
           </>
         )}

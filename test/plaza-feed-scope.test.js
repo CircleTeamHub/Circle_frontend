@@ -46,10 +46,12 @@ test('plaza membership gate recovers across account switch and same-account upgr
 test('plaza feed does not paginate while the first page is still empty', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 
-  assert.match(source, /plazaPosts\.length > 0/);
+  // 按列表实际显示的那份判断(listPosts:首帧延后期间是空的),空着的那一帧也不会误触底翻页。
+  assert.match(source, /const listPosts = listReady \? plazaPosts : NO_POSTS;/);
+  assert.match(source, /listPosts\.length > 0/);
   assert.match(
     source,
-    /plazaPosts\.length,\s*plazaLoading,\s*plazaRefreshing,\s*plazaHasMore,\s*fetchPlazaPosts/,
+    /listPosts\.length,\s*plazaLoading,\s*plazaRefreshing,\s*plazaHasMore,\s*fetchPlazaPosts/,
   );
 });
 

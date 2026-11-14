@@ -46,6 +46,7 @@ import { markMatchingTargetNotificationsRead } from '@/features/notifications/ut
 import type { MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { readPageSnapshot } from '@/storage/page-snapshots';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 import { toggleMomentLikeOnce } from '@/features/discover/utils/moment-like';
 import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
@@ -154,6 +155,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+const NO_COMMENT_ROWS: MomentCommentRow[] = [];
 
 export default function MomentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -375,16 +378,20 @@ function MomentDetailContent() {
     () => flattenMomentCommentThreads(commentThreads),
     [commentThreads],
   );
+  // 首帧只出顶栏,帖子(图片)和评论下一帧再画(见 useDeferredContent):点进动态详情立刻进页。
+  // 定位到某条评论和列表用同一份,空着的那一帧不会对空列表 scrollToIndex。
+  const listReady = useDeferredContent();
+  const listCommentRows = listReady ? commentRows : NO_COMMENT_ROWS;
   useEffect(() => {
     if (
       !targetCommentId ||
-      commentRows.length === 0 ||
+      listCommentRows.length === 0 ||
       scrolledToTargetCommentRef.current === targetCommentId
     ) {
       return;
     }
 
-    const index = commentRows.findIndex((row) => row.comment.id === targetCommentId);
+    const index = listCommentRows.findIndex((row) => row.comment.id === targetCommentId);
     if (index < 0) {
       return;
     }
@@ -403,7 +410,7 @@ function MomentDetailContent() {
       }
     }, 2200);
     return () => clearTimeout(timer);
-  }, [commentRows, targetCommentId]);
+  }, [listCommentRows, targetCommentId]);
 
   // Precompute each comment's formatted timestamp once per list/locale change,
   // instead of running Date + toLocaleString for every row on every render.
@@ -692,10 +699,10 @@ function MomentDetailContent() {
       />
       <FlatList
         ref={listRef}
-        data={commentRows}
+        data={listCommentRows}
         keyExtractor={(item) => item.id}
         renderItem={renderCommentRow}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={listReady ? ListHeader : null}
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
         refreshing={refreshing}
         onRefresh={handleRefreshMoment}
@@ -713,9 +720,11 @@ function MomentDetailContent() {
           }, 250);
         }}
         ListEmptyComponent={
-          <View style={s.emptyComments}>
-            <Text style={d.emptyText}>{t('moment.noComments')}</Text>
-          </View>
+          listReady ? (
+            <View style={s.emptyComments}>
+              <Text style={d.emptyText}>{t('moment.noComments')}</Text>
+            </View>
+          ) : null
         }
       />
 

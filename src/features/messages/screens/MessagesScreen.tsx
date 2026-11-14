@@ -42,7 +42,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { Blend, CheckCheck, Search } from 'lucide-react-native';
+import { CheckCheck, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -65,6 +65,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
 
 const SWIPE_ACTION_WIDTH = 76;
@@ -154,10 +155,14 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  circleBellBadge: {
+  circleBellDot: {
     position: "absolute",
-    top: -8,
-    right: -12,
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   quickAddIcon: {
     width: 24,
@@ -714,7 +719,7 @@ export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
 
   // useMemo 让 BASE_FILTERS / MENU_ACTIONS 在 `t` 不变时保持同一引用 ——
@@ -1568,11 +1573,18 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
-            {/* 两个相交的圆代表「圈子」；和右边的已读 / 搜索 / + 同一套粗描边线性图标，形状简单，4px 描边下也不糊。 */}
-            <Blend size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
-            <View style={s.circleBellBadge}>
-              <Badge count={circleBellUnread} />
-            </View>
+            {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），空心。
+                这排里唯一带颜色的入口，一眼对上「圈子」。浅色用深一档的紫；暗色的深紫压在纯黑上
+                只有 ~3.3:1、发闷，仍用 primary。 */}
+            <PlaneLogoIcon size={24} color={resolvedMode === 'dark' ? colors.primary : colors.primaryDeep} />
+            {/* 有未读只点一个红点（和圈子 tab 的「有新帖」同款）：数字角标会把机头整个盖住，飞机就认不出了。
+                具体条数就在正下方的圈子 tab 上，同一个数（圈子通知 + 报名）。外圈是页面底色，像从机头上挖出来的。 */}
+            {circleBellUnread > 0 ? (
+              <View
+                testID="circle-notification-dot"
+                style={[s.circleBellDot, { backgroundColor: colors.error, borderColor: colors.background }]}
+              />
+            ) : null}
           </Pressable>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
             <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
@@ -1639,6 +1651,7 @@ export default function MessagesScreen() {
     selecting,
     quickAddExpanded,
     quickAddProgress,
+    resolvedMode,
     visibleConversations.length,
     t,
   ]);

@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import CollectionsScreen from './CollectionsScreen';
-import { deleteCollection, fetchCollections, type UserCollection } from '@/services/api/collections';
+import { deleteCollection, fetchCollections, getCachedCollections, type UserCollection } from '@/services/api/collections';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { saveMediaToLibrary } from '@/utils/save-image';
 import { ImageViewer } from '@/components/ui/image-viewer';
@@ -61,7 +61,7 @@ jest.mock('@/hooks/use-network-status', () => ({ useNetworkStatus: () => ({ isOf
 // 会话内存快照由真实 fetchCollections 填;这里替身掉 API,快照恒为空(每次进页都走网络)。
 jest.mock('@/services/api/collections', () => ({
   fetchCollections: jest.fn(), deleteCollection: jest.fn(),
-  getCachedCollections: () => null, collectionsMutatedSince: () => false,
+  getCachedCollections: jest.fn(() => null), collectionsMutatedSince: () => false,
 }));
 jest.mock('@/services/api/client', () => ({ apiClient: jest.fn(), ApiError: jest.requireActual('@/services/api/api-error').ApiError }));
 jest.mock('@/utils/save-image', () => ({ saveMediaToLibrary: jest.fn() }));
@@ -288,4 +288,15 @@ test('previous-account delete confirmation cannot act after account switch', asy
     await act(async () => { await confirm?.onPress?.(); });
     expect(deleteCollection).not.toHaveBeenCalled();
   } finally { alert.mockRestore(); }
+});
+
+// 进页不卡:会话内存里已有的收藏首帧不画,下一帧再画,中间也不闪「还没有收藏」。
+test('cached collections render on the next frame without flashing the empty state', async () => {
+  jest.mocked(getCachedCollections).mockReturnValueOnce({ items: [chatItem] } as never);
+  jest.mocked(fetchCollections).mockReturnValue(new Promise(() => undefined));
+  render(<CollectionsScreen />);
+  expect(screen.getByText('我的收藏')).toBeTruthy();
+  expect(screen.queryByTestId('collection-item-c-text')).toBeNull();
+  expect(screen.queryByText('还没有收藏')).toBeNull();
+  expect(await screen.findByTestId('collection-item-c-text')).toBeTruthy();
 });

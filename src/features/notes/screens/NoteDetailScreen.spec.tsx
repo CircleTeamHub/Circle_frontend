@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import NoteDetailScreen from './NoteDetailScreen';
-import { collectNote, fetchNoteDetail, findCollectedNote } from '@/services/api/notes';
+import { collectNote, fetchNoteDetail, findCollectedNote, getCachedNoteDetail } from '@/services/api/notes';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { resolveNoteCollectSource } from '@/features/notes/utils/collect-note-source';
@@ -30,9 +30,9 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign(
   (selector: (state: typeof mockAuth) => unknown) => selector(mockAuth), { getState: () => mockAuth },
 ) }));
-// No persisted detail / saved-copy snapshot: every test starts from the network load.
+// No persisted detail / saved-copy snapshot by default: every test starts from the network load.
 jest.mock('@/services/api/notes', () => ({ fetchNoteDetail: jest.fn(), findCollectedNote: jest.fn(), collectNote: jest.fn(), createNoteExport: jest.fn(), notesMutatedSince: () => false,
-  getCachedNoteDetail: () => null, getCachedCollectedNote: () => null }));
+  getCachedNoteDetail: jest.fn(() => null), getCachedCollectedNote: () => null }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
@@ -292,4 +292,18 @@ test('measures the viewport through the native ScrollView host', async () => {
   expect(measure).toHaveBeenCalledTimes(1);
   expect(visibility).toHaveBeenLastCalledWith(true);
   unregister();
+});
+
+// 进页不卡:native-stack 等新页面首次提交完才开始推入动画。缓存里的整篇正文(全部段落、图片)
+// 首帧不画,下一帧再画。
+test('a cached note body renders on the next frame, not in the first commit', async () => {
+  mockParams = { id: 'note' };
+  mockBodyProps = undefined;
+  jest.mocked(getCachedNoteDetail).mockReturnValueOnce({ value: note as any, at: Date.now() });
+  jest.mocked(fetchNoteDetail).mockReturnValue(new Promise(() => undefined));
+
+  render(<NoteDetailScreen />);
+
+  expect(mockBodyProps).toBeUndefined();
+  await waitFor(() => expect(mockBodyProps).toMatchObject({ title: 'Shared' }));
 });

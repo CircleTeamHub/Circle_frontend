@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
+import { MEDIA_PROGRESS_DELAY_MS } from '@/components/ui/media-image';
 import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
 
@@ -120,14 +121,26 @@ test('an expired video says it expired and keeps its long-press menu', () => {
 });
 
 describe('VideoBubble poster', () => {
-  it('keeps the play badge from covering the central poster download progress', () => {
-    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
-    fireEvent(screen.getByTestId('chat-video-poster'), 'loadStart');
-    expect(screen.getByTestId('media-progress-track')).toBeTruthy();
-    expect(screen.queryByText('play')).toBeNull();
-    fireEvent(screen.getByTestId('chat-video-poster'), 'loadEnd');
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.getByText('play')).toBeTruthy();
+  // 封面真在下载时播放键让位给中间的下载进度;缓存里的封面马上显示,不挂进度,
+  // 播放键也不跟着卸掉重挂 —— 滑动时每个视频划进来都不再让整个气泡重渲染。
+  it('keeps the play badge from covering the central poster download progress, only while it really downloads', () => {
+    jest.useFakeTimers();
+    try {
+      render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
+      fireEvent(screen.getByTestId('chat-video-poster'), 'loadStart');
+      expect(screen.queryByTestId('media-progress-track')).toBeNull();
+      expect(screen.getByText('play')).toBeTruthy();
+      act(() => {
+        jest.advanceTimersByTime(MEDIA_PROGRESS_DELAY_MS);
+      });
+      expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+      expect(screen.queryByText('play')).toBeNull();
+      fireEvent(screen.getByTestId('chat-video-poster'), 'loadEnd');
+      expect(screen.queryByRole('progressbar')).toBeNull();
+      expect(screen.getByText('play')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('shows the poster frame, cached by its object key, before the video is played', () => {

@@ -142,6 +142,8 @@ export const Avatar: React.FC<AvatarProps> = ({
             contentFit="cover"
             cachePolicy="memory-disk"
             transition={0}
+            // 头像上传不缩图(常是两三千像素见方):按头像框的像素直接解码,别整张解完再在主线程缩。
+            enforceEarlyResizing
             onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
             onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
           />

@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchMembershipProgramStatus } from '@/services/api/membership';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
@@ -29,6 +30,7 @@ import type { CirclePlazaPost } from '@/types';
 
 /** 会员计划开关没有本地写请求能改它:只按 30 秒窗口和账号判断要不要重拉。 */
 const NO_TRACKED_WRITES = () => false;
+const NO_POSTS: CirclePlazaPost[] = [];
 
 const s = StyleSheet.create({
   listContent: {
@@ -104,6 +106,10 @@ export const PlazaFeed: React.FC = () => {
       setPlazaFilter: s.setPlazaFilter,
     })),
   );
+  // 第一次点圈子 tab:首帧只出圈子标签栏,缓存的帖子卡片下一帧再画(见 useDeferredContent),
+  // 切 tab 不用等 12 张卡片画完。翻页判断和列表用同一份,空着的那一帧不会误触底拉下一页。
+  const listReady = useDeferredContent();
+  const listPosts = listReady ? plazaPosts : NO_POSTS;
 
   const {
     joinedCircles,
@@ -247,7 +253,7 @@ export const PlazaFeed: React.FC = () => {
 
   const handleEndReached = useCallback(() => {
     if (
-      plazaPosts.length > 0 &&
+      listPosts.length > 0 &&
       !plazaLoading &&
       !plazaRefreshing &&
       plazaHasMore
@@ -255,7 +261,7 @@ export const PlazaFeed: React.FC = () => {
       fetchPlazaPosts(false);
     }
   }, [
-    plazaPosts.length,
+    listPosts.length,
     plazaLoading,
     plazaRefreshing,
     plazaHasMore,
@@ -373,10 +379,10 @@ export const PlazaFeed: React.FC = () => {
       <FlatList
         ref={listRef}
         pointerEvents={programEnabled === null ? 'none' : 'auto'}
-        data={plazaPosts}
+        data={listPosts}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        ListEmptyComponent={ListEmpty ?? ContentLoading}
+        ListEmptyComponent={listReady ? (ListEmpty ?? ContentLoading) : null}
         ListFooterComponent={ListFooter}
         contentContainerStyle={s.listContent}
         refreshControl={

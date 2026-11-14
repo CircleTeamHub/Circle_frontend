@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Animated, FlatList, PanResponder, StyleSheet } from 'react-native';
 import { ImageViewer } from './image-viewer';
 import { ViewerVideoPage } from './viewer-video-page';
+import { MEDIA_PROGRESS_DELAY_MS } from './media-image';
 
 // 手势跑在 PanResponder 上,和 zoomable-image.spec 一样把回调抓出来喂事件;
 // 播放器是原生模块,只模拟它对外的事件和状态字段。
@@ -167,13 +168,24 @@ describe('before playback', () => {
     expect(screen.queryByTestId('viewer-video-poster')).toBeNull();
   });
 
+  // 播放键在封面真在下载、显示进度时才让位;缓存命中的封面播放键一直在,中间也不空着。
   test('a slow poster shows its download progress instead of the play badge', () => {
-    renderPage();
-    expect(screen.getByTestId('viewer-video-play-badge')).toBeTruthy();
-    fireEvent(screen.getByTestId('viewer-video-poster'), 'loadStart');
-    expect(screen.queryByTestId('viewer-video-play-badge')).toBeNull();
-    fireEvent(screen.getByTestId('viewer-video-poster'), 'loadEnd');
-    expect(screen.getByTestId('viewer-video-play-badge')).toBeTruthy();
+    jest.useFakeTimers();
+    try {
+      renderPage();
+      expect(screen.getByTestId('viewer-video-play-badge')).toBeTruthy();
+      fireEvent(screen.getByTestId('viewer-video-poster'), 'loadStart');
+      expect(screen.getByTestId('viewer-video-play-badge')).toBeTruthy();
+      act(() => {
+        jest.advanceTimersByTime(MEDIA_PROGRESS_DELAY_MS);
+      });
+      expect(screen.queryByTestId('viewer-video-play-badge')).toBeNull();
+      expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+      fireEvent(screen.getByTestId('viewer-video-poster'), 'loadEnd');
+      expect(screen.getByTestId('viewer-video-play-badge')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('older videos without a poster still offer play', () => {

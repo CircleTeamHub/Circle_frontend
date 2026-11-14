@@ -131,9 +131,12 @@ export function ChatMessageArea({
         // 虚拟化调优：限制单批渲染数与窗口大小，降低活跃/长会话的渲染与内存压力。
         // 消息气泡高度可变，无法安全提供 getItemLayout，故只调这几个安全项；
         // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
+        // 滑动时新行按批挂到主线程上：图片行各带头像和图片两个原生图片视图(不复用、每次新建),
+        // 一批 10 行在 120Hz 屏上常超出一帧。改成 5 行一批、间隔减半:每批的活少一半,
+        // 每秒渲染的行数和原来(10 行/40ms)一样,搜索/未读跳转的重试也照样够得着。
         initialNumToRender={15}
-        maxToRenderPerBatch={10}
-        updateCellsBatchingPeriod={40}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={20}
         // inverted:列表"末端"是最旧的一头,触底即向前翻页。
         onEndReached={handleLoadOlder}
         onEndReachedThreshold={0.4}

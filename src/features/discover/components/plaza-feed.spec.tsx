@@ -117,9 +117,10 @@ beforeEach(() => {
 
 async function renderFeed() {
   render(<PlazaFeed />);
-  // 让会员计划查询落地,列表才可交互。
+  // 让会员计划查询落地,列表才可交互;再等过帖子列表延后渲染的那一帧(useDeferredContent)。
   await act(async () => {
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
@@ -171,4 +172,15 @@ test('a circle with nothing cached yet shows a spinner in the content area', asy
   // 和下拉刷新的圈同一个主题紫(浅色 #7C5CF0 / 暗色 #B18AFF),不是靛蓝 primary。
   const spinner = screen.UNSAFE_getByType(ActivityIndicator);
   expect(spinner.props.color).toMatch(/^#(7C5CF0|B18AFF)$/i);
+});
+
+// 进页不卡:第一次点圈子 tab 时,首帧只出圈子标签栏,缓存的帖子卡片下一帧再画,
+// 中间也不闪「暂无进行中的动态」。
+test('cached posts render on the next frame, without flashing the empty state', async () => {
+  render(<PlazaFeed />);
+
+  expect(screen.getByTestId('circle-filter-bar')).toBeTruthy();
+  expect(screen.queryByText('post p1')).toBeNull();
+  expect(screen.queryByText('暂无进行中的动态')).toBeNull();
+  expect(await screen.findByText('post p1')).toBeTruthy();
 });

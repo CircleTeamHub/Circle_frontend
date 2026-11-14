@@ -13,6 +13,7 @@ import {
 import ChatDetailScreen from './ChatDetailScreen';
 import {
   loadConversationMessages,
+  loadOlderConversationMessages,
   markConversationAsRead,
   sendTextMessage,
   sendQuoteMessage,
@@ -408,6 +409,41 @@ test('mounts a direct chat, shows the cached history and loads the focused conve
   await waitFor(() => expect(markConversationAsRead).toHaveBeenCalled(), SETTLE);
 });
 
+// 进页不卡:native-stack 要等新页面首次提交完才开始推入动画,首帧里画十几个气泡
+// 就等于点下去干等。首帧只有页面壳(页头、列表容器、输入栏),缓存的消息下一帧再交给列表。
+test('the first commit is only the page shell; cached bubbles arrive on the next frame', async () => {
+  render(<ChatDetailScreen />);
+
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
+  expect(screen.getByTestId(E2E_TEST_IDS.chatMessageList)).toBeTruthy();
+  expect(screen.queryByText('received:在吗')).toBeNull();
+  expect(screen.queryByText('sent:晚上吃什么')).toBeNull();
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+  expect(screen.getByText('sent:晚上吃什么')).toBeTruthy();
+});
+
+// 首帧消息还没交给列表,空列表量完尺寸就可能触底。那一下不能去翻更早的一页:
+// 繁忙的群消息多、记过翻页起点,每次进会话都会白发一次请求、窗口跟着涨一页。
+test('the empty first frame does not page older history', async () => {
+  useChatStore.setState({ historyFloorByConversation: { [CONVERSATION]: 1 } });
+  render(<ChatDetailScreen />);
+  const list = screen.UNSAFE_getAllByType(FlatList).find((item) => item.props.testID === E2E_TEST_IDS.chatMessageList)!;
+  act(() => {
+    list.props.onEndReached?.({ distanceFromEnd: 0 });
+  });
+  expect(loadOlderConversationMessages).not.toHaveBeenCalled();
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+});
+
+// 从搜索结果进来、目标就在缓存里:搜索定位要等消息交给列表之后才滚,
+// 对着首帧的空列表 scrollToIndex 会同步抛错(只延后 FlatList 的 data 就会这样)。
+test('opening from a search result with cached history mounts cleanly and lands on the message', async () => {
+  mockParams = { ...mockParams, searchedMsgID: 'msg-1' };
+  render(<ChatDetailScreen />);
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+  expect(loadOlderConversationMessages).not.toHaveBeenCalled();
+});
+
 // 文字加密已整体删除:老开发数据里残留的 encrypted-text 消息走未知类型的占位文案,
 // 不崩、不渲染空白气泡,也不把信封里的密文当正文显示出来。
 test('a leftover encrypted-text message renders the unsupported-type placeholder', async () => {
@@ -643,6 +679,37 @@ test('a new incoming message renders only its own bubble', async () => {
   expect(await screen.findByText('received:七点吧', {}, SETTLE)).toBeTruthy();
   expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
   expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
+});
+
+// 进会话后会重拉最新一页:和手上那份一字不差的消息沿用原对象,已经画好的气泡不重画
+// (原来整屏重画一遍,图片还跟着重载,正好撞上用户刚开始滑动)。
+test('re-fetching an unchanged page does not re-render the bubbles already on screen', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  mockBubbleRenders.clear();
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [message(1, PEER, '在吗'), message(2, ME, '晚上吃什么')]);
+  });
+
+  expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
+  expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
+});
+
+// 用 msg-2:前面的多选删除用例把 msg-1 记成了本机删除(墓碑在模块里,不随用例清),
+// 再收 msg-1 会被当成删掉的挡下。
+test('a re-fetched message whose content differs still replaces the one on screen', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [message(2, ME, '晚上吃什么呀')]);
+  });
+
+  expect(await screen.findByText('sent:晚上吃什么呀', {}, SETTLE)).toBeTruthy();
 });
 
 function photoMessage(height: number, senderId = PEER): ChatMessageDto {

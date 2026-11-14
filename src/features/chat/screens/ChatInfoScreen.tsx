@@ -97,6 +97,7 @@ import {
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useDeferredContent } from '@/hooks/use-deferred-content';
 import {
   groupConversationReloadKey,
   groupOrCircleMutatedSince,
@@ -220,6 +221,7 @@ const initialActionPending = {
 const GROUP_MEMBER_COLUMNS = 5;
 const COLLAPSED_GROUP_MEMBER_ROWS = 4;
 const GROUP_MEMBER_AVATAR_SIZE = 56;
+const NO_MEMBERS: ChatMemberDto[] = [];
 
 type ConversationActionKey = keyof typeof initialActionPending;
 type OptimisticConversationState = {
@@ -463,9 +465,14 @@ export default function ChatInfoScreen() {
     GROUP_MEMBER_AVATAR_SIZE,
     Math.floor((windowWidth - 2 * (Spacing.lg + Spacing.sm)) / GROUP_MEMBER_COLUMNS) - Spacing.sm,
   );
+  // 头像墙(最多 20 格头像+昵称)首帧不画,下一帧再从缓存画(见 useDeferredContent):
+  // 点「聊天信息」立刻进页。推入动画刚开始那一帧页面还几乎在屏幕外,看不出空了一下。
+  const membersReady = useDeferredContent();
   const visibleGroupMembers = useMemo(
-    () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
-    [collapsedGroupMemberLimit, groupMembers, groupMembersExpanded],
+    () => (!membersReady
+      ? NO_MEMBERS
+      : groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
+    [collapsedGroupMemberLimit, groupMembers, groupMembersExpanded, membersReady],
   );
   // 会话 dto:store 优先(偏好更新会 upsert 回写、保持活体),群聊兜底到本页
   // get-or-create 的结果。
