@@ -83,6 +83,8 @@ export const darkColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  // 字母索引气泡:中性浅灰,深浅色底上都托得住白色大字,两个主题同值。
+  indexBubble: '#CBCBCB',
   chatBackgroundScrim: 'rgba(0, 0, 0, 0.35)',
   statusBarStyle: 'light',
 };
@@ -158,6 +160,8 @@ export const lightColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  // 字母索引气泡:中性浅灰,深浅色底上都托得住白色大字,两个主题同值。
+  indexBubble: '#CBCBCB',
   chatBackgroundScrim: 'rgba(248, 249, 250, 0.35)',
   statusBarStyle: 'dark',
 };

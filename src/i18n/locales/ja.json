@@ -2294,6 +2294,7 @@
     "loadFailed": "連絡先の読み込みに失敗しました。もう一度お試しください",
     "loadingContacts": "連絡先を読み込み中...",
     "noFriends": "まだ友だちがいません",
+    "indexJumpHint": "このグループへ移動します",
     "friendActivity": {
       "title": "新しい友だち",
       "loadFailed": "友だちアクティビティの読み込みに失敗しました",

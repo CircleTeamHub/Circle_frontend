@@ -1174,6 +1174,7 @@
     "loadFailed": "联系人加载失败，请稍后重试",
     "loadingContacts": "正在加载联系人...",
     "noFriends": "还没有添加好友",
+    "indexJumpHint": "跳到该分组",
     "friendActivity": {
       "title": "新的朋友",
       "loadFailed": "好友动态加载失败，请稍后重试",

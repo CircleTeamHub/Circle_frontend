@@ -24,7 +24,7 @@ test('contacts quick actions keep the agreed order and entries', () => {
   const source = read('src/features/contacts/screens/ContactsScreen.tsx');
   const block = source.slice(
     source.indexOf('const QUICK_ACTION_KEYS'),
-    source.indexOf('const ALPHABET'),
+    source.indexOf('const s = StyleSheet.create'),
   );
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
