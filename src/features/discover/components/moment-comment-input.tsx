@@ -29,6 +29,8 @@ import {
 } from '@/hooks/use-modal-input-auto-focus';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { useEagerMediaUploads } from '@/features/discover/hooks/use-eager-media-uploads';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import {
@@ -62,6 +64,39 @@ interface MomentCommentInputProps {
 
 // 输入条下方的功能面板：表情选择 / @好友选择，同一时间只开一个。
 type PanelKind = 'none' | 'emoji' | 'friends';
+
+/** 选中即传(见 useEagerMediaUploads):写评论的同时图已经在传,点发送不用再等。 */
+async function uploadCommentImage(asset: ImagePicker.ImagePickerAsset, progressKey: string): Promise<string> {
+  const fileName = asset.fileName || asset.uri.split('/').pop() || 'photo.jpg';
+  const contentType =
+    resolveUploadContentType({ mimeType: asset.mimeType, fileName }) ?? 'image/jpeg';
+  const prepared = await prepareChatImageForUpload({
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+    contentType,
+    filename: fileName,
+  });
+  const presign = await requestUploadPresign({
+    filename: sanitizeUploadFilename(prepared.filename),
+    contentType: prepared.contentType,
+    folder: 'posts',
+    fileUri: prepared.uri,
+  });
+  await uploadLocalFileToPresignedUrl(
+    presign.uploadUrl,
+    prepared.contentType,
+    prepared.uri,
+    presign.requiredHeaders,
+    undefined,
+    { progressKey, foreground: true },
+  );
+  return presign.fileUrl;
+}
+
+function reportCommentImageUploadFailure(error: unknown) {
+  reportHandledFailure('momentComment', 'imageUpload', error);
+}
 
 const s = StyleSheet.create({
   overlay: {
@@ -116,6 +151,12 @@ const s = StyleSheet.create({
     height: 64,
     borderRadius: Radius.md,
   },
+  imagePreviewClip: { borderRadius: Radius.md, overflow: 'hidden' },
+  imageFailedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   imageRemoveBtn: {
     position: 'absolute',
     top: -6,
@@ -161,7 +202,19 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  // 评论最多一张图:换图 = 删掉旧条目再加新的。传好的结果按条目记住,发送失败重试
+  // 不重传 —— 每次重传 URL 都不同,评论的幂等键就对不上了。
+  const {
+    items: imageItems,
+    add: addImage,
+    remove: removeImage,
+    retry: retryImage,
+    settle: settleImage,
+  } = useEagerMediaUploads({
+    upload: uploadCommentImage,
+    onError: reportCommentImageUploadFailure,
+  });
+  const image = imageItems[0] ?? null;
   const [panel, setPanel] = useState<PanelKind>('none');
   const [friends, setFriends] = useState<FriendProfile[] | null>(null);
   const [friendsError, setFriendsError] = useState(false);
@@ -176,8 +229,6 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   useModalInputAutoFocus(inputRef, true);
   const selectionRef = useRef<MomentTextSelection>({ start: 0, end: 0 });
   const submitInFlightRef = useRef(false);
-  // 发送失败后重试不重传同一张图:每次重传 URL 都不同,评论的幂等键就对不上了。
-  const uploadedImageRef = useRef<{ uri: string; url: string } | null>(null);
 
   useEffect(() => {
     const showEvent =
@@ -198,7 +249,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
 
   const bottomInsetPad = keyboardVisible ? 0 : insets.bottom || Spacing.sm;
 
-  const canSend = (text.trim().length > 0 || imageUri !== null) && !submitting;
+  const canSend = (text.trim().length > 0 || image !== null) && !submitting;
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -207,8 +258,9 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
-    setImageUri(result.assets[0].uri);
-  }, []);
+    imageItems.forEach((item) => removeImage(item.id));
+    addImage([result.assets[0]], 1);
+  }, [addImage, imageItems, removeImage]);
 
   const handleToggleEmoji = useCallback(() => {
     setPanel((p) => (p === 'emoji' ? 'none' : 'emoji'));
@@ -293,7 +345,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (
-      (!trimmed && !imageUri) ||
+      (!trimmed && !image) ||
       submitting ||
       submitInFlightRef.current
     ) {
@@ -303,40 +355,17 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
     setSubmitting(true);
     try {
       let images: string[] | undefined;
-      if (imageUri && uploadedImageRef.current?.uri === imageUri) {
-        images = [uploadedImageRef.current.url];
-      } else if (imageUri) {
-        try {
-          const fileName = imageUri.split('/').pop() ?? 'photo.jpg';
-          const contentType =
-            resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const prepared = await prepareChatImageForUpload({
-            uri: imageUri,
-            contentType,
-            filename: fileName,
-          });
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(prepared.filename),
-            contentType: prepared.contentType,
-            folder: 'posts',
-            fileUri: prepared.uri,
-          });
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            prepared.contentType,
-            prepared.uri,
-            presign.requiredHeaders,
-          );
-          images = [presign.fileUrl];
-          uploadedImageRef.current = { uri: imageUri, url: presign.fileUrl };
-        } catch (error) {
+      if (image) {
+        // 图在选中时就开始传了,这里只等它传完;失败的会补传一次。
+        const settled = await settleImage();
+        if (!settled.ok) {
           // 上传阶段失败：onSubmit 还没发生，父组件不会提示，这里兜底。
           Alert.alert(
             t('discover.commentInput.imageUploadFailedTitle', {
               defaultValue: '图片上传失败',
             }),
             getApiErrorMessage(
-              error,
+              settled.error,
               t('moment.commentFailedMessage', {
                 defaultValue: '网络异常，请稍后重试',
               }),
@@ -344,6 +373,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
           );
           return;
         }
+        images = settled.results;
       }
 
       try {
@@ -351,7 +381,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         await onSubmit(trimmed, replyTo?.id, images, mentionedUserIds);
         // onSubmit 成功后由父组件决定是否调用 onDismiss（一般会清掉 commentTarget）。
         setText('');
-        setImageUri(null);
+        if (image) removeImage(image.id);
         setMentionOccurrences([]);
         selectionRef.current = { start: 0, end: 0 };
       } catch {
@@ -361,7 +391,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [text, imageUri, submitting, replyTo, onSubmit, t, mentionOccurrences]);
+  }, [text, image, settleImage, removeImage, submitting, replyTo, onSubmit, t, mentionOccurrences]);
 
   const renderFriendRow = useCallback(
     ({ item }: { item: FriendProfile }) => (
@@ -394,19 +424,32 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         <Pressable style={s.backdrop} onPress={onDismiss} />
 
         {/* 已选图片预览 */}
-        {imageUri ? (
+        {image ? (
           <View
             style={[s.imagePreviewRow, { backgroundColor: colors.surface }]}
           >
             <View style={s.imagePreviewWrap}>
-              <Image
-                source={{ uri: imageUri }}
-                style={s.imagePreview}
-                contentFit="cover"
-              />
+              <View style={s.imagePreviewClip}>
+                <Image
+                  source={{ uri: image.asset.uri }}
+                  style={s.imagePreview}
+                  contentFit="cover"
+                />
+                {image.status === 'uploading' ? <NoteMediaUploadRing progressKey={image.id} /> : null}
+                {image.status === 'failed' ? (
+                  <Pressable
+                    style={[s.imageFailedOverlay, { backgroundColor: colors.overlay }]}
+                    onPress={() => retryImage(image.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.retry')}
+                  >
+                    <Ionicons name="refresh" size={20} color={colors.white} />
+                  </Pressable>
+                ) : null}
+              </View>
               <Pressable
                 style={[s.imageRemoveBtn, { backgroundColor: colors.text }]}
-                onPress={() => setImageUri(null)}
+                onPress={() => removeImage(image.id)}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.delete', { defaultValue: '删除' })}

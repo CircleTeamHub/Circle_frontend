@@ -37,7 +37,7 @@ test('comment composer supports image, mention, and emoji (Douyin parity)', () =
   assert.match(input, /name="image-outline"/);
   assert.match(input, /name="at"/);
   assert.match(input, /name="happy-outline"/);
-  // 图片：单选 → presign 上传 → onSubmit 带 images
+  // 图片：单选 → 选中即 presign 上传 → onSubmit 带 images
   assert.match(input, /launchImageLibraryAsync/);
   assert.match(input, /requestUploadPresign/);
   assert.match(input, /uploadLocalFileToPresignedUrl/);
@@ -51,7 +51,7 @@ test('comment composer supports image, mention, and emoji (Douyin parity)', () =
   assert.match(input, /insertMomentMention/);
   assert.match(input, /reconcileMomentMentionOccurrences/);
   // 纯图评论可发送（文字或图片其一即可）
-  assert.match(input, /text\.trim\(\)\.length > 0 \|\| imageUri !== null/);
+  assert.match(input, /text\.trim\(\)\.length > 0 \|\| image !== null/);
 });
 
 test('comment images render in detail rows and tag the feed preview', () => {

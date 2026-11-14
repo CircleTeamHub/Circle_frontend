@@ -1,5 +1,53 @@
 import { useCallback, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  requestUploadPresign,
+  resolveUploadContentType,
+  sanitizeUploadFilename,
+  uploadLocalFileToPresignedUrl,
+} from '@/services/api/upload';
+import {
+  useEagerMediaUploads,
+  type EagerMediaItem,
+} from './use-eager-media-uploads';
+
+/**
+ * 头像选中就开始传(见 useEagerMediaUploads),不等填完名称、简介点提交。
+ * 相册原图动辄几 MB,先和聊天、动态一样压到长边 2048。
+ */
+async function uploadCircleAvatar(asset: ImagePicker.ImagePickerAsset, progressKey: string): Promise<string> {
+  const fileName = asset.fileName || asset.uri.split('/').pop() || 'avatar.jpg';
+  const contentType =
+    resolveUploadContentType({ mimeType: asset.mimeType, fileName }) ?? 'image/jpeg';
+  const prepared = await prepareChatImageForUpload({
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+    contentType,
+    filename: fileName,
+  });
+  const presign = await requestUploadPresign({
+    filename: sanitizeUploadFilename(prepared.filename),
+    contentType: prepared.contentType,
+    folder: 'avatars',
+    fileUri: prepared.uri,
+  });
+  await uploadLocalFileToPresignedUrl(
+    presign.uploadUrl,
+    prepared.contentType,
+    prepared.uri,
+    presign.requiredHeaders,
+    undefined,
+    { progressKey, foreground: true },
+  );
+  return presign.fileUrl;
+}
+
+function reportCircleAvatarUploadFailure(error: unknown) {
+  reportHandledFailure('circle', 'avatarUpload', error);
+}
 
 // Create + Edit 圈子流程共享的表单状态。两个屏幕之前各自维护 ~13 个 useState +
 // ~7 个 handler，结构基本一样（见 PR 中 #52）。这里收敛一遍。
@@ -12,7 +60,7 @@ export interface CircleFormState {
   // avatarUri 是当前用于展示的 URI —— Edit 初始为服务器 URL，Create 为 null。
   avatarUri: string | null;
   // pickedAvatarUri 是用户本次从相册选的本地 file://，未选则为 null。
-  // 提交时 only-if pickedAvatarUri != null 才走上传流程。
+  // 选中即开始上传；提交时 only-if pickedAvatarUri != null 才等 settleAvatar()。
   pickedAvatarUri: string | null;
   rules: string;
   // 标签 UI 已从表单移除（与主题分类重复）；字段保留用于 Edit 的 hydrate/提交
@@ -57,12 +105,28 @@ export interface CircleFormApi extends CircleFormState {
   toggleCategory: (value: string) => void;
   handleAddCustomCategory: () => void;
   handlePickAvatar: () => Promise<void>;
+  /** 本次所选头像的上传状态(缩略图上画进度环 / 失败重试),没选为 null。 */
+  avatarUpload: EagerMediaItem | null;
+  retryAvatarUpload: () => void;
+  /** 等所选头像传完(失败补传一次):成功给 URL,仍失败给 null。 */
+  settleAvatar: () => Promise<string | null>;
   // Edit 用：从服务器载入数据后一次性铺到表单上。
   hydrate: (initial: Partial<CircleFormState>) => void;
 }
 
 export function useCircleForm(): CircleFormApi {
   const [state, setState] = useState<CircleFormState>(INITIAL_FORM_STATE);
+  const {
+    items: avatarItems,
+    add: addAvatar,
+    remove: removeAvatar,
+    retry: retryAvatar,
+    settle: settleAvatarUpload,
+  } = useEagerMediaUploads({
+    upload: uploadCircleAvatar,
+    onError: reportCircleAvatarUploadFailure,
+  });
+  const avatarUpload = avatarItems[0] ?? null;
 
   const setName = useCallback(
     (value: string) => setState((s) => ({ ...s, name: value })),
@@ -126,9 +190,20 @@ export function useCircleForm(): CircleFormApi {
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
-    const uri = result.assets[0].uri;
-    setState((s) => ({ ...s, avatarUri: uri, pickedAvatarUri: uri }));
-  }, []);
+    const asset = result.assets[0];
+    setState((s) => ({ ...s, avatarUri: asset.uri, pickedAvatarUri: asset.uri }));
+    avatarItems.forEach((item) => removeAvatar(item.id));
+    addAvatar([asset], 1);
+  }, [addAvatar, avatarItems, removeAvatar]);
+
+  const retryAvatarUpload = useCallback(() => {
+    if (avatarUpload) retryAvatar(avatarUpload.id);
+  }, [avatarUpload, retryAvatar]);
+
+  const settleAvatar = useCallback(async () => {
+    const settled = await settleAvatarUpload();
+    return settled.ok ? settled.results[0] ?? null : null;
+  }, [settleAvatarUpload]);
 
   const setJoinVipRestriction = useCallback(
     (value: number | null) =>
@@ -160,6 +235,9 @@ export function useCircleForm(): CircleFormApi {
     toggleCategory,
     handleAddCustomCategory,
     handlePickAvatar,
+    avatarUpload,
+    retryAvatarUpload,
+    settleAvatar,
     hydrate,
   };
 }
