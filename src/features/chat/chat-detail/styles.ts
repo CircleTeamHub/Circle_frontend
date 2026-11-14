@@ -14,20 +14,9 @@ export const chatDetailStyles = StyleSheet.create({
   // 「隐藏聊天头像」把整列去掉，气泡贴边；名字要跟着回到 0，否则名字缩进、
   // 它自己的气泡贴边，两者对不上。合并头像不走这条 —— 那时占位还在。
   senderLabelWithoutAvatarColumn: { marginLeft: 0 },
-  header: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    gap: 12,
-  },
-  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerMeta: { flex: 1, gap: 2 },
-  headerName: { fontSize: 16, fontWeight: '600' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
-  headerStatusText: { ...Typography.small },
   chatBody: { flex: 1 },
+  // 顶栏和横幅悬浮在消息上(与底部 composerDock 对称),消息从它们后面滑过。
+  topDock: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 },
   composerDock: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3 },
   messageArea: {
     flex: 1,
@@ -77,16 +66,23 @@ export const chatDetailStyles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
   },
+  // 悬浮在顶栏下的玻璃小胶囊,按文字收缩居中;过长时在两侧留白内换行。
   disappearingMessageNotice: {
+    alignSelf: 'center',
+    marginTop: Spacing.xs,
+    marginHorizontal: Spacing.md,
+  },
+  disappearingMessageNoticePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderCurve: 'continuous',
   },
   disappearingMessageNoticeText: {
     ...Typography.small,
-    flex: 1,
+    flexShrink: 1,
   },
   targetMessageHighlight: {
     borderRadius: Radius.lg,

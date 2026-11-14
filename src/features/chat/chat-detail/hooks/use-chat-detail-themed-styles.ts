@@ -4,16 +4,14 @@ import { type ThemeColors } from '@/theme';
 export interface ChatDetailThemedStylesParams {
   colors: ThemeColors;
   backgroundStyle: { backgroundColor: string };
-  statusColor: string;
 }
 
 /**
- * 随主题、聊天背景与对端在线状态变化的样式(静态部分在 chat-detail/styles)。
+ * 随主题与聊天背景变化的样式(静态部分在 chat-detail/styles)。
  */
 export function useChatDetailThemedStyles({
   colors,
   backgroundStyle,
-  statusColor,
 }: ChatDetailThemedStylesParams) {
   const d = useMemo(() => ({
     container: { flex: 1, backgroundColor: colors.background },
@@ -23,11 +21,7 @@ export function useChatDetailThemedStyles({
       borderColor: colors.surfaceBorder,
     },
     unreadJumpText: { color: colors.success },
-    headerName: { color: colors.text },
-    onlineDot: { backgroundColor: statusColor },
-    headerStatusText: { color: statusColor },
     inputBar: { backgroundColor: 'transparent' },
-    disappearingMessageNotice: { backgroundColor: colors.primaryLight },
     disappearingMessageNoticeText: { color: colors.text },
     silencedBar: { backgroundColor: colors.surface },
     silencedBarText: { color: colors.text },
@@ -44,7 +38,7 @@ export function useChatDetailThemedStyles({
       borderColor: colors.primary,
     },
     targetMessageHighlight: { backgroundColor: colors.primaryLight },
-  }), [backgroundStyle.backgroundColor, colors, statusColor]);
+  }), [backgroundStyle.backgroundColor, colors]);
 
   return {
     d,
