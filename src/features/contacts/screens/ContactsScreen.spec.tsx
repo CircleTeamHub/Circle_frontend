@@ -32,7 +32,7 @@ jest.mock('@/theme', () => ({
   Typography: { title: {}, caption: {}, tiny: {}, bodyRegular: {} },
   useTheme: () => ({
     colors: {
-      background: '#fff', text: '#111', textSecondary: '#666', primary: '#00f', white: '#fff',
+      background: '#fff', text: '#111', textSecondary: '#666', primary: '#00f', white: '#fff', indexBubble: '#ccc',
     },
   }),
 }));
@@ -136,8 +136,16 @@ function touchAt(letterIndex: number, pageOffset = 400) {
   return { nativeEvent: { locationY, pageY: pageOffset + locationY } };
 }
 
-// 浮层只是给手指的视觉反馈,对读屏隐藏(读屏用户聚焦字母本身就会读出来)。
-const overlay = () => screen.queryByTestId('contacts-index-overlay', { includeHiddenElements: true });
+// 气泡只是给手指的视觉反馈,对读屏隐藏(读屏用户聚焦字母本身就会读出来)。
+const bubble = () => screen.queryByTestId('contacts-index-bubble', { includeHiddenElements: true });
+
+/** 气泡贴在索引条左边,竖直方向的中心对准当前字母的中心。 */
+function expectBubbleBeside(letterIndex: number, letter: string) {
+  const element = bubble();
+  expect(element).toHaveTextContent(letter);
+  const { top, height } = StyleSheet.flatten(element?.props.style) as { top: number; height: number };
+  expect(top + height / 2).toBe(letterIndex * LETTER_HEIGHT + LETTER_HEIGHT / 2);
+}
 
 function heightOf(testID: string) {
   return StyleSheet.flatten(screen.getByTestId(testID).props.style).height as number;
@@ -174,7 +182,7 @@ test('the index lists only letters that have contacts, each readable by screen r
   expect(letters[0].props.accessibilityHint).toBe('contacts.indexJumpHint');
 });
 
-test('tapping a letter lands its section header at the top of the list and flashes the letter', async () => {
+test('tapping a letter lands its section header at the top of the list and pops a bubble beside it', async () => {
   await renderContacts();
   const bar = screen.getByTestId('contacts-index-bar');
 
@@ -184,11 +192,11 @@ test('tapping a letter lands its section header at the top of the list and flash
   expect(scrollTo).toHaveBeenCalledTimes(1);
   expect(scrollTo).toHaveBeenLastCalledWith({ y: sectionTop(3), animated: false });
   expect(sectionTop(3)).toBe(LIST_HEADER_HEIGHT + 3 * 32 + 4 * 68);
-  expect(overlay()).toHaveTextContent('Z');
+  expectBubbleBeside(3, 'Z');
   expect(Haptics.selectionAsync).toHaveBeenCalledTimes(1);
 
   fireEvent(bar, 'responderRelease', touchAt(3));
-  expect(overlay()).toBeNull();
+  expect(bubble()).toBeNull();
 });
 
 test('sliding along the index jumps once per letter crossed and clamps at both ends', async () => {
@@ -205,7 +213,7 @@ test('sliding along the index jumps once per letter crossed and clamps at both e
   moveTo(4); // 仍在 A 里,不重复跳
   moveTo(LETTER_HEIGHT); // B
   moveTo(LETTER_HEIGHT * 2); // C
-  expect(overlay()).toHaveTextContent('C');
+  expectBubbleBeside(2, 'C');
   moveTo(1000); // 拖过底端 → 停在最后一个 #
   moveTo(-1000); // 拖过顶端 → 回到 A
 
@@ -217,11 +225,11 @@ test('sliding along the index jumps once per letter crossed and clamps at both e
     { y: sectionTop(0), animated: false },
   ]);
   expect(Haptics.selectionAsync).toHaveBeenCalledTimes(5);
-  expect(overlay()).toHaveTextContent('A');
+  expectBubbleBeside(0, 'A');
 
-  // 被系统手势抢走也要收起浮层。
+  // 被系统手势抢走也要收起气泡。
   fireEvent(bar, 'responderTerminate', start);
-  expect(overlay()).toBeNull();
+  expect(bubble()).toBeNull();
 });
 
 test('a screen reader double tap on a letter jumps to that section', async () => {
