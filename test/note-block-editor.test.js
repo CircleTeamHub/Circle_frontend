@@ -280,3 +280,16 @@ test('note text editor toolbar offers only paragraph and list, and the composer 
   assert.match(screen, /\n\s*fitContent\r?\n/);
   assert.doesNotMatch(screen, /TEXT_EDITOR_RESIZE_HANDLE_HEIGHT|textEditorFrame|resizeTextBlock/);
 });
+
+// 安卓真机反馈「文字栏点了没法输入」：Expo DOM 的页面模板给 #root 写了
+// `display: flex`（默认横排）。输入条形态的根节点不再 position:fixed 铺满视口，
+// 而是 #root 横排里的一个 flex 子项；不撑开就收缩成内容宽度——空文档时只剩
+// 左右内边距加光标约 22px，点条上其余位置都落在 #root 上，可编辑区拿不到焦点，
+// 键盘不弹、打字无效（模拟器 CDP 实测 .bn-editor 宽 22px）。
+test('fit-content DOM editor root stretches across the Expo DOM #root flex row', () => {
+  const dom = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+  const rootStyle = dom.match(/ref=\{rootRef\}[\s\S]*?fitsContent\s*\?[^{]*\{([^{}]*)\}/);
+  assert.ok(rootStyle, 'fit-content root style object not found');
+  assert.match(rootStyle[1], /\bflex:\s*1\b/);
+  assert.match(rootStyle[1], /\bminWidth:\s*0\b/);
+});
