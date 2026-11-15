@@ -18,6 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
@@ -286,7 +289,8 @@ export default function PostSignupsScreen() {
   );
 
   // 报名行按消息列表的样子展示：和该报名者的单聊（若已有）的最近一条消息、时间与未读。
-  const chatConversations = useChatStore((state) => state.conversations);
+  // 看不见时(切走的 tab、上面压着别的页)不跟着每条消息重算;露出来时按最新值取。
+  const chatConversations = useStoreWhileActive(useChatStore, selectConversations, useScreenLive());
   const chatBySigner = useMemo(() => {
     const signerIds = new Set(signups.map((signer) => signer.userId));
     const bySigner = new Map<string, Conversation>();

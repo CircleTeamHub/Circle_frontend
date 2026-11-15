@@ -11,6 +11,9 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useDeferredContent } from '@/hooks/use-deferred-content';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useGroupEditor } from '@/features/messages/hooks/use-group-editor';
 import { GroupEditForm } from '@/features/messages/components/group-edit-form';
@@ -52,7 +55,8 @@ export default function GroupEditScreen() {
   const leaveAllowedRef = useRef(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ConversationMemberFilter>('all');
-  const rawConversations = useChatStore((state) => state.conversations);
+  // 看不见时(切走的 tab、上面压着别的页)不跟着每条消息重算;露出来时按最新值取。
+  const rawConversations = useStoreWhileActive(useChatStore, selectConversations, useScreenLive());
   const conversations = useMemo(() => rawConversations.map(mapChatConversationToUI), [rawConversations]);
   const selectedIds = useMemo(() => new Set(editor.conversationIDs), [editor.conversationIDs]);
   const results = useMemo(

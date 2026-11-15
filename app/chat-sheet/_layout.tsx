@@ -16,8 +16,6 @@ export default function ChatSheetLayout() {
     <Stack
       screenLayout={probeScreenLayout}
       screenOptions={{
-        // 看不见的页面冻结渲染,和其他栈一致。
-        freezeOnBlur: true,
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
       }}

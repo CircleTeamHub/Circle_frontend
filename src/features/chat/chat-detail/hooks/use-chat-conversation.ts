@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import { useChatStore } from '@/chat-core/store';
-import type { ChatConversationDto } from '@/chat-core/protocol';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
+import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
 // 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
@@ -61,7 +63,10 @@ export function useChatConversation({
       state.conversations.find((candidate) => candidate.id === conversationID),
     [conversationID],
   );
-  const conversation = useChatStore(selectConversation);
+  // 看不见时（切到别的 tab、上面压着别的页）不跟着本会话的每条消息、回执重渲染，露出来时按最新值取。
+  // 已读上报、活跃会话标记按焦点或直接读 store，不受影响。
+  const live = useScreenLive();
+  const conversation = useStoreWhileActive(useChatStore, selectConversation, live);
   const routeInitialUnreadCount = parseNonNegativeRouteNumber(
     params.initialUnreadCount,
   );
@@ -71,12 +76,14 @@ export function useChatConversation({
   // The conversation row and the local read-watermark map are updated through
   // different async paths. Capture the higher value once at entry so a stale
   // row cannot make messages already read on this device look unread again.
-  const localReadHeight = useChatStore(
-    (state) =>
+  const selectLocalReadHeight = useCallback(
+    (state: { readWatermarks: Record<string, Record<string, number>> }) =>
       (currentUserID && conversationID
         ? state.readWatermarks[conversationID]?.[currentUserID]
         : 0) ?? 0,
+    [conversationID, currentUserID],
   );
+  const localReadHeight = useStoreWhileActive(useChatStore, selectLocalReadHeight, live);
   const entryUnreadCountRef = useRef<number | null>(routeInitialUnreadCount);
   // 路由带了水位就只信它:消息列表在点击前已取好 max(会话 readHeight, 本机水位),
   // 随后才标已读 —— 首帧这里读到的本机水位已被推到最新一条。再和它取 max,入口水位
@@ -179,21 +186,27 @@ export function useChatConversation({
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
   // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
-  const conversationMessages = useChatStore(
-    (state) => state.messagesByConversation[conversationID],
+  const selectConversationMessages = useCallback(
+    (state: { messagesByConversation: Record<string, ChatMessageDto[]> }) =>
+      state.messagesByConversation[conversationID],
+    [conversationID],
   );
+  const conversationMessages = useStoreWhileActive(useChatStore, selectConversationMessages, live);
+  const peerWatermarkID = params.conversationType !== 'group' ? sourceID : '';
   // 对端已读水位(单聊「已读」标记):服务端 chat:read 广播驱动。
-  const peerReadHeight = useChatStore((state) =>
-    params.conversationType !== 'group' && sourceID
-      ? (state.readWatermarks[conversationID]?.[sourceID] ?? 0)
-      : 0,
+  const selectPeerReadHeight = useCallback(
+    (state: { readWatermarks: Record<string, Record<string, number>> }) =>
+      peerWatermarkID ? (state.readWatermarks[conversationID]?.[peerWatermarkID] ?? 0) : 0,
+    [conversationID, peerWatermarkID],
   );
+  const peerReadHeight = useStoreWhileActive(useChatStore, selectPeerReadHeight, live);
   // 对端送达水位(单聊「已送达」标记,G-07):chat:delivered 广播驱动。
-  const peerDeliveredHeight = useChatStore((state) =>
-    params.conversationType !== 'group' && sourceID
-      ? (state.deliveredWatermarks[conversationID]?.[sourceID] ?? 0)
-      : 0,
+  const selectPeerDeliveredHeight = useCallback(
+    (state: { deliveredWatermarks: Record<string, Record<string, number>> }) =>
+      peerWatermarkID ? (state.deliveredWatermarks[conversationID]?.[peerWatermarkID] ?? 0) : 0,
+    [conversationID, peerWatermarkID],
   );
+  const peerDeliveredHeight = useStoreWhileActive(useChatStore, selectPeerDeliveredHeight, live);
   const paramTitle =
     typeof params.title === 'string'
       ? params.title

@@ -11,7 +11,8 @@ test('chat info screen uses real conversation state instead of local placeholder
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /useChatStore\(\(state\) => state\.conversations\)/);
+  // 看不见时停订阅(页面不冻结,见 navigation-no-freeze-on-blur.test.js)。
+  assert.match(source, /useStoreWhileActive\(useChatStore, selectConversations, useScreenLive\(\)\)/);
   assert.doesNotMatch(source, /useIMStore/);
   assert.doesNotMatch(source, /@\/im\//);
   assert.doesNotMatch(source, /@openim\/rn-client-sdk/);

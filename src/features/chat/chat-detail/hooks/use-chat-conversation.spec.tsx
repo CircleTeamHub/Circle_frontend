@@ -5,8 +5,12 @@ import { useChatConversation } from './use-chat-conversation';
 
 let mockState: Record<string, unknown>;
 jest.mock('@/chat-core/store', () => ({
-  useChatStore: (selector: (state: unknown) => unknown) => selector(mockState),
+  useChatStore: Object.assign((selector: (state: unknown) => unknown) => selector(mockState), {
+    getState: () => mockState,
+    subscribe: () => () => {},
+  }),
 }));
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
 jest.mock('@/chat-core/client', () => ({
   ensureCircleConversation: jest.fn(),
   ensureDirectConversation: jest.fn(),

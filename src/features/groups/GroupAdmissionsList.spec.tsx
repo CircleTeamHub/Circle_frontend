@@ -44,7 +44,13 @@ jest.mock('react-i18next', () => {
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: Object.assign((select: (s: unknown) => unknown) => select(mockAuth), { getState: () => mockAuth }),
 }));
-jest.mock('@/chat-core/store', () => ({ useChatStore: (select: (s: unknown) => unknown) => select({ conversations: mockConversations }) }));
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
+jest.mock('@/chat-core/store', () => {
+  const getState = () => ({ conversations: mockConversations });
+  return {
+    useChatStore: Object.assign((select: (s: unknown) => unknown) => select(getState()), { getState, subscribe: () => () => {} }),
+  };
+});
 // 「已加入」走 ensureChatConversations(有新鲜快照就复用,否则整表拉)。
 jest.mock('@/chat-core/api', () => ({ ensureChatConversations: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: jest.fn() }));

@@ -75,6 +75,8 @@ jest.mock('@/hooks/use-focus-reload-gate', () => {
   const gate = { shouldSkip: () => false, markLoaded: () => undefined };
   return { useFocusReloadGate: () => gate };
 });
+let mockFocused = true;
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
@@ -99,6 +101,7 @@ jest.mock('@/features/discover/components/circle-shortcut-order-sheet', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocused = true;
   mockListeners.clear();
   mockDiscover = {
     plazaPosts: [{ id: 'p1' }],
@@ -184,3 +187,27 @@ test('cached posts render on the next frame, without flashing the empty state', 
   expect(screen.queryByText('暂无进行中的动态')).toBeNull();
   expect(await screen.findByText('post p1')).toBeTruthy();
 });
+
+// 导航器不冻结看不见的页面：发现 tab 切走后，依赖变了（如在「我的」里升级会员）也不能当场
+// 拉广场 —— 那会顺带标记「已看过」、清掉飞机红点，而用户根本没看到。回到本页再拉。
+test('a feed out of sight waits until it is shown again before refreshing (and marking seen)', async () => {
+  const view = render(<PlazaFeed />);
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(1);
+
+  mockFocused = false;
+  view.rerender(<PlazaFeed />);
+  act(() => setDiscover({ selectedCircleId: 'c1' }));
+  act(() => setDiscover({ selectedCircleId: 'c2' }));
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(1);
+
+  mockFocused = true;
+  view.rerender(<PlazaFeed />);
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(2);
+  view.rerender(<PlazaFeed />);
+  expect(refreshCirclePlazaUpdate).toHaveBeenCalledTimes(2);
+});
+

@@ -12,7 +12,6 @@ import {
 } from '@/components/app/floating-tab-bar';
 import { openCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 import { useTabBarBridgeStore } from '@/stores/tabBarBridgeStore';
-import { probeNavigatorLayout } from '@/observability/screen-probe';
 
 // 原生端：tab bar 由各 tab 首页自己渲染（TabRootScreen），这里只把导航器
 // props 发布出去，自身不画任何东西。深层页面不渲染 bar，因此无需显隐开关。
@@ -40,7 +39,6 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenLayout={probeNavigatorLayout}
       tabBar={(props) =>
         Platform.OS === 'web' ? (
           <FloatingTabBar tabProps={props} hidden={hideTabBar} />
@@ -49,8 +47,6 @@ export default function TabLayout() {
         )
       }
       screenOptions={{
-        // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
-        freezeOnBlur: true,
         headerShown: false,
       }}
     >

@@ -16,7 +16,6 @@ const TITLES: Readonly<Record<string, (read: Read) => readonly (string | undefin
     read('components'),
   ],
   'render:slowScreen': (read) => ['页面首次渲染慢', read('page'), unit(read('durationMs'), ' ms')],
-  'navigation:focusedScreenFrozen': (read) => ['页面切回来没有解冻', read('page')],
   'navigation:duplicateTabs': (read) => ['根栈里出现多份 (tabs)', unit(read('routeCount'), ' 份')],
   'noteSave:contentDropped': (read) => [
     '笔记保存后正文被丢掉',

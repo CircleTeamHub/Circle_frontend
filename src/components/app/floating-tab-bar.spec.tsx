@@ -156,3 +156,13 @@ it('honours the circle notification master switch', () => {
   renderBar();
   expect(screen.queryByTestId(DOT)).toBeNull();
 });
+
+// 原生端各 tab 首页各挂一份 bar：本 tab 没被选中的那几份不跟着未读数重渲染，选中时按最新值补上。
+it('an inactive bar ignores badge changes until it is active again', () => {
+  const view = render(<FloatingTabBar tabProps={tabProps()} hidden={false} active={false} />);
+  act(() => useTabBadgeStore.getState().setCircleUnread(3));
+  expect(screen.queryByText('3')).toBeNull();
+
+  view.rerender(<FloatingTabBar tabProps={tabProps()} hidden={false} active />);
+  expect(screen.getByText('3')).toBeTruthy();
+});

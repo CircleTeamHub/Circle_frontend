@@ -1,12 +1,10 @@
 import React from 'react';
 import { AppState, Text } from 'react-native';
-import { act, renderAsync } from '@testing-library/react-native';
+import { renderAsync } from '@testing-library/react-native';
 import { Freeze } from 'react-freeze';
 import {
   checkNavigationShape,
   countRouteCopies,
-  FROZEN_AFTER_FOCUS_MS,
-  probeNavigatorLayout,
   probeScreenLayout,
   resetScreenProbeReports,
   SLOW_SCREEN_MS,
@@ -27,28 +25,26 @@ jest.mock('./http-diagnostics', () => ({
   diagnosticNow: () => mockNow,
 }));
 
-function fakeNavigation() {
-  const listeners = new Set<() => void>();
-  return {
-    addListener: (_type: 'focus', listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    emitFocus: () => listeners.forEach((listener) => listener()),
-  };
+// 探针在模块加载时注册的前后台监听（RN 的 jest 桩把 addEventListener 记成 jest.fn）。
+const appStateCall = jest.mocked(AppState.addEventListener).mock.calls.find(([type]) => type === 'change');
+const emitAppState = appStateCall?.[1] as (state: string) => void;
+
+const navigationIn = (stack: string | undefined) => ({ getId: () => stack });
+
+function SlowContent(): React.ReactElement {
+  mockNow += SLOW_SCREEN_MS + 200;
+  return <Text>slow</Text>;
 }
 
-/** 冻结与否由外层决定，与 react-native-screens 的 freezeOnBlur 相同：探针在冻结边界里面。 */
-function Screen({ frozen, navigation }: { frozen: boolean; navigation: ReturnType<typeof fakeNavigation> }) {
-  return (
-    <Freeze freeze={frozen}>
-      {probeNavigatorLayout({ route: { name: 'messages' }, navigation, children: <Text>messages</Text> })}
-    </Freeze>
+/** 冷启动的第一个页面不计，先用一个页面占掉它。 */
+async function startUp(): Promise<void> {
+  const startup = await renderAsync(
+    probeScreenLayout({ route: { name: 'index' }, navigation: navigationIn('/(tabs)/messages'), children: <Text>home</Text> }),
   );
+  await startup.unmountAsync();
 }
 
 beforeEach(() => {
-  jest.useFakeTimers();
   // RN 的 jest 桩里 currentState 是个 jest.fn，不是 'active'。
   (AppState as unknown as { currentState: string }).currentState = 'active';
   mockNow = 0;
@@ -57,106 +53,79 @@ beforeEach(() => {
   resetScreenProbeReports();
 });
 
-afterEach(() => {
-  jest.useRealTimers();
-});
-
-async function advance(ms: number) {
-  await act(async () => {
-    mockNow += ms;
-    jest.advanceTimersByTime(ms);
-  });
-}
-
-test('a screen that gets focus but stays frozen is reported once', async () => {
-  const navigation = fakeNavigation();
-  const { rerenderAsync } = await renderAsync(<Screen frozen={false} navigation={navigation} />);
-  await rerenderAsync(<Screen frozen navigation={navigation} />);
-
-  await act(async () => navigation.emitFocus());
-  await advance(FROZEN_AFTER_FOCUS_MS);
-
-  expect(mockReportHandledFailure).toHaveBeenCalledTimes(1);
-  expect(mockReportHandledFailure).toHaveBeenCalledWith(
-    'navigation',
-    'focusedScreenFrozen',
-    expect.any(Error),
-    { page: 'messages', code: 'messages' },
-  );
-
-  await act(async () => navigation.emitFocus());
-  await advance(FROZEN_AFTER_FOCUS_MS);
-  expect(mockReportHandledFailure).toHaveBeenCalledTimes(1);
-});
-
-test('a screen that thaws when it gets focus is fine', async () => {
-  const navigation = fakeNavigation();
-  const { rerenderAsync } = await renderAsync(<Screen frozen navigation={navigation} />);
-
-  await act(async () => navigation.emitFocus());
-  await rerenderAsync(<Screen frozen={false} navigation={navigation} />);
-  await advance(FROZEN_AFTER_FOCUS_MS);
-
-  expect(mockReportHandledFailure).not.toHaveBeenCalled();
-});
-
-test('a frozen screen is not reported once the app has left the foreground', async () => {
-  const navigation = fakeNavigation();
-  const { rerenderAsync } = await renderAsync(<Screen frozen={false} navigation={navigation} />);
-  await rerenderAsync(<Screen frozen navigation={navigation} />);
-
-  await act(async () => navigation.emitFocus());
-  (AppState as unknown as { currentState: string }).currentState = 'background';
-  await advance(FROZEN_AFTER_FOCUS_MS);
-
-  expect(mockReportHandledFailure).not.toHaveBeenCalled();
-});
-
-test('a check timer that fires far too late means the JS thread stalled, which is not a freeze', async () => {
-  const navigation = fakeNavigation();
-  const { rerenderAsync } = await renderAsync(<Screen frozen={false} navigation={navigation} />);
-  await rerenderAsync(<Screen frozen navigation={navigation} />);
-
-  await act(async () => navigation.emitFocus());
-  mockNow += 5000;
-  await advance(FROZEN_AFTER_FOCUS_MS);
-
-  expect(mockReportHandledFailure).not.toHaveBeenCalled();
-});
-
-function SlowContent(): React.ReactElement {
-  mockNow += SLOW_SCREEN_MS + 200;
-  return <Text>slow</Text>;
-}
-
 test('the first page of a cold start is startup cost, not a slow page', async () => {
-  const navigation = fakeNavigation();
-  await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation, children: <SlowContent /> }));
+  await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation: navigationIn('/(tabs)/messages'), children: <SlowContent /> }));
 
   expect(mockRecordMetric).not.toHaveBeenCalled();
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
 });
 
-test('a page whose first commit takes over a second is recorded and reported by route template', async () => {
-  const navigation = fakeNavigation();
-  const startup = await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation, children: <Text>home</Text> }));
-  await startup.unmountAsync();
-  await renderAsync(probeScreenLayout({ route: { name: 'circle/[id]' }, navigation, children: <SlowContent /> }));
+test('a page whose first commit takes over a second is recorded and reported by stack and route template', async () => {
+  await startUp();
+  await renderAsync(
+    probeScreenLayout({ route: { name: 'circle/[id]' }, navigation: navigationIn('/(tabs)/explore'), children: <SlowContent /> }),
+  );
 
   expect(mockRecordMetric).toHaveBeenCalledWith('screen.first_commit.duration', SLOW_SCREEN_MS + 200);
   expect(mockReportHandledFailure).toHaveBeenCalledWith('render', 'slowScreen', expect.any(Error), {
-    page: 'circle/[id]',
+    page: '/(tabs)/explore/circle/[id]',
     durationMs: SLOW_SCREEN_MS + 200,
     // fingerprint 只收 [A-Za-z0-9_.-]。
-    code: 'circle.id',
+    code: 'tabs.explore.circle.id',
   });
 });
 
-test('a navigator wrapper does not time its first commit (its pages do)', async () => {
-  const navigation = fakeNavigation();
-  await renderAsync(probeNavigatorLayout({ route: { name: '(tabs)' }, navigation, children: <SlowContent /> }));
+test('every tab has a home page called index; each one is its own page (REACT-NATIVE-D2 only said "index")', async () => {
+  await startUp();
+  for (const stack of ['/(tabs)/explore', '/(tabs)/profile']) {
+    await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation: navigationIn(stack), children: <SlowContent /> }));
+  }
 
+  expect(mockReportHandledFailure.mock.calls.map(([, , , context]) => context.page)).toEqual([
+    '/(tabs)/explore/index',
+    '/(tabs)/profile/index',
+  ]);
+});
+
+test('a render that straddles a trip to the background is not timed', async () => {
+  await startUp();
+  emitAppState('background');
+  mockNow += 5000;
+  emitAppState('active');
+  function SuspendedMidRender(): React.ReactElement {
+    // iOS 挂起了 JS：回前台才接着渲染、提交。
+    emitAppState('background');
+    mockNow += 26_000;
+    emitAppState('active');
+    return <Text>late</Text>;
+  }
+  await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation: navigationIn('/(tabs)/explore'), children: <SuspendedMidRender /> }));
   expect(mockRecordMetric).not.toHaveBeenCalled();
+
+  // 渲染开始之前的那次后台不算：照常计时。
+  await renderAsync(probeScreenLayout({ route: { name: 'note-ranking' }, navigation: navigationIn('/(tabs)/explore'), children: <SlowContent /> }));
+  expect(mockRecordMetric).toHaveBeenCalledWith('screen.first_commit.duration', SLOW_SCREEN_MS + 200);
+});
+
+test('a page hidden by Suspense and shown again is not timed again (REACT-NATIVE-D2)', async () => {
+  const navigation = navigationIn('/(tabs)/explore');
+  const page = (name: string, hidden: boolean) => (
+    <Freeze freeze={hidden}>{probeScreenLayout({ route: { name }, navigation, children: <Text>{name}</Text> })}</Freeze>
+  );
+  // 重新显示时 React 会重跑 layout effect；冷启动的第一个页面也不能补量（量的会是「冷启动到现在」）。
+  const startup = await renderAsync(page('home', false));
+  await startup.rerenderAsync(page('home', true));
+  mockNow += 26_000;
+  await startup.rerenderAsync(page('home', false));
+  expect(mockRecordMetric).not.toHaveBeenCalled();
+
+  const explore = await renderAsync(page('index', false));
+  expect(mockRecordMetric).toHaveBeenCalledTimes(1);
+  await explore.rerenderAsync(page('index', true));
+  mockNow += 26_000;
+  await explore.rerenderAsync(page('index', false));
+
+  expect(mockRecordMetric).toHaveBeenCalledTimes(1);
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
 });
 

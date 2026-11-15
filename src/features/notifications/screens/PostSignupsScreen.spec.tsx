@@ -75,9 +75,16 @@ jest.mock('@/components/ui/badge', () => {
   return { Badge: ({ count }: { count: number }) => <Text testID="unread-badge">{count}</Text> };
 });
 let mockChatConversations: { id: string; type: string; peer?: { id: string }; preview: string; unreadCount: number }[] = [];
-jest.mock('@/chat-core/store', () => ({
-  useChatStore: (select: (state: { conversations: unknown[] }) => unknown) => select({ conversations: mockChatConversations }),
-}));
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
+jest.mock('@/chat-core/store', () => {
+  const getState = () => ({ conversations: mockChatConversations });
+  return {
+    useChatStore: Object.assign((select: (state: { conversations: unknown[] }) => unknown) => select(getState()), {
+      getState,
+      subscribe: () => () => {},
+    }),
+  };
+});
 jest.mock('@/chat-core/mappers', () => ({
   mapChatConversationToUI: (dto: { id: string; preview: string; unreadCount: number }) => ({
     id: dto.id, message: dto.preview, time: '10:30', unreadCount: dto.unreadCount,

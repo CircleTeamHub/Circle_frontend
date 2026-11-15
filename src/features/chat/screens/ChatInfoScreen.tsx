@@ -48,6 +48,9 @@ import {
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   type GroupRole,
@@ -298,7 +301,8 @@ export default function ChatInfoScreen() {
   });
   const currentConversationIDRef = useRef('');
   const [optimisticConversationState, setOptimisticConversationState] = useState<OptimisticConversationState>({});
-  const conversations = useChatStore((state) => state.conversations);
+  // 看不见时(切走的 tab、上面压着别的页)不跟着每条消息重算;露出来时按最新值取。
+  const conversations = useStoreWhileActive(useChatStore, selectConversations, useScreenLive());
 
   // 自研栈 id 就是后端 UUID(会话列表/联系人/资料页统一),不再需要 OpenIM
   // 去连字符 hex 与 UUID 的互转;单聊按 peer.id、群聊按 circleId 匹配会话。
