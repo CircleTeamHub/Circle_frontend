@@ -112,6 +112,8 @@ jest.mock('expo-router', () => {
 
 let mockFocused = true;
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockFocused }));
+// 页面在前台 = 订阅着；测试里与 isFocused 同步。
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => mockFocused }));
 jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({ t: mockT, i18n: { language: 'zh' } }),
@@ -407,6 +409,27 @@ test('mounts a direct chat, shows the cached history and loads the focused conve
     SETTLE,
   );
   await waitFor(() => expect(markConversationAsRead).toHaveBeenCalled(), SETTLE);
+});
+
+// 页面不冻结(导航器不开 freezeOnBlur):聊天页留在别的 tab 或被压住时,不能跟着本会话的
+// 每条新消息整页重渲染;露出来时按最新值补上。
+test('a chat out of sight does not re-render for new messages until it is shown again', async () => {
+  const view = render(<ChatDetailScreen />);
+  expect(await screen.findByText('received:在吗', {}, SETTLE)).toBeTruthy();
+
+  mockFocused = false;
+  view.rerender(<ChatDetailScreen />);
+  act(() => useChatStore.setState((state) => ({
+    messagesByConversation: {
+      ...state.messagesByConversation,
+      [CONVERSATION]: [message(3, PEER, '到了吗'), ...state.messagesByConversation[CONVERSATION]],
+    },
+  })));
+  expect(screen.queryByText('received:到了吗')).toBeNull();
+
+  mockFocused = true;
+  view.rerender(<ChatDetailScreen />);
+  expect(await screen.findByText('received:到了吗', {}, SETTLE)).toBeTruthy();
 });
 
 // 进页不卡:native-stack 要等新页面首次提交完才开始推入动画,首帧里画十几个气泡

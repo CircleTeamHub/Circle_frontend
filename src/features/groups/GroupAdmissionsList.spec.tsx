@@ -44,13 +44,13 @@ jest.mock('react-i18next', () => {
 jest.mock('@/stores/authStore', () => ({
   useAuthStore: Object.assign((select: (s: unknown) => unknown) => select(mockAuth), { getState: () => mockAuth }),
 }));
-// 看不见就停订阅的那层在这里直通:测试的 useChatStore 是普通 selector 函数。
 jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
-jest.mock('@/hooks/use-store-while-active', () => ({
-  useStoreWhileActive: (store: (select: (state: unknown) => unknown) => unknown, select: (state: unknown) => unknown) =>
-    store(select),
-}));
-jest.mock('@/chat-core/store', () => ({ useChatStore: (select: (s: unknown) => unknown) => select({ conversations: mockConversations }) }));
+jest.mock('@/chat-core/store', () => {
+  const getState = () => ({ conversations: mockConversations });
+  return {
+    useChatStore: Object.assign((select: (s: unknown) => unknown) => select(getState()), { getState, subscribe: () => () => {} }),
+  };
+});
 // 「已加入」走 ensureChatConversations(有新鲜快照就复用,否则整表拉)。
 jest.mock('@/chat-core/api', () => ({ ensureChatConversations: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: jest.fn() }));

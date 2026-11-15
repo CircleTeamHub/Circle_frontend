@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
   FlatList,
@@ -193,9 +194,26 @@ export const PlazaFeed: React.FC = () => {
     }, [fetchMyCircles, membershipBlocked, programEnabled]),
   );
 
+  // 拉广场会顺带把它标成「已看过」（清掉飞机红点），只能在本页真在眼前时做：导航器不冻结
+  // 看不见的页面，下面两个 effect 在切走后照样会因依赖变化而跑（如在「我的」里升级了会员）。
+  // 看不见时只记一笔，回到本页再拉。
+  const isFocused = useIsFocused();
+  const isFocusedRef = useRef(isFocused);
+  isFocusedRef.current = isFocused;
+  const plazaRefreshDue = useRef(false);
+  const refreshPlazaWhenSeen = useCallback(() => {
+    if (isFocusedRef.current) void refreshCirclePlazaUpdate();
+    else plazaRefreshDue.current = true;
+  }, []);
+  useEffect(() => {
+    if (!isFocused || !plazaRefreshDue.current) return;
+    plazaRefreshDue.current = false;
+    void refreshCirclePlazaUpdate();
+  }, [isFocused]);
+
   useEffect(() => {
     if (programEnabled === null || membershipBlocked) return;
-    void refreshCirclePlazaUpdate();
+    refreshPlazaWhenSeen();
   }, [
     fetchPlazaPosts,
     filterCircleIds,
@@ -204,6 +222,7 @@ export const PlazaFeed: React.FC = () => {
     selectedCity,
     membershipBlocked,
     programEnabled,
+    refreshPlazaWhenSeen,
   ]);
 
   // 同账号升级(如客服升级)后 vipLevel 由非会员变会员:上次留下的 plazaMembershipRequired
@@ -218,9 +237,9 @@ export const PlazaFeed: React.FC = () => {
     const prev = prevVipLevelRef.current;
     prevVipLevelRef.current = vipLevel;
     if (prev <= 0 && vipLevel > 0 && plazaMembershipRequired) {
-      void refreshCirclePlazaUpdate();
+      refreshPlazaWhenSeen();
     }
-  }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts]);
+  }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts, refreshPlazaWhenSeen]);
 
   // rollout 从「开放/未知」翻成「关闭」而上次还留着会员门:membershipBlocked 会因陈旧的
   // plazaMembershipRequired 恒为真(programEnabled===false 让第二个从句失效,但 OR 的第一

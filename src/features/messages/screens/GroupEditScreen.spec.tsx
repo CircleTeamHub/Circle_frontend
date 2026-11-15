@@ -4,6 +4,8 @@ import type { AlertButton } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { usePreventRemove } from '@react-navigation/native';
 import GroupEditScreen from './GroupEditScreen';
+import { useChatStore } from '@/chat-core/store';
+import type { ChatConversationDto } from '@/chat-core/protocol';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import {
   createConversationGroup,
@@ -20,6 +22,10 @@ const mockConversations = [
   { id: 'c-1', name: '读书会', conversationType: 'group', avatarUrl: undefined },
   { id: 'c-2', name: '张三', conversationType: 'private', avatarUrl: undefined },
 ];
+
+// 映射器在下面被桩成恒等函数，所以测试里放的是页面要的 UI 形状。
+const setChatConversations = (list: unknown[]) =>
+  useChatStore.setState({ conversations: list as ChatConversationDto[] });
 
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
@@ -64,15 +70,10 @@ jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/hooks/use-deferred-content', () => ({ useDeferredContent: () => true }));
-// 看不见就停订阅的那层在这里直通:测试的 useChatStore 是普通 selector 函数。
-jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
-jest.mock('@/hooks/use-store-while-active', () => ({
-  useStoreWhileActive: (store: (select: (state: unknown) => unknown) => unknown, select: (state: unknown) => unknown) =>
-    store(select),
-}));
+let mockLive = true;
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => mockLive }));
 jest.mock('@/chat-core/store', () => ({
-  useChatStore: (select: (state: { conversations: unknown[] }) => unknown) =>
-    select({ conversations: mockConversations }),
+  useChatStore: jest.requireActual('zustand').create(() => ({ conversations: [] })),
 }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: (c: unknown) => c }));
 jest.mock('@/services/api/conversation-groups', () => ({
@@ -125,6 +126,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   alertSpy.mockImplementation(() => undefined);
   mockParams = {};
+  mockLive = true;
+  setChatConversations(mockConversations);
   useMessageGroupsStore.setState({ groups: [], filterOrder: [], error: null, loading: false });
 });
 
@@ -281,4 +284,23 @@ test('a new group has no delete button, and a group deleted elsewhere shows a no
   render(<GroupEditScreen />);
   expect(screen.getByText('messages.groups.notFound')).toBeTruthy();
   expect(screen.queryByPlaceholderText('messages.groups.namePlaceholder')).toBeNull();
+});
+
+// 页面不冻结(导航器不开 freezeOnBlur):被压住或切走时不能跟着会话列表的每次变化重算,
+// 露出来时按最新值补上。
+test('a group editor out of sight does not follow the conversation list until it is shown again', () => {
+  const view = render(<GroupEditScreen />);
+  expect(screen.getByText('读书会')).toBeTruthy();
+
+  mockLive = false;
+  view.rerender(<GroupEditScreen />);
+  act(() => setChatConversations([
+    ...mockConversations,
+    { id: 'c-3', name: '新来的群', conversationType: 'group', avatarUrl: undefined },
+  ]));
+  expect(screen.queryByText('新来的群')).toBeNull();
+
+  mockLive = true;
+  view.rerender(<GroupEditScreen />);
+  expect(screen.getByText('新来的群')).toBeTruthy();
 });

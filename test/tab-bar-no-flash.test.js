@@ -259,7 +259,8 @@ test('原生端 tab bar 由各 tab 首页渲染，不再靠导航状态切显隐
 
   // 首页外壳在原生端把 bar 作为本页内容渲染，且永远不隐藏。
   assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<\/>/);
-  assert.match(root, /<FloatingTabBar tabProps=\{tabProps\} hidden=\{false\} \/>/);
+  assert.match(root, /<TabBar tabProps=\{tabProps\} hidden=\{false\} active=\{[^}]+\} \/>/);
+  assert.match(root, /const TabBar = memo\(FloatingTabBar, /);
 
   // 每个 tab 首页都必须套上外壳，少一个那个 tab 就没有 bar。
   for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {

@@ -33,7 +33,7 @@ import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { useTheme, withAlpha } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -653,25 +653,22 @@ function CustomTabBar({
 }
 
 // 各 tab 汇总自己辖下的未读。路由布局（无障碍标签）和自绘 bar（红点）共用这一份口径。
-export function useTabBadgeMap(): Record<string, number> {
-  const {
-    messagesUnread,
-    contactsUnread,
-    momentsUnread,
-    circleUnread,
-    signupUnread,
-    profileUnread,
-  } =
-    useTabBadgeStore(useShallow((state) => ({
-      messagesUnread: state.messagesUnread,
-      contactsUnread: state.contactsUnread + state.groupAdmissionsUnread,
-      momentsUnread: state.momentsUnread,
-      circleUnread: state.circleUnread,
-      signupUnread: state.signupUnread,
-      profileUnread: state.profileUnread,
-    })));
+type BadgeCounts = ReturnType<typeof useTabBadgeStore.getState>;
+const selectMessagesUnread = (state: BadgeCounts) => state.messagesUnread;
+const selectContactsUnread = (state: BadgeCounts) => state.contactsUnread + state.groupAdmissionsUnread;
+const selectMomentsUnread = (state: BadgeCounts) => state.momentsUnread;
+const selectCircleUnread = (state: BadgeCounts) => state.circleUnread;
+const selectSignupUnread = (state: BadgeCounts) => state.signupUnread;
+const selectProfileUnread = (state: BadgeCounts) => state.profileUnread;
 
-
+/** active=false 时不跟着未读数变化重渲染（看不见的那几份 tab bar），重新 active 时按最新值取。 */
+export function useTabBadgeMap(active = true): Record<string, number> {
+  const messagesUnread = useStoreWhileActive(useTabBadgeStore, selectMessagesUnread, active);
+  const contactsUnread = useStoreWhileActive(useTabBadgeStore, selectContactsUnread, active);
+  const momentsUnread = useStoreWhileActive(useTabBadgeStore, selectMomentsUnread, active);
+  const circleUnread = useStoreWhileActive(useTabBadgeStore, selectCircleUnread, active);
+  const signupUnread = useStoreWhileActive(useTabBadgeStore, selectSignupUnread, active);
+  const profileUnread = useStoreWhileActive(useTabBadgeStore, selectProfileUnread, active);
 
   // 各 tab 汇总自己辖下的未读：圈子含圈子通知和报名管理，探索含朋友圈。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
@@ -715,12 +712,14 @@ export function useCirclePlazaDotVisible(): boolean {
 interface FloatingTabBarProps {
   tabProps: BottomTabBarProps;
   hidden: boolean;
+  /** 原生端各 tab 首页各有一份 bar：本 tab 没被选中时为 false，不跟着未读数重渲染。 */
+  active?: boolean;
 }
 
 // 浮动 tab bar 的唯一入口。原生端由各 tab 首页把它当作页面内容渲染
 // （见 TabRootScreen），推入的页面会盖住它、返回时随首页一起滑回；
 // Web 端仍由 Tabs 的 tabBar 作为全局浮层渲染。
-export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
+export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabBarProps) {
   const { colors, resolvedMode } = useTheme();
   const insets = useSafeAreaInsets();
   const activeRoute = tabProps.state.routes[tabProps.state.index];
@@ -731,7 +730,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
   const isSplitLayout = useDesktopSplitLayout();
   // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
   const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
-  const badgeMap = useTabBadgeMap();
+  const badgeMap = useTabBadgeMap(active);
   const plazaDotVisible = useCirclePlazaDotVisible();
 
   const styles = useMemo<TabBarStyles>(() => StyleSheet.create({

@@ -139,7 +139,7 @@ test('notification center scopes its list to the requested bell domain', () => {
 test('tab badges follow the moved moments and plaza ownership', () => {
   const source = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
-  assert.match(source, /signupUnread: state\.signupUnread/);
+  assert.match(source, /selectSignupUnread = \(state: BadgeCounts\) => state\.signupUnread/);
   // 各 tab 合计各自的未读。曾经读 discoverUnread（= 好友申请 +
   // 朋友圈 + 圈子 的并集，互动消息列表页的全集口径），一条未读好友申请
   // 就会把动态 tab 也点亮 —— 好友申请的规范 UI 是「新的朋友」，归联系人。

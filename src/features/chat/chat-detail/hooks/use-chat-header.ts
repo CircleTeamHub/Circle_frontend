@@ -11,6 +11,8 @@ import { type ChatMessage } from '@/types';
 import { Alert } from 'react-native';
 import { fetchChatMembers } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { type ThemeColors } from '@/theme';
 import { type TFunction } from 'i18next';
@@ -179,9 +181,13 @@ export function useChatHeader({
     [conversationType, isAssistantConversation, sourceID],
   );
   // 对端「正在输入」有效期;到期自动回落在线状态。
-  const typingUntil = useChatStore(
-    (state) => state.typingUntilByConversation[conversationID] ?? 0,
+  // 看不见时不跟着对端的每次输入事件重渲染（群里有人一直在打字时很频繁），露出来时按最新值取。
+  const selectTypingUntil = useCallback(
+    (state: { typingUntilByConversation: Record<string, number> }) =>
+      state.typingUntilByConversation[conversationID] ?? 0,
+    [conversationID],
   );
+  const typingUntil = useStoreWhileActive(useChatStore, selectTypingUntil, useScreenLive());
   const [typingVisible, setTypingVisible] = useState(false);
   useEffect(() => {
     const remaining = typingUntil - Date.now();

@@ -12,5 +12,6 @@ test('the chat detail hook looks the conversation up once per store write', () =
   );
   const lookups = source.match(/state\.conversations\.find\(/g) ?? [];
   assert.equal(lookups.length, 1, 'derive fields from the single conversation lookup');
-  assert.match(source, /const conversation = useChatStore\(selectConversation\)/);
+  // 看不见时停订阅(页面不冻结,见 navigation-no-freeze-on-blur.test.js)。
+  assert.match(source, /const conversation = useStoreWhileActive\(useChatStore, selectConversation, live\)/);
 });
