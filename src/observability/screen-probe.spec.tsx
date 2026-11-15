@@ -129,8 +129,18 @@ function SlowContent(): React.ReactElement {
   return <Text>slow</Text>;
 }
 
+test('the first page of a cold start is startup cost, not a slow page', async () => {
+  const navigation = fakeNavigation();
+  await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation, children: <SlowContent /> }));
+
+  expect(mockRecordMetric).not.toHaveBeenCalled();
+  expect(mockReportHandledFailure).not.toHaveBeenCalled();
+});
+
 test('a page whose first commit takes over a second is recorded and reported by route template', async () => {
   const navigation = fakeNavigation();
+  const startup = await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation, children: <Text>home</Text> }));
+  await startup.unmountAsync();
   await renderAsync(probeScreenLayout({ route: { name: 'circle/[id]' }, navigation, children: <SlowContent /> }));
 
   expect(mockRecordMetric).toHaveBeenCalledWith('screen.first_commit.duration', SLOW_SCREEN_MS + 200);

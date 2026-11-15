@@ -96,6 +96,19 @@ describe('createCommitStormDetector', () => {
     expect(storms[0].components).toEqual([]);
   });
 
+  test('hot components are only diffed against the next commit of the same root', () => {
+    const { detector, storms, commitFor } = setup();
+    // 最后一秒刚好第 15 次提交时判定成风暴，等下一次提交来取组件名。
+    commitFor(COMMIT_STORM_SECONDS - 1, 20); // 每 50ms 一次，秒界对齐
+    commitFor(1, COMMIT_STORM_RATE);
+    expect(storms).toHaveLength(0);
+    detector.onCommit({ current: { tag: 3, child: null } });
+    expect(storms).toHaveLength(0);
+
+    detector.onCommit(fakeRoot);
+    expect(storms).toHaveLength(1);
+  });
+
   test('a busy UI just under the rate never reports', () => {
     const { storms, commitFor } = setup();
     commitFor(60, COMMIT_STORM_RATE - 1);

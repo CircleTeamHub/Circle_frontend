@@ -128,8 +128,9 @@ export function noteContentDropped(
   const input = pending.input;
   const sentBlocks = contentBlockCount(input.sections?.text?.contentJson ?? input.contentJson);
   if (sentBlocks === 0 || !result) return null;
-  const returned = result.sections?.text?.contentJson ?? result.contentJson;
-  // 响应里压根没有正文字段是「不知道」，不是「丢了」；null 才算服务端把正文清掉了。
+  // 响应里压根没有正文字段是「不知道」，不是「丢了」；字段在但是 null 才算服务端把正文清掉了。
+  const section = result.sections?.text;
+  const returned = section && 'contentJson' in section ? section.contentJson : result.contentJson;
   if (returned === undefined) return null;
   const returnedBlocks = contentBlockCount(returned);
   return returnedBlocks < sentBlocks ? { sentBlocks, returnedBlocks } : null;

@@ -55,6 +55,8 @@ describe('noteContentDropped', () => {
     const bare = { id: 'note-1', title: 'Note', media: [], groups: [] } as unknown as NoteDetail;
     expect(noteContentDropped(pendingFor(blocks), bare)).toBeNull();
     expect(noteContentDropped(pendingFor(blocks), resultWith(null))).toEqual({ sentBlocks: 3, returnedBlocks: 0 });
+    const nulledSection = { id: 'note-1', title: 'Note', media: [], groups: [], sections: { text: { contentJson: null } } } as unknown as NoteDetail;
+    expect(noteContentDropped(pendingFor(blocks), nulledSection)).toEqual({ sentBlocks: 3, returnedBlocks: 0 });
   });
 
   test('a note sent without body text has nothing to lose', () => {

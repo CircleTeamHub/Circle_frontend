@@ -341,6 +341,29 @@ for (const [label, trace] of [
   });
 }
 
+test('a suspended stall whose backup also failed is still reported: the user saw that error', async () => {
+  const timers = makeTimers();
+  const { apiClient, registerRequestTraceHooks, reports } = loadClient({
+    timers,
+    fetchImpl: (options) => stalledFetch(options),
+  });
+  registerRequestTraceHooks(traceHooks({
+    finish: () => ({ xhrStage: 'acked', appState: 'background', appStateChanged: true, loopLagMs: 91157 }),
+  }));
+
+  const pending = apiClient('/note');
+  await tick();
+  timers.fireSoonest(); // 2.5s 发备份
+  await tick();
+  timers.fireSoonest(); // 备份的预算到
+  await tick();
+  timers.fireSoonest(); // 第一次的预算到
+  await assert.rejects(pending);
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].context.retry, 'failed');
+});
+
 test('when the backup also gets no response, the stuck first attempt is reported once as failed', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports, calls } = loadClient({

@@ -25,6 +25,9 @@ const TIMER_LATE_TOLERANCE_MS = 1000;
 const REPORT_COOLDOWN_MS = 10 * 60_000;
 
 const lastReportedAt = new Map<string, number>();
+// 冷启动的第一个页面和启动一起渲染（store 水合、字体、整张列表），量的是启动耗时，
+// 归 Sentry 的 app start；不跳过的话每次冷启动都会报一条「页面慢」。
+let firstScreenSeen = false;
 
 function reportAtMostEvery(key: string, report: () => void): void {
   const at = diagnosticNow();
@@ -37,6 +40,7 @@ function reportAtMostEvery(key: string, report: () => void): void {
 /** 测试隔离用。 */
 export function resetScreenProbeReports(): void {
   lastReportedAt.clear();
+  firstScreenSeen = false;
 }
 
 type NavigationLike = {
@@ -60,6 +64,10 @@ const ScreenProbe: React.FC<ProbeProps> = ({ route, navigation, children, measur
 
   useLayoutEffect(() => {
     if (!measureFirstCommit || renderStartedAt.current === null) return;
+    if (!firstScreenSeen) {
+      firstScreenSeen = true;
+      return;
+    }
     const durationMs = Math.round(diagnosticNow() - renderStartedAt.current);
     recordMetric('screen.first_commit.duration', durationMs);
     if (durationMs < SLOW_SCREEN_MS) return;

@@ -143,7 +143,7 @@ export function createCommitStormDetector(deps: CommitStormDetectorDeps) {
   let touchesDown = 0;
   let lastInputAt = Number.NEGATIVE_INFINITY;
   let lastReportAt = Number.NEGATIVE_INFINITY;
-  let pending: { snapshot: Set<FiberLike>; storm: Omit<CommitStorm, 'components'> } | null = null;
+  let pending: { root: unknown; snapshot: Set<FiberLike>; storm: Omit<CommitStorm, 'components'> } | null = null;
 
   const resetStreak = () => {
     currentSecond = Number.NaN;
@@ -158,6 +158,8 @@ export function createCommitStormDetector(deps: CommitStormDetectorDeps) {
   const onCommit = (root: unknown) => {
     const at = deps.now();
     if (pending) {
+      // 只拿同一棵树的下一次提交来比对；别的 React 根的提交跟快照毫无关系。
+      if (root !== pending.root) return;
       const { snapshot, storm } = pending;
       pending = null;
       deps.onStorm({ ...storm, components: findHotComponents(snapshot, root) });
@@ -183,6 +185,7 @@ export function createCommitStormDetector(deps: CommitStormDetectorDeps) {
     lastReportAt = at;
     const durationMs = Math.max(1, Math.round(at - streakStartedAt));
     pending = {
+      root,
       snapshot: snapshotFibers(root),
       storm: {
         commitsPerSecond: Math.round((streakCommits * 1000) / durationMs),

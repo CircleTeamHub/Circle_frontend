@@ -804,8 +804,7 @@ function shouldReportApiFailure(error: unknown, status: number | undefined): boo
   // iOS 挂起后台 App 时 JS 整段停住，回来后在途请求一起「超时 / 卡住」（线上一次挂起
   // 91 秒就报了 6 个接口，loopLagMs≈全程）。那是系统冻结，不是网络故障。只认真的进过后台：
   // 结束时还在后台，或前后台切过、且等待的大半时间 JS 都没在跑。下拉通知栏、Face ID
-  // 这类只到 inactive 的短暂切换照报。
-  if (error instanceof ApiError && wasSuspendedInBackground(error)) return false;
+  // 这类只到 inactive 的短暂切换照报。判断在 reportApiFailure 里：要看重试结果。
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
@@ -842,6 +841,8 @@ function reportApiFailure(
 ): void {
   const status = error instanceof ApiError ? error.status : undefined;
   if (!shouldReportApiFailure(error, status)) return;
+  // 备份请求也失败了的，用户回到前台后确实看到了报错：照报。
+  if (stallRetry?.retry !== 'failed' && error instanceof ApiError && wasSuspendedInBackground(error)) return;
   const reportEndpoint =
     error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
   const reportMethod =
