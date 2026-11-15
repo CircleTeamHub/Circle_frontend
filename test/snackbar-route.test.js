@@ -346,3 +346,44 @@ test("getNotificationScope maps the current tab stack to a notification scope", 
   assert.equal(getNotificationScope(["(tabs)", "explore", "moment", "[id]"]), "explore");
   assert.equal(getNotificationScope(["(tabs)", "contacts"]), "messages");
 });
+
+// 消息页的「通知」和飞机都在消息栈里:点进去的落点也要在消息栈,返回才回到通知列表,
+// 而不是被甩到「我」/探索/圈子 tab 的首页。
+test("getSnackbarRoute keeps notice and circle-bell destinations inside the messages stack", () => {
+  const scope = { untitledPost: "Untitled", scope: "messages" };
+  const system = getSnackbarRoute(notification({ id: "notice-1", type: "SYSTEM" }), scope);
+  assert.equal(system.pathname, "/(tabs)/messages/system-announcements/[id]");
+  assert.equal(system.params.id, "notice-1");
+
+  const moment = getSnackbarRoute(
+    notification({ type: "TRACE_LIKE", fromTrace: { id: "trace-1" } }),
+    scope,
+  );
+  assert.equal(moment.pathname, "/(tabs)/messages/moment/[id]");
+
+  const verification = getSnackbarRoute(
+    notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: { id: "inv-1" } }),
+    scope,
+  );
+  assert.equal(verification.pathname, "/(tabs)/messages/verification/[id]");
+
+  const invitation = getSnackbarRoute(
+    notification({ type: "CIRCLE_INVITATION_RECEIVED", fromInvitation: { id: "inv-2" } }),
+    scope,
+  );
+  assert.equal(invitation.pathname, "/(tabs)/messages/invitation/[id]");
+});
+
+test("every messages-stack destination the notices can open has a route file", () => {
+  for (const file of [
+    "app/(tabs)/messages/new-friends.tsx",
+    "app/(tabs)/messages/new-friends/[id].tsx",
+    "app/(tabs)/messages/system-announcements/[id].tsx",
+    "app/(tabs)/messages/moment/[id].tsx",
+    "app/(tabs)/messages/verification/[id].tsx",
+    "app/(tabs)/messages/invitation/[id].tsx",
+  ]) {
+    assert.ok(fs.existsSync(path.join(process.cwd(), file)), `${file} is missing`);
+  }
+});
+

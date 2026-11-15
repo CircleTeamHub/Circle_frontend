@@ -211,8 +211,21 @@ export function getMomentDetailHref(
   return { pathname: '/(tabs)/discover/moment/[id]', params };
 }
 
-export function getFriendActivityDetailHref(id: string): Href {
-  return { pathname: '/(tabs)/contacts/new-friends/[id]', params: { id } };
+/** 「新的朋友」住两个栈:通讯录的本家,和消息页「通知」点进来的那份(返回要回到通知)。 */
+export type NewFriendsScope = 'messages' | 'contacts';
+
+export function getNewFriendsScope(segments: readonly string[] | undefined): NewFriendsScope {
+  return getUserProfileScopeFromSegments(segments) === 'messages' ? 'messages' : 'contacts';
+}
+
+export function getNewFriendsHref(scope: NewFriendsScope): Href {
+  return scope === 'messages' ? '/(tabs)/messages/new-friends' : '/(tabs)/contacts/new-friends';
+}
+
+export function getFriendActivityDetailHref(id: string, scope: NewFriendsScope = 'contacts'): Href {
+  return scope === 'messages'
+    ? { pathname: '/(tabs)/messages/new-friends/[id]', params: { id } }
+    : { pathname: '/(tabs)/contacts/new-friends/[id]', params: { id } };
 }
 
 export function getChatDetailHref(

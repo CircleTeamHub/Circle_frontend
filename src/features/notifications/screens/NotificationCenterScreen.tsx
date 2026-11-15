@@ -42,6 +42,8 @@ import {
 import { isCurrentRoute } from '@/utils/current-route';
 import {
   getCircleNotificationSettingsHref,
+  getNewFriendsHref,
+  getNewFriendsScope,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import {
@@ -459,9 +461,10 @@ export default function NotificationCenterScreen() {
     [store, router, t, notificationScope, pathname, params, isCurrentSession],
   );
 
+  // 留在当前栈(消息栈也有一份「新的朋友」):跳去通讯录 tab 的话,返回停在通讯录首页。
   const handleOpenNewFriends = useCallback(() => {
-    router.push('/(tabs)/contacts/new-friends');
-  }, [router]);
+    router.push(getNewFriendsHref(getNewFriendsScope(segments)));
+  }, [router, segments]);
   const showNewFriendsShortcut =
     domain === 'notice' && (tab === 'notice' || tab === 'group');
 

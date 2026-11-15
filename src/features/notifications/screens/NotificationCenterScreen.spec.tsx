@@ -441,7 +441,8 @@ test('a notification with its own destination still opens it', async () => {
   jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [liked], nextCursor: null });
   render(<NotificationCenterScreen />);
   fireEvent.press(await screen.findByText('liked'));
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/explore/moment/[id]', params: { id: 'trace-1' } });
+  // 这一页开在消息栈里:动态详情也开在消息栈,返回回到这一页(而不是探索 tab 首页)。
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/moment/[id]', params: { id: 'trace-1' } });
 });
 
 // ---- 消息页「通知」:圈子以外的知会,四个分类 ----
@@ -469,7 +470,8 @@ test('friend and group requests get a shortcut into their own inbox instead of c
   await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalled());
   await act(async () => { await Promise.resolve(); });
   fireEvent.press(screen.getByTestId('notice-new-friends-shortcut'));
-  expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/contacts/new-friends');
+  // 留在消息栈:跳去通讯录 tab 的话,返回停在通讯录首页而不是这一页。
+  expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/messages/new-friends');
 
   // 互动 / 系统分类里没有这个入口。
   fireEvent.press(screen.getByTestId('tab-moments'));

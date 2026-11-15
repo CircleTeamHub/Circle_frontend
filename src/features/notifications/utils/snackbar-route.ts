@@ -120,12 +120,13 @@ export function getSnackbarRoute(
     };
   }
 
-  // 「邀请你为入圈申请验证」→ 直达担保验证页，可直接同意/拒绝。
+  // 「邀请你为入圈申请验证」→ 直达担保验证页，可直接同意/拒绝。三个通知栈都有这页：
+  // 留在当前栈，返回才回到点进来的通知列表（消息页飞机进来的不该被甩到圈子 tab）。
   if (item.type === 'CIRCLE_VERIFICATION_REQUESTED' && item.fromInvitation?.id) {
-    return {
-      pathname: '/(tabs)/discover/verification/[id]',
-      params: { id: item.fromInvitation.id },
-    };
+    const params = { id: item.fromInvitation.id };
+    if (options.scope === 'messages') return { pathname: '/(tabs)/messages/verification/[id]', params };
+    if (options.scope === 'explore') return { pathname: '/(tabs)/explore/verification/[id]', params };
+    return { pathname: '/(tabs)/discover/verification/[id]', params };
   }
 
   if (
@@ -134,22 +135,24 @@ export function getSnackbarRoute(
       item.type === 'CIRCLE_ADMIN_OVERRIDE_APPROVED') &&
     item.fromInvitation?.id
   ) {
-    return {
-      pathname: '/(tabs)/discover/invitation/[id]',
-      params: { id: item.fromInvitation.id },
-    };
+    const params = { id: item.fromInvitation.id };
+    if (options.scope === 'messages') return { pathname: '/(tabs)/messages/invitation/[id]', params };
+    if (options.scope === 'explore') return { pathname: '/(tabs)/explore/invitation/[id]', params };
+    return { pathname: '/(tabs)/discover/invitation/[id]', params };
   }
 
   if (item.type.startsWith('FRIEND_REQUEST')) {
     return '/(tabs)/contacts/new-friends';
   }
 
-  // 系统公告只会从消息页「通知」点进来（公告不弹横幅）；详情页按通知 id 取。
+  // 系统公告只会从消息页「通知」点进来（公告不弹横幅）；详情页按通知 id 取，放在消息栈里，
+  // 返回回到通知。其余入口仍去「我」页的公告详情。
   if (item.kind === 'notification' && item.type === 'SYSTEM') {
-    return {
-      pathname: '/(tabs)/profile/system-announcements/[id]',
-      params: { id: item.id },
-    };
+    const params = { id: item.id };
+    if (options.scope === 'messages') {
+      return { pathname: '/(tabs)/messages/system-announcements/[id]', params };
+    }
+    return { pathname: '/(tabs)/profile/system-announcements/[id]', params };
   }
 
   // 资料点赞 / 活动协作认可：直达对方（点赞者 / 认可者）主页，方便回赞 / 加好友。
@@ -174,9 +177,12 @@ export function getSnackbarRoute(
       id: item.fromTrace.id,
       ...(item.fromReply?.id ? { targetCommentId: item.fromReply.id } : {}),
     };
-    // 朋友圈住在探索 tab;正在圈子 tab 上时留在本栈,不跨 tab。
+    // 朋友圈住在探索 tab;正在圈子 tab 或消息页(「通知」)上时留在本栈,不跨 tab。
     if (options.scope === 'discover') {
       return { pathname: '/(tabs)/discover/moment/[id]', params };
+    }
+    if (options.scope === 'messages') {
+      return { pathname: '/(tabs)/messages/moment/[id]', params };
     }
     return { pathname: '/(tabs)/explore/moment/[id]', params };
   }

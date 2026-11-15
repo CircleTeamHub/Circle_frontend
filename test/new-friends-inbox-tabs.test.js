@@ -52,7 +52,7 @@ test('one search box filters whichever tab is showing', () => {
   assert.match(screen, /contacts\.friendActivity\.searchPlaceholder/);
   // activities 为 null = 还没有列表(转圈中),按空表过滤。
   assert.match(screen, /filterFriendInboxRows\(buildFriendActivityInboxRows\(activities \?\? \[\]\), query\)/);
-  assert.match(screen, /<NewGroupsInboxList query=\{query\} \/>/);
+  assert.match(screen, /<NewGroupsInboxList query=\{query\} scope=\{inboxScope\} \/>/);
   assert.match(list, /query\.trim\(\)\.toLocaleLowerCase\(\)/);
 });
 
@@ -111,7 +111,8 @@ test('the back button pops the current stack instead of switching tabs', () => {
   assert.match(navHeader, /const state = navigation\.getState\(\);/);
   assert.match(navHeader, /state\?\.type === 'stack' && \(state\.index \?\? 0\) > 0/);
   assert.match(navHeader, /canPopThisStack[\s\S]{0,120}fallbackHref/);
-  assert.match(screen, /fallbackHref="\/\(tabs\)\/contacts"/);
+  // 消息页「通知」点进来的那份兜底回消息页，通讯录的本家兜底回通讯录。
+  assert.match(screen, /fallbackHref=\{inboxScope === 'messages' \? '\/\(tabs\)\/messages' : '\/\(tabs\)\/contacts'\}/);
 });
 
 test('every locale defines the new tab, search and group-inbox copy', () => {
