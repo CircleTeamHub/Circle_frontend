@@ -249,11 +249,14 @@
       "title": "大众点评",
       "nationwide": "全国",
       "chooseCity": "选择城市",
-      "subtitle": "{{month}} 月好评榜 · 每月 1 号重新排",
-      "subtitleNoMonth": "本月好评榜 · 每月 1 号重新排",
+      "heroTitle": "{{month}} 月好评榜",
+      "heroTitleNoMonth": "本月好评榜",
+      "heroCaption": "{{scope}} · 每月 1 号重新排",
+      "viewNationwide": "看看全国榜",
       "empty": "这个月还没有上榜的笔记",
       "emptyCity": "{{city}}这个月还没有上榜的笔记",
       "emptyHint": "在笔记标题里选上城市，收到好评就会上榜。",
+      "emptyHintNationwide": "笔记收到好评就会上榜。",
       "loadFailed": "榜单加载失败",
       "rankA11y": "第 {{rank}} 名"
     }

@@ -3140,11 +3140,14 @@
       "title": "人気ランキング",
       "nationwide": "全国",
       "chooseCity": "都市を選ぶ",
-      "subtitle": "{{month}}月の高評価ランキング · 毎月1日に更新",
-      "subtitleNoMonth": "今月の高評価ランキング · 毎月1日に更新",
+      "heroTitle": "{{month}}月の高評価ランキング",
+      "heroTitleNoMonth": "今月の高評価ランキング",
+      "heroCaption": "{{scope}} · 毎月1日に更新",
+      "viewNationwide": "全国ランキングを見る",
       "empty": "今月はまだランクインしたノートがありません",
       "emptyCity": "今月は{{city}}のランクインしたノートがまだありません",
       "emptyHint": "ノートのタイトルで都市を選び、高評価が付くとランクインします。",
+      "emptyHintNationwide": "高評価が付いたノートがランクインします。",
       "loadFailed": "ランキングを読み込めませんでした",
       "rankA11y": "{{rank}}位"
     }

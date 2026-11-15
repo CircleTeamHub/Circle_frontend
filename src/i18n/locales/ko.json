@@ -3140,11 +3140,14 @@
       "title": "인기 랭킹",
       "nationwide": "전국",
       "chooseCity": "도시 선택",
-      "subtitle": "{{month}}월 좋은 평가 랭킹 · 매월 1일 갱신",
-      "subtitleNoMonth": "이번 달 좋은 평가 랭킹 · 매월 1일 갱신",
+      "heroTitle": "{{month}}월 좋은 평가 랭킹",
+      "heroTitleNoMonth": "이번 달 좋은 평가 랭킹",
+      "heroCaption": "{{scope}} · 매월 1일 갱신",
+      "viewNationwide": "전국 랭킹 보기",
       "empty": "이번 달 랭킹에 오른 노트가 아직 없습니다",
       "emptyCity": "이번 달 {{city}} 랭킹에 오른 노트가 아직 없습니다",
       "emptyHint": "노트 제목에서 도시를 선택하고 좋은 평가를 받으면 랭킹에 오릅니다.",
+      "emptyHintNationwide": "좋은 평가를 받은 노트가 랭킹에 오릅니다.",
       "loadFailed": "랭킹을 불러오지 못했습니다",
       "rankA11y": "{{rank}}위"
     }

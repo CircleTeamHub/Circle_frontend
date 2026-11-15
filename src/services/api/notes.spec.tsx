@@ -1,9 +1,12 @@
 import { apiClient } from './client';
-import { createNote, updateNote, fetchNotes, findCollectedNote, togglePinNote } from './notes';
+import { createNote, updateNote, fetchNotes, fetchNoteRanking, findCollectedNote, togglePinNote } from './notes';
 import type { CreateNoteInput, NoteSummary } from '@/features/notes/types';
 
 jest.mock('./client', () => ({ apiClient: jest.fn(), ApiError: class extends Error {} }));
-jest.mock('@/services/api/utils', () => ({ allowPeerMediaUrl: (url: string) => url }));
+// 媒体白名单：带 untrusted 的地址视为不可信。
+jest.mock('@/services/api/utils', () => ({
+  allowPeerMediaUrl: (url: string | null) => (url && !url.includes('untrusted') ? url : null),
+}));
 // findCollectedNote answers only for the session that is still current; the epoch
 // the caller passes must match the store, and moving it simulates an account switch.
 let mockSessionEpoch = 1;
@@ -104,4 +107,25 @@ test('a late lookup from the previous account does not replace the current accou
   await previous;
   expect(await findCollectedNote('source', 2)).toBeNull();
   expect(apiClient).toHaveBeenCalledTimes(2);
+});
+
+test('ranking previews keep at most four allow-listed image urls and default to none on older servers', async () => {
+  const item = (id: string, previewUrls?: unknown) =>
+    ({ id, title: id, cover: null, ...(previewUrls === undefined ? {} : { previewUrls }) }) as unknown as NoteSummary;
+  jest.mocked(apiClient).mockResolvedValue({
+    month: '2026-11',
+    city: null,
+    items: [
+      item('a', ['https://m/1', 'https://untrusted/2', 42, 'https://m/3', 'https://m/4', 'https://m/5']),
+      item('legacy'),
+    ],
+  });
+
+  const ranking = await fetchNoteRanking(null);
+
+  expect(apiClient).toHaveBeenLastCalledWith('/note/ranking');
+  expect(ranking.items.map((entry) => [entry.id, entry.previewUrls])).toEqual([
+    ['a', ['https://m/1', 'https://m/3', 'https://m/4', 'https://m/5']],
+    ['legacy', []],
+  ]);
 });
