@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Dimensions, StyleSheet } from 'react-native';
+import { Alert, AppState, Dimensions, Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NoteBlockEditor } from './NoteBlockEditor';
 
@@ -326,4 +326,63 @@ test('the default editor fills its parent and never asks the DOM for its height'
   expect(frame).toEqual({ flex: 1 });
   expect((mockDomProps as unknown as MockFitContentProps).onContentHeightChange).toBeUndefined();
   expect((mockDomProps as unknown as MockFitContentProps).backgroundColor).toBeUndefined();
+});
+
+type MockReadyProps = {
+  onEditorReady?: (rootWidth: number, rootHeight: number, viewportWidth: number, viewportHeight: number) => void;
+};
+const readyProps = () => mockDomProps as unknown as MockReadyProps;
+
+describe('DOM editor health', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    (AppState as unknown as { currentState: string }).currentState = 'active';
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // 网页端组件在 web 上是桩、onLoadEnd 永不回调，曾经一直转圈；这类「加载不出来」现在要能看见。
+  test('an editor that never reports ready within 10 seconds is reported once', () => {
+    render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+    act(() => jest.advanceTimersByTime(10_000));
+
+    expect(mockReportHandledFailure).toHaveBeenCalledWith(
+      'noteEditor', 'domReadyTimeout', expect.any(Error), expect.objectContaining({ durationMs: 10_000 }),
+    );
+  });
+
+  test('an editor that reports a sane layout is quiet', () => {
+    render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+    act(() => readyProps().onEditorReady?.(390, 700, 390, 720));
+    act(() => jest.advanceTimersByTime(10_000));
+
+    expect(mockReportHandledFailure).not.toHaveBeenCalled();
+  });
+
+  // 安卓文字栏曾缩成 22px 宽，点哪儿都打不了字。
+  test('a composer bar whose editor collapsed to a sliver is reported with its measurements', () => {
+    render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} fitContent />);
+    act(() => readyProps().onEditorReady?.(22, 38, 390, 38));
+
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'domLayoutCollapsed', expect.any(Error), {
+      rootWidth: 22, rootHeight: 38, viewportWidth: 390, viewportHeight: 38, platform: Platform.OS,
+    });
+  });
+
+  test('a one-line composer bar is short by design, not collapsed', () => {
+    render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} fitContent />);
+    act(() => readyProps().onEditorReady?.(390, 38, 390, 720));
+
+    expect(mockReportHandledFailure).not.toHaveBeenCalled();
+  });
+
+  test('the full-screen editor collapsing in height is reported', () => {
+    render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+    act(() => readyProps().onEditorReady?.(390, 40, 390, 720));
+
+    expect(mockReportHandledFailure).toHaveBeenCalledWith(
+      'noteEditor', 'domLayoutCollapsed', expect.any(Error), expect.objectContaining({ rootHeight: 40 }),
+    );
+  });
 });

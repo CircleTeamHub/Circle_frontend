@@ -61,6 +61,7 @@ import {
 } from './store';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { createConnectionWatchdog } from './connection-watchdog';
 import {
   startOperationSpan,
   type OperationSpan,
@@ -381,6 +382,46 @@ let serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let handshakeRefreshRequested = false;
 /** 这条 socket 从发起握手到第一次有结果的性能 span;结束后置空。 */
 let pendingConnectSpan: OperationSpan | null = null;
+/** 最近一次断开的归一化原因，供连接看门狗上报（见 connection-watchdog）。 */
+let lastDisconnectReason = 'none';
+
+const connectionWatchdog = createConnectionWatchdog({
+  now: () => Date.now(),
+  setTimeout: (run, ms) => {
+    const handle = setTimeout(run, ms);
+    // 只在 Node 测试里有 unref：别让看门狗把测试进程多拖一分钟。RN 里是 no-op。
+    (handle as { unref?: () => void }).unref?.();
+    return handle;
+  },
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  isReconnectPending: () =>
+    Boolean(socket?.active) || serverReconnectTimer !== null || tokenRefreshTimer !== null || tokenRefreshInFlight,
+  onStuck: (durationMs) => {
+    reportHandledFailure('chatSocket', 'disconnectedTooLong', new Error('chat socket left disconnected'), {
+      durationMs,
+      reason: lastDisconnectReason,
+      stage: socket ? 'inactive' : 'no_socket',
+      attempts: consecutiveConnectErrors,
+      platform: Platform.OS,
+    });
+  },
+});
+let connectionWatchdogStarted = false;
+
+/** App 启动时调一次（app/_layout）：之后跟着聊天 store 的连接 / 前后台 / 会话状态走。 */
+export function startChatConnectionWatchdog(): void {
+  if (connectionWatchdogStarted) return;
+  connectionWatchdogStarted = true;
+  const check = (state: ReturnType<typeof useChatStore.getState>) => {
+    connectionWatchdog.update({
+      expected: state.currentUserId !== null,
+      foreground: state.appForeground,
+      connected: state.connected,
+    });
+  };
+  useChatStore.subscribe(check);
+  check(useChatStore.getState());
+}
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -567,9 +608,10 @@ export function connectChat(token: string, userId: string): void {
   });
   next.on('disconnect', (reason) => {
     if (gen !== sessionGen) return;
+    lastDisconnectReason = classifyDisconnectReason(reason);
     logClientDiagnostic('chat.ws.disconnected', {
       stage: 'ready',
-      reason: classifyDisconnectReason(reason),
+      reason: lastDisconnectReason,
       platform: Platform.OS,
     });
     captureDeliveredBaseline();
@@ -871,6 +913,7 @@ function teardownSocket(): void {
   finishConnectSpan('cancelled');
   clearServerReconnectTimer();
   if (!socket) return;
+  lastDisconnectReason = suspendedForBackground ? 'background_suspended' : 'suspended';
   socket.removeAllListeners();
   socket.disconnect();
   socket = null;

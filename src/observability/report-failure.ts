@@ -66,6 +66,20 @@ export function resetHandledFailureTelemetry(): void {
   reportedSignatures.clear();
 }
 
+/**
+ * 把组件名、路由模板这类代码标识压成 sentry.ts 的 code 能收的形状（字母开头，只留
+ * [A-Za-z0-9_.-]）：`Freeze>Suspense` → `Freeze.Suspense`，`circle/[id]` → `circle.id`。
+ * code 进 fingerprint，用来让不同源头各成一个 issue。
+ */
+export function toStableCode(value: string): string {
+  const code = value
+    .replace(/[^A-Za-z0-9_.-]+/g, '.')
+    .replace(/^[^A-Za-z]+/, '')
+    .replace(/\.+$/, '')
+    .slice(0, 64);
+  return code || 'unknown';
+}
+
 export function isExpectedFailure(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const name = (error as { name?: unknown }).name;

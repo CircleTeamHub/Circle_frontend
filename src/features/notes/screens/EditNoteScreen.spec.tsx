@@ -99,6 +99,28 @@ test('reports the failed save phase without logging an API error body or the pen
   } finally { alert.mockRestore(); }
 });
 
+// 后端曾把正文清空、仍回 200：用户无感，上报里只能有块数，不能有正文。
+test('a save the server answers with an emptied body is reported without the note text', async () => {
+  jest.mocked(createNote).mockImplementationOnce(async (input) => {
+    const saved = noteResult(input);
+    return { ...saved, contentJson: [[]], sections: { ...saved.sections, text: { ...saved.sections?.text, contentJson: [[]] } } } as unknown as NoteDetail;
+  });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<EditNoteScreen />);
+    pressComposer('title');
+    pressComposer('text');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Private title');
+    act(() => mockEditorProps?.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Private body' }] }]));
+    fireEvent.press(screen.getByText('notes.edit.done'));
+    await waitFor(() => expect(mockReportHandledFailure).toHaveBeenCalledWith(
+      // 发出的是正文段落 + 编辑器自己的 noteLayout 排版块（里面也带着文字），共 2 块。
+      'noteSave', 'contentDropped', expect.any(Error), { sentBlocks: 2, returnedBlocks: 0 },
+    ));
+    expect(JSON.stringify(mockReportHandledFailure.mock.calls)).not.toContain('Private body');
+  } finally { alert.mockRestore(); }
+});
+
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
 jest.mock('@/features/notes/components/NoteVideoViewer', () => ({ NoteVideoViewer: jest.fn(() => null) }));
 

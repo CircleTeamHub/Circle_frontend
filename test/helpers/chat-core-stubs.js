@@ -41,6 +41,10 @@ function makeChatCoreStubs() {
     get '@/services/api/group-writes'() {
       return require('./load-ts-module').loadTsModule('src/services/api/group-writes.ts');
     },
+    // 长连接看门狗:纯逻辑,用真实实现(计时器已 unref,不拖住测试进程)。
+    get './connection-watchdog'() {
+      return require('./load-ts-module').loadTsModule('src/chat-core/connection-watchdog.ts');
+    },
     // 冷启动预载名单:纯函数,用真实实现。
     get './eager-hydration'() {
       return require('./load-ts-module').loadTsModule('src/chat-core/eager-hydration.ts');

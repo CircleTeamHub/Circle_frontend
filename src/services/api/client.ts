@@ -801,11 +801,33 @@ export function refreshSessionAccessToken(rejectedAccessToken?: string): Promise
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   // Auth anomalies are captured once at their decision boundary.
   if (error instanceof ApiError && ['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
+  // iOS 挂起后台 App 时 JS 整段停住，回来后在途请求一起「超时 / 卡住」（线上一次挂起
+  // 91 秒就报了 6 个接口，loopLagMs≈全程）。那是系统冻结，不是网络故障。只认真的进过后台：
+  // 结束时还在后台，或前后台切过、且等待的大半时间 JS 都没在跑。下拉通知栏、Face ID
+  // 这类只到 inactive 的短暂切换照报。
+  if (error instanceof ApiError && wasSuspendedInBackground(error)) return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
 
   return shouldReportHttpFailure(status);
+}
+
+// 被系统挂起时 JS 整段停住，事件循环延迟是秒级；inactive 时 JS 照跑，只有几十毫秒。
+const SUSPENDED_LOOP_LAG_MS = 1000;
+
+function wasSuspendedInBackground(error: ApiError): boolean {
+  const diagnostics = error.diagnostics;
+  if (!diagnostics) return false;
+  if (diagnostics.appState === 'background') return true;
+  const { appStateChanged, loopLagMs } = diagnostics;
+  return (
+    appStateChanged === true &&
+    typeof loopLagMs === 'number' &&
+    loopLagMs >= SUSPENDED_LOOP_LAG_MS &&
+    typeof error.durationMs === 'number' &&
+    loopLagMs * 2 >= error.durationMs
+  );
 }
 
 type StallRetryReport = { attempts: number; retry: 'recovered' | 'failed' };

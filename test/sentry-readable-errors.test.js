@@ -143,6 +143,43 @@ test('a JS thread stall reads as such with its length instead of a generic runti
   assert.deepEqual([...capture.context.fingerprint], ['jsThread', 'stall', 'error']);
 });
 
+// 主动检测（不是 catch 到的错）的标题按 observability/detector-titles 排，读数直接写在标题里；
+// code 区分源头（哪个组件在空转、哪个页面慢），各成一个 issue。
+for (const [context, title, fingerprint] of [
+  [
+    { operation: 'render', kind: 'commitStorm', commitsPerSecond: 24, durationMs: 4100, components: 'Freeze>Suspense', code: 'Freeze.Suspense' },
+    '渲染提交风暴｜24 次/秒｜Freeze>Suspense',
+    ['render', 'commitStorm', 'error', 'Freeze.Suspense'],
+  ],
+  [
+    { operation: 'render', kind: 'slowScreen', page: 'chat-detail', durationMs: 1340, code: 'chat-detail' },
+    '页面首次渲染慢｜chat-detail｜1340 ms',
+    ['render', 'slowScreen', 'error', 'chat-detail'],
+  ],
+  [
+    { operation: 'noteSave', kind: 'contentDropped', sentBlocks: 3, returnedBlocks: 0 },
+    '笔记保存后正文被丢掉｜发出 3 块，返回 0 块',
+    ['noteSave', 'contentDropped', 'error'],
+  ],
+  [
+    { operation: 'chatSocket', kind: 'disconnectedTooLong', durationMs: 60000, reason: 'background_suspended' },
+    '聊天长连接断开过久｜60000 ms｜background_suspended',
+    ['chatSocket', 'disconnectedTooLong', 'error'],
+  ],
+]) {
+  test(`detector report reads as: ${title}`, () => {
+    const { sentry, options, captures } = setup();
+    sentry.reportError(new Error('detector carrier'), context);
+    const capture = captures[0];
+    const event = options.beforeSend({
+      ...capture.context,
+      exception: { values: [{ type: capture.error.name, value: capture.error.message }] },
+    });
+    assert.equal(event.exception.values[0].value, title);
+    assert.deepEqual([...capture.context.fingerprint], fingerprint);
+  });
+}
+
 test('a retry that also failed names the outcome and stays an error', () => {
   const { sentry, options, captures } = setup();
   sentry.reportError(new Error('Network request failed'), {

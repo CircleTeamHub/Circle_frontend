@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useAddingAccountScope } from '@/features/auth/hooks/use-adding-account-scope';
 import { useTheme } from '@/theme';
+import { probeScreenLayout } from '@/observability/screen-probe';
 
 export default function AuthLayout() {
   const { colors } = useTheme();
@@ -9,6 +10,7 @@ export default function AuthLayout() {
 
   return (
     <Stack
+      screenLayout={probeScreenLayout}
       screenOptions={{
         // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
         freezeOnBlur: true,

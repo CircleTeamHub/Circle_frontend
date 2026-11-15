@@ -278,6 +278,69 @@ test('a stall rescued by the backup is reported once, tagged recovered, with the
   assert.equal(context.attempts, 1);
 });
 
+// 线上真实样本:iOS 把 App 挂起 91 秒,回来后 6 个接口同时报「请求卡住」,loopLagMs=91157、
+// appState=background。那是系统冻结了 JS,不是网络卡住。
+for (const [label, trace] of [
+  ['the app was suspended in the background for most of the wait', { xhrStage: 'acked', appState: 'active', appStateChanged: true, loopLagMs: 91157 }],
+  ['the request ended while the app was in the background', { xhrStage: 'acked', appState: 'background', appStateChanged: false, loopLagMs: 91157 }],
+]) {
+  test(`a stall is not reported when ${label}`, async () => {
+    const timers = makeTimers();
+    const { apiClient, registerRequestTraceHooks, reports } = loadClient({
+      timers,
+      fetchImpl: (options, n) => (n === 1 ? stalledFetch(options) : Promise.resolve(okResponse({ id: 7 }))),
+    });
+    registerRequestTraceHooks(traceHooks({ finish: (_id, failed) => (failed ? trace : undefined) }));
+
+    const pending = apiClient('/note');
+    await tick();
+    timers.fireSoonest();
+    assert.equal((await pending).id, 7);
+
+    assert.equal(reports.length, 0);
+  });
+}
+
+test('a write that times out across a trip to the background is not reported either', async () => {
+  const timers = makeTimers();
+  const { apiClient, registerRequestTraceHooks, reports } = loadClient({
+    timers,
+    fetchImpl: (options) => stalledFetch(options),
+  });
+  registerRequestTraceHooks(traceHooks({
+    finish: () => ({ xhrStage: 'acked', appState: 'active', appStateChanged: true, loopLagMs: 91157 }),
+  }));
+
+  const pending = apiClient('/note/source-states', { method: 'POST', body: {} });
+  await tick();
+  timers.fireSoonest();
+  await assert.rejects(pending);
+
+  assert.equal(reports.length, 0);
+});
+
+// 下拉通知栏 / Face ID / 来电横幅只到 inactive，JS 照跑：这时候卡住的请求是真卡住。
+for (const [label, trace] of [
+  ['the notification shade was pulled down during the wait', { xhrStage: 'acked', appState: 'active', appStateChanged: true, loopLagMs: 40 }],
+  ['the request ended while a system prompt made the app inactive', { xhrStage: 'acked', appState: 'inactive', appStateChanged: true, loopLagMs: 40 }],
+]) {
+  test(`a stall is still reported when ${label}`, async () => {
+    const timers = makeTimers();
+    const { apiClient, registerRequestTraceHooks, reports } = loadClient({
+      timers,
+      fetchImpl: (options, n) => (n === 1 ? stalledFetch(options) : Promise.resolve(okResponse({ id: 7 }))),
+    });
+    registerRequestTraceHooks(traceHooks({ finish: (_id, failed) => (failed ? trace : undefined) }));
+
+    const pending = apiClient('/note');
+    await tick();
+    timers.fireSoonest();
+    await pending;
+
+    assert.equal(reports.length, 1);
+  });
+}
+
 test('when the backup also gets no response, the stuck first attempt is reported once as failed', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports, calls } = loadClient({

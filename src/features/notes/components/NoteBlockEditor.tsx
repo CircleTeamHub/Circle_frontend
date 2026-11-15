@@ -21,6 +21,7 @@ import {
 } from '@/services/api/upload';
 import { useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useNoteEditorDomHealth } from '@/features/notes/hooks/use-note-editor-dom-health';
 
 type NoteBlockEditorDOMComponent =
   typeof import('@/features/notes/dom/NoteBlockEditor.dom').default;
@@ -347,6 +348,8 @@ function NoteBlockEditorImpl({
     [onContentChange],
   );
 
+  const handleEditorReady = useNoteEditorDomHealth(canLoadDOMEditor(), fitContent);
+
   const containerStyle = fitContent
     ? {
         height: Math.min(
@@ -380,6 +383,7 @@ function NoteBlockEditorImpl({
           editable={editable}
           backgroundColor={fitContent ? colors.surface : undefined}
           onContentHeightChange={fitContent ? handleContentHeightChange : undefined}
+          onEditorReady={handleEditorReady}
         />
       </View>
     </DOMBridgeErrorBoundary>

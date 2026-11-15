@@ -108,6 +108,10 @@ function loadErrors() {
     if (spec === '@/services/api/client') return { ApiError: FakeApiError };
     if (spec === '@/services/api/server-error-codes') return loadServerErrorCodes();
     if (spec === '@/utils/user-facing-error') return USER_FACING_ERROR;
+    if (spec === '@/observability/http-diagnostics') return HTTP_DIAGNOSTICS;
+    if (spec === '@/observability/report-failure') {
+      return { reportHandledFailure: (...args) => handledReports.push(args) };
+    }
     return require(spec);
   };
   // new Function runs in the host realm, so `error instanceof Error` inside errors.ts
@@ -117,6 +121,8 @@ function loadErrors() {
   return moduleObj.exports;
 }
 
+const handledReports = [];
+const HTTP_DIAGNOSTICS = loadTsModule('src/observability/http-diagnostics.ts');
 const { getApiErrorMessage } = loadErrors();
 
 test('an uncertain refresh gives safe sign-in guidance at the original and blocked status', () => {
@@ -203,6 +209,38 @@ test('maps the empty-comment backend code to localized copy', () => {
 test('uses the caller fallback when the errorCode is unknown', () => {
   const err = new FakeApiError('后端原始消息', 'AUTH_SOMETHING_NEW');
   assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
+});
+
+// 前后端错误码表靠契约测试对齐，但线上老版本 App 会碰到之后新增的错误码：只能显示兜底文案，
+// 以前什么也不报。每个码每个进程报一次，带接口路径，不带后端原文。
+test('an errorCode the app does not know is reported once per code, without the backend message', () => {
+  handledReports.length = 0;
+  const err = new FakeApiError('后端原始消息', 'NOTE_SOMETHING_NEW');
+  err.reportEndpoint = '/note/123';
+  getApiErrorMessage(err, 'fallback');
+  getApiErrorMessage(err, 'fallback');
+  getApiErrorMessage(new FakeApiError('x', 'AUTH_INVALID_CREDENTIALS'), 'fallback');
+
+  assert.equal(handledReports.length, 1);
+  const [operation, kind, error, context] = handledReports[0];
+  assert.equal(operation, 'api');
+  assert.equal(kind, 'unknownErrorCode');
+  assert.doesNotMatch(String(error.message), /后端原始消息/);
+  // 接口路径按模板归一，不带具体 ID。
+  assert.deepEqual(context, {
+    errorCode: 'NOTE_SOMETHING_NEW',
+    code: 'NOTE_SOMETHING_NEW',
+    endpointPath: HTTP_DIAGNOSTICS.safeHttpEndpoint('/note/123'),
+  });
+  assert.doesNotMatch(context.endpointPath, /123/);
+});
+
+test('an errorCode that is not a code at all is reported as malformed, not echoed', () => {
+  handledReports.length = 0;
+  getApiErrorMessage(new FakeApiError('x', 'user 18800001111 not found'), 'fallback');
+
+  assert.equal(handledReports.length, 1);
+  assert.equal(handledReports[0][3].errorCode, 'MALFORMED');
 });
 
 test('uses the caller fallback when ApiError has no errorCode', () => {
