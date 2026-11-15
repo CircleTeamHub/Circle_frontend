@@ -3144,11 +3144,14 @@
       "title": "Lo más valorado",
       "nationwide": "Todo el país",
       "chooseCity": "Elegir ciudad",
-      "subtitle": "Más valoradas del mes {{month}} · se reinicia el día 1",
-      "subtitleNoMonth": "Más valoradas de este mes · se reinicia el día 1",
+      "heroTitle": "Más valoradas del mes {{month}}",
+      "heroTitleNoMonth": "Más valoradas de este mes",
+      "heroCaption": "{{scope}} · se reinicia el día 1",
+      "viewNationwide": "Ver todo el país",
       "empty": "Aún no hay notas en la clasificación este mes",
       "emptyCity": "Aún no hay notas de {{city}} en la clasificación este mes",
       "emptyHint": "Elige una ciudad en el título de una nota; cuando reciba buenas valoraciones aparecerá aquí.",
+      "emptyHintNationwide": "Las notas aparecen aquí cuando reciben buenas valoraciones.",
       "loadFailed": "No se pudo cargar la clasificación",
       "rankA11y": "Puesto {{rank}}"
     }

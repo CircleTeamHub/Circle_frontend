@@ -15,6 +15,10 @@ export type NoteCardSection = 'text' | 'media' | 'showcase' | 'location';
 interface NoteCardBodyProps {
   note: NoteCardData;
   outgoing: boolean;
+  /** 不在聊天里时（如大众点评榜单）由所在页面给定宽度；缺省按聊天消息列表算。 */
+  width?: number;
+  /** 已知的本月好评/差评数（榜单接口自带）；缺省读聊天侧的计数缓存。 */
+  ratingCounts?: { goodCount: number; badCount: number };
   onPress?: (note: NoteCardData) => void;
   onSectionPress?: (note: NoteCardData, section: NoteCardSection) => void;
   onLongPress?: (event: GestureResponderEvent) => void;
@@ -93,7 +97,15 @@ const s = StyleSheet.create({
  * 有四宫格就不放左上角封面(图都在格子里);旧卡片没有四宫格才保留小封面。
  * 四个分块按钮始终都在:有的那块是绿色实心,点一下以我的名义把那部分发到当前聊天;没有的是灰色描边。
  */
-export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPress }: NoteCardBodyProps) {
+export function NoteCardBody({
+  note,
+  outgoing,
+  width,
+  ratingCounts: knownRatingCounts,
+  onPress,
+  onSectionPress,
+  onLongPress,
+}: NoteCardBodyProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const onCard = outgoing ? colors.white : colors.text;
@@ -106,8 +118,10 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   // This month's counters of the source note. They arrive with the conversation's
   // source-state reconciliation, or right after the viewer rates from the menu;
   // until then the area shows 0 so the card keeps its height.
-  const ratingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
-  const cardWidth = noteCardWidth(useWindowDimensions().width);
+  const cachedRatingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
+  const ratingCounts = knownRatingCounts ?? cachedRatingCounts;
+  const windowWidth = useWindowDimensions().width;
+  const cardWidth = width ?? noteCardWidth(windowWidth);
   // 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。
   const tileSize = Math.floor((cardWidth - CARD_PADDING_HORIZONTAL * 2 - GRID_GAP * 3) / 4);
 
@@ -215,6 +229,8 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
                 contentFit="cover"
                 recyclingKey={uri}
                 accessibilityIgnoresInvertColors
+                // 四宫格是原图签名地址、榜单一屏好几张;理由同封面和 image-bubble。
+                enforceEarlyResizing
               />
             </View>
           ))}

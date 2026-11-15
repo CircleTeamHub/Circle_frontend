@@ -43,6 +43,10 @@ export const Gradients = {
   exploreAssistant: ['#4A2FE6', '#2EC5E8'] as const,
   // 大众点评：好评橙（ratingGood）→ 热度红（dangerFill），和榜单里的好评图标同一色系。
   exploreRanking: ['#F97316', '#E5484D'] as const,
+  // 大众点评名次奖牌：金 / 银 / 铜（左上受光面 → 右下背光面），配 exploreRanking 色的绶带。
+  rankGold: ['#FFD966', '#E8950C'] as const,
+  rankSilver: ['#DCE3EC', '#8B97A7'] as const,
+  rankBronze: ['#F4BC91', '#B8622E'] as const,
   // 钱包黑金卡：左上偏亮的石墨 → 近黑（金属卡的受光面），配三档香槟金箔
   // （亮 → 主 → 暗，亮档用于数字，主档用于描边与字标，暗档给芯片阴影）。
   blackCard: ['#3A3A3F', '#18181B', '#060607'] as const,

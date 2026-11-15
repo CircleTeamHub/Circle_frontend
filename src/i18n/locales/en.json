@@ -249,11 +249,14 @@
       "title": "Top Rated",
       "nationwide": "All cities",
       "chooseCity": "Choose city",
-      "subtitle": "Most liked in month {{month}} · resets on the 1st",
-      "subtitleNoMonth": "Most liked this month · resets on the 1st",
+      "heroTitle": "Top rated · Month {{month}}",
+      "heroTitleNoMonth": "Top rated this month",
+      "heroCaption": "{{scope}} · resets on the 1st",
+      "viewNationwide": "See all cities",
       "empty": "No notes on the chart this month yet",
       "emptyCity": "No notes from {{city}} on the chart this month yet",
       "emptyHint": "Pick a city in a note's title; once it gets good ratings it shows up here.",
+      "emptyHintNationwide": "Notes show up here once they get good ratings.",
       "loadFailed": "Couldn't load the chart",
       "rankA11y": "Rank {{rank}}"
     }

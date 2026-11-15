@@ -1,48 +1,49 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Spacing, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 import { useNoteRanking } from '@/features/notes/hooks/use-note-ranking';
-import { NoteRankingRow } from '@/features/notes/components/NoteRankingRow';
+import { NoteRankingHero } from '@/features/notes/components/NoteRankingHero';
+import { NoteRankingRow, RANK_COLUMN_WIDTH, RANK_GAP } from '@/features/notes/components/NoteRankingRow';
+import { NoteRankingStatus } from '@/features/notes/components/NoteRankingStatus';
+import type { NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { getNoteDetailHref } from '@/features/user/utils/routes';
-import type { NoteSummary } from '@/features/notes/types';
+import type { NoteRankingItem } from '@/features/notes/types';
+
+/** 宽屏（平板、桌面网页）上榜单不铺满：卡片再宽四宫格就太大了。 */
+const MAX_CONTENT_WIDTH = 600;
+const PAGE_GUTTER = Spacing.md;
 
 const s = StyleSheet.create({
-  filters: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg },
-  chip: {
-    height: 32,
-    borderRadius: Radius.full,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
+  list: {
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
+    paddingHorizontal: PAGE_GUTTER,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
   },
-  chipText: { ...Typography.caption, fontWeight: '600' },
-  subtitle: { ...Typography.small, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
-  list: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: Spacing.sm },
-  state: { alignItems: 'center', paddingTop: Spacing.xxl, paddingHorizontal: Spacing.xl, gap: Spacing.sm },
-  stateText: { ...Typography.bodyRegular, textAlign: 'center' },
-  retry: { ...Typography.body, fontWeight: '600' },
 });
 
-const keyExtractor = (note: NoteSummary) => note.id;
+const keyExtractor = (note: NoteRankingItem) => note.id;
 
-/** 探索 → 大众点评：本月好评最多的笔记，按城市筛选，每月 1 号（上海时区）重新排。 */
+/** 探索 → 大众点评：本月好评最多的笔记，全国或按城市看，每月 1 号（上海时区）重新排。 */
 export default function NoteRankingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  // 默认看自己资料里的城市；没填就看全国。
+  const { width: windowWidth } = useWindowDimensions();
+  // 默认看自己资料里的城市；没填就看全国。切到全国后城市那一段仍记着上次的城市，点一下就回去。
   const homeCity = useAuthStore((state) => state.user?.city ?? null);
   const [city, setCity] = useState<string | null>(homeCity);
+  const [lastCity, setLastCity] = useState<string | null>(homeCity);
   const consumePickedCity = useCityPickStore((state) => state.consume);
   const { ranking, loading, error, reload } = useNoteRanking(city);
   const pull = usePullRefresh(reload);
@@ -50,111 +51,79 @@ export default function NoteRankingScreen() {
   useFocusEffect(
     useCallback(() => {
       const picked = consumePickedCity('ranking');
-      if (picked) setCity(picked);
+      if (!picked) return;
+      setCity(picked);
+      setLastCity(picked);
     }, [consumePickedCity]),
   );
 
+  const cardWidth =
+    Math.min(windowWidth, MAX_CONTENT_WIDTH) - PAGE_GUTTER * 2 - RANK_COLUMN_WIDTH - RANK_GAP;
   const d = useMemo(
     () => ({
       container: { flex: 1, backgroundColor: colors.background, paddingTop: insets.top },
-      chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.surfaceBorder },
-      chipActive: { backgroundColor: colors.primary, borderWidth: 1, borderColor: colors.primary },
-      chipText: { color: colors.text },
-      chipTextActive: { color: colors.white },
-      secondary: { color: colors.textSecondary },
-      link: { color: colors.primary },
       listBottom: { paddingBottom: insets.bottom + Spacing.xl },
     }),
-    [colors, insets.bottom, insets.top],
+    [colors.background, insets.bottom, insets.top],
   );
 
+  const showNationwide = useCallback(() => setCity(null), []);
   const openCityPicker = useCallback(() => {
     router.push({
       pathname: '/(tabs)/explore/select-city',
       params: { target: 'ranking', ...(city ? { city } : {}) },
     });
   }, [city, router]);
+  // 已在看城市榜：再点就是换城市；在全国榜：有上次的城市就直接切回去，没有才去选。
+  const pressCity = useCallback(() => {
+    if (city === null && lastCity) setCity(lastCity);
+    else openCityPicker();
+  }, [city, lastCity, openCityPicker]);
   const openNote = useCallback(
-    (note: NoteSummary) => router.push(getNoteDetailHref('explore', note.id, note.ownerId ?? '')),
+    (note: NoteRankingItem, section?: NoteCardSection) =>
+      router.push(getNoteDetailHref('explore', note.id, note.ownerId ?? '', section ?? '')),
     [router],
   );
   const renderItem = useCallback(
-    ({ item, index }: { item: NoteSummary; index: number }) => (
-      <NoteRankingRow rank={index + 1} note={item} onPress={openNote} />
+    ({ item, index }: { item: NoteRankingItem; index: number }) => (
+      <NoteRankingRow rank={index + 1} note={item} cardWidth={cardWidth} onOpen={openNote} />
     ),
-    [openNote],
+    [cardWidth, openNote],
   );
 
   const month = ranking ? Number(ranking.month.slice(5, 7)) : null;
-  const items = ranking?.items ?? [];
+  const header = (
+    <NoteRankingHero
+      month={month}
+      city={city}
+      cityLabel={city ?? lastCity}
+      onNationwide={showNationwide}
+      onCity={pressCity}
+    />
+  );
+  const status =
+    loading && !pull.refreshing ? (
+      <NoteRankingStatus kind="loading" />
+    ) : error ? (
+      <NoteRankingStatus kind="error" message={error} onRetry={reload} />
+    ) : (
+      <NoteRankingStatus kind="empty" city={city} onNationwide={showNationwide} />
+    );
 
   return (
     <View style={d.container}>
       <NavHeader title={t('explore.ranking.title', { defaultValue: '大众点评' })} />
-      <View style={s.filters}>
-        <Pressable
-          style={[s.chip, city === null ? d.chipActive : d.chip]}
-          onPress={() => setCity(null)}
-          accessibilityRole="button"
-          accessibilityState={{ selected: city === null }}
-        >
-          <Text style={[s.chipText, city === null ? d.chipTextActive : d.chipText]}>
-            {t('explore.ranking.nationwide', { defaultValue: '全国' })}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[s.chip, city !== null ? d.chipActive : d.chip]}
-          onPress={openCityPicker}
-          accessibilityRole="button"
-          accessibilityState={{ selected: city !== null }}
-        >
-          <Ionicons name="location-outline" size={14} color={city !== null ? colors.white : colors.text} />
-          <Text style={[s.chipText, city !== null ? d.chipTextActive : d.chipText]}>
-            {city ?? t('explore.ranking.chooseCity', { defaultValue: '选择城市' })}
-          </Text>
-          <Ionicons name="chevron-down" size={13} color={city !== null ? colors.white : colors.textSecondary} />
-        </Pressable>
-      </View>
-      <Text style={[s.subtitle, d.secondary]}>
-        {month
-          ? t('explore.ranking.subtitle', { defaultValue: '{{month}} 月好评榜 · 每月 1 号重新排', month })
-          : t('explore.ranking.subtitleNoMonth', { defaultValue: '本月好评榜 · 每月 1 号重新排' })}
-      </Text>
       <FlatList
-        data={items}
+        data={ranking?.items ?? []}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListEmptyComponent={status}
         contentContainerStyle={[s.list, d.listBottom]}
         refreshing={pull.refreshing}
         onRefresh={pull.onRefresh}
-        initialNumToRender={8}
-        ListEmptyComponent={
-          loading && !pull.refreshing ? (
-            <View style={s.state} testID="note-ranking-loading">
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : error ? (
-            <View style={s.state}>
-              <Text style={[s.stateText, d.secondary]}>{error}</Text>
-              <Pressable onPress={reload} accessibilityRole="button" hitSlop={8}>
-                <Text style={[s.retry, d.link]}>{t('common.retry', { defaultValue: '重试' })}</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={s.state}>
-              <Text style={[s.stateText, d.secondary]}>
-                {city
-                  ? t('explore.ranking.emptyCity', { defaultValue: '{{city}}这个月还没有上榜的笔记', city })
-                  : t('explore.ranking.empty', { defaultValue: '这个月还没有上榜的笔记' })}
-              </Text>
-              <Text style={[s.stateText, d.secondary]}>
-                {t('explore.ranking.emptyHint', {
-                  defaultValue: '在笔记标题里选上城市，收到好评就会上榜。',
-                })}
-              </Text>
-            </View>
-          )
-        }
+        initialNumToRender={6}
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );

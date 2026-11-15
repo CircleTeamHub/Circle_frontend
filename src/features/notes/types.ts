@@ -179,10 +179,15 @@ export interface NoteSummary {
   /** 来源笔记本月（上海时区）的好评 / 差评数；旧接口缺省按 0。 */
   goodCount?: number;
   badCount?: number;
-  /** 作者在标题里选的城市；选了城市才参加该城市的大众点评月榜。旧接口缺省按未选。 */
+  /** 作者在标题里选的城市；选了城市才进该城市的大众点评月榜（全国榜不看城市）。旧接口缺省按未选。 */
   city?: string | null;
   /** 下架时间（status=UNLISTED 时有值）；60 天后服务端自动永久删除。 */
   unlistedAt?: string | null;
+}
+
+/** 榜单一条：笔记摘要 + 聊天笔记卡片同款的四宫格预览图（服务端现签，已过媒体白名单）。 */
+export interface NoteRankingItem extends NoteSummary {
+  previewUrls: string[];
 }
 
 /** 大众点评月榜：本月（上海时区）好评最多的笔记，已按名次排好。 */
@@ -191,7 +196,7 @@ export interface NoteRanking {
   month: string;
   /** null = 全国 */
   city: string | null;
-  items: NoteSummary[];
+  items: NoteRankingItem[];
 }
 
 export interface NoteDetail extends NoteSummary {

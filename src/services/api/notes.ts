@@ -219,11 +219,24 @@ export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
   }
 }
 
-/** 大众点评月榜。city 不传 = 全国；只有选了城市的源笔记会上榜。 */
+/** 同聊天笔记卡片的四宫格：最多 4 张。 */
+const RANKING_PREVIEW_MAX = 4;
+
+/** 大众点评月榜。city 不传 = 全国（不看城市）；传了只收选了这座城市的源笔记。 */
 export async function fetchNoteRanking(city: string | null): Promise<NoteRanking> {
   const qs = city ? `?city=${encodeURIComponent(city)}` : '';
   const ranking = await apiClient<NoteRanking>(`/note/ranking${qs}`);
-  return { ...ranking, items: ranking.items.map(sanitizeNoteSummary) };
+  return {
+    ...ranking,
+    items: ranking.items.map((item) => ({
+      ...sanitizeNoteSummary(item),
+      // 旧后端没有这个字段；每张都要过媒体白名单，同聊天卡片的预览图。
+      previewUrls: (Array.isArray(item.previewUrls) ? item.previewUrls : [])
+        .map((url: unknown) => allowPeerMediaUrl(typeof url === 'string' ? url : null))
+        .filter((url): url is string => Boolean(url))
+        .slice(0, RANKING_PREVIEW_MAX),
+    })),
+  };
 }
 
 export async function fetchNoteDrafts(): Promise<NoteDraftSummary[]> {
