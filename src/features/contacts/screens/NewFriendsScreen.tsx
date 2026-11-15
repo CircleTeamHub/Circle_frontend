@@ -298,10 +298,10 @@ export default function NewFriendsScreen() {
 
   const tabs = useMemo(
     () => [
-      { id: 'friends' as const, label: t('contacts.friendActivity.tabFriends') },
+      { id: 'friends' as const, label: t('contacts.friendActivity.tabFriends'), unreadCount: unreadFriendActivityCount },
       { id: 'groups' as const, label: t('contacts.friendActivity.tabGroups'), unreadCount: groupAdmissionsUnread },
     ],
-    [groupAdmissionsUnread, t],
+    [groupAdmissionsUnread, t, unreadFriendActivityCount],
   );
 
   return (

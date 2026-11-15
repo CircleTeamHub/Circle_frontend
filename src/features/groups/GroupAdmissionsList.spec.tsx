@@ -131,7 +131,7 @@ test('inviter, recipient and reviewing manager see the correct people and member
 });
 
 
-test('one group row combines history and joined chat, uses newest update, and preserves all unread counts', async () => {
+test('one group row combines history and joined chat, uses newest update, and adds up its invitation unread counts', async () => {
   mockConversations = [{ id: 'g', type: 'GROUP', name: '同一个群', unreadCount: 3 }];
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
     { id: 'older', conversationId: 'g', applicantId: 'actor', isApplicant: true, kind: 'INVITE', status: 'INVITED', createdAt: '2026-10-14T02:00:00Z', updatedAt: '2026-10-14T02:00:00Z', unreadCount: 1, group: { id: 'g', name: '同一个群' } },
@@ -143,7 +143,8 @@ test('one group row combines history and joined chat, uses newest update, and pr
   expect(ui.queryByText(/等待接受邀请/)).toBeNull();
   const list = ui.UNSAFE_getByType(FlatList);
   expect(list.props.data[0].key).toBe('group-g');
-  expect(list.props.data[0].unreadCount).toBe(6);
+  // 群聊里的 3 条未读消息归消息页，这里只数两条邀请通知。
+  expect(list.props.data[0].unreadCount).toBe(3);
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
     { id: 'latest', conversationId: 'g', applicantId: 'actor', isApplicant: true, kind: 'INVITE', status: 'PENDING', updatedAt: '2026-10-14T04:00:00Z', group: { id: 'g', name: '同一个群' } },
   ] as any, nextCursor: null });
@@ -151,6 +152,25 @@ test('one group row combines history and joined chat, uses newest update, and pr
   await ui.findByText(/已提交，等待管理员审核/);
   expect(ui.getAllByText('同一个群')).toHaveLength(1);
   expect(ui.UNSAFE_getByType(FlatList).props.data[0].key).toBe('group-g');
+});
+
+// 真机现场：邀请已点开（通知已读），群里那条「某某邀请你加入群聊」系统消息还没读。
+// 这一行点进去是邀请详情、不会读群消息，红点要是算上聊天未读就永远消不掉，
+// 页签角标（只数邀请通知）也对不上。
+test('unread chat messages in a joined group never light the invitation row', async () => {
+  mockConversations = [
+    { id: 'g', type: 'GROUP', name: '开门吗', unreadCount: 1 },
+    { id: 'joined-only', type: 'GROUP', name: '只是加入的群', unreadCount: 4 },
+  ];
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
+    { id: 'seen', conversationId: 'g', applicantId: 'actor', isApplicant: true, kind: 'INVITE', status: 'JOINED', inviterName: '小李', unreadCount: 0, group: { id: 'g', name: '开门吗', isMember: true } },
+  ] as any, nextCursor: null });
+  const ui = render(<GroupAdmissionsList includeJoined />);
+  await ui.findByText('小李 邀请你加入群聊 · 已加入群聊');
+  await ui.findByText('只是加入的群');
+  const data = ui.UNSAFE_getByType(FlatList).props.data;
+  expect(data.map((row: any) => [row.name, row.unreadCount])).toEqual([['开门吗', 0], ['只是加入的群', 0]]);
+  expect(ui.queryByTestId('group-inbox-unread-seen', { includeHiddenElements: true })).toBeNull();
 });
 
 test('circle invitations and their joined circle conversation also share one row', async () => {

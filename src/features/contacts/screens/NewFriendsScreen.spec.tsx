@@ -47,8 +47,14 @@ jest.mock('@/components/ui/member-name', () => {
     jest.requireActual<typeof import('react-native')>('react-native');
   return { MemberName: ({ name }: { name: string }) => <MockText>{name}</MockText> };
 });
+let mockTabs: { id: string; unreadCount?: number }[] = [];
+let mockFriendUnread = 0;
+let mockGroupUnread = 0;
 jest.mock('@/features/contacts/components/InboxTabsHeader', () => ({
-  InboxTabsHeader: () => null,
+  InboxTabsHeader: ({ tabs }: { tabs: typeof mockTabs }) => {
+    mockTabs = tabs;
+    return null;
+  },
 }));
 jest.mock('@/features/contacts/components/NewGroupsInboxList', () => ({
   NewGroupsInboxList: () => null,
@@ -68,7 +74,7 @@ jest.mock('@/services/api/friends', () => ({
 }));
 // 与真 store 一样返回稳定的 refresh:每次渲染换新引用会让聚焦回调反复重跑。
 jest.mock('@/stores/friendActivityUnreadStore', () => {
-  const state = { count: 0, refresh: async () => 0 };
+  const state = { get count() { return mockFriendUnread; }, refresh: async () => 0 };
   return {
     useFriendActivityUnreadStore: (select: (current: typeof state) => unknown) =>
       select(state),
@@ -76,7 +82,7 @@ jest.mock('@/stores/friendActivityUnreadStore', () => {
 });
 jest.mock('@/stores/tabBadgeStore', () => ({
   useTabBadgeStore: (select: (state: { groupAdmissionsUnread: number }) => unknown) =>
-    select({ groupAdmissionsUnread: 0 }),
+    select({ groupAdmissionsUnread: mockGroupUnread }),
 }));
 jest.mock('@/stores/authStore', () => {
   const getState = () => ({ user: { id: 'me' }, sessionEpoch: mockSessionEpoch });
@@ -121,7 +127,21 @@ async function visitOnce(activities: FriendActivity[]) {
 beforeEach(() => {
   mockFriendsMutated = false;
   mockSessionEpoch += 1;
+  mockTabs = [];
+  mockFriendUnread = 0;
+  mockGroupUnread = 0;
   jest.mocked(fetchFriendActivities).mockReset();
+});
+
+test('both tabs show how many items are still unread', () => {
+  mockFriendUnread = 2;
+  mockGroupUnread = 1;
+  jest.mocked(fetchFriendActivities).mockReturnValue(new Promise(() => {}));
+  render(<NewFriendsScreen />);
+  expect(mockTabs.map(({ id, unreadCount }) => [id, unreadCount])).toEqual([
+    ['friends', 2],
+    ['groups', 1],
+  ]);
 });
 
 test('the first visit spins until the list arrives', () => {

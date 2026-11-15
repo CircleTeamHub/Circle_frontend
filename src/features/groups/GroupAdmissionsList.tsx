@@ -230,7 +230,9 @@ export function GroupAdmissionsList({
             avatar: ui.avatarUrl ?? null,
             groupId: c.id,
             sourceId: ui.sourceID,
-            unreadCount: ui.unreadCount ?? 0,
+            // 红点只数邀请/申请通知，与页签角标同一口径。群聊未读消息归消息页：
+            // 这一行点进去多半是邀请详情，算上它红点就永远点不掉。
+            unreadCount: 0,
           };
         })
       : [];
