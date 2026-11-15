@@ -75,6 +75,12 @@ jest.mock('@/components/ui/badge', () => {
   return { Badge: ({ count }: { count: number }) => <Text testID="unread-badge">{count}</Text> };
 });
 let mockChatConversations: { id: string; type: string; peer?: { id: string }; preview: string; unreadCount: number }[] = [];
+// 看不见就停订阅的那层在这里直通:测试的 useChatStore 是普通 selector 函数。
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
+jest.mock('@/hooks/use-store-while-active', () => ({
+  useStoreWhileActive: (store: (select: (state: unknown) => unknown) => unknown, select: (state: unknown) => unknown) =>
+    store(select),
+}));
 jest.mock('@/chat-core/store', () => ({
   useChatStore: (select: (state: { conversations: unknown[] }) => unknown) => select({ conversations: mockChatConversations }),
 }));

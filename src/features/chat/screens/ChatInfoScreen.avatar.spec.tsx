@@ -71,6 +71,7 @@ jest.mock('@/chat-core/burn-durations', () => ({
 }));
 jest.mock('@/chat-core/silence-durations', () => ({ SILENCE_DURATION_OPTIONS: [], isMemberSilencedNow: () => false }));
 jest.mock('@/chat-core/client', () => ({}));
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
 jest.mock('@/chat-core/store', () => ({
   useChatStore: jest.requireActual('zustand').create(() => ({
     currentUserId: 'me', conversations: [], upsertConversation: jest.fn(),

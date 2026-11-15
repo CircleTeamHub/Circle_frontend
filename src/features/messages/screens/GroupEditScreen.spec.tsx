@@ -64,6 +64,12 @@ jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/hooks/use-deferred-content', () => ({ useDeferredContent: () => true }));
+// 看不见就停订阅的那层在这里直通:测试的 useChatStore 是普通 selector 函数。
+jest.mock('@/hooks/use-screen-live', () => ({ useScreenLive: () => true }));
+jest.mock('@/hooks/use-store-while-active', () => ({
+  useStoreWhileActive: (store: (select: (state: unknown) => unknown) => unknown, select: (state: unknown) => unknown) =>
+    store(select),
+}));
 jest.mock('@/chat-core/store', () => ({
   useChatStore: (select: (state: { conversations: unknown[] }) => unknown) =>
     select({ conversations: mockConversations }),

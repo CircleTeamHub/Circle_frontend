@@ -137,7 +137,7 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  // 从这里点进群聊后,本页紧挨在聊天页下面,原生栈不会冻结它;不停订阅的话
+  // 从这里点进群聊后,本页压在聊天页下面照样挂载(导航器不冻结看不见的页面);不停订阅的话
   // 每来一条消息都要把所有群重新映射一遍。右滑返回一开始就恢复,露出来的是最新列表。
   const isLive = useScreenLive();
   const conversations = useStoreWhileActive(useChatStore, selectConversations, isLive);

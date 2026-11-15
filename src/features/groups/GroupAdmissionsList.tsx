@@ -25,6 +25,9 @@ import { Divider } from "@/components/ui/divider";
 import { UnreadCountBadge } from "@/components/ui/unread-count-badge";
 import { useAuthStore } from "@/stores/authStore";
 import { useChatStore } from "@/chat-core/store";
+import { selectConversations } from "@/chat-core/conversation-selectors";
+import { useScreenLive } from "@/hooks/use-screen-live";
+import { useStoreWhileActive } from "@/hooks/use-store-while-active";
 import { ensureChatConversations } from "@/chat-core/api";
 import {
   getChatDetailHref,
@@ -78,7 +81,8 @@ export function GroupAdmissionsList({
   );
   const sessionEpoch = useAuthStore((s) => s.sessionEpoch);
   const userId = useAuthStore((s) => s.user?.id);
-  const conversations = useChatStore((s) => s.conversations);
+  // 看不见时(切走的 tab、上面压着别的页)不跟着每条消息重算;露出来时按最新值取。
+  const conversations = useStoreWhileActive(useChatStore, selectConversations, useScreenLive());
   // 上次拉到的第一页先画出来，后台照常重拉；没有快照才整页转圈（见 group-admissions-cache）。
   const [snapshot] = useState(() =>
     readGroupAdmissionsSnapshot(sessionEpoch, groupId, groupOrCircleMutatedSince),

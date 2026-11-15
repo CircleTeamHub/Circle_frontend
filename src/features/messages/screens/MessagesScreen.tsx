@@ -745,8 +745,8 @@ export default function MessagesScreen() {
     [t],
   );
 
-  // 页面不在前台(切到别的 tab,或聊天页压在上面)时不再跟着聊天 store 走:原生栈
-  // 为了右滑返回不会冻结紧挨在当前页下面的这一页,不停订阅的话每条消息都整表重算。
+  // 页面不在前台(切到别的 tab,或聊天页压在上面)时不再跟着聊天 store 走:看不见的页面
+  // 不卸载也不冻结(导航器不开 freezeOnBlur),不停订阅的话每条消息都整表重算。
   // 右滑返回一开始就恢复(useScreenLive),露出来的是最新列表;focus effect 也会重拉一遍会话。
   const isLive = useScreenLive();
   const rawConversations = useStoreWhileActive(
@@ -920,7 +920,7 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  // tab 角标不靠这里:chat-core/app-badge 在根上独立同步,本页冻结或失焦都不影响。
+  // tab 角标不靠这里:chat-core/app-badge 在根上独立同步,本页失焦也不影响。
   const totalUnread = useStoreWhileActive(useChatStore, selectTotalUnread, isLive);
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 

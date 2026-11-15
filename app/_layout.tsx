@@ -259,8 +259,6 @@ function RootStack() {
       <Stack
         screenLayout={probeNavigatorLayout}
         screenOptions={{
-          // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
-          freezeOnBlur: true,
           headerShown: false,                          // 所有页面不显示系统 header
           animation: 'slide_from_right',               // 页面切换动画：从右侧滑入
           contentStyle: { backgroundColor: colors.background },

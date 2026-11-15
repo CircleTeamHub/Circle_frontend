@@ -23,6 +23,9 @@ import {
 } from '@/chat-core/api';
 import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
@@ -126,7 +129,8 @@ export default function SearchScreen() {
     setLoadError(null);
   }, [sessionEpoch]);
 
-  const rawConversations = useChatStore((state) => state.conversations);
+  // 看不见时(切走的 tab、上面压着别的页)不跟着每条消息重算;露出来时按最新值取。
+  const rawConversations = useStoreWhileActive(useChatStore, selectConversations, useScreenLive());
   const conversations = useMemo(
     () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
