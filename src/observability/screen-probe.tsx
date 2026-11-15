@@ -58,12 +58,16 @@ type ProbeProps = LayoutProps & { measureFirstCommit: boolean };
 const ScreenProbe: React.FC<ProbeProps> = ({ route, navigation, children, measureFirstCommit }) => {
   const renderStartedAt = useRef<number | null>(null);
   if (renderStartedAt.current === null) renderStartedAt.current = diagnosticNow();
+  // 冻结是 Suspense：解冻重新显示时 React 会重跑 layout effect（React 18 起），ref 却留着，
+  // 不拦的话「从开始渲染到解冻」整段都被当成首次提交（REACT-NATIVE-D2 的 26 秒）。
+  const firstCommitSeen = useRef(false);
   const [focusCount, setFocusCount] = useState(0);
   const awaitingCommit = useRef(false);
   const page = route.name;
 
   useLayoutEffect(() => {
-    if (!measureFirstCommit || renderStartedAt.current === null) return;
+    if (!measureFirstCommit || firstCommitSeen.current || renderStartedAt.current === null) return;
+    firstCommitSeen.current = true;
     if (!firstScreenSeen) {
       firstScreenSeen = true;
       return;

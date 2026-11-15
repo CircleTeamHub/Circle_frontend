@@ -152,6 +152,28 @@ test('a page whose first commit takes over a second is recorded and reported by 
   });
 });
 
+test('a page thawed after being pushed under is not timed again (REACT-NATIVE-D2)', async () => {
+  const navigation = fakeNavigation();
+  const startup = await renderAsync(probeScreenLayout({ route: { name: 'messages' }, navigation, children: <Text>home</Text> }));
+  await startup.unmountAsync();
+  const explore = (frozen: boolean) => (
+    <Freeze freeze={frozen}>
+      {probeScreenLayout({ route: { name: 'index' }, navigation, children: <Text>explore</Text> })}
+    </Freeze>
+  );
+  const { rerenderAsync } = await renderAsync(explore(false));
+  expect(mockRecordMetric).toHaveBeenCalledTimes(1);
+
+  // 往里压两层后它被冻结；26 秒后返回一层，它成了焦点下面那页而解冻。
+  // Suspense 重新显示内容时会重跑 layout effect（React 18 起），但这不是首次提交。
+  await rerenderAsync(explore(true));
+  mockNow += 26_000;
+  await rerenderAsync(explore(false));
+
+  expect(mockRecordMetric).toHaveBeenCalledTimes(1);
+  expect(mockReportHandledFailure).not.toHaveBeenCalled();
+});
+
 test('a navigator wrapper does not time its first commit (its pages do)', async () => {
   const navigation = fakeNavigation();
   await renderAsync(probeNavigatorLayout({ route: { name: '(tabs)' }, navigation, children: <SlowContent /> }));
