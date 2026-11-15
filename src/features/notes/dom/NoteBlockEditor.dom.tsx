@@ -275,7 +275,16 @@ export default function NoteBlockEditor({
         fitsContent
           ? // Normal flow so the root's height is the content height that
             // gets reported; past the native cap the page itself scrolls.
-            { display: 'flex', flexDirection: 'column', backgroundColor: bg }
+            // Expo DOM's template makes #root a flex row, so without flex:1
+            // this item shrinks to its content width (~22px when empty) and
+            // taps on the rest of the bar never reach the contenteditable.
+            {
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: bg,
+            }
           : {
               // Expo DOM mounts this content with no html/body/#root height, so a
               // `height: 100%` here can't resolve and the flex column collapses to
