@@ -67,6 +67,12 @@ export const TELEMETRY_METRICS = {
       outcome: ['success', 'failed', 'cancelled'],
     },
   },
+  // 页面从开始渲染到第一次提交（observability/screen-probe）；native-stack 推页要等这次提交。
+  'screen.first_commit.duration': {
+    type: 'distribution',
+    unit: 'millisecond',
+    attributes: {},
+  },
   'push.received': {
     type: 'counter',
     attributes: { provider: PUSH_PROVIDERS, category: PUSH_CATEGORIES },

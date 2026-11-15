@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
 import { useTheme } from '@/theme';
+import { probeScreenLayout } from '@/observability/screen-probe';
 
 // 跨 tab 压栈（如聊天里点圈子名片 push 到本栈的 circle/[id]）时，给栈底垫上
 // 首页：否则栈里只有被压入的页面，返回无处可去，tab 会永远卡在那个页面。
@@ -14,6 +15,7 @@ export default function DiscoverLayout() {
   return (
     <DesktopCenteredColumn>
       <Stack
+        screenLayout={probeScreenLayout}
         screenOptions={{
           // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
           freezeOnBlur: true,

@@ -101,3 +101,37 @@ export function noteSubmissionMatchesResult(pending: PendingNoteSubmission, resu
 export function noteUpdateResultMatchesTarget(pending: PendingNoteSubmission, result: NoteDetail): boolean {
   return pending.noteId !== null && Boolean(result) && result.id === pending.noteId;
 }
+
+const CONTENT_KEYS = new Set(['text', 'objectKey', 'url']);
+
+/** 块里有没有用户写的字或插的媒体（空行、只剩样式默认值的块不算）。 */
+function blockCarriesContent(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(blockCarriesContent);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, field]) =>
+    (CONTENT_KEYS.has(key) && typeof field === 'string') ? field.trim().length > 0 : blockCarriesContent(field));
+}
+
+function contentBlockCount(contentJson: readonly unknown[] | null | undefined): number {
+  return (contentJson ?? []).filter(blockCarriesContent).length;
+}
+
+/**
+ * 保存成功后，服务端返回的正文比发出去的少了有内容的块：内容在服务端被丢了。
+ * 后端 ValidationPipe 曾把每个块清成空数组、PATCH 照样 200，用户的正文就这样没了，
+ * 却没有任何报错。PATCH 的对账只核对 id，这里专门数一遍；只给块数，不碰内容。
+ */
+export function noteContentDropped(
+  pending: PendingNoteSubmission,
+  result: NoteDetail,
+): { sentBlocks: number; returnedBlocks: number } | null {
+  const input = pending.input;
+  const sentBlocks = contentBlockCount(input.sections?.text?.contentJson ?? input.contentJson);
+  if (sentBlocks === 0 || !result) return null;
+  // 响应里压根没有正文字段是「不知道」，不是「丢了」；字段在但是 null 才算服务端把正文清掉了。
+  const section = result.sections?.text;
+  const returned = section && 'contentJson' in section ? section.contentJson : result.contentJson;
+  if (returned === undefined) return null;
+  const returnedBlocks = contentBlockCount(returned);
+  return returnedBlocks < sentBlocks ? { sentBlocks, returnedBlocks } : null;
+}

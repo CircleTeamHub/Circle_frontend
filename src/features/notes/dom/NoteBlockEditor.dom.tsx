@@ -57,6 +57,8 @@ interface Props {
    * instead of filling a fixed-height viewport.
    */
   onContentHeightChange?: (height: number) => void;
+  /** 挂载后量一次根节点与视口（CSS px），原生侧据此判断「一直没就绪」「布局塌了」。 */
+  onEditorReady?: (rootWidth: number, rootHeight: number, viewportWidth: number, viewportHeight: number) => void;
 }
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
@@ -92,6 +94,7 @@ export default function NoteBlockEditor({
   editable = true,
   backgroundColor,
   onContentHeightChange,
+  onEditorReady,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
     if (!initialContent) return undefined;
@@ -229,6 +232,24 @@ export default function NoteBlockEditor({
     observer.observe(root);
     return () => observer.disconnect();
   }, [fitsContent]);
+
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+  // 等两帧再量：第一帧时 flex 布局还没算完。
+  useEffect(() => {
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const rect = rootRef.current?.getBoundingClientRect();
+        onEditorReadyRef.current?.(
+          Math.round(rect?.width ?? 0),
+          Math.round(rect?.height ?? 0),
+          Math.round(window.innerWidth),
+          Math.round(window.innerHeight),
+        );
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   // A batch is inserted in one call so every item stays anchored after the
   // original cursor block in the same order the picker returned it.

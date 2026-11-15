@@ -110,6 +110,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
       if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
       if (name === "./http-diagnostics") return load("src/observability/http-diagnostics.ts");
+      if (name === "./detector-titles") return load("src/observability/detector-titles.ts");
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },

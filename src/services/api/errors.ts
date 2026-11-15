@@ -2,6 +2,25 @@ import i18n from '@/i18n';
 import { ApiError } from '@/services/api/client';
 import { isKnownServerErrorCode } from '@/services/api/server-error-codes';
 import { isUserFacingError } from '@/utils/user-facing-error';
+import { safeHttpEndpoint } from '@/observability/http-diagnostics';
+import { reportHandledFailure } from '@/observability/report-failure';
+
+const reportedUnknownCodes = new Set<string>();
+
+/**
+ * 前端不认识的后端错误码：只能显示兜底文案。前后端码表靠契约测试对齐，但线上老版本 App
+ * 会碰到之后新增的码，以前什么也不报。每个码每个进程报一次，只带码和接口模板，不带后端原文。
+ */
+function reportUnknownServerErrorCode(error: ApiError, errorCode: string): void {
+  const code = /^[A-Z][A-Z0-9_]{0,63}$/.test(errorCode) ? errorCode : 'MALFORMED';
+  if (reportedUnknownCodes.has(code)) return;
+  reportedUnknownCodes.add(code);
+  reportHandledFailure('api', 'unknownErrorCode', new Error(`unknown server error code ${code}`), {
+    errorCode: code,
+    code,
+    ...(error.reportEndpoint ? { endpointPath: safeHttpEndpoint(error.reportEndpoint) } : {}),
+  });
+}
 
 /**
  * 把任意抛出的错误转成一句可展示给用户的文案。
@@ -29,6 +48,7 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     }
     if (error.errorCode) {
       if (!isKnownServerErrorCode(error.errorCode)) {
+        reportUnknownServerErrorCode(error, error.errorCode);
         return fallback;
       }
       return i18n.t(`serverErrors.${error.errorCode}`, {

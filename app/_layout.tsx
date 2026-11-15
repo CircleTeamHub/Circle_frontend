@@ -55,6 +55,8 @@ import { createFreshConnectionTransport } from '@/services/api/fresh-connection-
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { createRequestTraceHooks } from '@/observability/request-trace';
 import { startJsStallDetector } from '@/observability/js-stall-detector';
+import { CommitStormTouchBoundary, startCommitStormDetector } from '@/observability/commit-storm-boundary';
+import { startChatConnectionWatchdog } from '@/chat-core/socket-manager';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
@@ -74,6 +76,7 @@ import {
 import { reportHandledFailure } from '@/observability/report-failure';
 import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { devWarn } from '@/utils/dev-log';
+import { checkNavigationShape, probeNavigatorLayout } from '@/observability/screen-probe';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
 export { RouteErrorBoundary as ErrorBoundary } from '@/observability/RouteErrorBoundary';
@@ -135,6 +138,10 @@ if (Platform.OS !== 'web') {
       reportHandledFailure('jsThread', 'stall', new Error('JS thread stalled'), { durationMs });
     },
   });
+  // 没人操作时 React 每秒提交十几次、持续 5 秒就报一次，带上反复渲染的组件名（见 commit-storm-detector）。
+  startCommitStormDetector();
+  // 前台、有会话，聊天长连接却断着一分钟且没人在重连，就报一次（见 chat-core/connection-watchdog）。
+  startChatConnectionWatchdog();
 }
 
 async function registerLiveKitGlobals() {
@@ -250,6 +257,7 @@ function RootStack() {
       {/* Stack 导航：所有页面以"从右滑入"的动画叠加展示，全局隐藏 header。
           开启横向返回手势，让带有自定义返回按钮的页面也支持从左侧滑回。 */}
       <Stack
+        screenLayout={probeNavigatorLayout}
         screenOptions={{
           // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
           freezeOnBlur: true,
@@ -399,6 +407,12 @@ function RootLayout() {
     registerSentryNavigationContainer(navigationRef);
   }, [navigationRef]);
 
+  // 导航状态每变一次查一遍形状：根栈里多出一份 (tabs) 时返回会走进死路（见 screen-probe）。
+  useEffect(
+    () => navigationRef.addListener('state', () => checkNavigationShape(navigationRef.getRootState())),
+    [navigationRef],
+  );
+
   useEffect(() => {
     // 引导逻辑搬到模块级 ensureStartupBootstrap()（记忆化 → 只跑一次）。
     // 认证 store 与其余持久化状态继续在后台恢复，不阻塞首屏路由渲染。
@@ -475,7 +489,7 @@ function RootLayout() {
     </ThemeProvider>
   );
 
-  return appContent;
+  return <CommitStormTouchBoundary>{appContent}</CommitStormTouchBoundary>;
 }
 
 // 用 Sentry 包裹根组件（启用触摸/导航埋点）；未配置 DSN 时返回原组件、行为不变。

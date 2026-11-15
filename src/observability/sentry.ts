@@ -26,6 +26,7 @@ import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
 import { allowedMetricAttributes, metricDefinition } from './metrics';
 import { safeHttpEndpoint } from './http-diagnostics';
+import { detectorTitle } from './detector-titles';
 import {
   isBenignDomBridgeRejection,
   rejectionMessage,
@@ -397,6 +398,16 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'responseHasRefreshToken',
   'sessionPreserved',
   'closeCode',
+  // 主动检测的读数（observability/detector-titles 列出的那几类）：计数与组件名，不含用户内容。
+  'commitsPerSecond',
+  'components',
+  'routeCount',
+  'sentBlocks',
+  'returnedBlocks',
+  'rootWidth',
+  'rootHeight',
+  'viewportWidth',
+  'viewportHeight',
   // 请求卡顿现场（observability/request-trace + services/api/client）：只收枚举与计数，
   // 形状由 isSafeStallDiagnostic 把关。
   ...STALL_DIAGNOSTIC_KEYS,
@@ -1342,6 +1353,8 @@ function safeErrorMessage(context: Record<string, unknown> | undefined, error?: 
   if (context?.operation === 'jsThread' && context.kind === 'stall') {
     return requestSummary('JS 线程卡顿', context);
   }
+  const detected = context ? detectorTitle((key) => readTagValue(context, key)) : undefined;
+  if (detected) return detected;
   if (context && readTagValue(context, 'endpointPath')) {
     const retryOutcome = context.retry === 'recovered' ? '｜重试已救回' : context.retry === 'failed' ? '｜重试也失败' : '';
     return `${requestSummary('接口请求失败', context)}｜${explanation}${retryOutcome}`;

@@ -165,7 +165,7 @@ import {
 } from '@/features/notes/utils/note-editor-drafts';
 import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
 import { stopNoteRecorder } from '@/features/notes/utils/note-recorder-lifecycle';
-import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteSubmissionMatchesResult, noteUpdateResultMatchesTarget, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
+import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteContentDropped, noteSubmissionMatchesResult, noteUpdateResultMatchesTarget, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
 import { createNoteDraftSaveQueue } from '@/features/notes/utils/note-draft-save-queue';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/api-error';
@@ -2879,6 +2879,11 @@ export default function EditNoteScreen() {
       logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(responseReceivedAt - phaseStartedAt)) });
       savePhase = 'reconcile';
       phaseStartedAt = responseReceivedAt;
+      // 服务端 200 却把正文丢了（曾因 ValidationPipe 清空 contentJson）：用户无感，只能在这里看见。
+      const droppedContent = noteContentDropped(submission, result);
+      if (droppedContent) {
+        reportHandledFailure('noteSave', 'contentDropped', new Error('saved note came back with less body'), droppedContent);
+      }
       const resultMatchesSubmission = submission.noteId !== null
         ? noteUpdateResultMatchesTarget(submission, result)
         : noteSubmissionMatchesResult(submission, result);

@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme';
+import { probeScreenLayout } from '@/observability/screen-probe';
 
 /**
  * 半屏聊天(quick-chat)里打开、选完要回到聊天的页面:分享选择、转账、选位置。
@@ -13,6 +14,7 @@ export default function ChatSheetLayout() {
 
   return (
     <Stack
+      screenLayout={probeScreenLayout}
       screenOptions={{
         // 看不见的页面冻结渲染,和其他栈一致。
         freezeOnBlur: true,
