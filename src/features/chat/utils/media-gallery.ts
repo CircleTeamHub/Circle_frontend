@@ -41,13 +41,36 @@ export async function readGalleryAccess(): Promise<GalleryAccess> {
   return toGalleryAccess(await MediaLibrary.getPermissionsAsync(false, ['photo', 'video']));
 }
 
+/**
+ * iOS 的 localUri 指向照片库里的原文件:App 进程凭照片权限读得到,但聊天上传走后台会话,
+ * 由系统的传输进程去读文件,照片库路径它读不到,上传立刻失败 —— 视频没压出新文件(压缩失败、
+ * HDR 跳过、压不小)就会拿原片去传,必现;GIF 原样上传也一样。拷进自己的缓存目录再交给
+ * 发送管线:同一 APFS 卷上是克隆,不额外占空间;「清除缓存」会一并清掉。
+ */
+async function copyIntoAppCache(uri: string): Promise<string> {
+  const directory = `${FileSystem.cacheDirectory}chat-gallery/`;
+  await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  const extension = /\.([A-Za-z0-9]{1,8})$/.exec(uri)?.[1]?.toLowerCase();
+  const name = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const target = `${directory}${name}${extension ? `.${extension}` : ''}`;
+  await FileSystem.copyAsync({ from: uri, to: target });
+  return target;
+}
+
 async function resolveGalleryAsset(asset: MediaLibrary.Asset): Promise<ImagePickerAsset | null> {
   // iOS 上 asset.uri 是 ph://,上传和压缩都要真实文件;只在 iCloud 上的会先下载下来。
   const info = await MediaLibrary.getAssetInfoAsync(asset, { shouldDownloadFromNetwork: true });
   // 个别 iOS 资源的 localUri 带 #fragment,文件名和类型推断都会被它带偏。
-  const uri = info.localUri?.split('#')[0];
+  const libraryUri = info.localUri?.split('#')[0];
   // 慢动作这类合成视频没有单一文件,拿不到就跳过。
-  if (!uri) return null;
+  if (!libraryUri) return null;
+  // 拷不出来就照旧用原路径:压缩能产出新文件时仍发得出去,别因此把这一项丢掉。
+  const uri = Platform.OS === 'ios'
+    ? await copyIntoAppCache(libraryUri).catch((error: unknown) => {
+        reportHandledFailure('chatMediaPicker', 'copyAsset', error);
+        return libraryUri;
+      })
+    : libraryUri;
   const file = await FileSystem.getInfoAsync(uri);
   const isVideo = asset.mediaType === MediaLibrary.MediaType.video;
   return {

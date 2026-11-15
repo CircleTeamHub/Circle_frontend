@@ -3316,56 +3316,59 @@ export default function EditNoteScreen() {
               returnKeyType="next"
             />
 
-            <Pressable
-              style={[s.groupButton, d.groupButton]}
-              disabled={isEditingLocked}
-              onPress={() => {
-                setGroupCreateOpen(false);
-                setGroupCreateName('');
-                setGroupCreating(false);
-                setGroupSheetVisible(true);
-              }}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-              accessibilityValue={{ text: groupSummary }}
-            >
-              <Ionicons name="folder-outline" size={14} color={colors.iconAccent} />
-              <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
-                {selectedGroupNames.length > 0
-                  ? groupSummary
-                  : t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-              </Text>
-              <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
-            </Pressable>
-            {/* 城市：选了才参加该城市的大众点评月榜；点 × 清除。 */}
-            <View style={[s.groupButton, s.cityChip, d.groupButton]}>
+            {/* 分组和城市并排一行：分组挤不下时自己省略，城市最多占半行。 */}
+            <View testID="note-title-chip-row" style={s.titleChipRow}>
               <Pressable
-                style={s.cityChipMain}
+                style={[s.groupButton, d.groupButton]}
                 disabled={isEditingLocked}
-                onPress={handleOpenCityPicker}
-                hitSlop={6}
+                onPress={() => {
+                  setGroupCreateOpen(false);
+                  setGroupCreateName('');
+                  setGroupCreating(false);
+                  setGroupSheetVisible(true);
+                }}
+                hitSlop={4}
                 accessibilityRole="button"
-                accessibilityLabel={t('notes.edit.cityLabel', { defaultValue: '城市' })}
-                accessibilityValue={city ? { text: city } : undefined}
+                accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+                accessibilityValue={{ text: groupSummary }}
               >
-                <Ionicons name="location-outline" size={14} color={colors.iconAccent} />
+                <Ionicons name="folder-outline" size={14} color={colors.iconAccent} />
                 <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
-                  {city ?? t('notes.edit.cityLabel', { defaultValue: '城市' })}
+                  {selectedGroupNames.length > 0
+                    ? groupSummary
+                    : t('notes.edit.groupsLabel', { defaultValue: '分组' })}
                 </Text>
-                {city ? null : <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />}
+                <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
               </Pressable>
-              {city ? (
+              {/* 城市：选了才参加该城市的大众点评月榜；点 × 清除。 */}
+              <View testID="note-city-chip" style={[s.groupButton, s.cityChip, d.groupButton]}>
                 <Pressable
+                  style={s.cityChipMain}
                   disabled={isEditingLocked}
-                  onPress={() => setCity(null)}
-                  hitSlop={8}
+                  onPress={handleOpenCityPicker}
+                  hitSlop={4}
                   accessibilityRole="button"
-                  accessibilityLabel={t('notes.edit.cityClear', { defaultValue: '不选城市' })}
+                  accessibilityLabel={t('notes.edit.cityLabel', { defaultValue: '城市' })}
+                  accessibilityValue={city ? { text: city } : undefined}
                 >
-                  <Ionicons name="close-circle" size={15} color={colors.textSecondary} />
+                  <Ionicons name="location-outline" size={14} color={colors.iconAccent} />
+                  <Text style={[s.groupButtonText, d.groupButtonText]} numberOfLines={1}>
+                    {city ?? t('notes.edit.cityLabel', { defaultValue: '城市' })}
+                  </Text>
+                  {city ? null : <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />}
                 </Pressable>
-              ) : null}
+                {city ? (
+                  <Pressable
+                    disabled={isEditingLocked}
+                    onPress={() => setCity(null)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('notes.edit.cityClear', { defaultValue: '不选城市' })}
+                  >
+                    <Ionicons name="close-circle" size={15} color={colors.textSecondary} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           </View>
         );
@@ -4438,22 +4441,27 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 26,
   },
-  // 分组收成标题下的一枚小胶囊：宽度随文字，超长时省略，不再占满一整行。
-  groupButton: {
-    alignSelf: 'flex-start',
+  // 标题下一行并排放分组和城市两枚胶囊；上下留白给胶囊的 hitSlop（出不了父视图）。
+  titleChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xs,
+  },
+  // 胶囊宽度随文字；分组摘要可能很长，挤不下时由它收缩省略。
+  groupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
     gap: Spacing.xs,
     height: 28,
-    marginHorizontal: Spacing.lg,
-    marginTop: 2,
-    marginBottom: Spacing.xs,
     paddingHorizontal: 10,
     borderRadius: Radius.pill,
   },
   groupButtonText: { ...Typography.small, fontWeight: '500', flexShrink: 1 },
-  // 城市胶囊沿用分组胶囊的外观，排在它下面；主体可点开选择，右侧 × 清除。
-  cityChip: { marginTop: Spacing.xs, maxWidth: 220 },
+  // 城市沿用分组胶囊的外观：不跟着分组一起被压扁，超过半行才省略；主体点开选择，右侧 × 清除。
+  cityChip: { flexShrink: 0, maxWidth: '50%' },
   cityChipMain: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexShrink: 1 },
   groupSheetWrap: { width: '100%', maxHeight: '70%' },
   groupSheet: {
