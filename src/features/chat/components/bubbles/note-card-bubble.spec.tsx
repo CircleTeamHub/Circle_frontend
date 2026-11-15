@@ -7,7 +7,11 @@ import type { ChatMessage, NoteCardData } from '@/types';
 
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual('react-native');
-  return { Image: ({ source }: { source: { uri: string } }) => <View testID={`img:${source.uri}`} /> };
+  return {
+    Image: ({ source, enforceEarlyResizing }: { source: { uri: string }; enforceEarlyResizing?: boolean }) => (
+      <View testID={`img:${source.uri}`} {...{ enforceEarlyResizing }} />
+    ),
+  };
 });
 jest.mock('@expo/vector-icons', () => {
   const { View } = jest.requireActual('react-native');
@@ -103,6 +107,19 @@ test('the grid shows at most four images and no extra count overlay', () => {
   );
   expect(screen.getAllByTestId(/^img:/)).toHaveLength(4);
   expect(screen.queryByText(/^\+\d+$/)).toBeNull();
+});
+
+// 榜单页一屏就是一串四宫格,每张都是原图签名地址:不按显示尺寸解码,iOS 会把整张位图解进内存(同封面、图片气泡)。
+test('grid thumbnails are decoded at display size, like the cover', () => {
+  render(
+    <NoteCardBubble
+      message={message(card({ previewUrls: ['https://cdn/a.jpg', 'https://cdn/b.jpg'] }))}
+      outgoing={false}
+    />,
+  );
+  for (const tile of screen.getAllByTestId(/^img:/)) {
+    expect(tile.props.enforceEarlyResizing).toBe(true);
+  }
 });
 
 test('all four section buttons are always there; the ones the note lacks are disabled', () => {

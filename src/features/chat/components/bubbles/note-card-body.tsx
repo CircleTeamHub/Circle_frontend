@@ -229,6 +229,8 @@ export function NoteCardBody({
                 contentFit="cover"
                 recyclingKey={uri}
                 accessibilityIgnoresInvertColors
+                // 四宫格是原图签名地址、榜单一屏好几张;理由同封面和 image-bubble。
+                enforceEarlyResizing
               />
             </View>
           ))}
