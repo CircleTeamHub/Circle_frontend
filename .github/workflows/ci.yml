@@ -115,6 +115,11 @@ jobs:
             codex/pr-notes-editor-media|codex/pr-reliability-notifications)
               backend_ref=codex/pr-notes-audio-drafts
               ;;
+            feat/quote-rich-preview)
+              # Carries the notices work; its backend half is feat/unified-notification-entry.
+              # Once that branch is merged and deleted, ls-remote misses and this falls back to main.
+              backend_ref=feat/unified-notification-entry
+              ;;
           esac
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$HEAD_REF" ] \
             && git ls-remote --exit-code --heads \
