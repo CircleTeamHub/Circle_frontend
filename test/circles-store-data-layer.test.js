@@ -144,7 +144,10 @@ test('广场圈子快捷入口随焦点刷新 (#107)', () => {
 
 test('发朋友圈：九图并发上传 cap=3；picker 先开、失败才引导 (#108, review 修复)', () => {
   const screen = read('src/features/discover/screens/CreateMomentScreen.tsx');
-  assert.match(screen, /mapWithConcurrency\(images, 3,/);
+  // 选中即传:排队与 cap=3 收在 useEagerMediaUploads 里(行为见 use-eager-media-uploads.spec.tsx)。
+  const hook = read('src/features/discover/hooks/use-eager-media-uploads.ts');
+  assert.match(screen, /useEagerMediaUploads\(/);
+  assert.match(hook, /const UPLOAD_CONCURRENCY = 3;/);
   assert.doesNotMatch(screen, /for \(const uri of images\)/);
   // review 修复：iOS PHPicker / Android 13+ 系统 picker 无需相册权限 ——
   // 前置权限门禁会把「拒绝过广义相册权限」的用户挡在不需要权限的入口外。
@@ -152,13 +155,13 @@ test('发朋友圈：九图并发上传 cap=3；picker 先开、失败才引导 
   assert.doesNotMatch(screen, /requestMediaLibraryPermissionsAsync/);
   const picker = screen.slice(
     screen.indexOf('const handlePickImages'),
-    screen.indexOf('const handleRemoveImage'),
+    screen.indexOf('const handleSubmit'),
   );
   assert.match(picker, /launchImageLibraryAsync/);
   // 失败路径仍引导权限设置文案
   assert.match(picker, /catch[\s\S]*validation\.albumPermission/);
-  // 上传结果保序：uploadedUrls 从 outcomes 过滤而来
-  assert.match(screen, /outcomes\.filter\(/);
+  // 上传结果保序：发布用 settle() 按所选顺序给回的结果
+  assert.match(screen, /const uploaded = settled\.results;/);
 });
 
 test('圈子单飞按会话/变更作用域失效 (review P1)', async () => {

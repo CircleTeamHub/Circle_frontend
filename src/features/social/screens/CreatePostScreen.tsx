@@ -46,13 +46,74 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { LIMITS } from '@/constants/config';
-import { mapWithConcurrency } from '@/utils/concurrency';
+import { useEagerMediaUploads } from '@/features/discover/hooks/use-eager-media-uploads';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 // 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
 const VIP_VALUES: (number | null)[] = [null, 1, 2, 3, 4, 5];
 const CREDIT_VALUES: (number | null)[] = [null, 60, 70, 80, 90];
 const POST_VIDEO_MAX_SIZE_MB = 100;
+
+type UploadedPostMedia = { url: string; isVideo: boolean };
+
+/** 选中即传(见 useEagerMediaUploads):进度画在缩略图上,走 iOS 前台会话,人就停在页面上等。 */
+async function uploadPostMedia(
+  asset: ImagePicker.ImagePickerAsset,
+  progressKey: string,
+): Promise<UploadedPostMedia> {
+  const isVideo = asset.type === 'video';
+  const fileName = asset.fileName || asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg');
+  const contentType =
+    resolveUploadContentType({
+      mimeType: asset.mimeType,
+      fileName,
+    }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+  const source = {
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+    contentType,
+    filename: fileName,
+  };
+  const prepared = isVideo ? source : await prepareChatImageForUpload(source);
+  const presign = await requestUploadPresign({
+    filename: sanitizeUploadFilename(prepared.filename),
+    contentType: prepared.contentType,
+    folder: 'posts',
+    fileUri: prepared.uri,
+  });
+  await uploadLocalFileToPresignedUrl(
+    presign.uploadUrl,
+    prepared.contentType,
+    prepared.uri,
+    presign.requiredHeaders,
+    isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+    { progressKey, foreground: true },
+  );
+  return { url: presign.fileUrl, isVideo };
+}
+
+function reportPostMediaUploadFailure(error: unknown) {
+  reportHandledFailure('createPost', 'mediaUpload', error);
+}
+
+/** 选的时候就拦下传不了的条目(超限 / 不支持的视频格式),不要等写完正文点发布才说。 */
+function findPostMediaProblem(asset: ImagePicker.ImagePickerAsset) {
+  const isVideo = asset.type === 'video';
+  const maxMb = isVideo ? POST_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB;
+  if ((asset.fileSize ?? 0) > maxMb * 1024 * 1024) return { kind: 'tooLarge' as const, maxMb };
+  if (
+    isVideo &&
+    !resolveUploadContentType({
+      mimeType: asset.mimeType,
+      fileName: asset.fileName || asset.uri.split('/').pop(),
+    })?.startsWith('video/')
+  ) {
+    return { kind: 'unsupportedVideo' as const };
+  }
+  return null;
+}
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -80,6 +141,12 @@ const s = StyleSheet.create({
     borderRadius: Radius.md,
   },
   videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbClip: { borderRadius: Radius.md, overflow: 'hidden' },
+  failedOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -195,7 +262,16 @@ export default function CreatePostScreen() {
   const resetForm = usePostFormStore((s) => s.reset);
 
   const [content, setContent] = useState('');
-  const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const {
+    items: mediaItems,
+    add: addMedia,
+    remove: removeMedia,
+    retry: retryMedia,
+    settle: settleMedia,
+  } = useEagerMediaUploads({
+    upload: uploadPostMedia,
+    onError: reportPostMediaUploadFailure,
+  });
   const [hornEnabled, setHornEnabled] = useState(false);
   const [postTags, setPostTags] = useState<string[]>([]);
   const [postTagInput, setPostTagInput] = useState('');
@@ -214,9 +290,8 @@ export default function CreatePostScreen() {
   // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
   const inFlightRef = useRef(false);
   // 重试同一条帖子沿用同一个幂等键(超时那次可能已经发出去了)。已传好的图片按所选
-  // 条目记住、重试不再上传:每次重传 URL 都不同,请求体一变就成了「另一条帖子」。
+  // 条目记住(useEagerMediaUploads)、重试不再上传:每次重传 URL 都不同,请求体一变就成了「另一条帖子」。
   const [intentKeys] = useState(() => new RetryIntentKeyStore(generateIdempotencyKey));
-  const uploadedMediaRef = useRef(new WeakMap<ImagePicker.ImagePickerAsset, { url: string; isVideo: boolean }>());
   const { t } = useTranslation();
 
   const d = useMemo(
@@ -237,6 +312,7 @@ export default function CreatePostScreen() {
       submitBtnDisabled: { backgroundColor: colors.surfaceBorder },
       submitText: { color: colors.white },
       hint: { color: colors.textSecondary },
+      failedOverlay: { backgroundColor: colors.overlay },
       circleChipOn: { backgroundColor: withAlpha(colors.primary, 0.12), borderColor: colors.iconAccent },
       circleChipOff: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
     }),
@@ -248,22 +324,25 @@ export default function CreatePostScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
-        selectionLimit: LIMITS.POST_MAX_MEDIA - media.length,
+        selectionLimit: LIMITS.POST_MAX_MEDIA - mediaItems.length,
         quality: 0.8,
       });
       if (result.canceled) return;
-      setMedia((prev) => [
-        ...prev,
-        ...result.assets.slice(0, LIMITS.POST_MAX_MEDIA - prev.length),
-      ]);
+      const problems = result.assets.map(findPostMediaProblem);
+      const problem = problems.find((item) => item !== null);
+      if (problem) {
+        Alert.alert(
+          t('plaza.create.pickerFailed'),
+          problem.kind === 'tooLarge'
+            ? t('upload.errors.fileTooLarge', { maxMb: problem.maxMb })
+            : t('chat.detail.videoUnsupported'),
+        );
+      }
+      addMedia(result.assets.filter((_, index) => problems[index] === null), LIMITS.POST_MAX_MEDIA);
     } catch {
       Alert.alert(t('plaza.create.pickerFailed'), t('validation.albumPermission'));
     }
-  }, [media.length, t]);
-
-  const handleRemoveMedia = useCallback((index: number) => {
-    setMedia((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [addMedia, mediaItems.length, t]);
 
   // 圈子直接以标签列在表单里（我创建的 + 我加入的），点一下选中 / 取消，可多选。
   const availableCircles = useMemo(
@@ -364,29 +443,6 @@ export default function CreatePostScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const oversizedAsset = media.find((asset) => {
-        const maxMb = asset.type === 'video' ? POST_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB;
-        return (asset.fileSize ?? 0) > maxMb * 1024 * 1024;
-      });
-      if (oversizedAsset) {
-        Alert.alert(
-          t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
-          t('upload.errors.fileTooLarge', {
-            maxMb: oversizedAsset.type === 'video' ? POST_VIDEO_MAX_SIZE_MB : LIMITS.IMAGE_MAX_SIZE_MB,
-          }),
-        );
-        return;
-      }
-      if (media.some((asset) =>
-        asset.type === 'video' && !resolveUploadContentType({
-          mimeType: asset.mimeType,
-          fileName: asset.fileName || asset.uri.split('/').pop(),
-        })?.startsWith('video/'),
-      )) {
-        Alert.alert(t('plaza.create.failedTitle'), t('chat.detail.videoUnsupported'));
-        return;
-      }
-
       // 发帖前用权威成员列表校验所选圈子仍可用：强制刷新一次，剔除已删除/退出的
       // 圈子。这是唯一防线，覆盖「离开圈子后未经选择页、直接在已有草稿上发帖」。
       // 判据只有「是否在成员列表里」，不做 UUID 格式假设 —— 避免误伤后端合法的
@@ -418,58 +474,18 @@ export default function CreatePostScreen() {
         }
       }
 
-      const outcomes = await mapWithConcurrency(media, 3, async (asset) => {
-        const uploaded = uploadedMediaRef.current.get(asset);
-        if (uploaded) return uploaded;
-        try {
-          const isVideo = asset.type === 'video';
-          const fileName = asset.fileName || asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg');
-          const contentType =
-            resolveUploadContentType({
-              mimeType: asset.mimeType,
-              fileName,
-            }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
-          const source = {
-            uri: asset.uri,
-            width: asset.width,
-            height: asset.height,
-            contentType,
-            filename: fileName,
-          };
-          const prepared = isVideo ? source : await prepareChatImageForUpload(source);
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(prepared.filename),
-            contentType: prepared.contentType,
-            folder: 'posts',
-            fileUri: prepared.uri,
-          });
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            prepared.contentType,
-            prepared.uri,
-            presign.requiredHeaders,
-            isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
-          );
-          const result = { url: presign.fileUrl, isVideo };
-          uploadedMediaRef.current.set(asset, result);
-          return result;
-        } catch (uploadError) {
-          reportHandledFailure('createPost', 'mediaUpload', uploadError);
-          return null;
-        }
-      });
-      const uploaded = outcomes.filter((item) => item !== null);
-      const failedUploads = media.length - uploaded.length;
-
-      if (failedUploads > 0) {
+      // 图片在选中时就开始传了,这里只等还没传完的;失败的会补传一次。
+      const settled = await settleMedia();
+      if (!settled.ok) {
+        const { failedCount } = settled;
         const reason =
-          failedUploads === media.length
+          failedCount === mediaItems.length
             ? t('plaza.create.allUploadsFailed', {
                 defaultValue: '媒体上传失败，请检查网络后重试',
               })
             : t('plaza.create.partialUploadsFailed', {
-                count: failedUploads,
-                defaultValue: `有 ${failedUploads} 个文件上传失败，请重试`,
+                count: failedCount,
+                defaultValue: `有 ${failedCount} 个文件上传失败，请重试`,
               });
         Alert.alert(
           t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
@@ -478,6 +494,7 @@ export default function CreatePostScreen() {
         return;
       }
 
+      const uploaded = settled.results;
       const videos = uploaded.filter((item) => item.isVideo).map((item) => item.url);
       const input = {
         content: content.trim(),
@@ -523,7 +540,8 @@ export default function CreatePostScreen() {
     selectedCircles,
     setSelectedCircles,
     fetchMyCircles,
-    media,
+    settleMedia,
+    mediaItems.length,
     content,
     postTags,
     resetForm,
@@ -564,25 +582,38 @@ export default function CreatePostScreen() {
 
           {/* Media picker */}
           <View style={s.photoRow}>
-            {media.map((asset, i) => (
-              <View key={`${asset.uri}-${i}`}>
-                {asset.type === 'video' ? (
-                  <View style={[s.photoThumb, s.videoThumb, { backgroundColor: colors.textSecondary }]}>
-                    <Ionicons name="videocam" size={28} color={colors.white} />
-                  </View>
-                ) : (
-                  <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
-                )}
+            {mediaItems.map(({ id, asset, status }) => (
+              <View key={id}>
+                <View style={s.thumbClip}>
+                  {asset.type === 'video' ? (
+                    <View style={[s.photoThumb, s.videoThumb, { backgroundColor: colors.textSecondary }]}>
+                      <Ionicons name="videocam" size={28} color={colors.white} />
+                    </View>
+                  ) : (
+                    <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
+                  )}
+                  {status === 'uploading' ? <NoteMediaUploadRing progressKey={id} /> : null}
+                  {status === 'failed' ? (
+                    <Pressable
+                      style={[s.failedOverlay, d.failedOverlay]}
+                      onPress={() => retryMedia(id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.retry')}
+                    >
+                      <Ionicons name="refresh" size={24} color={colors.white} />
+                    </Pressable>
+                  ) : null}
+                </View>
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
-                  onPress={() => handleRemoveMedia(i)}
+                  onPress={() => removeMedia(id)}
                   accessibilityLabel={t('moment.removeMedia')}
                 >
                   <Ionicons name="close" size={12} color={colors.white} />
                 </Pressable>
               </View>
             ))}
-            {media.length < LIMITS.POST_MAX_MEDIA ? (
+            {mediaItems.length < LIMITS.POST_MAX_MEDIA ? (
               <Pressable
                 style={[s.photoBtn, d.photoBtn]}
                 onPress={handlePickMedia}
@@ -590,7 +621,7 @@ export default function CreatePostScreen() {
               >
                 <Ionicons name="add" size={24} color={colors.textSecondary} />
                 <Text style={[s.photoCount, d.photoCount]}>
-                  {media.length} / {LIMITS.POST_MAX_MEDIA}
+                  {mediaItems.length} / {LIMITS.POST_MAX_MEDIA}
                 </Text>
               </Pressable>
             ) : null}

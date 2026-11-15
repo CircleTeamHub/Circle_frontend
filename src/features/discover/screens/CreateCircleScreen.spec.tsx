@@ -4,10 +4,6 @@ import { Alert } from 'react-native';
 import CreateCircleScreen from './CreateCircleScreen';
 import { createCircle } from '@/services/api/circles';
 import { ApiError } from '@/services/api/api-error';
-import {
-  requestUploadPresign,
-  uploadLocalFileToPresignedUrl,
-} from '@/services/api/upload';
 
 const mockRouter = { back: jest.fn() };
 const mockFetchProgramStatus = jest.fn();
@@ -25,6 +21,7 @@ const mockForm = {
   name: '',
   description: '',
   pickedAvatarUri: null as string | null,
+  settleAvatar: jest.fn<Promise<string | null>, []>(),
   selectedCategories: [] as string[],
   rules: '',
   joinVipRestriction: null as number | null,
@@ -131,13 +128,6 @@ jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (...args: unknown[]) => mockGetApiErrorMessage(...args),
 }));
 
-jest.mock('@/services/api/upload', () => ({
-  requestUploadPresign: jest.fn(),
-  resolveUploadContentType: jest.fn(),
-  sanitizeUploadFilename: jest.fn(),
-  uploadLocalFileToPresignedUrl: jest.fn(),
-}));
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockKeySequence = 0;
@@ -223,13 +213,8 @@ function fillValidForm() {
     description: 'A sufficiently long circle description',
     pickedAvatarUri: 'file:///avatar.jpg',
   });
-  jest.mocked(requestUploadPresign).mockResolvedValue({
-    uploadUrl: 'https://upload.test',
-    fileUrl: 'https://cdn.test/avatars/a.jpg',
-    key: 'avatars/a.jpg',
-    requiredHeaders: {},
-  } as never);
-  jest.mocked(uploadLocalFileToPresignedUrl).mockResolvedValue(undefined as never);
+  // 头像在选中时由 useCircleForm 上传;提交只等它的结果。
+  mockForm.settleAvatar.mockResolvedValue('https://cdn.test/avatars/a.jpg');
 }
 
 /** Two taps landing before React re-renders: only a ref checked at handler entry stops the second. */
@@ -282,7 +267,22 @@ test('retrying a timed-out create reuses its key and the uploaded avatar', async
     expect.objectContaining({ avatarUrl: 'https://cdn.test/avatars/a.jpg' }),
     { idempotencyKey: 'key-1' },
   );
-  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);
+});
+
+test('an avatar that still fails to upload does not block creating the circle', async () => {
+  fillValidForm();
+  mockForm.settleAvatar.mockResolvedValue(null);
+  jest.mocked(createCircle).mockResolvedValue({} as never);
+  mockFetchMyCircles.mockResolvedValue({ ok: true });
+
+  render(<CreateCircleScreen />);
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
+  expect(createCircle).toHaveBeenCalledWith(
+    expect.objectContaining({ avatarUrl: undefined }),
+    { idempotencyKey: 'key-1' },
+  );
 });
 
 test('a definitive rejection drops the key', async () => {

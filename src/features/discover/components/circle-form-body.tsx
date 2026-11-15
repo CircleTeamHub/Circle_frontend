@@ -22,6 +22,7 @@ import {
   CIRCLE_VIP_OPTIONS_VALUES,
 } from '@/features/discover/constants/circle-form';
 import type { CircleFormApi } from '@/features/discover/hooks/use-circle-form';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
 import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
 
 interface CircleFormBodyProps {
@@ -76,6 +77,12 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.lg,
+  },
+  avatarClip: { borderRadius: Radius.lg, overflow: 'hidden' },
+  avatarFailedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarHint: {
     ...Typography.caption,
@@ -407,11 +414,26 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
         <View style={s.avatarRow}>
           <Pressable onPress={form.handlePickAvatar}>
             {form.avatarUri ? (
-              <Image
-                source={{ uri: form.avatarUri }}
-                style={s.avatarImage}
-                contentFit="cover"
-              />
+              <View style={s.avatarClip}>
+                <Image
+                  source={{ uri: form.avatarUri }}
+                  style={s.avatarImage}
+                  contentFit="cover"
+                />
+                {form.avatarUpload?.status === 'uploading' ? (
+                  <NoteMediaUploadRing progressKey={form.avatarUpload.id} />
+                ) : null}
+                {form.avatarUpload?.status === 'failed' ? (
+                  <Pressable
+                    style={[s.avatarFailedOverlay, { backgroundColor: colors.overlay }]}
+                    onPress={form.retryAvatarUpload}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.retry')}
+                  >
+                    <Ionicons name="refresh" size={24} color={colors.white} />
+                  </Pressable>
+                ) : null}
+              </View>
             ) : (
               <View
                 style={[

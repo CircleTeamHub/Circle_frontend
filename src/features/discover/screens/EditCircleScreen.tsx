@@ -19,19 +19,12 @@ import {
   updateCircle,
 } from '@/services/api/circles';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
-import {
-  requestUploadPresign,
-  resolveUploadContentType,
-  sanitizeUploadFilename,
-  uploadLocalFileToPresignedUrl,
-} from '@/services/api/upload';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
 import type { CircleDetail } from '@/types';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
-import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -145,29 +138,9 @@ export default function EditCircleScreen() {
     try {
       let uploadedAvatarUrl = form.avatarUri ?? undefined;
       if (form.pickedAvatarUri) {
-        try {
-          const fileName =
-            form.pickedAvatarUri.split('/').pop() ?? 'avatar.jpg';
-          const contentType =
-            resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(fileName),
-            contentType,
-            folder: 'avatars',
-            fileUri: form.pickedAvatarUri,
-          });
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            contentType,
-            form.pickedAvatarUri,
-            presign.requiredHeaders,
-          );
-          uploadedAvatarUrl = presign.fileUrl;
-        } catch (error) {
-          // 头像上传失败时保留旧头像（不阻塞整个编辑流程）。
-          uploadedAvatarUrl = circle.avatarUrl ?? undefined;
-          reportHandledFailure('circle', 'avatarUpload', error);
-        }
+        // 头像选中时就开始传了，这里只等它传完。仍失败就保留旧头像（不阻塞整个
+        // 编辑流程），失败已在上传时上报。
+        uploadedAvatarUrl = (await form.settleAvatar()) ?? circle.avatarUrl ?? undefined;
       }
 
       await updateCircle(id, {

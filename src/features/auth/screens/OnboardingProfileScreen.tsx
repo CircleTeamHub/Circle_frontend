@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -36,12 +37,54 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { useEagerMediaUploads } from '@/features/discover/hooks/use-eager-media-uploads';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+
+const AVATAR_SIZE = 112;
+
+/**
+ * 头像选中(裁剪完)就开始传(见 useEagerMediaUploads),填昵称、简介的同时字节已经在走,
+ * 点「完成」不用再从头等。先和聊天、动态一样压到长边 2048。
+ */
+async function uploadOnboardingAvatar(asset: ImagePickerAsset, progressKey: string): Promise<string> {
+  const fileName = asset.fileName ?? 'avatar.jpg';
+  const contentType =
+    resolveUploadContentType({ mimeType: asset.mimeType, fileName }) ?? 'image/jpeg';
+  const prepared = await prepareChatImageForUpload({
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+    contentType,
+    filename: fileName,
+  });
+  const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
+    filename: sanitizeUploadFilename(prepared.filename),
+    contentType: prepared.contentType,
+    folder: 'avatars',
+    fileUri: prepared.uri,
+  });
+  await uploadLocalFileToPresignedUrl(
+    uploadUrl,
+    prepared.contentType,
+    prepared.uri,
+    requiredHeaders,
+    undefined,
+    { progressKey, foreground: true },
+  );
+  return fileUrl;
+}
+
+function reportOnboardingAvatarUploadFailure(error: unknown) {
+  reportHandledFailure('onboardingProfile', 'avatarUpload', error);
+}
 
 const s = StyleSheet.create({
   page: {
@@ -59,6 +102,17 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.sm,
+  },
+  avatarPreview: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: 'hidden',
+  },
+  avatarFailedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarButton: {
     minHeight: 44,
@@ -158,12 +212,20 @@ export default function OnboardingProfileScreen() {
   const [city, setCity] = useState(user?.city ?? '');
   const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
   const [gender, setGender] = useState(user?.gender ?? 'unset');
-  const [selectedAvatarUri, setSelectedAvatarUri] = useState<string | null>(null);
-  const [selectedAvatarFileName, setSelectedAvatarFileName] = useState<string | null>(null);
-  const [selectedAvatarMimeType, setSelectedAvatarMimeType] = useState<string | null>(null);
+  const {
+    items: avatarItems,
+    add: addAvatar,
+    remove: removeAvatar,
+    retry: retryAvatar,
+    settle: settleAvatar,
+  } = useEagerMediaUploads({
+    upload: uploadOnboardingAvatar,
+    onError: reportOnboardingAvatarUploadFailure,
+  });
+  const pickedAvatar = avatarItems[0] ?? null;
   const [isSaving, setIsSaving] = useState(false);
 
-  const avatarPreviewUri = selectedAvatarUri ?? user?.avatarUrl ?? null;
+  const avatarPreviewUri = pickedAvatar?.asset.uri ?? user?.avatarUrl ?? null;
   const d = useOnboardingStyles();
 
   const { cropIfNeeded, cropper: avatarCropper } = useImageCropStep('square');
@@ -219,9 +281,8 @@ export default function OnboardingProfileScreen() {
       return;
     }
 
-    setSelectedAvatarUri(asset.uri);
-    setSelectedAvatarFileName(asset.fileName ?? 'avatar.jpg');
-    setSelectedAvatarMimeType(contentType);
+    avatarItems.forEach((item) => removeAvatar(item.id));
+    addAvatar([asset], 1);
   }
 
   function getValidationError() {
@@ -268,24 +329,17 @@ export default function OnboardingProfileScreen() {
         ...toProfileUpdatePayload('gender', gender),
       };
 
-      if (selectedAvatarUri && selectedAvatarMimeType) {
-        const filename = sanitizeUploadFilename(
-          selectedAvatarFileName ?? 'avatar.jpg',
-        );
-        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
-          filename,
-          contentType: selectedAvatarMimeType,
-          folder: 'avatars',
-          fileUri: selectedAvatarUri,
-        });
-
-        await uploadLocalFileToPresignedUrl(
-          uploadUrl,
-          selectedAvatarMimeType,
-          selectedAvatarUri,
-          requiredHeaders,
-        );
-        payload.avatarUrl = fileUrl;
+      if (pickedAvatar) {
+        // 头像选中时就开始传了，这里只等它传完；失败的会补传一次。
+        const settled = await settleAvatar();
+        if (!settled.ok) {
+          Alert.alert(
+            t('validation.saveFailed'),
+            getApiErrorMessage(settled.error, t('validation.saveFailed')),
+          );
+          return;
+        }
+        payload.avatarUrl = settled.results[0];
       }
 
       const nextUser = await updateUserProfile(user.id, payload, user);
@@ -336,11 +390,26 @@ export default function OnboardingProfileScreen() {
         </View>
 
         <View style={s.avatarBlock}>
-          <Avatar
-            size={112}
-            name={nickname || user.accountId || 'C'}
-            uri={avatarPreviewUri ?? undefined}
-          />
+          <View style={s.avatarPreview}>
+            <Avatar
+              size={AVATAR_SIZE}
+              name={nickname || user.accountId || 'C'}
+              uri={avatarPreviewUri ?? undefined}
+            />
+            {pickedAvatar?.status === 'uploading' ? (
+              <NoteMediaUploadRing progressKey={pickedAvatar.id} />
+            ) : null}
+            {pickedAvatar?.status === 'failed' ? (
+              <Pressable
+                style={[s.avatarFailedOverlay, { backgroundColor: colors.overlay }]}
+                onPress={() => retryAvatar(pickedAvatar.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.retry')}
+              >
+                <Ionicons name="refresh" size={28} color={colors.white} />
+              </Pressable>
+            ) : null}
+          </View>
           <Pressable
             style={[s.avatarButton, d.avatarButton]}
             onPress={handlePickAvatar}
