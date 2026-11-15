@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 /** 同时在传的条目数:九个全并发会同时打满 presign + PUT,串行又太慢(同 mapWithConcurrency 的取值)。 */
@@ -46,7 +46,19 @@ export function useEagerMediaUploads<T>({ upload, onError }: EagerMediaUploadOpt
     setItems(next);
   }, []);
 
-  const isLive = useCallback((id: string) => itemsRef.current.some((item) => item.id === id), []);
+  // 离开页面后排队中的不再开传:不发了还在后台传,白占流量和上传额度。
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const isLive = useCallback(
+    (id: string) => mountedRef.current && itemsRef.current.some((item) => item.id === id),
+    [],
+  );
 
   const setStatus = useCallback(
     (id: string, status: EagerMediaStatus) => {

@@ -153,3 +153,20 @@ test('retry re-uploads a failed item on demand', async () => {
   expect(result.current.items[0].status).toBe('done');
   expect(upload).toHaveBeenCalledTimes(2);
 });
+
+// 选了九张又不发、直接返回:还在排队的不能接着在后台申请地址、上传,白占流量和每人每天的上传额度。
+test('leaving the screen stops the queued uploads from starting', async () => {
+  const pending = Array.from({ length: 5 }, () => deferred<string>());
+  const upload = jest.fn((picked: ImagePickerAsset) => pending[Number(picked.uri.slice(-1))].promise);
+  const { result, unmount } = renderHook(() => useEagerMediaUploads({ upload, onError: jest.fn() }));
+
+  act(() => result.current.add([0, 1, 2, 3, 4].map((index) => asset(`m${index}`)), 9));
+  await flush();
+  expect(upload).toHaveBeenCalledTimes(3);
+
+  unmount();
+  pending.slice(0, 3).forEach((item, index) => item.resolve(String(index)));
+  await flush();
+
+  expect(upload).toHaveBeenCalledTimes(3);
+});
