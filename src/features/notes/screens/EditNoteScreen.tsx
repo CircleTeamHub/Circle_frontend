@@ -504,9 +504,9 @@ export default function EditNoteScreen() {
   }>();
   const isEdit = Boolean(id);
   const navigation = useNavigation();
-  // 编辑页整个生命周期都挂着「未保存先确认」的守卫。iOS 的侧滑返回（尤其全屏侧滑）不看这个守卫：
-  // 手势先把页面滑走、事后再靠原生把它放回来，放不回来时页面看着已经退出，导航状态里却还在，
-  // 之后每次返回或点 tab 都会再弹「保存未完成的笔记？」。编辑页只走返回按钮，弹窗和页面才一致。
+  // 编辑页整个生命周期都挂着退出守卫（先把草稿存进本机再放行）。iOS 的侧滑返回（尤其全屏侧滑）不看
+  // 这个守卫：手势先把页面滑走、事后再靠原生把它放回来，放不回来时页面看着已经退出，导航状态里却还在。
+  // 编辑页只走返回按钮，守卫和页面才一致。
   useLayoutEffect(() => {
     navigation.setOptions({ gestureEnabled: false });
   }, [navigation]);

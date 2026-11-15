@@ -3,7 +3,7 @@
  *
  * request-trace 只在有请求在飞时量卡顿；「笔记保存成功后停在『保存中』」「点飞机 tab
  * 卡死」这类卡在请求之外，之前生产上一点动静都没有，只能靠用户描述猜。这里在前台常驻
- * 一个 1 秒一拍的定时器：JS 线程被占住时这一拍会迟到，迟到多久就是卡了多久。上报经
+ * 一个 2 秒一拍的定时器：JS 线程被占住时这一拍会迟到，迟到多久就是卡了多久。上报经
  * reportHandledFailure 走，自带卡顿前的面包屑和路由，能看出卡之前在干什么。
  *
  * 熄屏 / 切后台时系统会挂起进程：离开前台就停表，回来重新起表。挂起前事件没来得及送到
@@ -20,7 +20,9 @@ export type JsStallDetectorDeps = {
   onStall: (durationMs: number) => void;
 };
 
-const TICK_MS = 1000;
+// 不能是 1 秒：iOS 的 RCTTiming 只在下一个定时器超过 1 秒后才停掉 display link 改用 NSTimer 休眠，
+// 1 秒一拍会让 display link 在前台每帧都唤醒 JS 线程，白白耗电。
+export const JS_STALL_TICK_MS = 2000;
 export const JS_STALL_THRESHOLD_MS = 3000;
 // 挂起恢复时，迟到的一拍和随后送达的前后台事件之间只隔几毫秒；人卡完再切走至少要几百毫秒。
 const RESUME_EVENT_WINDOW_MS = 500;
@@ -33,14 +35,14 @@ export function startJsStallDetector(deps: JsStallDetectorDeps): void {
   const tick = () => {
     const at = deps.now();
     if (pending) deps.onStall(pending.durationMs);
-    const lag = at - lastTick - TICK_MS;
+    const lag = at - lastTick - JS_STALL_TICK_MS;
     pending = lag >= JS_STALL_THRESHOLD_MS ? { durationMs: Math.round(lag), detectedAt: at } : null;
     lastTick = at;
   };
 
   const start = () => {
     lastTick = deps.now();
-    timer = deps.setInterval(tick, TICK_MS);
+    timer = deps.setInterval(tick, JS_STALL_TICK_MS);
   };
 
   deps.subscribeAppState(() => {
