@@ -412,6 +412,7 @@
       "videoExpired": "動画の保存期間が終了しました",
       "voiceExpired": "音声の保存期間が終了しました",
       "playVideo": "動画を再生",
+      "openImage": "画像を表示",
       "pauseVideo": "一時停止",
       "videoSkipBack": "15秒戻る",
       "videoSkipForward": "15秒進む",

@@ -4,6 +4,7 @@ import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
+import { QuotedMessageBlock } from './quoted-message-block';
 
 interface SentBubbleProps {
   /** G-07:点按某个回应 pill 切换自己的回应。 */
@@ -50,13 +51,6 @@ const sSent = StyleSheet.create({
   sentStatusIcon: {
     marginTop: 1,
   },
-  quoteBox: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginBottom: 6,
-    maxWidth: 240,
-  },
 });
 
 export const SentBubble: React.FC<SentBubbleProps> = ({
@@ -84,13 +78,6 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },
-      quoteBox: {
-        backgroundColor: 'rgba(255,255,255,0.18)',
-      },
-      quoteText: {
-        color: 'rgba(255,255,255,0.78)',
-        ...Typography.tinyRegular,
-      },
     }),
     [colors],
   );
@@ -99,20 +86,6 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
     <View style={sSent.sentRow}>
       <View style={sSent.sentContent}>
         <View style={[sSent.sentBubble, d.sentBubble]}>
-          {message.quotedText ? (
-            onQuotePress ? (
-              <Pressable
-                style={[sSent.quoteBox, d.quoteBox]}
-                onPress={onQuotePress}
-              >
-                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-              </Pressable>
-            ) : (
-              <View style={[sSent.quoteBox, d.quoteBox]}>
-                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-              </View>
-            )
-          ) : null}
           <Text style={d.sentBubbleText}>
             {message.text}
             {message.edited
@@ -142,6 +115,9 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
             </View>
           ) : null}
         </View>
+        {message.quotedText ? (
+          <QuotedMessageBlock message={message} align="end" onPress={onQuotePress} />
+        ) : null}
         {message.time ? (
           <View style={sSent.sentTimeRow}>
             <Text style={d.timeText}>{message.time}</Text>
@@ -171,7 +147,7 @@ const sReactions = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    // 自己发的气泡是实心主题紫，pill 直接叠白色半透明层（与 quoteBox 同语言）。
+    // 自己发的气泡是实心主题紫，pill 直接叠白色半透明层。
     backgroundColor: 'rgba(255,255,255,0.22)',
     borderWidth: 1,
     borderColor: 'transparent',

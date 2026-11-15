@@ -1236,6 +1236,22 @@ test('long pressing a group sender avatar inserts their group name at the cursor
   }));
 });
 
+test('choosing quote puts the cursor in the input once the menu has closed', async () => {
+  // TextInput 的 jest 替身把 focus 挂在共享的 MockNativeMethods 上。
+  const { focus } = jest.requireActual<{ default: { focus: jest.Mock } }>(
+    'react-native/jest/MockNativeMethods',
+  ).default;
+  render(<ChatDetailScreen />);
+  const bubble = await screen.findByText('received:在吗', {}, SETTLE);
+  focus.mockClear();
+  fireEvent(bubble, 'longPress', { nativeEvent: { pageX: 50, pageY: 200 } });
+  fireEvent.press(await screen.findByLabelText('message-action-quote', {}, SETTLE));
+
+  // 菜单还在淡出:这时聚焦,键盘会跟着 Modal 一起被收走,所以先不动。
+  expect(focus).not.toHaveBeenCalled();
+  await waitFor(() => expect(focus).toHaveBeenCalledTimes(1), SETTLE);
+});
+
 test.each(['direct', 'muted'])('avatar mentions are unavailable in a %s chat', async (kind) => {
   if (kind === 'muted') {
     mockParams = { conversationID: GROUP, sourceID: GROUP, conversationType: 'group', conversationKind: 'group' };

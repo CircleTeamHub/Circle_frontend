@@ -415,6 +415,10 @@ export function mapChatMessageDtoToUI(
         quoteMessageId: replyTo?.id,
         quoteHeight: replyTo && !replyTo.revoked ? replyTo.height : undefined,
         quoteRevoked: replyTo?.revoked,
+        quoteSenderName:
+          replyTo && !replyTo.revoked
+            ? replyTo.senderNickname || undefined
+            : undefined,
       };
     }
     case 'image':

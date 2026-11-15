@@ -183,6 +183,8 @@ export interface ChatMessage {
   quoteMessageId?: string;
   quoteHeight?: number;
   quoteRevoked?: boolean;
+  /** 被引用消息的发送者昵称(replyTo 快照);原消息在本页时引用块用它拼本地生成的摘要。 */
+  quoteSenderName?: string;
   // G-07:表情回应聚合(mine=本人是否已回应,点按切换)与编辑标记。
   reactions?: { emoji: string; count: number; mine: boolean }[];
   edited?: boolean;

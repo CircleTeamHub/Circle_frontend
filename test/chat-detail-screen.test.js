@@ -467,8 +467,10 @@ test('chat detail opens sent note cards from group chats', () => {
   const source = readChatDetailSource();
 
   assert.match(source, /case 'note-card':/);
-  assert.match(source, /<NoteCardBubble[\s\S]*onPress=\{\(note\) =>/);
-  assert.match(source, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? '', '', \{/);
+  // 卡片与引用块里展开的同一张卡片共用 openNoteCard;整卡点击不带分块 → 打开详情。
+  assert.match(source, /<NoteCardBubble[\s\S]*onPress=\{\(note\) => openNoteCard\(item, note\)\}/);
+  assert.match(source, /section: NoteCardSection \| '' = ''/);
+  assert.match(source, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? '', section, \{/);
   assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
 });
 

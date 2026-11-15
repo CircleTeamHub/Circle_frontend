@@ -751,3 +751,28 @@ test('assistant note reminders read 打烊 and 开工 in the chat bubble', () =>
   assert.equal(bubble('WORKING'), 'assistant.noteReopened');
   assert.equal(bubble('UNLISTED'), 'assistant.noteUnlisted');
 });
+
+test('quote messages carry the quoted sender name only while the original is still visible', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const replyTo = { id: 'orig', height: 3, senderNickname: '小明', type: 'image', preview: '[图片]', revoked: false };
+  const quote = mapChatMessageDtoToUI(
+    dto({ type: 'quote', replyToId: 'orig', replyTo, content: { text: '好看', quotedText: '[图片]' } }),
+    'u1',
+  );
+  // 引用块拿它和本页的原消息拼「小明: [笔记] 标题」;只有快照这一条线知道原发送者。
+  assert.equal(quote.quoteSenderName, '小明');
+  assert.equal(quote.quoteMessageId, 'orig');
+  assert.equal(quote.quotedText, '小明: [图片]');
+
+  const revoked = mapChatMessageDtoToUI(
+    dto({ type: 'quote', replyToId: 'orig', replyTo: { ...replyTo, revoked: true, preview: '' }, content: { text: '好看' } }),
+    'u1',
+  );
+  assert.equal(revoked.quoteSenderName, undefined);
+
+  const anonymous = mapChatMessageDtoToUI(
+    dto({ type: 'quote', replyToId: 'orig', replyTo: { ...replyTo, senderNickname: '' }, content: { text: '好看' } }),
+    'u1',
+  );
+  assert.equal(anonymous.quoteSenderName, undefined);
+});
