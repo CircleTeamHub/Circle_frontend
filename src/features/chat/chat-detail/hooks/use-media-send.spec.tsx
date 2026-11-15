@@ -18,7 +18,10 @@ jest.mock('@/services/api/upload', () => ({
   uploadLocalFileToPresignedUrl: jest.fn(async () => undefined),
 }));
 jest.mock('@/features/chat/utils/image-thumbnail', () => ({ uploadChatImageThumbnail: jest.fn(async () => null) }));
-jest.mock('@/features/chat/utils/chat-image-compress', () => ({ prepareChatImageForUpload: jest.fn(async (asset: object) => asset) }));
+jest.mock('@/features/chat/utils/chat-image-compress', () => ({
+  planChatImageUpload: () => ({ reencode: true }),
+  prepareChatImageForUpload: jest.fn(async (asset: object) => asset),
+}));
 jest.mock('@/features/chat/utils/chat-video-poster', () => ({ uploadChatVideoPoster: jest.fn(async () => null) }));
 jest.mock('@/features/chat/utils/chat-video-compress', () => ({
   isChatVideoCompressionAvailable: jest.fn(() => true),
@@ -143,6 +146,19 @@ test.each(['image', 'video'] as const)('does not prepare the %s derivative when 
   expect(uploadChatVideoPoster).not.toHaveBeenCalled();
   expect(sendImageMessage).not.toHaveBeenCalled();
   expect(sendVideoMessage).not.toHaveBeenCalled();
+});
+
+// 重新选片发成功了，上一次的「视频发送失败」不能还挂着：和文字、语音、长按重发一样，新的一次发送先清掉旧提示。
+test.each(['gallery', 'editor'] as const)('a new %s send clears the previous failure banner', async (entry) => {
+  const { result } = renderHook(() => useMediaSend(params));
+  const asset = { uri: 'file:///next.jpg', width: 1200, height: 900, type: 'image', fileName: 'next.jpg' } as never;
+  if (entry === 'gallery') {
+    act(() => result.current.setGalleryMode('send'));
+    await act(async () => result.current.handleGalleryConfirm([asset], ''));
+  } else {
+    await act(async () => { await result.current.handleSendEditedPhoto(asset); });
+  }
+  expect(params.setSendError).toHaveBeenCalledWith(null);
 });
 
 const compressedAsset = { uri: 'file:///compressed.mp4', width: 1280, height: 720, duration: 42_000, fileSize: 1_000_000 };

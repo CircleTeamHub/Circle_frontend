@@ -608,6 +608,8 @@ export function useMediaSend({
       // bounded scheduler immediately; one failed upload cannot hide others.
       // Items rejected up front (size/type gates) release their turn, and the
       // caption is held back when nothing in the batch went out.
+      // 和文字、语音、长按重发一样:新的一次发送先清掉上一次的失败提示,这一批再失败会重新报。
+      setSendError(null);
       const { done } = chainMediaSends(assets, (asset, turn) =>
         isVideoAsset(asset)
           ? uploadAndSendVideoAsset(asset, turn)
@@ -615,7 +617,7 @@ export function useMediaSend({
       );
       sendCaptionAfter(done, caption);
     },
-    [sendCaptionAfter, uploadAndSendImageAsset, uploadAndSendVideoAsset],
+    [sendCaptionAfter, setSendError, uploadAndSendImageAsset, uploadAndSendVideoAsset],
   );
 
   const flushPendingEditor = useCallback(() => {
@@ -726,6 +728,7 @@ export function useMediaSend({
 
   const handleSendEditedPhoto = useCallback(
     async (asset: ImagePicker.ImagePickerAsset) => {
+      setSendError(null);
       let accepted = false;
       const { started, done } = chainMediaSends([asset], async (item, turn) => {
         accepted = await uploadAndSendImageAsset(item, turn);
@@ -737,7 +740,7 @@ export function useMediaSend({
       if (mountedRef.current) setPhotoEditorAsset(null);
       return true;
     },
-    [uploadAndSendImageAsset, mountedRef, sendCaptionAfter],
+    [uploadAndSendImageAsset, mountedRef, sendCaptionAfter, setSendError],
   );
 
   const runMediaSourceAction = useCallback(
