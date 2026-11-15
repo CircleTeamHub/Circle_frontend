@@ -32,7 +32,7 @@ import {
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
-import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { selectNoticeUnread, useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { useTheme, withAlpha } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
@@ -655,38 +655,31 @@ function CustomTabBar({
 // 各 tab 汇总自己辖下的未读。路由布局（无障碍标签）和自绘 bar（红点）共用这一份口径。
 type BadgeCounts = ReturnType<typeof useTabBadgeStore.getState>;
 const selectMessagesUnread = (state: BadgeCounts) => state.messagesUnread;
-const selectContactsUnread = (state: BadgeCounts) => state.contactsUnread + state.groupAdmissionsUnread;
-const selectMomentsUnread = (state: BadgeCounts) => state.momentsUnread;
 const selectCircleUnread = (state: BadgeCounts) => state.circleUnread;
 const selectSignupUnread = (state: BadgeCounts) => state.signupUnread;
-const selectProfileUnread = (state: BadgeCounts) => state.profileUnread;
 
 /** active=false 时不跟着未读数变化重渲染（看不见的那几份 tab bar），重新 active 时按最新值取。 */
 export function useTabBadgeMap(active = true): Record<string, number> {
   const messagesUnread = useStoreWhileActive(useTabBadgeStore, selectMessagesUnread, active);
-  const contactsUnread = useStoreWhileActive(useTabBadgeStore, selectContactsUnread, active);
-  const momentsUnread = useStoreWhileActive(useTabBadgeStore, selectMomentsUnread, active);
+  const noticeUnread = useStoreWhileActive(useTabBadgeStore, selectNoticeUnread, active);
   const circleUnread = useStoreWhileActive(useTabBadgeStore, selectCircleUnread, active);
   const signupUnread = useStoreWhileActive(useTabBadgeStore, selectSignupUnread, active);
-  const profileUnread = useStoreWhileActive(useTabBadgeStore, selectProfileUnread, active);
 
-  // 各 tab 汇总自己辖下的未读：圈子含圈子通知和报名管理，探索含朋友圈。
-  // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
-  // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和圈子两个
-  // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
+  // 一条未读只在一个 tab 上计数。圈子以外的通知（朋友圈互动、好友/入群申请、群聊知会、
+  // 系统公告）都汇进消息页列表里的「通知」，算在消息 tab 上；圈子的事（圈子通知 + 报名）
+  // 归圈子 tab。通讯录 / 探索 / 我 三个 tab 不再重复计数 —— 页面里「新的朋友」、
+  // 朋友圈铃铛、系统公告各自的数字照旧，读的是同一份计数。
   const badgeMap: Record<string, number> = useMemo(() => ({
-    messages: messagesUnread,
-    contacts: contactsUnread,
+    messages: messagesUnread + noticeUnread,
+    contacts: 0,
     discover: circleUnread + signupUnread,
-    explore: momentsUnread,
-    profile: profileUnread,
+    explore: 0,
+    profile: 0,
   }), [
     messagesUnread,
-    contactsUnread,
-    momentsUnread,
+    noticeUnread,
     circleUnread,
     signupUnread,
-    profileUnread,
   ]);
 
   return badgeMap;

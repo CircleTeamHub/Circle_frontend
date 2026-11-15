@@ -15,6 +15,8 @@ export type NotificationUnreadSummary = {
   /** 圈子铃铛未读（不含报名管理）。 */
   circleUnread: number;
   profileUnread: number;
+  /** 消息页「通知」里的群聊知会。老后端不返回，按 0 处理。 */
+  groupNoticeUnread: number;
   totalUnread: number;
   /** 飞机 tab 的红点。老后端不返回，此时保持现状而不是当成「没有更新」。 */
   circlePlazaHasUpdate?: boolean;
@@ -49,7 +51,7 @@ export type RegisterPushTokenInput = {
 // 判定整个响应非法，否则新客户端连老服务端会整块丢掉徽标。
 function isNotificationSummaryShape(
   value: unknown,
-): value is Omit<NotificationUnreadSummary, 'momentsUnread' | 'circleUnread'> {
+): value is Omit<NotificationUnreadSummary, 'momentsUnread' | 'circleUnread' | 'groupNoticeUnread'> {
   if (!isPlainObject(value)) return false;
   return (
     isFiniteNonNegativeNumber(value.discoverUnread) &&
@@ -110,6 +112,7 @@ export async function fetchNotificationUnreadSummary(): Promise<NotificationUnre
     ...summary,
     momentsUnread: optionalUnreadCount(source.momentsUnread),
     circleUnread: optionalUnreadCount(source.circleUnread),
+    groupNoticeUnread: optionalUnreadCount(source.groupNoticeUnread),
     circlePlazaHasUpdate:
       typeof source.circlePlazaHasUpdate === 'boolean'
         ? source.circlePlazaHasUpdate

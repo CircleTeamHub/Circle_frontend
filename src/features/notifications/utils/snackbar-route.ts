@@ -37,8 +37,9 @@ function getNotificationCenterFallback(
   if (scope === 'discover') {
     // 兜底也认域:圈子的通知落在圈子铃铛,朋友圈的落在朋友圈铃铛,
     // 否则点进去看到的是另一个入口的列表。
+    // 圈子 tab 上只有这两个铃铛；群聊知会 / 公告不在这里，按不限域兜底。
     const domain = notificationDomain(type);
-    if (domain) {
+    if (domain === 'moments' || domain === 'circle') {
       return {
         pathname: DISCOVER_NOTIFICATION_CENTER_ROUTE,
         params: { domain },
@@ -141,6 +142,14 @@ export function getSnackbarRoute(
 
   if (item.type.startsWith('FRIEND_REQUEST')) {
     return '/(tabs)/contacts/new-friends';
+  }
+
+  // 系统公告只会从消息页「通知」点进来（公告不弹横幅）；详情页按通知 id 取。
+  if (item.kind === 'notification' && item.type === 'SYSTEM') {
+    return {
+      pathname: '/(tabs)/profile/system-announcements/[id]',
+      params: { id: item.id },
+    };
   }
 
   // 资料点赞 / 活动协作认可：直达对方（点赞者 / 认可者）主页，方便回赞 / 加好友。

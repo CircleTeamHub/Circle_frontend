@@ -665,7 +665,13 @@ export type NotificationType =
   | 'CIRCLE_POST_SIGNUP_CREATED'
   | 'CIRCLE_POST_AUTO_ENDED'
   | 'CIRCLE_POST_COLLABORATION_RECOGNIZED'
-  | 'PROFILE_LIKE';
+  | 'PROFILE_LIKE'
+  // 站内知会、不推送:本人被移出独立群聊 / 独立群聊解散(content = 当时的群名,可空)。
+  | 'GROUP_MEMBER_REMOVED'
+  | 'GROUP_DISSOLVED'
+  // 站内知会、不推送:本人被移出圈子 / 圈子解散(fromCircle 指向圈子)。
+  | 'CIRCLE_MEMBER_REMOVED'
+  | 'CIRCLE_DISSOLVED';
 
 export interface NotificationItem {
   title?: string | null;
@@ -685,6 +691,8 @@ export interface NotificationItem {
   } | null;
   fromInvitation: { id: string; status: string } | null;
   fromGroupAdmission?: { id: string; status: string } | null;
+  /** SYSTEM 才有:所属公告的标题。 */
+  systemAnnouncement?: { title: string } | null;
   fromMessage?: {
     id?: string;
     messageID?: string;

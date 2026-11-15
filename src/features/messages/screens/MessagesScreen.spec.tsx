@@ -72,6 +72,12 @@ jest.mock('@/components/ui/member-name', () => {
   return { MemberName: ({ name }: { name: string }) => <Text>{name}</Text> };
 });
 jest.mock('@/components/ui/badge', () => ({ Badge: () => null }));
+jest.mock('@/features/messages/components/NoticeHeaderButton', () => ({
+  NoticeHeaderButton: ({ onPress }: { onPress: () => void }) => {
+    const { Pressable } = jest.requireActual('react-native');
+    return <Pressable testID="notice-button" onPress={onPress} />;
+  },
+}));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/components/ui/filter-tabs', () => {
   const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -222,6 +228,14 @@ test('the header circle button opens circle notifications inside the messages ta
   fireEvent.press(screen.getByRole('button', { name: 'notifications.circleTitle' }));
   // Stays in the messages stack so back returns here, not to the circle tab.
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'circle' } });
+});
+
+test('the header notice button opens the non-circle notices next to the circle plane', () => {
+  render(<MessagesScreen />);
+  // 「通知」是页头按钮,不是会话列表里的一行;飞机仍只管圈子。
+  fireEvent.press(screen.getByTestId('notice-button'));
+  expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/notifications', params: { domain: 'notice' } });
+  expect(screen.getByRole('button', { name: 'notifications.circleTitle' })).toBeTruthy();
 });
 
 test('dark mode keeps the brighter primary purple for the circle plane: the deep purple is too dim on black', () => {

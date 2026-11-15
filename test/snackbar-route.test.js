@@ -294,12 +294,22 @@ test("getSnackbarRoute defaults to the notification center", () => {
 });
 
 test("getSnackbarRoute defaults to the discover notification center for discover scope", () => {
-  // 不属于任何铃铛的类型（SYSTEM 等）落在不限域的通知中心。
+  // 不属于任何铃铛、也没有专属落点的类型落在不限域的通知中心。
   const route = getSnackbarRoute(
-    notification({ type: "SYSTEM" }),
+    notification({ type: "MESSAGE_RECEIVED" }),
     DISCOVER_OPTS,
   );
   assert.equal(route, "/(tabs)/discover/notification-center");
+});
+
+test("getSnackbarRoute opens a system announcement by its notification id", () => {
+  // 消息页「通知」里的系统分类点开直达公告详情（详情页按通知 id 取）。
+  const route = getSnackbarRoute(
+    notification({ id: "notice-1", type: "SYSTEM" }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/profile/system-announcements/[id]");
+  assert.equal(route.params.id, "notice-1");
 });
 
 test("getSnackbarRoute's discover fallback lands in the bell that owns the type", () => {
@@ -323,9 +333,9 @@ test("getSnackbarRoute's explore fallback only owns the moments bell", () => {
   assert.equal(moments.pathname, "/(tabs)/explore/notification-center");
   assert.equal(moments.params.domain, "moments");
 
-  // 探索 tab 没有圈子铃铛:圈子 / 系统类兜底仍回消息页的通知中心。
+  // 探索 tab 没有圈子铃铛:圈子 / 其他类兜底仍回消息页的通知中心。
   assert.equal(
-    getSnackbarRoute(notification({ type: "SYSTEM" }), EXPLORE_OPTS),
+    getSnackbarRoute(notification({ type: "MESSAGE_RECEIVED" }), EXPLORE_OPTS),
     "/(tabs)/messages/notifications",
   );
 });

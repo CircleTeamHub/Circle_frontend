@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import type { MyCirclePost, NotificationItem } from '@/types';
 import {
-  notificationDomain,
+  isNotificationInDomain,
   type NotificationDomain,
 } from '@/features/notifications/utils/notification-domain';
 
 interface NotificationCenterState {
-  /** 两个铃铛共用的通知池；各自按 domain 过滤后展示。 */
+  /** 两个铃铛和消息页「通知」共用的通知池；各自按 domain 过滤后展示。 */
   interactive: NotificationItem[];
   /** 报名管理 tab: posts the current user authored. */
   signupPosts: MyCirclePost[];
@@ -50,7 +50,7 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
         const kept = s.interactive.filter(
           (item) =>
             !incomingIds.has(item.id) &&
-            notificationDomain(item.type) !== domain,
+            !isNotificationInDomain(item.type, domain),
         );
         return { interactive: [...items, ...kept].sort(byCreatedAtDesc) };
       }),
@@ -84,7 +84,7 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
     markDomainInteractiveReadLocal: (domain) =>
       set((s) => ({
         interactive: s.interactive.map((n) =>
-          !domain || notificationDomain(n.type) === domain
+          isNotificationInDomain(n.type, domain)
             ? { ...n, read: true }
             : n,
         ),

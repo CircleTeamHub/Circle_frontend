@@ -43,7 +43,10 @@ import {
   isCallParticipantPayload,
   isCallStatePayload,
 } from '@/features/call/realtime-guards';
-import { BELL_NOTIFICATION_TYPES } from '@/features/notifications/utils/notification-domain';
+import {
+  BELL_NOTIFICATION_TYPES,
+  MEMBERSHIP_NOTICE_TYPES,
+} from '@/features/notifications/utils/notification-domain';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
 
@@ -57,6 +60,7 @@ type BadgeSnapshotPayload = {
   circlePlazaHasUpdate?: boolean;
   circlePlazaChangedAt?: string;
   profileUnread?: number;
+  groupNoticeUnread?: number;
 };
 
 type RealtimeEvent =
@@ -81,6 +85,7 @@ type RealtimeEvent =
         count?: number;
         momentsUnread?: number;
         circleUnread?: number;
+        groupNoticeUnread?: number;
       };
     }
   | {
@@ -477,6 +482,7 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     circleUnread: gated.circleUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
+    groupNoticeUnread: snapshot.groupNoticeUnread,
     circlePlazaHasUpdate: snapshot.circlePlazaHasUpdate,
     circlePlazaChangedAt: typeof snapshot.circlePlazaChangedAt === 'string'
       && Number.isFinite(Date.parse(snapshot.circlePlazaChangedAt))
@@ -531,20 +537,23 @@ function isNoteSourceStatusChange(
 }
 
 function handleNotificationCreated(payload: NotificationItem) {
-  if ((payload.type === 'GROUP_ADMISSION' || payload.type === 'CIRCLE_INVITATION_RECEIVED')) void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
+  if (payload.type === 'GROUP_ADMISSION') void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
   // SYSTEM notifications are not part of the interactive list and have no
   // in-app landing screen, so toasting one would route nowhere. Skip them.
   if (payload.type === 'SYSTEM') {
     return;
   }
 
-  if (BELL_NOTIFICATION_TYPES.has(payload.type) || (payload.type === 'GROUP_ADMISSION' || payload.type === 'CIRCLE_INVITATION_RECEIVED')) {
+  if (BELL_NOTIFICATION_TYPES.has(payload.type) || payload.type === 'GROUP_ADMISSION') {
     const store = useNotificationCenterStore.getState();
     store.setInteractive([
       payload,
       ...store.interactive.filter((item) => item.id !== payload.id),
     ]);
   }
+
+  // 被移出 / 解散不弹横幅：聊天层收到 removed 事件时已经当场提示过，再弹就是两条。
+  if (MEMBERSHIP_NOTICE_TYPES.has(payload.type)) return;
 
   // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」总闸控制：关掉时通知照常进铃铛
   // 列表（上面已处理，数据不丢），但不弹横幅。非圈子通知不受影响。
@@ -606,6 +615,9 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       // 而不是清零 —— 否则每来一条互动通知，另一个铃铛的红点就被抹掉。
       if (typeof message.payload?.momentsUnread === 'number') {
         badgeStore.setMomentsUnread(message.payload.momentsUnread);
+      }
+      if (typeof message.payload?.groupNoticeUnread === 'number') {
+        badgeStore.setGroupNoticeUnread(message.payload.groupNoticeUnread);
       }
       if (gated.circleUnread !== undefined) {
         badgeStore.setCircleUnread(gated.circleUnread);
@@ -828,6 +840,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
       circleUnread: notificationSummary.circleUnread,
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
+      groupNoticeUnread: notificationSummary.groupNoticeUnread,
       circlePlazaHasUpdate: notificationSummary.circlePlazaHasUpdate,
       circlePlazaChangedAt: notificationSummary.circlePlazaChangedAt,
     });

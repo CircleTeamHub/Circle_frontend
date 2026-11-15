@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
+const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 const readScreen = () =>
   fs.readFileSync(
     path.join(
@@ -20,7 +21,7 @@ test('notification center does not replace failed fetches with empty notificatio
   assert.doesNotMatch(source, /catch\(\(\) => \[\] as MyCirclePost\[\]\)/);
   assert.match(source, /Promise\.allSettled/);
   assert.match(source, /fetchAllMyCirclePosts\(\)/);
-  assert.match(source, /fetchNotificationsPage\(nextCursor, domain\)/);
+  assert.match(source, /fetchNotificationsPage\(nextCursor, listDomain\)/);
   assert.match(source, /onEndReached=\{loadMore\}/);
   assert.doesNotMatch(source, /fetchMyCirclePosts\(1\)/);
   assert.match(source, /setLoadError\(/);
@@ -59,10 +60,14 @@ test('notification center keeps the bell badges in sync when interactive items a
   const source = readScreen();
 
   // 读一条通知要同时扣总数和它所属域的计数，否则对应铃铛的红点清不掉。
-  assert.match(source, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
-  assert.match(source, /Math\.max\(0, badgeStore\.momentsUnread - 1\)/);
-  assert.match(source, /Math\.max\(0, badgeStore\.circleUnread - 1\)/);
-  assert.match(source, /if \(!raw\.read\) decrementUnreadBadges\(raw\.type\)/);
+  // 扣减规则收在 unread-badges.ts，横幅点开与列表点开共用。
+  const badges = read('src/features/notifications/utils/unread-badges.ts');
+  assert.match(badges, /Math\.max\(0, badges\.discoverUnread - 1\)/);
+  assert.match(badges, /Math\.max\(0, badges\.momentsUnread - 1\)/);
+  assert.match(badges, /Math\.max\(0, badges\.circleUnread - 1\)/);
+  assert.match(badges, /Math\.max\(0, badges\.groupNoticeUnread - 1\)/);
+  assert.match(badges, /Math\.max\(0, badges\.profileUnread - 1\)/);
+  assert.match(source, /if \(!raw\.read\) decrementUnreadBadgesFor\(raw\.type\)/);
   // 失败要能整组回滚。
   assert.match(source, /rollback\.setDiscoverUnread\(previousBadges\.discoverUnread\)/);
   assert.match(source, /rollback\.setMomentsUnread\(previousBadges\.momentsUnread\)/);
@@ -96,5 +101,6 @@ test('circle bell puts signup management first and opens it by default', () => {
   );
   assert.match(source, /if \(!showSignupTab\) return \[primary\];/);
   assert.doesNotMatch(source, /\[signups, primary\]/);
-  assert.match(source, /useState<NotificationTabKey>\(domain === 'circle' \? 'signups' : 'notifications'\)/);
+  assert.match(source, /useState<NotificationTabKey>\(\(\) => initialTab\(domain\)\)/);
+  assert.match(source, /if \(domain === 'circle'\) return 'signups';/);
 });

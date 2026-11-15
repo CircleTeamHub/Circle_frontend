@@ -416,7 +416,12 @@
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请",
       "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子",
       "CIRCLE_POST_AUTO_ENDED": "活动已结束，请选择合作认可对象",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "认可了你的活动协作"
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "认可了你的活动协作",
+      "CIRCLE_INVITATION_RECEIVED": "邀请你加入「{{circle}}」",
+      "GROUP_MEMBER_REMOVED": "你已被移出该群聊",
+      "GROUP_DISSOLVED": "该群聊已解散",
+      "CIRCLE_MEMBER_REMOVED": "你已被移出该圈子",
+      "CIRCLE_DISSOLVED": "该圈子已解散"
     },
     "signupMgmt": {
       "untitledPost": "（无内容帖子）",
@@ -440,7 +445,19 @@
       "recognitionFailedTitle": "提交失败"
     },
     "chatChannelName": "聊天消息",
-    "chatChannelDescription": "好友和群聊的新消息"
+    "chatChannelDescription": "好友和群聊的新消息",
+    "notice": {
+      "title": "通知",
+      "tabAll": "全部",
+      "tabInteractive": "互动",
+      "tabFriendsGroups": "好友·群",
+      "tabSystem": "系统",
+      "emptySubtitle": "互动、群聊和系统通知会出现在这里",
+      "newFriends": "新的朋友",
+      "newFriendsHint": "好友申请和入群申请",
+      "unnamedGroup": "群聊",
+      "unnamedCircle": "圈子"
+    }
   },
   "chat": {
     "selection": {
@@ -3470,7 +3487,13 @@
   "im": {
     "conversation": {
       "removedFromGroup": "你已被移出该群聊",
-      "removedFromNamedGroup": "你已被移出群聊「{{name}}」"
+      "removedFromNamedGroup": "你已被移出群聊「{{name}}」",
+      "removedFromCircle": "你已被移出该圈子",
+      "removedFromNamedCircle": "你已被移出圈子「{{name}}」",
+      "dissolvedGroup": "该群聊已解散",
+      "dissolvedNamedGroup": "群聊「{{name}}」已解散",
+      "dissolvedCircle": "该圈子已解散",
+      "dissolvedNamedCircle": "圈子「{{name}}」已解散"
     },
     "time": {
       "yesterday": "昨天"

@@ -128,24 +128,26 @@ test('notification center scopes its list to the requested bell domain', () => {
 
   assert.match(source, /useLocalSearchParams/);
   assert.match(source, /parseNotificationDomain\(domainParam\)/);
-  // 列表、拉取、全部已读三处都必须带域，少一处就会串台。
-  assert.match(source, /notificationDomain\(n\.type\) === domain/);
-  assert.match(source, /fetchNotificationsPage\(undefined, domain\)/);
-  assert.match(source, /markAllNotificationsRead\(domain\)/);
-  // 报名管理是圈子域独有的 tab，朋友圈铃铛不显示也不为它请求数据。
-  assert.match(source, /domain !== 'moments'/);
+  // 列表、拉取、全部已读三处都必须带域，少一处就会串台。消息页「通知」的四个分类
+  // 各自是一个域（listDomain），其余入口 listDomain 就是入口自己的域。
+  assert.match(source, /isNotificationInDomain\(n\.type, listDomain\)/);
+  assert.match(source, /fetchNotificationsPage\(undefined, listDomain\)/);
+  assert.match(source, /markAllNotificationsRead\(listDomain\)/);
+  // 报名管理是圈子域独有的 tab，朋友圈铃铛和「通知」不显示也不为它请求数据。
+  assert.match(source, /domain === 'circle' \|\| domain === null/);
 });
 
 test('tab badges follow the moved moments and plaza ownership', () => {
   const source = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   assert.match(source, /selectSignupUnread = \(state: BadgeCounts\) => state\.signupUnread/);
-  // 各 tab 合计各自的未读。曾经读 discoverUnread（= 好友申请 +
-  // 朋友圈 + 圈子 的并集，互动消息列表页的全集口径），一条未读好友申请
-  // 就会把动态 tab 也点亮 —— 好友申请的规范 UI 是「新的朋友」，归联系人。
-  // 朋友圈随入口迁到探索 tab，红点也跟过去，联系人只剩好友/入群申请。
-  assert.match(source, /contacts: contactsUnread,/);
-  assert.match(source, /explore: momentsUnread,/);
+  // 一条未读只在一个 tab 上计数。圈子的事（圈子通知 + 报名）归圈子 tab；圈子以外的
+  // 通知都汇进消息页的「通知」，算在消息 tab 上。曾经读 discoverUnread（好友申请 +
+  // 朋友圈 + 圈子 的并集）时，一条好友申请会同时点亮两个 tab。
+  assert.match(source, /messages: messagesUnread \+ noticeUnread,/);
+  assert.match(source, /contacts: 0,/);
+  assert.match(source, /explore: 0,/);
+  assert.match(source, /profile: 0,/);
   assert.match(source, /discover: circleUnread \+ signupUnread/);
   assert.doesNotMatch(source, /discover: discoverUnread/);
 });

@@ -98,18 +98,14 @@ test('tab count is beside the label and the underline stays below both', () => {
   expect(row.findAllByProps({ children: '1' }).length).toBeGreaterThan(0);
 });
 
-test('each group or circle invitation uses its own server unread count, including on cold load', async () => {
+test('each group invitation uses its own server unread count, including on cold load', async () => {
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
     { id: 'unread', unreadCount: 2, kind: 'INVITE', status: 'INVITED', group: { name: '未读群', avatarUrl: null } },
     { id: 'read', unreadCount: 0, kind: 'INVITE', status: 'INVITED', group: { name: '已读群', avatarUrl: null } },
   ] as any, nextCursor: null });
-  jest.mocked(fetchMyApplications).mockResolvedValue([
-    { id: 'circle', circleName: '未读圈', unreadCount: 1, status: 'INVITED', inviter: { nickname: '邀请人' }, applicant: { nickname: '本人' } },
-  ] as any);
   const ui = render(<GroupAdmissionsList />);
   await waitFor(() => expect(ui.getByTestId('group-inbox-unread-unread', { includeHiddenElements: true })).toBeTruthy());
   expect(ui.queryByTestId('group-inbox-unread-read', { includeHiddenElements: true })).toBeNull();
-  expect(ui.getByTestId('group-inbox-unread-circle-circle', { includeHiddenElements: true })).toBeTruthy();
   fireEvent.press(ui.getByText('未读群'));
   expect(mockPush).toHaveBeenCalled();
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
@@ -179,13 +175,12 @@ test('unread chat messages in a joined group never light the invitation row', as
   expect(ui.queryByTestId('group-inbox-unread-seen', { includeHiddenElements: true })).toBeNull();
 });
 
-test('circle invitations and their joined circle conversation also share one row', async () => {
-  mockConversations = [{ id: 'chat-circle', circleId: 'circle-id', type: 'GROUP', name: '同一个圈' }];
-  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
-  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'inv-circle', circleId: 'circle-id', circleName: '同一个圈', status: 'INVITED', inviter: {}, applicant: {} }] as any);
-  const ui = render(<GroupAdmissionsList includeJoined />);
-  await ui.findByText('等待接受邀请');
-  expect(ui.getAllByText('同一个圈')).toHaveLength(1);
+// 圈子的邀请/申请归飞机(圈子通知):这页只管群聊,连接口都不调。
+test('circle invitations are not listed here: they belong to the circle bell', async () => {
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('g', '只有群聊')], nextCursor: null } as any);
+  const ui = render(<GroupAdmissionsList />);
+  await ui.findByText(/只有群聊/);
+  expect(fetchMyApplications).not.toHaveBeenCalled();
 });
 
 test('a scoped manager view retains separate applicants for individual approval', async () => {
@@ -217,14 +212,6 @@ test('leaving then receiving a new invitation or application keeps one row and i
   expect(ui.UNSAFE_getByType(FlatList).props.data[0].unreadCount).toBe(0);
 });
 
-
-test.each([['APPROVED','已加入圈子'],['ADMIN_APPROVED','已加入圈子'],['REJECTED','申请未通过'],['CANCELLED','申请已取消']])('circle status %s is rendered accurately', async (status, label) => {
-  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
-  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'status-circle', circleId: 'circle', circleName: '圈', status, inviter: {}, applicant: {} }] as any);
-  const ui = render(<GroupAdmissionsList />);
-  await ui.findByText(label);
-  expect(ui.queryByText('已提交，等待管理员审核')).toBeNull();
-});
 
 test('opening one merged group clears unread admission cycles including older records', async () => {
   const group = { id: 'g', name: '同一群', avatarUrl: null };
@@ -263,28 +250,12 @@ test('retry after a failed refresh uses page one instead of the old pagination c
   expect(fetchGroupAdmissions).toHaveBeenLastCalledWith(undefined, undefined);
 });
 
-test('a joined circle merged with approved invitation history opens its conversation', async () => {
+test('a joined circle conversation row opens its conversation', async () => {
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
-  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'history', circleId: 'circle', circleName: '摄影圈', status: 'APPROVED', inviter: {}, applicant: {} }] as never);
   mockConversations = [{ id: 'chat', type: 'GROUP', circleId: 'circle', name: '摄影圈', unreadCount: 0 }];
   const ui = render(<GroupAdmissionsList includeJoined />);
   fireEvent.press(await ui.findByText('摄影圈'));
   expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/contacts/chat-detail' }));
-});
-
-test('circle-history failure preserves successful standalone admissions', async () => {
-  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [{ id: 'standalone', group: { name: '保留独立群', avatarUrl: null }, status: 'INVITED' }] as never, nextCursor: null });
-  jest.mocked(fetchMyApplications).mockRejectedValueOnce(new Error('circle unavailable'));
-  const ui = render(<GroupAdmissionsList />);
-  expect(await ui.findByText('保留独立群')).toBeTruthy();
-  expect(await ui.findByText('common.retry')).toBeTruthy();
-});
-
-test('standalone admission failure preserves successful circle history', async () => {
-  jest.mocked(fetchGroupAdmissions).mockRejectedValueOnce(new Error('groups unavailable'));
-  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'circle', circleName: '保留圈子', status: 'INVITED', inviter: {}, applicant: {} }] as never);
-  const ui = render(<GroupAdmissionsList />);
-  expect(await ui.findByText('保留圈子')).toBeTruthy();
 });
 
 test('pull-to-refresh retries joined conversations after the initial request fails', async () => {
@@ -307,7 +278,7 @@ const pending = <T,>() => {
 
 // 国内连新加坡时接口常要等好几秒：再进这页先画上次的第一页，后台重拉不转圈，到了再整体替换。
 test('the last first page shows right away from the snapshot and is quietly replaced when the reload lands', async () => {
-  jest.mocked(readGroupAdmissionsSnapshot).mockReturnValueOnce({ items: [invite('old', '旧的群')] as any, circleInvitations: [], nextCursor: null });
+  jest.mocked(readGroupAdmissionsSnapshot).mockReturnValueOnce({ items: [invite('old', '旧的群')] as any, nextCursor: null });
   const reload = pending<any>();
   jest.mocked(fetchGroupAdmissions).mockReturnValue(reload.promise);
   const ui = render(<GroupAdmissionsList query="" />);
@@ -319,23 +290,23 @@ test('the last first page shows right away from the snapshot and is quietly repl
   await ui.findByText(/新的群/);
   expect(ui.queryByText(/旧的群/)).toBeNull();
   await waitFor(() => expect(writeGroupAdmissionsSnapshot).toHaveBeenCalledWith(
-    1, undefined, { items: [expect.objectContaining({ id: 'new' })], circleInvitations: [], nextCursor: null }, expect.any(Number), 7,
+    1, undefined, { items: [expect.objectContaining({ id: 'new' })], nextCursor: null }, expect.any(Number), 7,
   ));
 });
 
-test('admissions show as soon as they arrive without waiting for the circle history', async () => {
-  jest.mocked(fetchMyApplications).mockReturnValue(new Promise(() => {}));
+test('admissions show as soon as they arrive without waiting for the joined conversations', async () => {
+  jest.mocked(ensureChatConversations).mockReturnValue(new Promise(() => {}));
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('a', '先到的群')], nextCursor: null } as any);
-  const ui = render(<GroupAdmissionsList query="" />);
+  const ui = render(<GroupAdmissionsList query="" includeJoined />);
 
   await ui.findByText(/先到的群/);
   expect(writeGroupAdmissionsSnapshot).not.toHaveBeenCalled();
 });
 
 test('a failed source leaves the previous snapshot untouched', async () => {
-  jest.mocked(fetchMyApplications).mockRejectedValue(new Error('down'));
+  jest.mocked(ensureChatConversations).mockRejectedValue(new Error('down'));
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [invite('a', '群')], nextCursor: null } as any);
-  render(<GroupAdmissionsList query="" />);
+  render(<GroupAdmissionsList query="" includeJoined />);
 
   await waitFor(() => expect(reportHandledFailure).toHaveBeenCalled());
   expect(writeGroupAdmissionsSnapshot).not.toHaveBeenCalled();

@@ -1100,6 +1100,46 @@ test('being removed from a group you are not viewing raises a top notice instead
   ]);
 });
 
+test('a dissolved group says the group is gone instead of blaming the member', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP', name: '周末羽毛球' }];
+  state.activeConversationId = 'other';
+
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    reason: 'dissolved',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+
+  assert.deepEqual(state.removed, ['c1']);
+  assert.deepEqual(state.notices, [
+    { type: 'warning', title: 'im.conversation.dissolvedNamedGroup:周末羽毛球' },
+  ]);
+});
+
+test('a circle group removal is worded as leaving the circle', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP', circleId: 'circle-1', name: '摄影圈' }];
+  state.activeConversationId = 'c1';
+
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c1', userId: 'me' });
+  // 踢出圈子群就是移出圈子。
+  assert.deepEqual(state.alerts, ['im.conversation.removedFromNamedCircle:摄影圈']);
+
+  state.conversations = [{ id: 'c2', type: 'GROUP', circleId: 'circle-2', name: '读书圈' }];
+  state.activeConversationId = 'other';
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    reason: 'dissolved',
+    conversationId: 'c2',
+    userId: 'me',
+  });
+  assert.deepEqual(state.notices, [
+    { type: 'warning', title: 'im.conversation.dissolvedNamedCircle:读书圈' },
+  ]);
+});
+
 test('a removal for a conversation this device never listed stays quiet unless it is on screen', () => {
   const { socket, state } = loadDispatcher();
   state.conversations = [];

@@ -832,7 +832,11 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         }
         // left 是本人在别处的主动动作,静默收走即可;removed 是被别人移出,要告诉本人。
         if (validPayload.kind === 'removed') {
-          notifyRemovedFromGroup(removedConversation, wasActive);
+          notifyRemovedFromGroup(
+            removedConversation,
+            wasActive,
+            validPayload.reason === 'dissolved',
+          );
         }
         return;
       }
@@ -844,24 +848,40 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
 }
 
 /**
- * 被移出群聊的提示:正开着这个群就弹窗(界面随即被收空,得说清楚为什么);
+ * 被移出 / 解散的当场提示:正开着这个群就弹窗(界面随即被收空,得说清楚为什么);
  * 在别的页面就给一条顶部提醒,不然群只是从列表里无声消失。本地列表里没有这个会话
  * (从没加载过)又不在前台看着它时不提示 —— 没有群名,用户无从知道说的是哪个群。
+ * 离线时错过的,服务端另留了一条站内知会(独立群在「通知」,圈子在飞机)。
+ * 踢出圈子群就是移出圈子,所以圈子群说「圈子」。
  */
 function notifyRemovedFromGroup(
   conversation: ChatConversationDto | undefined,
   wasActive: boolean,
+  dissolved: boolean,
 ): void {
+  const keys = removalNoticeKeys(Boolean(conversation?.circleId), dissolved);
   const title = conversation
-    ? i18n.t('im.conversation.removedFromNamedGroup', {
-        name: mapChatConversationToUI(conversation).name,
-      })
-    : i18n.t('im.conversation.removedFromGroup');
+    ? i18n.t(keys.named, { name: mapChatConversationToUI(conversation).name })
+    : i18n.t(keys.unnamed);
   if (wasActive) {
     Alert.alert(title);
     return;
   }
   if (conversation) showTopNotice({ type: 'warning', title });
+}
+
+function removalNoticeKeys(
+  isCircle: boolean,
+  dissolved: boolean,
+): { named: string; unnamed: string } {
+  if (dissolved) {
+    return isCircle
+      ? { named: 'im.conversation.dissolvedNamedCircle', unnamed: 'im.conversation.dissolvedCircle' }
+      : { named: 'im.conversation.dissolvedNamedGroup', unnamed: 'im.conversation.dissolvedGroup' };
+  }
+  return isCircle
+    ? { named: 'im.conversation.removedFromNamedCircle', unnamed: 'im.conversation.removedFromCircle' }
+    : { named: 'im.conversation.removedFromNamedGroup', unnamed: 'im.conversation.removedFromGroup' };
 }
 
 /** 这条消息是否点名了当前用户,或者是 @所有人。 */

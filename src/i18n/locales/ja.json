@@ -2242,7 +2242,12 @@
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理者が「{{circle}}」でのあなたの申請を承認しました",
       "CIRCLE_POST_SIGNUP_CREATED": "あなたのサークル投稿に応募しました",
       "CIRCLE_POST_AUTO_ENDED": "アクティビティが終了しました。認可する協力者を選んでください",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "あなたの活動での協力を認めました"
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "あなたの活動での協力を認めました",
+      "CIRCLE_INVITATION_RECEIVED": "「{{circle}}」に招待しました",
+      "GROUP_MEMBER_REMOVED": "このグループチャットから削除されました",
+      "GROUP_DISSOLVED": "このグループチャットは解散されました",
+      "CIRCLE_MEMBER_REMOVED": "このサークルから削除されました",
+      "CIRCLE_DISSOLVED": "このサークルは解散されました"
     },
     "signupMgmt": {
       "untitledPost": "（タイトルなしの投稿）",
@@ -2266,7 +2271,19 @@
       "recognitionFailedTitle": "送信に失敗しました"
     },
     "chatChannelName": "チャットメッセージ",
-    "chatChannelDescription": "友だちやグループからの新着メッセージ"
+    "chatChannelDescription": "友だちやグループからの新着メッセージ",
+    "notice": {
+      "title": "通知",
+      "tabAll": "すべて",
+      "tabInteractive": "やりとり",
+      "tabFriendsGroups": "友だち・グループ",
+      "tabSystem": "システム",
+      "emptySubtitle": "やりとり・グループ・システムの通知がここに表示されます",
+      "newFriends": "新しい友だち",
+      "newFriendsHint": "友だち申請とグループ参加申請",
+      "unnamedGroup": "グループチャット",
+      "unnamedCircle": "サークル"
+    }
   },
   "search": {
     "loadFriendsFailed": "友だちリストの読み込みに失敗しました。再試行してください",
@@ -3533,7 +3550,13 @@
   "im": {
     "conversation": {
       "removedFromGroup": "このグループチャットから削除されました",
-      "removedFromNamedGroup": "グループ「{{name}}」から削除されました"
+      "removedFromNamedGroup": "グループ「{{name}}」から削除されました",
+      "removedFromCircle": "このサークルから削除されました",
+      "removedFromNamedCircle": "サークル「{{name}}」から削除されました",
+      "dissolvedGroup": "このグループチャットは解散されました",
+      "dissolvedNamedGroup": "グループ「{{name}}」は解散されました",
+      "dissolvedCircle": "このサークルは解散されました",
+      "dissolvedNamedCircle": "サークル「{{name}}」は解散されました"
     },
     "time": {
       "yesterday": "昨日"

@@ -4,9 +4,11 @@ import { useTheme } from '@/theme';
 
 /**
  * `notifications` = 当前域的通知列表（互动 / 朋友圈 / 圈子，取决于入口）；
- * `signups` = 报名管理（我发的圈子帖收到的报名），只在圈子铃铛和无域兜底页出现。
+ * `signups` = 报名管理（我发的圈子帖收到的报名），只在圈子铃铛和无域兜底页出现；
+ * 消息页「通知」的四个分类（全部 / 互动 / 好友·群 / 系统）直接用分类的域作 key。
  */
-export type NotificationTabKey = 'notifications' | 'signups';
+export type NoticeCategory = 'notice' | 'moments' | 'group' | 'system';
+export type NotificationTabKey = 'notifications' | 'signups' | NoticeCategory;
 
 export interface NotificationTabItem {
   key: NotificationTabKey;
@@ -39,7 +41,7 @@ export const NotificationTabBar = memo(function NotificationTabBar(p: Props) {
         return (
           <Pressable key={item.key} style={s.tab} onPress={() => p.onSelect(item.key)}>
             <View style={s.labelRow}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.iconAccent : colors.text }}>
+              <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.iconAccent : colors.text }}>
                 {item.label}
               </Text>
               {item.unread ? <View style={s.dot} /> : null}

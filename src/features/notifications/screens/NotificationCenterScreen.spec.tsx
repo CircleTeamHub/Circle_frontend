@@ -16,10 +16,13 @@ const originalAppendPage = useNotificationCenterStore.getState().appendInteracti
 const mockAppendPage = jest.fn(originalAppendPage);
 const mockBadges = {
   discoverUnread: 0, momentsUnread: 0, circleUnread: 0, signupUnread: 0,
+  groupNoticeUnread: 0, profileUnread: 0, contactsUnread: 0, groupAdmissionsUnread: 0,
   setDiscoverUnread: jest.fn((count) => { mockBadges.discoverUnread = count; }),
   setMomentsUnread: jest.fn((count) => { mockBadges.momentsUnread = count; }),
   setCircleUnread: jest.fn((count) => { mockBadges.circleUnread = count; }),
   setSignupUnread: jest.fn((count) => { mockBadges.signupUnread = count; }),
+  setGroupNoticeUnread: jest.fn((count) => { mockBadges.groupNoticeUnread = count; }),
+  setProfileUnread: jest.fn((count) => { mockBadges.profileUnread = count; }),
 };
 jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual('zustand');
@@ -34,8 +37,9 @@ jest.mock('react-native', () => {
   const actual = jest.requireActual<typeof import('react-native')>('react-native');
   return new Proxy(actual, { get(target, property, receiver) {
     if (property !== 'FlatList') return Reflect.get(target, property, receiver);
-    return ({ onEndReached, onRefresh, refreshing, ListFooterComponent, ListEmptyComponent, data, renderItem }: { onEndReached: () => void; onRefresh: () => void; refreshing: boolean; ListFooterComponent: React.ReactNode; ListEmptyComponent: React.ReactNode; data: { view: { id: string } }[]; renderItem: (args: { item: { view: { id: string } } }) => React.ReactNode }) =>
+    return ({ onEndReached, onRefresh, refreshing, ListHeaderComponent, ListFooterComponent, ListEmptyComponent, data, renderItem }: { onEndReached: () => void; onRefresh: () => void; refreshing: boolean; ListHeaderComponent?: React.ReactNode; ListFooterComponent: React.ReactNode; ListEmptyComponent: React.ReactNode; data: { view: { id: string } }[]; renderItem: (args: { item: { view: { id: string } } }) => React.ReactNode }) =>
       ReactModule.createElement(actual.View, null,
+        ListHeaderComponent ?? null,
         ReactModule.createElement(actual.Pressable, { testID: 'list-end', onPress: onEndReached }),
         ReactModule.createElement(actual.Pressable, { testID: 'list-refresh', onPress: onRefresh, accessibilityState: { busy: refreshing } }),
         ...data.map((item) => ReactModule.createElement(ReactModule.Fragment, { key: item.view.id }, renderItem({ item }))),
@@ -45,7 +49,8 @@ jest.mock('react-native', () => {
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/theme', () => ({
-  Spacing: { sm: 8, md: 12, lg: 16, xl: 24 },
+  Spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
+  Radius: { full: 9999 },
   useTheme: () => ({ colors: { background: '#fff', surface: '#fff', text: '#111', textSecondary: '#666', primary: '#6200ee' } }),
 }));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
@@ -54,6 +59,9 @@ jest.mock('@/features/notifications/components/NotificationTabBar', () => ({ Not
   return <View>
     <Pressable testID="signup-tab" onPress={() => onSelect('signups')} />
     <Pressable testID="notifications-tab" onPress={() => onSelect('notifications')} />
+    {['notice', 'moments', 'group', 'system'].map((key) => (
+      <Pressable key={key} testID={`tab-${key}`} onPress={() => onSelect(key)} />
+    ))}
   </View>;
 } }));
 jest.mock('@/features/notifications/components/ReadFilterBar', () => ({ ReadFilterBar: ({ onMarkAll }: { onMarkAll: () => void }) => {
@@ -67,7 +75,12 @@ jest.mock('@/features/notifications/components/NotificationRow', () => ({ Notifi
 jest.mock('@/features/notifications/components/NotificationEmptyState', () => ({ NotificationEmptyState: () => null }));
 jest.mock('@/services/api/notifications', () => ({ fetchNotificationsPage: jest.fn(), markAllNotificationsRead: jest.fn(), markNotificationRead: jest.fn() }));
 jest.mock('@/services/api/plaza', () => ({ fetchAllMyCirclePosts: jest.fn(), markMyPostSignupsRead: jest.fn() }));
-jest.mock('@/stores/tabBadgeStore', () => ({ useTabBadgeStore: { getState: () => mockBadges } }));
+jest.mock('@/stores/tabBadgeStore', () => ({
+  useTabBadgeStore: Object.assign(
+    (selector: (state: typeof mockBadges) => unknown) => selector(mockBadges),
+    { getState: () => mockBadges },
+  ),
+}));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 beforeEach(() => {
   jest.clearAllMocks();
@@ -80,7 +93,10 @@ beforeEach(() => {
   useAuthStore.setState({ user: { id: 'account-a' } as AuthUser, isAuthenticated: true, sessionEpoch: 1 });
   useNotificationCenterStore.getState().reset();
   useNotificationCenterStore.setState({ appendInteractivePage: mockAppendPage });
-  Object.assign(mockBadges, { discoverUnread: 0, momentsUnread: 0, circleUnread: 0, signupUnread: 0 });
+  Object.assign(mockBadges, {
+    discoverUnread: 0, momentsUnread: 0, circleUnread: 0, signupUnread: 0,
+    groupNoticeUnread: 0, profileUnread: 0, contactsUnread: 0, groupAdmissionsUnread: 0,
+  });
 });
 
 test('the circle notifications page carries the settings gear and opens settings in the same tab', async () => {
@@ -427,3 +443,70 @@ test('a notification with its own destination still opens it', async () => {
   fireEvent.press(await screen.findByText('liked'));
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/explore/moment/[id]', params: { id: 'trace-1' } });
 });
+
+// ---- 消息页「通知」:圈子以外的知会,四个分类 ----
+
+test('the message-page notices open on every category at once and switch by category domain', async () => {
+  mockDomain = 'notice';
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalledWith(undefined, 'notice'));
+  // 不是圈子:没有报名管理,也不为它拉数据。
+  expect(fetchAllMyCirclePosts).not.toHaveBeenCalled();
+
+  fireEvent.press(screen.getByTestId('tab-group'));
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenLastCalledWith(undefined, 'group'));
+  fireEvent.press(screen.getByTestId('tab-system'));
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenLastCalledWith(undefined, 'system'));
+});
+
+test('friend and group requests get a shortcut into their own inbox instead of copied rows', async () => {
+  mockDomain = 'notice';
+  Object.assign(mockBadges, { contactsUnread: 2, groupAdmissionsUnread: 1 });
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  // 这里的 FlatList 替身每次渲染都是新组件类型(列表子树会重挂):等加载落定再取再按。
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalled());
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByTestId('notice-new-friends-shortcut'));
+  expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/contacts/new-friends');
+
+  // 互动 / 系统分类里没有这个入口。
+  fireEvent.press(screen.getByTestId('tab-moments'));
+  await waitFor(() => expect(screen.queryByTestId('notice-new-friends-shortcut')).toBeNull());
+});
+
+test('a removed-from-group notice is marked read where it is and leads nowhere', async () => {
+  mockDomain = 'notice';
+  mockBadges.groupNoticeUnread = 1;
+  jest.mocked(markNotificationRead).mockResolvedValue(undefined);
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({
+    items: [notification('removed-1', 'GROUP_MEMBER_REMOVED')],
+    nextCursor: null,
+  });
+  render(<NotificationCenterScreen />);
+  fireEvent.press(await screen.findByText('removed-1'));
+  expect(markNotificationRead).toHaveBeenCalledWith('removed-1');
+  // 群已经不在了:不跳转,也不会兜底叠出第二个通知列表。
+  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  // 扣的是群聊知会那一份,不碰两个铃铛的计数。
+  expect(mockBadges.setGroupNoticeUnread).toHaveBeenCalledWith(0);
+  expect(mockBadges.setDiscoverUnread).not.toHaveBeenCalled();
+});
+
+test('marking all notices read clears notices and announcements but never the circle bell', async () => {
+  mockDomain = 'notice';
+  Object.assign(mockBadges, { momentsUnread: 3, groupNoticeUnread: 1, profileUnread: 2, circleUnread: 4 });
+  jest.mocked(markAllNotificationsRead).mockResolvedValue({ count: 6 });
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalled());
+  await act(async () => { fireEvent.press(screen.getByTestId('mark-all')); });
+  expect(markAllNotificationsRead).toHaveBeenCalledWith('notice');
+  expect(mockBadges.momentsUnread).toBe(0);
+  expect(mockBadges.groupNoticeUnread).toBe(0);
+  expect(mockBadges.profileUnread).toBe(0);
+  expect(mockBadges.circleUnread).toBe(4);
+});
+

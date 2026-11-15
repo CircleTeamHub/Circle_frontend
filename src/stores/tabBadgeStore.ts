@@ -13,6 +13,7 @@ type TabBadgeSnapshot = {
   circleUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
+  groupNoticeUnread?: number;
   circlePlazaHasUpdate?: boolean;
   circlePlazaChangedAt?: number;
 };
@@ -30,6 +31,8 @@ type TabBadgeState = {
   /** 报名管理 unread (signups on my posts). */
   signupUnread: number;
   profileUnread: number;
+  /** 消息页「通知」里的群聊知会（被移出独立群聊 / 群聊解散）。 */
+  groupNoticeUnread: number;
   /** 飞机 tab 的红点：圈子帖子列表有别人发的新帖。只是一个点，不计数。 */
   circlePlazaHasUpdate: boolean;
   circlePlazaChangedAt: number | null;
@@ -43,6 +46,7 @@ type TabBadgeState = {
   setCircleUnread: (count: number) => void;
   setSignupUnread: (count: number) => void;
   setProfileUnread: (count: number) => void;
+  setGroupNoticeUnread: (count: number) => void;
   setCirclePlazaHasUpdate: (hasUpdate: boolean, changedAt?: number) => void;
   applySnapshot: (snapshot: TabBadgeSnapshot) => void;
   setRealtimeConnected: (connected: boolean) => void;
@@ -58,6 +62,7 @@ const initialState = {
   circleUnread: 0,
   signupUnread: 0,
   profileUnread: 0,
+  groupNoticeUnread: 0,
   circlePlazaHasUpdate: false,
   circlePlazaChangedAt: null,
   isRealtimeConnected: false,
@@ -74,6 +79,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
   setCircleUnread: (circleUnread) => set({ circleUnread }),
   setSignupUnread: (signupUnread) => set({ signupUnread }),
   setProfileUnread: (profileUnread) => set({ profileUnread }),
+  setGroupNoticeUnread: (groupNoticeUnread) => set({ groupNoticeUnread }),
   setCirclePlazaHasUpdate: (circlePlazaHasUpdate, changedAt) => set((state) => {
     if (changedAt !== undefined && state.circlePlazaChangedAt !== null
       && changedAt < state.circlePlazaChangedAt) return state;
@@ -98,6 +104,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
         circleUnread: snapshot.circleUnread ?? state.circleUnread,
         signupUnread: snapshot.signupUnread ?? state.signupUnread,
         profileUnread: snapshot.profileUnread ?? state.profileUnread,
+        groupNoticeUnread: snapshot.groupNoticeUnread ?? state.groupNoticeUnread,
         circlePlazaHasUpdate: applyPlaza ? snapshot.circlePlazaHasUpdate! : state.circlePlazaHasUpdate,
         circlePlazaChangedAt: applyPlaza
           ? snapshot.circlePlazaChangedAt ?? state.circlePlazaChangedAt : state.circlePlazaChangedAt,
@@ -107,3 +114,17 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
   setRealtimeConnected: (isRealtimeConnected) => set({ isRealtimeConnected }),
   reset: () => set(initialState),
 }));
+
+/**
+ * 消息页「通知」行的数字 = 圈子以外的全部未读：朋友圈互动、群聊知会、系统公告，
+ * 加上「新的朋友」里待处理的好友申请和入群申请。它也是消息 tab 角标里通知的那一份。
+ */
+export const selectNoticeUnread = (state: Pick<
+  TabBadgeState,
+  'momentsUnread' | 'groupNoticeUnread' | 'profileUnread' | 'contactsUnread' | 'groupAdmissionsUnread'
+>): number =>
+  state.momentsUnread +
+  state.groupNoticeUnread +
+  state.profileUnread +
+  state.contactsUnread +
+  state.groupAdmissionsUnread;

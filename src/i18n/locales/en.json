@@ -416,7 +416,12 @@
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
       "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post",
       "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "recognized your collaboration"
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "recognized your collaboration",
+      "CIRCLE_INVITATION_RECEIVED": "invited you to join {{circle}}",
+      "GROUP_MEMBER_REMOVED": "You have been removed from this group chat",
+      "GROUP_DISSOLVED": "This group chat has been disbanded",
+      "CIRCLE_MEMBER_REMOVED": "You have been removed from this circle",
+      "CIRCLE_DISSOLVED": "This circle has been disbanded"
     },
     "signupMgmt": {
       "untitledPost": "(untitled post)",
@@ -440,7 +445,19 @@
       "recognitionFailedTitle": "Submit failed"
     },
     "chatChannelName": "Chat messages",
-    "chatChannelDescription": "New messages from friends and groups"
+    "chatChannelDescription": "New messages from friends and groups",
+    "notice": {
+      "title": "Notifications",
+      "tabAll": "All",
+      "tabInteractive": "Activity",
+      "tabFriendsGroups": "Social",
+      "tabSystem": "System",
+      "emptySubtitle": "Activity, group and system notices show up here",
+      "newFriends": "New Friends",
+      "newFriendsHint": "Friend requests and group join requests",
+      "unnamedGroup": "Group chat",
+      "unnamedCircle": "Circle"
+    }
   },
   "chat": {
     "selection": {
@@ -3478,7 +3495,13 @@
   "im": {
     "conversation": {
       "removedFromGroup": "You have been removed from this group chat",
-      "removedFromNamedGroup": "You have been removed from the group \"{{name}}\""
+      "removedFromNamedGroup": "You have been removed from the group \"{{name}}\"",
+      "removedFromCircle": "You have been removed from this circle",
+      "removedFromNamedCircle": "You have been removed from the circle \"{{name}}\"",
+      "dissolvedGroup": "This group chat has been disbanded",
+      "dissolvedNamedGroup": "The group \"{{name}}\" has been disbanded",
+      "dissolvedCircle": "This circle has been disbanded",
+      "dissolvedNamedCircle": "The circle \"{{name}}\" has been disbanded"
     },
     "time": {
       "yesterday": "Yesterday"
