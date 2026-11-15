@@ -346,13 +346,18 @@ test('EditNoteScreen title card drops the date line', () => {
   assert.doesNotMatch(src, /calendar-outline|formatNoteFullDate|metaRow|dateStr/);
 });
 
-test('EditNoteScreen group selector is a content-width pill, not a full-width row', () => {
+test('EditNoteScreen group selector is a content-width pill sharing a row with the city', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  const block = src.match(/groupButton:\s*\{\s*alignSelf:\s*'flex-start',[^}]*\}/);
+  const row = src.match(/titleChipRow:\s*\{[^}]*\}/);
+  assert.ok(row, 'titleChipRow style block not found');
+  assert.match(row[0], /flexDirection:\s*'row'/);
+  const block = src.match(/groupButton:\s*\{\s*flexDirection:\s*'row',[^}]*\}/);
   assert.ok(block, 'groupButton style block not found');
+  assert.match(block[0], /flexShrink:\s*1/);
   assert.match(block[0], /height:\s*28/);
   assert.match(block[0], /borderRadius:\s*Radius\.pill/);
+  assert.doesNotMatch(block[0], /flex:\s*1|alignSelf:\s*'stretch'/);
   assert.doesNotMatch(src, /groupSection:|groupButtonSummary/);
 });
 

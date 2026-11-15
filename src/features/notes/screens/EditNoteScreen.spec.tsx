@@ -2121,6 +2121,21 @@ test('the title card has no date line and groups through a compact chip', () => 
   expect(screen.queryByText('notes.format.fullDate')).toBeNull();
 });
 
+// 分组和城市并排在标题下同一行，不再各占一整行；分组挤不下时自己省略，城市最多占半行。
+test('the title card lays the group and city chips side by side in one row', () => {
+  render(<EditNoteScreen />);
+  pressComposer('title');
+
+  const row = screen.getByTestId('note-title-chip-row');
+  expect(StyleSheet.flatten(row.props.style)).toEqual(expect.objectContaining({ flexDirection: 'row' }));
+  const groupChip = within(row).getByRole('button', { name: 'notes.edit.groupsLabel' });
+  expect(within(row).getByRole('button', { name: 'notes.edit.cityLabel' })).toBeTruthy();
+  expect(StyleSheet.flatten(groupChip.props.style)).toEqual(expect.objectContaining({ flexShrink: 1 }));
+  expect(StyleSheet.flatten(within(row).getByTestId('note-city-chip').props.style)).toEqual(
+    expect.objectContaining({ flexShrink: 0, maxWidth: '50%' }),
+  );
+});
+
 test('the title tool draws a heading glyph so it no longer looks like the text tool', () => {
   render(<EditNoteScreen />);
 
