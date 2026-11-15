@@ -1,0 +1,140 @@
+diff --git a/node_modules/react-freeze/dist/index.js b/node_modules/react-freeze/dist/index.js
+index b8af4e5..0f40e65 100644
+--- a/node_modules/react-freeze/dist/index.js
++++ b/node_modules/react-freeze/dist/index.js
+@@ -3,14 +3,35 @@ function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'defau
+ var React = require('react');
+ var React__default = _interopDefault(React);
+ 
+-var infiniteThenable = {
+-  then: function then() {}
+-};
++// circle-im patch (react-freeze#44 / PR #42): suspend through use() on a
++// promise of our own, resolved on thaw, instead of throwing a never-resolving
++// thenable that makes React 19.1+ commit frozen boundaries in an endless loop.
++function newSuspension() {
++  var thaw = function thaw() {};
++  var promise = new Promise(function (resolve) {
++    thaw = resolve;
++  });
++  return {
++    promise: promise,
++    thaw: thaw
++  };
++}
+ function Suspender(_ref) {
+   var freeze = _ref.freeze,
+     children = _ref.children;
++  var suspension = React.useRef(null);
+   if (freeze) {
+-    throw infiniteThenable;
++    if (suspension.current === null) suspension.current = newSuspension();
++    React.use(suspension.current.promise);
++  } else if (suspension.current !== null) {
++    var _suspension$current = suspension.current,
++      promise = _suspension$current.promise,
++      thaw = _suspension$current.thaw;
++    suspension.current = null;
++    thaw();
++    promise.status = "fulfilled";
++    promise.value = undefined;
++    React.use(promise);
+   }
+   return React__default.createElement(React.Fragment, null, children);
+ }
+diff --git a/node_modules/react-freeze/dist/index.modern.js b/node_modules/react-freeze/dist/index.modern.js
+index dee6ae5..c9736f4 100644
+--- a/node_modules/react-freeze/dist/index.modern.js
++++ b/node_modules/react-freeze/dist/index.modern.js
+@@ -1,13 +1,34 @@
+-import React, { Suspense, Fragment } from 'react';
++import React, { Suspense, Fragment, use, useRef } from 'react';
+ 
+-var infiniteThenable = {
+-  then: function then() {}
+-};
++// circle-im patch (react-freeze#44 / PR #42): suspend through use() on a
++// promise of our own, resolved on thaw, instead of throwing a never-resolving
++// thenable that makes React 19.1+ commit frozen boundaries in an endless loop.
++function newSuspension() {
++  var thaw = function thaw() {};
++  var promise = new Promise(function (resolve) {
++    thaw = resolve;
++  });
++  return {
++    promise: promise,
++    thaw: thaw
++  };
++}
+ function Suspender(_ref) {
+   var freeze = _ref.freeze,
+     children = _ref.children;
++  var suspension = useRef(null);
+   if (freeze) {
+-    throw infiniteThenable;
++    if (suspension.current === null) suspension.current = newSuspension();
++    use(suspension.current.promise);
++  } else if (suspension.current !== null) {
++    var _suspension$current = suspension.current,
++      promise = _suspension$current.promise,
++      thaw = _suspension$current.thaw;
++    suspension.current = null;
++    thaw();
++    promise.status = "fulfilled";
++    promise.value = undefined;
++    use(promise);
+   }
+   return React.createElement(Fragment, null, children);
+ }
+diff --git a/node_modules/react-freeze/src/index.tsx b/node_modules/react-freeze/src/index.tsx
+index 096ebc6..00ed900 100644
+--- a/node_modules/react-freeze/src/index.tsx
++++ b/node_modules/react-freeze/src/index.tsx
+@@ -1,7 +1,24 @@
+-import React, { Suspense, Fragment } from "react";
++import React, { Suspense, Fragment, use, useRef } from "react";
+ 
+-const infiniteThenable = { then() {} };
++interface Suspension {
++  // `status` and `value` as React's use() reads them from a settled thenable
++  promise: Promise<void> & { status?: "fulfilled"; value?: undefined };
++  thaw: () => void;
++}
++
++function newSuspension(): Suspension {
++  let thaw = () => {};
++  const promise = new Promise<void>((resolve) => {
++    thaw = resolve;
++  });
++  return { promise, thaw };
++}
+ 
++// circle-im patch (react-freeze#44 / PR #42): suspend through use() on a
++// promise of our own, resolved on thaw. A thrown never-resolving thenable makes
++// React 19.1+ claim a new retry lane each time a boundary that already shows
++// its fallback suspends again, and two frozen boundaries then commit their
++// retry lanes to each other without end, starving timers on the JS thread.
+ function Suspender({
+   freeze,
+   children,
+@@ -9,8 +26,19 @@ function Suspender({
+   freeze: boolean;
+   children: React.ReactNode;
+ }) {
++  const suspension = useRef<Suspension | null>(null);
+   if (freeze) {
+-    throw infiniteThenable;
++    if (suspension.current === null) suspension.current = newSuspension();
++    use(suspension.current.promise);
++  } else if (suspension.current !== null) {
++    const { promise, thaw } = suspension.current;
++    suspension.current = null;
++    thaw();
++    // settled where use() reads it: the thawing render calls use() as the
++    // suspended one did, without suspending again
++    promise.status = "fulfilled";
++    promise.value = undefined;
++    use(promise);
+   }
+   return <Fragment>{children}</Fragment>;
+ }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { act, render, screen } from '@testing-library/react-native';
+import { act, renderAsync, screen } from '@testing-library/react-native';
 import DelayedFreeze from 'react-native-screens/src/components/helpers/DelayedFreeze';
 
 // 回归(react-native-screens#4518,上游修复 PR #4608 未合并,见 patches/react-native-screens+4.23.0.patch):
@@ -33,21 +33,23 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test('a tab that blurs again before the unfreeze timer fires still gets its deactivation rendered', () => {
-  const { rerender } = render(renderScreen(false, 2));
+// react-freeze 打了补丁后用 use() 挂起(patches/react-freeze+1.0.4.patch)。开发版 React 的同步 act()
+// 碰到 use() 就不再把本次渲染刷完,所以这里一律用异步 act;线上没有 act 队列,不受影响。
+test('a tab that blurs again before the unfreeze timer fires still gets its deactivation rendered', async () => {
+  const { rerenderAsync } = await renderAsync(renderScreen(false, 2));
 
   // 失焦:先渲染出 0,计时器跑完后冻结。
-  rerender(renderScreen(true, 0));
-  act(() => {
+  await rerenderAsync(renderScreen(true, 0));
+  await act(async () => {
     jest.runOnlyPendingTimers();
   });
   expect(committedActivityState()).toBe(0);
 
   // 重新聚焦:立即解冻并渲染出 2;重置计时器还没跑。
-  rerender(renderScreen(false, 2));
+  await rerenderAsync(renderScreen(false, 2));
   expect(committedActivityState()).toBe(2);
 
   // 计时器跑之前又失焦:必须先渲染出 0 再冻结。
-  rerender(renderScreen(true, 0));
+  await rerenderAsync(renderScreen(true, 0));
   expect(committedActivityState()).toBe(0);
 });

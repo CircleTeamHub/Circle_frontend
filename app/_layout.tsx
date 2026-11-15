@@ -54,6 +54,7 @@ import {
 import { createFreshConnectionTransport } from '@/services/api/fresh-connection-transport';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { createRequestTraceHooks } from '@/observability/request-trace';
+import { startJsStallDetector } from '@/observability/js-stall-detector';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
@@ -121,6 +122,19 @@ if (Platform.OS !== 'web') {
       xhrPrototype: (globalThis.XMLHttpRequest?.prototype ?? null) as unknown as Record<string, unknown> | null,
     }),
   );
+  // 前台时 JS 线程卡住 3 秒以上就报一次，带卡之前的面包屑（见 observability/js-stall-detector）。
+  startJsStallDetector({
+    now: diagnosticNow,
+    getAppState: () => AppState.currentState ?? 'unknown',
+    subscribeAppState: (listener) => {
+      AppState.addEventListener('change', listener);
+    },
+    setInterval: (callback, ms) => setInterval(callback, ms),
+    clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+    onStall: (durationMs) => {
+      reportHandledFailure('jsThread', 'stall', new Error('JS thread stalled'), { durationMs });
+    },
+  });
 }
 
 async function registerLiveKitGlobals() {

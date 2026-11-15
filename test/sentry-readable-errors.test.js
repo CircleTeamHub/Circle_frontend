@@ -131,6 +131,18 @@ test('a stalled request rescued by the retry reads as such and is reported as a 
   assert.equal(event.tags.retry, 'recovered');
 });
 
+test('a JS thread stall reads as such with its length instead of a generic runtime error', () => {
+  const { sentry, options, captures } = setup();
+  sentry.reportError(new Error('JS thread stalled'), { operation: 'jsThread', kind: 'stall', durationMs: 8123 });
+  const capture = captures[0];
+  const event = options.beforeSend({
+    ...capture.context,
+    exception: { values: [{ type: capture.error.name, value: capture.error.message }] },
+  });
+  assert.equal(event.exception.values[0].value, 'JS 线程卡顿｜8123 ms');
+  assert.deepEqual([...capture.context.fingerprint], ['jsThread', 'stall', 'error']);
+});
+
 test('a retry that also failed names the outcome and stays an error', () => {
   const { sentry, options, captures } = setup();
   sentry.reportError(new Error('Network request failed'), {
