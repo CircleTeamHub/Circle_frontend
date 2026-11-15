@@ -1,33 +1,32 @@
 /**
- * screen-probe.tsx — 挂在每个页面外面的探针（经导航器的 screenLayout），管三件事：
+ * screen-probe.tsx — 挂在每个叶子页面外面的探针（经叶子栈的 screenLayout），管两件事：
  *
- * 1. 切回来没解冻：页面拿到焦点后 1.5 秒内它自己的子树一次都没重新提交，就是冻结没解开。
- *    FE#354 点 tab 停在上一页（RNS#4518 延迟冻结）就是这样：导航状态切过去了，画面没动。
- *    焦点事件来自导航器的事件派发，不受冻结影响；探针收到后改一下自己的 state，这次更新
- *    只有解冻后才能提交——提交了就清掉计时器，到点还没提交就报。
- * 2. 首次渲染慢：从探针开始渲染到整页第一次提交（子树的 layout effect 全跑完）的耗时，记成
+ * 1. 首次渲染慢：从探针开始渲染到整页第一次提交（子树的 layout effect 全跑完）的耗时，记成
  *    指标；超过 1 秒的按页面报一次。FE#371「进页慢一秒」就是 native-stack 在等这次提交。
- * 3. 根栈里出现多份 (tabs)：React Navigation 7 在某些跨 tab 跳转下会再压一份 (tabs)，
+ * 2. 根栈里出现多份 (tabs)：React Navigation 7 在某些跨 tab 跳转下会再压一份 (tabs)，
  *    之后返回会走进死路（见 countRouteCopies）。
  *
- * 页面名用路由模板名（如 `circle/[id]`），不是实际参数，不含任何标识符。
+ * 页面名是「所在栈 + 路由模板名」（如 `/(tabs)/explore/index`），不是实际参数，不含任何标识符。
+ * 以前还查过「切回来没解冻」（FE#354）；导航器不再开 freezeOnBlur 后没有冻结了，已删。
  */
-import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { diagnosticNow } from './http-diagnostics';
 import { recordMetric } from './metrics';
 import { reportHandledFailure, toStableCode } from './report-failure';
 
-export const FROZEN_AFTER_FOCUS_MS = 1500;
 export const SLOW_SCREEN_MS = 1000;
-// 计时器自己迟到这么久，说明是 JS 线程整个卡住了（归 js-stall-detector），不是冻结。
-const TIMER_LATE_TOLERANCE_MS = 1000;
 const REPORT_COOLDOWN_MS = 10 * 60_000;
 
 const lastReportedAt = new Map<string, number>();
 // 冷启动的第一个页面和启动一起渲染（store 水合、字体、整张列表），量的是启动耗时，
 // 归 Sentry 的 app start；不跳过的话每次冷启动都会报一条「页面慢」。
 let firstScreenSeen = false;
+// 渲染开始后进过后台的话，iOS 会把 JS 整段挂起，回前台才提交：量到的是挂起时长，不是渲染。
+let lastBackgroundAt = Number.NEGATIVE_INFINITY;
+AppState.addEventListener('change', (state) => {
+  if (state === 'background') lastBackgroundAt = diagnosticNow();
+});
 
 function reportAtMostEvery(key: string, report: () => void): void {
   const at = diagnosticNow();
@@ -41,10 +40,11 @@ function reportAtMostEvery(key: string, report: () => void): void {
 export function resetScreenProbeReports(): void {
   lastReportedAt.clear();
   firstScreenSeen = false;
+  lastBackgroundAt = Number.NEGATIVE_INFINITY;
 }
 
 type NavigationLike = {
-  addListener(type: 'focus', listener: () => void): () => void;
+  getId(): string | undefined;
 };
 
 type LayoutProps = {
@@ -53,28 +53,30 @@ type LayoutProps = {
   children: ReactNode;
 };
 
-type ProbeProps = LayoutProps & { measureFirstCommit: boolean };
+/** 六个 tab 的首页都叫 index：前面拼上所在栈。expo-router 拿布局路径（如 `/(tabs)/explore`）当导航器 id。 */
+function pageName(navigation: NavigationLike, routeName: string): string {
+  const stack = navigation.getId();
+  return stack ? `${stack}/${routeName}` : routeName;
+}
 
-const ScreenProbe: React.FC<ProbeProps> = ({ route, navigation, children, measureFirstCommit }) => {
-  const renderStartedAt = useRef<number | null>(null);
-  if (renderStartedAt.current === null) renderStartedAt.current = diagnosticNow();
-  // 冻结是 Suspense：解冻重新显示时 React 会重跑 layout effect（React 18 起），ref 却留着，
-  // 不拦的话「从开始渲染到解冻」整段都被当成首次提交（REACT-NATIVE-D2 的 26 秒）。
-  const firstCommitSeen = useRef(false);
-  const [focusCount, setFocusCount] = useState(0);
-  const awaitingCommit = useRef(false);
-  const page = route.name;
+const ScreenProbe: React.FC<LayoutProps> = ({ route, navigation, children }) => {
+  const [renderStartedAt] = useState(diagnosticNow);
+  // 靠这个 ref 保证只量一次，`[]` 保证不了：页面被 Suspense 藏起再显示时（如冻结后解冻），
+  // React 会重跑 layout effect，量出来的是「首渲到重新显示」整段（REACT-NATIVE-D2 的 26 秒）。
+  const measured = useRef(false);
 
   useLayoutEffect(() => {
-    if (!measureFirstCommit || firstCommitSeen.current || renderStartedAt.current === null) return;
-    firstCommitSeen.current = true;
+    if (measured.current) return;
+    measured.current = true;
     if (!firstScreenSeen) {
       firstScreenSeen = true;
       return;
     }
-    const durationMs = Math.round(diagnosticNow() - renderStartedAt.current);
+    if (lastBackgroundAt >= renderStartedAt || AppState.currentState === 'background') return;
+    const durationMs = Math.round(diagnosticNow() - renderStartedAt);
     recordMetric('screen.first_commit.duration', durationMs);
     if (durationMs < SLOW_SCREEN_MS) return;
+    const page = pageName(navigation, route.name);
     reportAtMostEvery(`slow:${page}`, () => {
       reportHandledFailure('render', 'slowScreen', new Error(`slow first commit ${page}`), {
         page,
@@ -82,53 +84,15 @@ const ScreenProbe: React.FC<ProbeProps> = ({ route, navigation, children, measur
         code: toStableCode(page),
       });
     });
-    // 只量第一次提交。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // 在提交里同步清掉（layout effect）：passive effect 可能排在检查计时器后面，
-  // 页面渲染很重时会把「慢」误判成「没解冻」。
-  useLayoutEffect(() => {
-    awaitingCommit.current = false;
-  }, [focusCount]);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = navigation.addListener('focus', () => {
-      const focusedAt = diagnosticNow();
-      awaitingCommit.current = true;
-      setFocusCount((count) => count + 1);
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        const late = diagnosticNow() - focusedAt - FROZEN_AFTER_FOCUS_MS;
-        if (!awaitingCommit.current || late > TIMER_LATE_TOLERANCE_MS) return;
-        if (AppState.currentState !== 'active') return;
-        reportAtMostEvery(`frozen:${page}`, () => {
-          reportHandledFailure('navigation', 'focusedScreenFrozen', new Error(`screen stayed frozen ${page}`), {
-            page,
-            code: toStableCode(page),
-          });
-        });
-      }, FROZEN_AFTER_FOCUS_MS);
-    });
-    return () => {
-      unsubscribe();
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [navigation, page]);
 
   return <>{children}</>;
 };
 
-/** 叶子页面用：量首次渲染 + 查冻结。 */
+/** 叶子栈的 screenLayout：量每个页面的首次渲染。 */
 export function probeScreenLayout(props: LayoutProps): React.ReactElement {
-  return <ScreenProbe {...props} measureFirstCommit />;
-}
-
-/** 里面装的是另一个导航器（根栈的 (tabs)、tab 页的子栈）：只查冻结，首次渲染归里面的页面量。 */
-export function probeNavigatorLayout(props: LayoutProps): React.ReactElement {
-  return <ScreenProbe {...props} measureFirstCommit={false} />;
+  return <ScreenProbe {...props} />;
 }
 
 type NavigationStateLike = {
