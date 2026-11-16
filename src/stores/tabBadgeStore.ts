@@ -36,6 +36,8 @@ type TabBadgeState = {
   /** 飞机 tab 的红点：圈子帖子列表有别人发的新帖。只是一个点，不计数。 */
   circlePlazaHasUpdate: boolean;
   circlePlazaChangedAt: number | null;
+  /** 探索 tab / 朋友圈磁贴的小红点：好友发了新动态（不推送，只亮这个点）。不计数。 */
+  momentsHasUpdate: boolean;
   isRealtimeConnected: boolean;
   lastSyncedAt: number | null;
   setMessagesUnread: (count: number) => void;
@@ -48,6 +50,7 @@ type TabBadgeState = {
   setProfileUnread: (count: number) => void;
   setGroupNoticeUnread: (count: number) => void;
   setCirclePlazaHasUpdate: (hasUpdate: boolean, changedAt?: number) => void;
+  setMomentsHasUpdate: (hasUpdate: boolean) => void;
   applySnapshot: (snapshot: TabBadgeSnapshot) => void;
   setRealtimeConnected: (connected: boolean) => void;
   reset: () => void;
@@ -65,6 +68,7 @@ const initialState = {
   groupNoticeUnread: 0,
   circlePlazaHasUpdate: false,
   circlePlazaChangedAt: null,
+  momentsHasUpdate: false,
   isRealtimeConnected: false,
   lastSyncedAt: null,
 };
@@ -88,6 +92,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
       circlePlazaChangedAt: changedAt ?? state.circlePlazaChangedAt,
     };
   }),
+  setMomentsHasUpdate: (momentsHasUpdate) => set({ momentsHasUpdate }),
   applySnapshot: (snapshot) =>
     set((state) => {
       // A legacy snapshot cannot replace a known semantic version.

@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ActivityIndicator } from 'react-native';
 import NotificationCenterScreen from './NotificationCenterScreen';
-import { fetchNotificationsPage, markAllNotificationsRead, markNotificationRead } from '@/services/api/notifications';
+import { fetchNotificationsPage, markAllNotificationsRead, markNotificationRead, markTraceLikesRead } from '@/services/api/notifications';
 import { fetchAllMyCirclePosts, markMyPostSignupsRead } from '@/services/api/plaza';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
@@ -73,7 +73,7 @@ jest.mock('@/features/notifications/components/NotificationRow', () => ({ Notifi
   return <Text onPress={onPress}>{data.id}</Text>;
 } }));
 jest.mock('@/features/notifications/components/NotificationEmptyState', () => ({ NotificationEmptyState: () => null }));
-jest.mock('@/services/api/notifications', () => ({ fetchNotificationsPage: jest.fn(), markAllNotificationsRead: jest.fn(), markNotificationRead: jest.fn() }));
+jest.mock('@/services/api/notifications', () => ({ fetchNotificationsPage: jest.fn(), markAllNotificationsRead: jest.fn(), markNotificationRead: jest.fn(), markTraceLikesRead: jest.fn() }));
 jest.mock('@/services/api/plaza', () => ({ fetchAllMyCirclePosts: jest.fn(), markMyPostSignupsRead: jest.fn() }));
 jest.mock('@/stores/tabBadgeStore', () => ({
   useTabBadgeStore: Object.assign(
@@ -115,6 +115,30 @@ test('the circle notifications page carries the settings gear and opens settings
   await act(async () => { await Promise.resolve(); });
   fireEvent.press(screen.getByRole('button', { name: 'discover.notifications.title' }));
   expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/discover/notifications');
+});
+
+test('likes on one moment show as one row and are marked read together', async () => {
+  const like = (id: string, userId: string): NotificationItem => ({
+    id, type: 'TRACE_LIKE', content: '', read: false, createdAt: '2026-11-16T00:00:00.000Z',
+    fromUser: { id: userId, nickname: userId, avatarUrl: null },
+    fromTrace: { id: 'trace-1', excerpt: '', firstImage: null },
+    fromReply: null, fromCircle: null, fromCirclePost: null, fromInvitation: null,
+  });
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({
+    items: [like('like-2', 'u2'), like('like-1', 'u1')], nextCursor: null,
+  });
+  jest.mocked(markTraceLikesRead).mockResolvedValue(undefined);
+  mockBadges.momentsUnread = 2;
+  mockBadges.discoverUnread = 2;
+  render(<NotificationCenterScreen />);
+
+  fireEvent.press(await screen.findByText('like-2'));
+
+  expect(screen.queryByText('like-1')).toBeNull();
+  expect(markTraceLikesRead).toHaveBeenCalledWith('trace-1');
+  expect(markNotificationRead).not.toHaveBeenCalled();
+  expect(mockBadges.momentsUnread).toBe(0);
+  expect(useNotificationCenterStore.getState().interactive.every((n) => n.read)).toBe(true);
 });
 
 test('the moments notifications page has no circle settings gear', async () => {

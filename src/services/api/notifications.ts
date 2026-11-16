@@ -195,6 +195,14 @@ export async function markNotificationRead(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}/read`, { method: 'PUT' });
 }
 
+/** 同一条动态收到的点赞（列表里合并成一行）一起标已读。 */
+export async function markTraceLikesRead(traceId: string): Promise<void> {
+  await apiClient<{ count: number }>(
+    `/notification/trace-likes/${encodeURIComponent(traceId)}/read`,
+    { method: 'PUT' },
+  );
+}
+
 export async function verifyNotificationOpenOwnership(
   id: string,
 ): Promise<{ owned: boolean }> {

@@ -404,6 +404,7 @@
     "summary": {
       "default": "sent you a notification",
       "TRACE_LIKE": "liked your moment",
+      "TRACE_LIKE_GROUPED": "and {{others}} others liked your moment",
       "PROFILE_LIKE": "liked you",
       "TRACE_COMMENT": "commented on your moment",
       "COMMENT_REPLY": "replied to you",
@@ -1376,6 +1377,7 @@
     "myApplied": "My applications",
     "noCircles": "No circles",
     "newPosts": "{{count}} new posts, tap to view",
+    "momentsHasUpdate": "Friends posted new moments",
     "noMoments": "No moments yet",
     "addFriendHint": "Add friends to see their moments",
     "notifications": {

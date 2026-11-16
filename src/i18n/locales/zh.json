@@ -404,6 +404,7 @@
     "summary": {
       "default": "给你发来一条新通知",
       "TRACE_LIKE": "点赞了你的动态",
+      "TRACE_LIKE_GROUPED": "和另外 {{others}} 人点赞了你的动态",
       "PROFILE_LIKE": "赞了你",
       "TRACE_COMMENT": "评论了你的动态",
       "COMMENT_REPLY": "回复了你",
@@ -1372,6 +1373,7 @@
     "myApplied": "我的申请",
     "noCircles": "暂无圈子",
     "newPosts": "有{{count}}条新动态，点击查看",
+    "momentsHasUpdate": "好友有新动态",
     "noMoments": "暂无朋友圈动态",
     "addFriendHint": "添加好友后即可看到朋友的动态",
     "notifications": {

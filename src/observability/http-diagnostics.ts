@@ -194,6 +194,7 @@ export const HTTP_ROUTE_TEMPLATES: readonly string[] = [
   "/note/share-links",
   "/notification/:id/open-ownership",
   "/notification/:id/read",
+  "/notification/trace-likes/:id/read",
   "/notification/circle-push-preference",
   "/notification/group-push-preference",
   "/notification/push-token",

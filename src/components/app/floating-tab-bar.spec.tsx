@@ -111,6 +111,19 @@ it('lets a numeric badge take the spot instead of stacking both', () => {
   expect(screen.getByText('2')).toBeTruthy();
 });
 
+it('lights a dot on the explore tab when friends posted new moments', () => {
+  renderBar();
+  const exploreDot = () =>
+    screen.queryAllByTestId(/-update-dot$/).filter((node) => node.props.testID !== DOT);
+  expect(exploreDot()).toHaveLength(0);
+
+  act(() => useTabBadgeStore.getState().setMomentsHasUpdate(true));
+  expect(exploreDot()).toHaveLength(1);
+
+  act(() => useTabBadgeStore.getState().setMomentsHasUpdate(false));
+  expect(exploreDot()).toHaveLength(0);
+});
+
 it('stays dark for someone the feed has told to upgrade', () => {
   mockMembershipRequired = true;
   useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);

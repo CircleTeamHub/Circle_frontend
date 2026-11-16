@@ -123,9 +123,13 @@ export async function fetchUserMoments(
   };
 }
 
-export async function fetchNewMomentsCount(since: string): Promise<number> {
+/** friendsOnly：不数自己发的（探索 tab 的「好友有新动态」红点用）。 */
+export async function fetchNewMomentsCount(
+  since: string,
+  options: { friendsOnly?: boolean } = {},
+): Promise<number> {
   const result = await apiClient<number>(
-    `/trace/feed/new-count?since=${encodeURIComponent(since)}`,
+    `/trace/feed/new-count?since=${encodeURIComponent(since)}${options.friendsOnly ? '&friendsOnly=1' : ''}`,
   );
   return result;
 }

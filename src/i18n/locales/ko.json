@@ -2015,6 +2015,7 @@
     "myApplied": "내 신청",
     "noCircles": "서클 없음",
     "newPosts": "새 게시물 {{count}}개, 눌러서 보기",
+    "momentsHasUpdate": "친구의 새 게시물이 있어요",
     "noMoments": "아직 모먼트가 없어요",
     "addFriendHint": "친구를 추가하면 모먼트를 볼 수 있어요",
     "notifications": {
@@ -2230,6 +2231,7 @@
     "summary": {
       "default": "알림을 보냈어요",
       "TRACE_LIKE": "회원님의 모먼트를 좋아합니다",
+      "TRACE_LIKE_GROUPED": "외 {{others}}명이 회원님의 모먼트를 좋아합니다",
       "PROFILE_LIKE": "회원님을 좋아합니다",
       "TRACE_COMMENT": "회원님의 모먼트에 댓글을 남겼어요",
       "COMMENT_REPLY": "회원님에게 답글을 남겼어요",

@@ -10,6 +10,7 @@ import {
   fetchNotificationsPage,
   markAllNotificationsRead,
   markNotificationRead,
+  markTraceLikesRead,
 } from '@/services/api/notifications';
 import {
   fetchAllMyCirclePosts,
@@ -30,7 +31,8 @@ import { decrementUnreadBadgesFor } from '@/features/notifications/utils/unread-
 import { NewFriendsShortcutRow } from '@/features/notifications/components/NewFriendsShortcutRow';
 import { orderNotificationTabs } from '@/features/notifications/utils/notification-tabs';
 import {
-  mapNotificationToRow,
+  groupTraceLikes,
+  mapNotificationGroupToRow,
   type NotificationRowData,
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
@@ -64,6 +66,8 @@ import { usePullRefresh } from '@/hooks/use-pull-refresh';
 interface Row {
   raw: NotificationItem | MyCirclePost;
   view: NotificationRowData;
+  /** 同一条动态合并成一行的点赞（含 raw 本身）；其余通知没有这个字段。 */
+  likes?: readonly NotificationItem[];
 }
 
 // 报名管理只属于圈子域；朋友圈铃铛和消息页「通知」不该出现这个 tab，也不该为它拉数据。
@@ -342,7 +346,11 @@ export default function NotificationCenterScreen() {
   const rows = useMemo<Row[]>(() => {
     const mapped: Row[] =
       isListTab
-        ? interactive.map((n) => ({ raw: n, view: mapNotificationToRow(n, t) }))
+        ? groupTraceLikes(interactive).map((group) => ({
+            raw: group[0],
+            view: mapNotificationGroupToRow(group, t),
+            ...(group.length > 1 ? { likes: group } : {}),
+          }))
         : signupPosts.map((p) => ({ raw: p, view: mapMyPostToRow(p, t) }));
     return filter === 'unread' ? mapped.filter((r) => r.view.unread) : mapped;
   }, [isListTab, filter, interactive, signupPosts, t]);
@@ -419,15 +427,32 @@ export default function NotificationCenterScreen() {
   }, [listDomain, isCurrentSession, isListTab, load, store]);
 
   const handleRowPress = useCallback(
-    (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
+    (
+      raw: NotificationItem | MyCirclePost,
+      view: NotificationRowData,
+      likes?: readonly NotificationItem[],
+    ) => {
       if (!isCurrentSession()) return;
       if ('type' in raw) {
-        store().markInteractiveReadLocal(raw.id);
-        if (!raw.read) decrementUnreadBadgesFor(raw.type);
-        void markNotificationRead(raw.id).catch((e) => {
-          if (isCurrentSession())
-            reportHandledFailure('notificationCenter', 'markRead', e);
-        });
+        if (likes && raw.fromTrace) {
+          // 合并行：这条动态的赞一次标完（含还没翻到的那些）。
+          for (const like of likes) {
+            if (like.read) continue;
+            store().markInteractiveReadLocal(like.id);
+            decrementUnreadBadgesFor(like.type);
+          }
+          void markTraceLikesRead(raw.fromTrace.id).catch((e) => {
+            if (isCurrentSession())
+              reportHandledFailure('notificationCenter', 'markTraceLikesRead', e);
+          });
+        } else {
+          store().markInteractiveReadLocal(raw.id);
+          if (!raw.read) decrementUnreadBadgesFor(raw.type);
+          void markNotificationRead(raw.id).catch((e) => {
+            if (isCurrentSession())
+              reportHandledFailure('notificationCenter', 'markRead', e);
+          });
+        }
         // 被移出 / 解散：群已经不在了，没有可去的地方，看过即可。
         if (MEMBERSHIP_NOTICE_TYPES.has(raw.type)) return;
         const route = getSnackbarRoute(
@@ -516,7 +541,7 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() => handleRowPress(item.raw, item.view)}
+            onPress={() => handleRowPress(item.raw, item.view, item.likes)}
           />
         )}
         ItemSeparatorComponent={Divider}
