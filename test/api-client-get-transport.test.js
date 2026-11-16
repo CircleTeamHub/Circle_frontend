@@ -341,14 +341,45 @@ for (const [label, trace] of [
   });
 }
 
-test('a suspended stall whose backup also failed is still reported: the user saw that error', async () => {
+// 线上真实样本（2026-11-16，安卓红米）：备份在冻结前就发出去了，系统随后把整个进程冻了 392 秒，
+// 回前台时两份请求的预算同时到点，一起失败。备份不是回来后才发的，用户没等过它。
+test('a stall is not reported when the backup was frozen by the same suspension', async () => {
   const timers = makeTimers();
   const { apiClient, registerRequestTraceHooks, reports } = loadClient({
     timers,
     fetchImpl: (options) => stalledFetch(options),
   });
   registerRequestTraceHooks(traceHooks({
-    finish: () => ({ xhrStage: 'acked', appState: 'background', appStateChanged: true, loopLagMs: 91157 }),
+    finish: () => ({ xhrStage: 'done', appState: 'active', appStateChanged: true, loopLagMs: 392057 }),
+  }));
+
+  const pending = apiClient('/note');
+  await tick();
+  timers.fireSoonest(); // 2.5s 发备份（冻结前）
+  await tick();
+  timers.fireSoonest(); // 解冻：备份的预算到
+  await tick();
+  timers.fireSoonest(); // 解冻：第一次的预算到
+  await assert.rejects(pending);
+
+  assert.equal(reports.length, 0);
+});
+
+test('a suspended stall whose backup failed after the app came back is still reported: the user saw that error', async () => {
+  const timers = makeTimers();
+  const { apiClient, registerRequestTraceHooks, reports } = loadClient({
+    timers,
+    fetchImpl: (options) => stalledFetch(options),
+  });
+  let firstAttempt;
+  registerRequestTraceHooks(traceHooks({
+    begin: (id) => {
+      firstAttempt ??= id;
+    },
+    // 第一次跨过了冻结；备份是回来之后才发的，JS 一直在跑。
+    finish: (id) => (id === firstAttempt
+      ? { xhrStage: 'acked', appState: 'active', appStateChanged: true, loopLagMs: 91157 }
+      : { xhrStage: 'acked', appState: 'active', appStateChanged: false, loopLagMs: 40 }),
   }));
 
   const pending = apiClient('/note');
