@@ -975,7 +975,8 @@
         "note": "노트",
         "video": "동영상",
         "display": "표시",
-        "location": "위치"
+        "location": "위치",
+        "sending": "전송 중"
       },
       "imageCount": "이미지 {{count}}장",
       "videoCount": "동영상 {{count}}개",

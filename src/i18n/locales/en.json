@@ -1087,7 +1087,8 @@
         "note": "Note",
         "video": "Video",
         "display": "Display",
-        "location": "Location"
+        "location": "Location",
+        "sending": "Sending"
       },
       "imageCount": "{{count}} images",
       "videoCount": "{{count}} videos",

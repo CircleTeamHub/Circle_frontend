@@ -1083,7 +1083,8 @@
         "note": "笔记",
         "video": "视频",
         "display": "展示",
-        "location": "位置"
+        "location": "位置",
+        "sending": "发送中"
       },
       "imageCount": "{{count}}张图片",
       "videoCount": "{{count}}个视频",

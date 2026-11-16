@@ -975,7 +975,8 @@
         "note": "ノート",
         "video": "動画",
         "display": "表示",
-        "location": "位置情報"
+        "location": "位置情報",
+        "sending": "送信中"
       },
       "imageCount": "画像{{count}}枚",
       "videoCount": "動画{{count}}本",

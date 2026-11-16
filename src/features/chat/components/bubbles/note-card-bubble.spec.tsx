@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { NoteCardBubble } from './note-card-bubble';
 import { noteCardWidth } from './note-card-body';
+import { useNoteSectionSendStore } from '@/features/chat/store/use-note-section-send-store';
 import type { ChatMessage, NoteCardData } from '@/types';
 
 jest.mock('expo-image', () => {
@@ -146,6 +147,29 @@ test('all four section buttons are always there; the ones the note lacks are dis
   fireEvent.press(screen.getByText('chat.noteCard.chips.note'));
   expect(onSectionPress).toHaveBeenCalledWith(expect.objectContaining({ noteId: 'n1' }), 'text');
   expect(screen.getByText('chat.noteCard.workStatus.closed')).toBeTruthy();
+});
+
+test('a section that is still being sent says so and cannot be tapped again', () => {
+  const onSectionPress = jest.fn();
+  useNoteSectionSendStore.setState({ sending: { 'n1:media': 1 } });
+  try {
+    render(
+      <NoteCardBubble
+        message={message(card({ videoCount: 1, imageCount: 1, showcaseCount: 1 }))}
+        outgoing={false}
+        onSectionPress={onSectionPress}
+      />,
+    );
+    expect(screen.getByText('chat.noteCard.chips.sending')).toBeTruthy();
+    expect(screen.queryByText('chat.noteCard.chips.video')).toBeNull();
+    fireEvent.press(screen.getByTestId('note-card-chip-media'));
+    expect(onSectionPress).not.toHaveBeenCalled();
+    // 其余分块不受影响。
+    fireEvent.press(screen.getByTestId('note-card-chip-showcase'));
+    expect(onSectionPress).toHaveBeenCalledWith(expect.objectContaining({ noteId: 'n1' }), 'showcase');
+  } finally {
+    act(() => useNoteSectionSendStore.setState({ sending: {} }));
+  }
 });
 
 test('older cards without the grid keep their cover image', () => {

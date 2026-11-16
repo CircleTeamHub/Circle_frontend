@@ -979,7 +979,8 @@
         "note": "Nota",
         "video": "Vídeo",
         "display": "Muestra",
-        "location": "Ubicación"
+        "location": "Ubicación",
+        "sending": "Enviando"
       },
       "imageCount": "{{count}} imágenes",
       "videoCount": "{{count}} vídeos",

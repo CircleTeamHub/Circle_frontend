@@ -189,6 +189,7 @@ test('buildNoteSendTasks orders card, then imported media, then location', () =>
     {
       kind: 'video',
       noteId: 'note-1',
+      mediaId: 'm-2',
       key: 'chat/me/b.mp4',
       width: undefined,
       height: undefined,
@@ -225,16 +226,18 @@ test('buildNoteSendTasks video duration is ceiled seconds with a 1s floor', () =
   assert.equal(tasks[1].kind === 'video' ? tasks[1].duration : -1, undefined);
 });
 
-test('buildNoteSendTasks gives each video the poster captured for it, and none when capture failed', () => {
+test('buildNoteSendTasks remembers which note media each video came from, so its poster can be captured', () => {
   const note = makeNote();
   const imported: ImportedNoteChatMedia[] = [
     { id: 'm-1', section: 'showcase', type: 'VIDEO', key: 'chat/me/a.mp4' },
     { id: 'm-2', section: 'showcase', type: 'VIDEO', key: 'chat/me/b.mp4' },
   ];
-  const posters = new Map([['chat/me/a.mp4', 'chat/me/poster-a.jpg']]);
-  const tasks = buildNoteSendTasks(note, options({ showcase: true }), imported, null, posters);
-  assert.equal(tasks[0].kind === 'video' ? tasks[0].thumbKey : null, 'chat/me/poster-a.jpg');
-  assert.equal(tasks[1].kind === 'video' && 'thumbKey' in tasks[1], false);
+  const tasks = buildNoteSendTasks(note, options({ showcase: true }), imported, null);
+  assert.deepEqual(
+    tasks.map((task) => (task.kind === 'video' ? task.mediaId : task.kind)),
+    ['m-1', 'm-2'],
+  );
+  assert.equal(tasks.some((task) => task.kind === 'video' && 'thumbKey' in task), false);
 });
 
 test('buildNoteSendTasks skips location when unchecked or invalid', () => {

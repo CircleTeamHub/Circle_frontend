@@ -1,11 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type GestureResponderEvent,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { NoteRatingCounts } from '@/features/notes/components/NoteRatingCounts';
 import { useNoteRatingCountsStore } from '@/features/notes/store/use-note-rating-counts-store';
 import { displayedNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
 import { splitNoteVideoCounts } from '@/features/notes/utils/note-format';
+import { useNoteSectionSendStore } from '@/features/chat/store/use-note-section-send-store';
+import { noteSectionSendKey } from '@/features/chat/utils/note-batch-send';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteCardData } from '@/types';
 import { AVATAR_COLUMN_SIZE, CHAT_CARD_PADDING_VERTICAL, CHAT_CARD_STANDARD_WIDTH } from './shared';
@@ -84,9 +94,12 @@ const s = StyleSheet.create({
     height: 22,
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.xs,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
   },
+  chipSpinner: { transform: [{ scale: 0.6 }], marginHorizontal: -4 },
   chipEnabled: { backgroundColor: NOTE_CARD_ACTIVE_GREEN },
   chipDisabled: { borderWidth: 1 },
   chipText: { ...Typography.tinyRegular, fontWeight: '600' },
@@ -120,6 +133,9 @@ export function NoteCardBody({
   // until then the area shows 0 so the card keeps its height.
   const cachedRatingCounts = useNoteRatingCountsStore((state) => state.counts[note.noteId]);
   const ratingCounts = knownRatingCounts ?? cachedRatingCounts;
+  // 正在发的分块显示「发送中」:大视频要先拷贝、截封面,点下去到第一条消息出现有好几秒,
+  // 标签没反应的话用户会以为没点上,连点好几次。
+  const sendingSections = useNoteSectionSendStore((state) => state.sending);
   const windowWidth = useWindowDimensions().width;
   const cardWidth = width ?? noteCardWidth(windowWidth);
   // 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。
@@ -242,24 +258,31 @@ export function NoteCardBody({
       <View style={s.chips}>
         {SECTIONS.map((section) => {
           const enabled = available[section.id];
+          const sending = enabled && Boolean(sendingSections[noteSectionSendKey(note.noteId, section.id)]);
           return (
             <Pressable
               key={section.id}
+              testID={`note-card-chip-${section.id}`}
               style={({ pressed }) => [
                 s.chip,
                 enabled
                   ? s.chipEnabled
                   : [s.chipDisabled, { borderColor: onCardMuted }],
-                enabled && pressed && { opacity: 0.75 },
+                enabled && (pressed || sending) && { opacity: 0.75 },
               ]}
-              disabled={!enabled}
+              disabled={!enabled || sending}
               onLongPress={onLongPress}
               delayLongPress={350}
               onPress={enabled && onSectionPress ? () => onSectionPress(note, section.id) : undefined}
-              accessibilityState={{ disabled: !enabled }}
+              accessibilityState={{ disabled: !enabled || sending, busy: sending }}
             >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.white} style={s.chipSpinner} />
+              ) : null}
               <Text style={[s.chipText, { color: enabled ? colors.white : onCardMuted }]}>
-                {t(section.labelKey, { defaultValue: section.defaultLabel })}
+                {sending
+                  ? t('chat.noteCard.chips.sending', { defaultValue: '发送中' })
+                  : t(section.labelKey, { defaultValue: section.defaultLabel })}
               </Text>
             </Pressable>
           );
