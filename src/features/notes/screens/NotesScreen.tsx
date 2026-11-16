@@ -60,6 +60,9 @@ import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-orde
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
 import { createNoteDraftId } from '@/features/notes/utils/note-editor-drafts';
+import { publishInterruptedNotes } from '@/features/notes/utils/interrupted-note-recovery';
+import { topNotice } from '@/components/app/top-notice-store';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { rateNoteGood, startBadNoteRating } from '@/features/notes/rating/note-rating-flow';
 import {
   applyNoteSourceStatusToSummaries,
@@ -267,6 +270,31 @@ function NotesContent() {
     }, [load, noteListVersion, noteStatusRecovery, sessionEpoch]),
   );
 
+  // 草稿箱已取消:编辑到一半被打断(闪退、被杀、退出时没存成)的内容,回到这里时存成笔记。
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUserId) return;
+      const epoch = sessionEpoch;
+      void publishInterruptedNotes({
+        userId: currentUserId,
+        fallbackTitle: t('notes.edit.untitledNote', { defaultValue: '未命名笔记' }),
+        isCurrent: () => {
+          const auth = useAuthStore.getState();
+          return auth.user?.id === currentUserId && auth.sessionEpoch === epoch;
+        },
+      })
+        .then((published) => {
+          if (published === 0 || !mountedRef.current) return;
+          topNotice.success(t('notes.interruptedSaved', {
+            count: published,
+            defaultValue: '已把 {{count}} 篇没保存完的编辑存成笔记',
+          }));
+          return load();
+        })
+        .catch((error: unknown) => reportHandledFailure('noteRecovery', 'run', error));
+    }, [currentUserId, load, sessionEpoch, t]),
+  );
+
   const reloadAfterMembershipChange = useCallback(async () => {
     await load();
   }, [load]);
@@ -432,12 +460,12 @@ function NotesContent() {
   }, [groups, t, tabOrderIds]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
-  const openUnlisted = useCallback(
-    () => router.push('/(tabs)/profile/notes/unlisted' as never),
+  const openRecycleBin = useCallback(
+    () => router.push('/(tabs)/profile/notes/recycle-bin' as never),
     [router],
   );
-  const openDrafts = useCallback(
-    () => router.push('/(tabs)/profile/notes/drafts' as never),
+  const openUnlisted = useCallback(
+    () => router.push('/(tabs)/profile/notes/unlisted' as never),
     [router],
   );
   const openSettings = useCallback(
@@ -948,8 +976,8 @@ function NotesContent() {
             ) : (
               <NotesHeaderActions
                 compact={compactActions}
+                onOpenRecycleBin={openRecycleBin}
                 onOpenUnlisted={openUnlisted}
-                onOpenDrafts={openDrafts}
                 onOpenSettings={openSettings}
               />
             )}

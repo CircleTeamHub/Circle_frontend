@@ -8,11 +8,11 @@ const source = fs.readFileSync(
   'utf8',
 );
 
-test('已下架笔记的操作 sheet 提供删除入口，确认后永久删除（回收站已取消）', () => {
+test('已下架笔记的操作 sheet 提供删除入口，确认后进回收站', () => {
   assert.match(source, /import \{[^}]*\bdeleteNote\b[^}]*\} from '@\/services\/api\/notes'/);
   assert.match(source, /onPress=\{handleDeleteNote\}/);
   assert.match(source, /await deleteNote\(note\.id\)/);
-  // 删除前必须二次确认，并说明删了就找不回（不删也会在下架到期后自动删除）。
+  // 删除前必须二次确认，并说明删除后可在回收站找回（30 天后清除）。
   assert.match(source, /notes\.alerts\.deleteUnlistedConfirm/);
   assert.match(source, /style: 'destructive'/);
 });

@@ -1237,6 +1237,8 @@
       "editNote": "ノートを編集",
       "editGroups": "グループを編集",
       "delete": "削除",
+      "restore": "復元",
+      "purge": "今すぐ削除",
       "download": "ダウンロード"
     },
     "alerts": {
@@ -1262,14 +1264,17 @@
       "refreshFailedTitle": "更新に失敗しました",
       "remarkFailedTitle": "メモを保存できませんでした",
       "deleteTitle": "ノートを削除",
-      "deleteConfirm": "削除すると元に戻せません。残しておきたい場合は掲載停止にすると、60日以内なら再掲載できます。",
+      "deleteConfirm": "削除したノートはごみ箱から復元でき、30日後に自動的に消去されます。",
+      "restoreFailedTitle": "復元に失敗しました",
+      "purgeTitle": "ノートを今すぐ削除しますか？",
+      "purgeConfirm": "ノートは完全に削除され、復元できません。",
       "batchFailedTitle": "一部の操作に失敗しました",
       "batchPartialFailed": "{{count}}件のノートの操作に失敗しました。選択は保持されています。もう一度お試しください。",
       "batchUnlistTitle": "まとめて非公開",
       "batchUnlistConfirm": "選択した{{count}}件のノートを掲載停止にしますか？60日後に自動で削除され、それまではいつでも再掲載できます。",
       "batchDeleteTitle": "まとめて削除",
-      "batchDeleteConfirm": "選択した{{count}}件のノートを削除しますか？元に戻せません。",
-      "deleteUnlistedConfirm": "削除すると元に戻せません。そのままでも60日たつと自動で削除されます。"
+      "batchDeleteConfirm": "選択中の{{count}}件のノートを削除しますか？ごみ箱から復元できます。",
+      "deleteUnlistedConfirm": "削除したノートはごみ箱から復元でき、30日後に自動的に消去されます。"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -1288,20 +1293,8 @@
       "openGroupSource": "グループ「{{name}}」で元のメッセージを見る"
     },
     "drafts": {
-      "title": "下書き",
-      "empty": "下書きはありません",
-      "deleteTitle": "下書きを削除しますか？",
-      "deleteMessage": "削除した下書きは復元できません。",
-      "deleteUnconfirmedMessage": "この下書きの保存結果はまだ確認できていません。サーバーに保存されていないか、保存内容がこの下書きと異なる可能性があります。削除すると下書きは復元できないため、先に開いて確認することをおすすめします。",
-      "deleteAnyway": "それでも削除",
-      "untitled": "無題のノート",
-      "noContent": "まだ内容がありません",
-      "mediaCount": "メディア {{count}} 件",
-      "deleteLabel": "下書きを削除",
-      "deleteFailed": "下書きを削除できませんでした。もう一度お試しください。",
-      "pendingSubmitDeleteBlocked": "この下書きの保存結果はまだ確認できていません。下書きを開いて元の保存を再試行してから、削除するか決めてください。",
-      "deletePending": "端末のデータ整理またはサーバーの削除が未完了です。内容は非表示になっています。再試行して削除を完了してください。",
-      "saveFailed": "下書きを保存できませんでした。もう一度お試しください。"
+      "saveFailed": "変更を保存できませんでした。もう一度お試しください。",
+      "deleteFailed": "後片付けに失敗しました。もう一度お試しください。"
     },
     "edit": {
       "addImage": "画像を追加",
@@ -1351,9 +1344,9 @@
       "audioRecording": "録音中、タップして停止",
       "waitForMediaTitle": "現在の操作を完了してください",
       "waitForMediaMessage": "録音を停止するか、アップロードまたは保存が完了してから戻ってください。",
-      "pendingSubmitMessage": "保存結果を確認しています。編集を一時停止し、内容は端末の下書きに保存しました。「再試行」で元の保存を確認してください。",
+      "pendingSubmitMessage": "保存結果を確認しています。編集を一時停止し、内容はこの端末に保持しています。「再試行」で元の保存を確認してください。",
       "pendingSubmitStorageFailed": "送信内容を端末に保存できなかったため、まだ送信していません。空き容量を確認して再試行してください。",
-      "pendingSubmitConflict": "保存結果を確認しています。編集を一時停止し、内容は端末の下書きに保存しました。「再試行」で元の保存を確認してください。",
+      "pendingSubmitConflict": "保存結果を確認しています。編集を一時停止し、内容はこの端末に保持しています。「再試行」で元の保存を確認してください。",
       "openCommittedNote": "保存済みノートを見る",
       "audioDuration": "{{seconds}} 秒",
       "audioPickerUnavailableTitle": "音声を選択できません",
@@ -1372,6 +1365,12 @@
       },
       "validationTitle": "ノートの内容を確認してください",
       "titleRequired": "タイトルを入力してください",
+      "untitledNote": "無題のノート",
+      "keepEditing": "編集を続ける",
+      "exitWithoutSaving": "保存せずに戻る",
+      "exitMediaNotUploaded": "アップロードが終わっていない写真・動画・録音があります。編集を続けて再アップロードするか、保存せずに戻ってください。",
+      "exitSaveLater": "通信状態が悪く、保存できませんでした。いったん戻っても、「マイノート」に戻ったときに自動でノートとして保存されます。",
+      "exitAndSaveLater": "いったん戻る",
       "titleHint": "タイトルは必須です（最大{{max}}文字）",
       "textTooLong": "本文は段落間の改行を含めて最大{{max}}文字です（現在{{count}}文字）。入力内容は保持されています。短くしてから保存してください。",
       "tooManyParagraphs": "本文は最大{{max}}段落です。入力内容は保持されています。一部の段落をまとめてから保存してください。",
@@ -1431,7 +1430,8 @@
     "empty": {
       "noMatch": "一致するノートがありません",
       "noNotes": "まだノートがありません",
-      "noUnlisted": "非公開のノートはありません"
+      "noUnlisted": "非公開のノートはありません",
+      "noDeleted": "ごみ箱は空です"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
@@ -1477,6 +1477,10 @@
     },
     "title": "マイノート",
     "unlisted": "非公開",
+    "recycleBin": "ごみ箱",
+    "recycleBinHint": "削除したノートはここから復元できます。30日後に自動的に消去されます。",
+    "recycleBinTitle": "ごみ箱",
+    "interruptedSaved": "保存しきれなかった編集 {{count}} 件をノートとして保存しました",
     "unlistedTitle": "非公開のノート",
     "unlistedAutoDeleteHint": "掲載停止のノートは60日後に自動で削除され、それまではいつでも再掲載できます。他の人には「掲載停止」と表示されます。",
     "format": {
@@ -3953,7 +3957,7 @@
     "FRIEND_LIMIT_REACHED": "友だちの数が上限に達しました。会員登録で上限を増やせます",
     "NOTE_GROUP_EXISTS": "同じ名前のグループが既に存在します",
     "NOTE_STORAGE_QUOTA_REACHED": "現在の会員レベルのノート保存上限に達しました",
-    "NOTE_PUBLICATION_QUOTA_REACHED": "このノートの保存回数が上限に達しました。下書きを保持し、追加した内容を新しいノートとして保存してください。",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "このノートの保存回数が上限に達しました。追加した内容は新しいノートとして保存してください。",
     "NOTE_GROUP_LIMIT": "ノートグループの数が上限に達しました",
     "NOTE_EXPORT_NO_MEDIA": "エクスポートできるメディアがありません",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "メディアファイルが大きすぎてエクスポートできません",

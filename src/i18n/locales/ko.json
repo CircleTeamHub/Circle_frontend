@@ -1237,6 +1237,8 @@
       "editNote": "노트 편집",
       "editGroups": "그룹 편집",
       "delete": "삭제",
+      "restore": "복원",
+      "purge": "지금 삭제",
       "download": "다운로드"
     },
     "alerts": {
@@ -1262,14 +1264,17 @@
       "refreshFailedTitle": "새로고침 실패",
       "remarkFailedTitle": "메모 저장 실패",
       "deleteTitle": "노트 삭제",
-      "deleteConfirm": "삭제하면 복구할 수 없습니다. 되돌릴 여지를 남기려면 내리기를 사용하세요. 60일 안에 다시 올릴 수 있습니다.",
+      "deleteConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
+      "restoreFailedTitle": "복원 실패",
+      "purgeTitle": "노트를 지금 삭제할까요?",
+      "purgeConfirm": "노트가 영구적으로 삭제되며 복구할 수 없습니다.",
       "batchFailedTitle": "일부 작업 실패",
       "batchPartialFailed": "노트 {{count}}개의 작업이 실패했습니다. 선택이 유지되니 다시 시도해 주세요.",
       "batchUnlistTitle": "일괄 내리기",
       "batchUnlistConfirm": "선택한 노트 {{count}}개를 내릴까요? 60일 후 자동으로 삭제되며, 그 전에는 언제든 다시 올릴 수 있습니다.",
       "batchDeleteTitle": "일괄 삭제",
-      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 삭제하면 복구할 수 없습니다.",
-      "deleteUnlistedConfirm": "삭제하면 복구할 수 없습니다. 그대로 두어도 60일이 지나면 자동으로 삭제됩니다."
+      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 휴지통에서 복원할 수 있습니다.",
+      "deleteUnlistedConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -1288,20 +1293,8 @@
       "openGroupSource": "그룹 \"{{name}}\"에서 원본 메시지 보기"
     },
     "drafts": {
-      "title": "임시 저장",
-      "empty": "저장된 초안이 없습니다",
-      "deleteTitle": "초안을 삭제할까요?",
-      "deleteMessage": "삭제한 초안은 복구할 수 없습니다.",
-      "deleteUnconfirmedMessage": "이 초안의 저장 결과가 아직 확인되지 않았습니다. 서버에 저장되지 않았거나 저장된 내용이 이 초안과 다를 수 있습니다. 삭제하면 초안을 복구할 수 없으니 먼저 열어서 확인해 보세요.",
-      "deleteAnyway": "그래도 삭제",
-      "untitled": "제목 없는 노트",
-      "noContent": "아직 내용이 없습니다",
-      "mediaCount": "미디어 {{count}}개",
-      "deleteLabel": "초안 삭제",
-      "deleteFailed": "초안을 삭제하지 못했습니다. 다시 시도해 주세요.",
-      "pendingSubmitDeleteBlocked": "이 초안의 저장 결과가 아직 확인되지 않았습니다. 초안을 열고 원래 저장을 다시 시도한 후 삭제 여부를 결정해 주세요.",
-      "deletePending": "기기 정리 또는 서버 삭제가 아직 완료되지 않았습니다. 내용은 숨겨졌으며, 다시 시도하여 삭제를 완료할 수 있습니다.",
-      "saveFailed": "초안을 저장하지 못했습니다. 다시 시도해 주세요."
+      "saveFailed": "변경 내용을 저장하지 못했습니다. 다시 시도해 주세요.",
+      "deleteFailed": "정리하지 못했습니다. 다시 시도해 주세요."
     },
     "edit": {
       "addImage": "이미지 추가",
@@ -1351,9 +1344,9 @@
       "audioRecording": "녹음 중, 눌러서 중지",
       "waitForMediaTitle": "현재 작업을 먼저 완료해 주세요",
       "waitForMediaMessage": "녹음을 중지하거나 업로드 또는 저장이 끝난 후 돌아가세요.",
-      "pendingSubmitMessage": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 로컬 초안에 저장되었습니다. 다시 시도하여 원래 저장을 확인하세요.",
+      "pendingSubmitMessage": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 이 기기에 보관되어 있습니다. 다시 시도하여 원래 저장을 확인하세요.",
       "pendingSubmitStorageFailed": "이 기기에 제출 내용을 보관할 수 없어 아직 전송하지 않았습니다. 저장 공간을 확인하고 다시 시도하세요.",
-      "pendingSubmitConflict": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 로컬 초안에 저장되었습니다. 다시 시도하여 원래 저장을 확인하세요.",
+      "pendingSubmitConflict": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 이 기기에 보관되어 있습니다. 다시 시도하여 원래 저장을 확인하세요.",
       "openCommittedNote": "저장된 노트 보기",
       "audioDuration": "{{seconds}}초",
       "audioPickerUnavailableTitle": "오디오를 선택할 수 없습니다",
@@ -1372,6 +1365,12 @@
       },
       "validationTitle": "노트 내용을 확인해 주세요",
       "titleRequired": "제목을 입력해 주세요",
+      "untitledNote": "제목 없는 노트",
+      "keepEditing": "계속 편집",
+      "exitWithoutSaving": "저장하지 않고 나가기",
+      "exitMediaNotUploaded": "업로드가 끝나지 않은 사진, 동영상 또는 녹음이 있습니다. 계속 편집해 다시 업로드하거나 저장하지 않고 나가세요.",
+      "exitSaveLater": "네트워크가 불안정해 저장하지 못했습니다. 지금 나가도 '내 노트'로 돌아오면 자동으로 노트로 저장됩니다.",
+      "exitAndSaveLater": "일단 나가기",
       "titleHint": "제목 필수, 최대 {{max}}자",
       "textTooLong": "본문은 단락 사이의 줄바꿈을 포함해 최대 {{max}}자이며 현재 {{count}}자입니다. 입력 내용은 유지됩니다. 내용을 줄인 후 저장해 주세요.",
       "tooManyParagraphs": "본문은 최대 {{max}}개 단락입니다. 입력 내용은 유지됩니다. 일부 단락을 합친 후 저장해 주세요.",
@@ -1431,7 +1430,8 @@
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
       "noNotes": "아직 노트가 없습니다",
-      "noUnlisted": "내린 노트가 없습니다"
+      "noUnlisted": "내린 노트가 없습니다",
+      "noDeleted": "휴지통이 비어 있습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
@@ -1477,6 +1477,10 @@
     },
     "title": "내 노트",
     "unlisted": "내림",
+    "recycleBin": "휴지통",
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
+    "recycleBinTitle": "휴지통",
+    "interruptedSaved": "저장하지 못한 편집 {{count}}개를 노트로 저장했습니다",
     "unlistedTitle": "내린 노트",
     "unlistedAutoDeleteHint": "내린 노트는 60일 후 자동으로 삭제되며, 그 전에는 언제든 다시 올릴 수 있습니다. 다른 사람에게는 「판매 중지」로 표시됩니다.",
     "format": {
@@ -3953,7 +3957,7 @@
     "FRIEND_LIMIT_REACHED": "친구 수가 한도에 도달했습니다. 멤버십을 업그레이드하면 늘릴 수 있습니다",
     "NOTE_GROUP_EXISTS": "같은 이름의 그룹이 이미 있습니다",
     "NOTE_STORAGE_QUOTA_REACHED": "현재 회원 등급의 노트 저장 한도에 도달했습니다",
-    "NOTE_PUBLICATION_QUOTA_REACHED": "이 노트의 저장 횟수가 한도에 도달했습니다. 초안을 보관하고 추가한 내용을 새 노트로 저장해 주세요.",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "이 노트의 저장 횟수가 한도에 도달했습니다. 추가한 내용은 새 노트로 저장해 주세요.",
     "NOTE_GROUP_LIMIT": "노트 그룹 개수가 한도에 도달했습니다",
     "NOTE_EXPORT_NO_MEDIA": "내보낼 수 있는 미디어가 없습니다",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "미디어 파일이 너무 커서 내보낼 수 없습니다",
