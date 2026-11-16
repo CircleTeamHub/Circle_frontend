@@ -2,11 +2,9 @@ import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-ke
 import type { GroupAdmissionDetail } from '@/services/api/group-admissions';
 import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import { useAuthStore } from '@/stores/authStore';
-import type { CircleInvitation } from '@/types';
 
 export type GroupAdmissionsSnapshot = {
   items: GroupAdmissionDetail[];
-  circleInvitations: CircleInvitation[];
   nextCursor: string | null;
 };
 

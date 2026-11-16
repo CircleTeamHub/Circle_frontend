@@ -415,6 +415,7 @@
       "videoExpired": "Vídeo caducado",
       "voiceExpired": "Mensaje de voz caducado",
       "playVideo": "Reproducir vídeo",
+      "openImage": "Ver imagen",
       "pauseVideo": "Pausar",
       "videoSkipBack": "Retroceder 15 segundos",
       "videoSkipForward": "Avanzar 15 segundos",
@@ -2249,7 +2250,12 @@
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "un administrador aprobó tu solicitud en {{circle}}",
       "CIRCLE_POST_SIGNUP_CREATED": "se inscribió en tu publicación del círculo",
       "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración"
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración",
+      "CIRCLE_INVITATION_RECEIVED": "te invitó a unirte a {{circle}}",
+      "GROUP_MEMBER_REMOVED": "Te han eliminado de este chat de grupo",
+      "GROUP_DISSOLVED": "Este chat de grupo se ha disuelto",
+      "CIRCLE_MEMBER_REMOVED": "Te han eliminado de este círculo",
+      "CIRCLE_DISSOLVED": "Este círculo se ha disuelto"
     },
     "signupMgmt": {
       "untitledPost": "(publicación sin título)",
@@ -2273,7 +2279,19 @@
       "recognitionFailedTitle": "Error al enviar"
     },
     "chatChannelName": "Mensajes de chat",
-    "chatChannelDescription": "Mensajes nuevos de amigos y grupos"
+    "chatChannelDescription": "Mensajes nuevos de amigos y grupos",
+    "notice": {
+      "title": "Notificaciones",
+      "tabAll": "Todas",
+      "tabInteractive": "Actividad",
+      "tabFriendsGroups": "Social",
+      "tabSystem": "Sistema",
+      "emptySubtitle": "La actividad y los avisos de grupos y del sistema aparecen aquí",
+      "newFriends": "Nuevos amigos",
+      "newFriendsHint": "Solicitudes de amistad y para unirse a grupos",
+      "unnamedGroup": "Chat de grupo",
+      "unnamedCircle": "Círculo"
+    }
   },
   "search": {
     "loadFriendsFailed": "No se pudieron cargar los amigos, inténtalo de nuevo",
@@ -3540,7 +3558,13 @@
   "im": {
     "conversation": {
       "removedFromGroup": "Te han eliminado de este chat de grupo",
-      "removedFromNamedGroup": "Te han eliminado del grupo «{{name}}»"
+      "removedFromNamedGroup": "Te han eliminado del grupo «{{name}}»",
+      "removedFromCircle": "Te han eliminado de este círculo",
+      "removedFromNamedCircle": "Te han eliminado del círculo «{{name}}»",
+      "dissolvedGroup": "Este chat de grupo se ha disuelto",
+      "dissolvedNamedGroup": "El grupo «{{name}}» se ha disuelto",
+      "dissolvedCircle": "Este círculo se ha disuelto",
+      "dissolvedNamedCircle": "El círculo «{{name}}» se ha disuelto"
     },
     "time": {
       "yesterday": "Ayer"

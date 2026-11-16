@@ -1,6 +1,11 @@
 import { useChatStore } from '@/chat-core/store';
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
 import { useConversationImageViewer } from './use-conversation-image-viewer';
+import {
+  collectQuoteSources,
+  type QuoteSources,
+} from '@/features/chat/components/bubbles/quoted-message-block';
+import type { NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
@@ -154,6 +159,29 @@ export function useMessageRenderer({
 }: MessageRendererParams) {
   const chatRouter = useChatRouter();
   const { imageViewer, openMedia } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
+  /**
+   * 点笔记卡片(聊天里那张,或引用块里展开的同一张):整卡 / 「笔记」打开详情,
+   * 其余三块直接以我的名义发到当前聊天。来源坐标始终是那条笔记卡片消息本身。
+   */
+  const openNoteCard = useCallback(
+    (message: ChatMessage, note: NoteCardData, section: NoteCardSection | '' = '') => {
+      if (section && section !== 'text') {
+        handleSendNoteSection(note, section);
+        return;
+      }
+      chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
+        conversationId: conversationID, messageId: message.id,
+        messageHeight: useChatStore.getState().messagesByConversation[conversationID]
+          ?.find((stored) => stored.id === message.id)?.height,
+      }));
+    },
+    [chatRouter, conversationID, handleSendNoteSection, scope],
+  );
+  // 引用块要原消息的缩略图、标题和整张笔记卡片:经 context 下发,不进 renderMessage 的依赖。
+  const quoteSources = useMemo<QuoteSources>(
+    () => ({ byId: collectQuoteSources(messages), openMedia, openNoteCard, selfDestructEnabled }),
+    [messages, openMedia, openNoteCard, selfDestructEnabled],
+  );
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
   // 成员表里的昵称才是能稳定显示的「对方名字」。
@@ -369,25 +397,8 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            onPress={(note) =>
-              chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', '', {
-                conversationId: conversationID, messageId: item.id,
-                messageHeight: useChatStore.getState().messagesByConversation[conversationID]
-                  ?.find((message) => message.id === item.id)?.height,
-              }))
-            }
-            onSectionPress={(note, section) => {
-              // 「笔记」仍然打开详情;其余三块直接以我的名义发到当前聊天。
-              if (section !== 'text') {
-                handleSendNoteSection(note, section);
-                return;
-              }
-              chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
-                conversationId: conversationID, messageId: item.id,
-                messageHeight: useChatStore.getState().messagesByConversation[conversationID]
-                  ?.find((message) => message.id === item.id)?.height,
-              }));
-            }}
+            onPress={(note) => openNoteCard(item, note)}
+            onSectionPress={(note, section) => openNoteCard(item, note, section)}
             hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
@@ -539,7 +550,7 @@ export function useMessageRenderer({
     receivedDisplayName,
     withGroupSenderLabel,
     handleOpenMessageSender,
-    handleSendNoteSection,
+    openNoteCard,
     answeredClearRequests,
     getAvatarLongPressHandler,
     handleOpenSelfProfile,
@@ -553,7 +564,6 @@ export function useMessageRenderer({
     selfAvatarUri,
     selfName,
     scope,
-    conversationID,
     getMessageLongPressHandler,
     withMessageActions,
     handleStartCall,
@@ -577,6 +587,7 @@ export function useMessageRenderer({
 
   return {
     imageViewer,
+    quoteSources,
     renderItem,
     keyExtractor: messageRowKey,
   };

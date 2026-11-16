@@ -4,7 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { buildQuotePreviewText } from '@/features/chat/utils/chat-send-payloads';
 import { type ThemeColors } from '@/theme';
 import { type TFunction } from 'i18next';
-import { type Dispatch, type SetStateAction } from 'react';
+import { type Dispatch, type SetStateAction, useContext } from 'react';
+import {
+  QuoteSourcesContext,
+  QuoteThumbnailImage,
+} from '@/features/chat/components/bubbles/quoted-message-block';
+import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
+import { quoteThumbnail } from '@/features/chat/utils/quote-preview';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -44,6 +50,8 @@ export function ComposerBanners({
   pendingCard,
   setPendingCard,
 }: ComposerBannersProps) {
+  const { selfDestructEnabled } = useContext(QuoteSourcesContext);
+  const quoteThumb = quoteTarget ? quoteThumbnail(quoteTarget) : null;
   return (
     <>
       {editingMessageId ? (
@@ -73,6 +81,13 @@ export function ComposerBanners({
           >
             {buildQuotePreviewText(quoteTarget, t)}
           </Text>
+          {quoteThumb ? (
+            <QuoteThumbnailImage
+              thumb={quoteThumb}
+              ephemeral={isEphemeralMessage(quoteTarget, selfDestructEnabled)}
+              size={32}
+            />
+          ) : null}
           <Pressable onPress={() => setQuoteTarget(null)} hitSlop={8}>
             <Ionicons name="close" size={18} color={colors.textSecondary} />
           </Pressable>

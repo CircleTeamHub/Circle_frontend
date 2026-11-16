@@ -116,6 +116,23 @@ test('realtime notification.created only prepends bell types but banners everyth
   );
 });
 
+test('removed / dissolved notices go into the notice pool but never raise a second banner', () => {
+  const client = read('src/realtime/client.ts');
+  // 聊天层收到 removed 事件时已经当场弹过窗 / 顶部提醒：这里只进通知池，不再入队横幅。
+  assert.match(
+    client,
+    /setInteractive\([\s\S]*?if \(MEMBERSHIP_NOTICE_TYPES\.has\(payload\.type\)\) return;[\s\S]*?enqueueNotification\(payload\)/,
+  );
+  // 群聊知会的未读数随互动未读事件和快照一起走，老后端不带时留住既有值。
+  assert.match(client, /typeof message\.payload\?\.groupNoticeUnread === 'number'/);
+  assert.match(client, /setGroupNoticeUnread\(message\.payload\.groupNoticeUnread\)/);
+  assert.match(client, /groupNoticeUnread: snapshot\.groupNoticeUnread/);
+  assert.match(client, /groupNoticeUnread: notificationSummary\.groupNoticeUnread/);
+  // 圈子邀请归飞机：不再触发「新的朋友 → 群组」的未读重拉。
+  assert.match(client, /if \(payload\.type === 'GROUP_ADMISSION'\) void refreshGroupAdmissionUnread\(\)/);
+  assert.doesNotMatch(client, /payload\.type === 'CIRCLE_INVITATION_RECEIVED'/);
+});
+
 test('realtime gates circle-notification banners on the circle notification settings', () => {
   const client = read('src/realtime/client.ts');
 

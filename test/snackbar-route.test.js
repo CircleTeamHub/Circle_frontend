@@ -294,12 +294,22 @@ test("getSnackbarRoute defaults to the notification center", () => {
 });
 
 test("getSnackbarRoute defaults to the discover notification center for discover scope", () => {
-  // 不属于任何铃铛的类型（SYSTEM 等）落在不限域的通知中心。
+  // 不属于任何铃铛、也没有专属落点的类型落在不限域的通知中心。
   const route = getSnackbarRoute(
-    notification({ type: "SYSTEM" }),
+    notification({ type: "MESSAGE_RECEIVED" }),
     DISCOVER_OPTS,
   );
   assert.equal(route, "/(tabs)/discover/notification-center");
+});
+
+test("getSnackbarRoute opens a system announcement by its notification id", () => {
+  // 消息页「通知」里的系统分类点开直达公告详情（详情页按通知 id 取）。
+  const route = getSnackbarRoute(
+    notification({ id: "notice-1", type: "SYSTEM" }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/profile/system-announcements/[id]");
+  assert.equal(route.params.id, "notice-1");
 });
 
 test("getSnackbarRoute's discover fallback lands in the bell that owns the type", () => {
@@ -323,9 +333,9 @@ test("getSnackbarRoute's explore fallback only owns the moments bell", () => {
   assert.equal(moments.pathname, "/(tabs)/explore/notification-center");
   assert.equal(moments.params.domain, "moments");
 
-  // 探索 tab 没有圈子铃铛:圈子 / 系统类兜底仍回消息页的通知中心。
+  // 探索 tab 没有圈子铃铛:圈子 / 其他类兜底仍回消息页的通知中心。
   assert.equal(
-    getSnackbarRoute(notification({ type: "SYSTEM" }), EXPLORE_OPTS),
+    getSnackbarRoute(notification({ type: "MESSAGE_RECEIVED" }), EXPLORE_OPTS),
     "/(tabs)/messages/notifications",
   );
 });
@@ -336,3 +346,44 @@ test("getNotificationScope maps the current tab stack to a notification scope", 
   assert.equal(getNotificationScope(["(tabs)", "explore", "moment", "[id]"]), "explore");
   assert.equal(getNotificationScope(["(tabs)", "contacts"]), "messages");
 });
+
+// 消息页的「通知」和飞机都在消息栈里:点进去的落点也要在消息栈,返回才回到通知列表,
+// 而不是被甩到「我」/探索/圈子 tab 的首页。
+test("getSnackbarRoute keeps notice and circle-bell destinations inside the messages stack", () => {
+  const scope = { untitledPost: "Untitled", scope: "messages" };
+  const system = getSnackbarRoute(notification({ id: "notice-1", type: "SYSTEM" }), scope);
+  assert.equal(system.pathname, "/(tabs)/messages/system-announcements/[id]");
+  assert.equal(system.params.id, "notice-1");
+
+  const moment = getSnackbarRoute(
+    notification({ type: "TRACE_LIKE", fromTrace: { id: "trace-1" } }),
+    scope,
+  );
+  assert.equal(moment.pathname, "/(tabs)/messages/moment/[id]");
+
+  const verification = getSnackbarRoute(
+    notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: { id: "inv-1" } }),
+    scope,
+  );
+  assert.equal(verification.pathname, "/(tabs)/messages/verification/[id]");
+
+  const invitation = getSnackbarRoute(
+    notification({ type: "CIRCLE_INVITATION_RECEIVED", fromInvitation: { id: "inv-2" } }),
+    scope,
+  );
+  assert.equal(invitation.pathname, "/(tabs)/messages/invitation/[id]");
+});
+
+test("every messages-stack destination the notices can open has a route file", () => {
+  for (const file of [
+    "app/(tabs)/messages/new-friends.tsx",
+    "app/(tabs)/messages/new-friends/[id].tsx",
+    "app/(tabs)/messages/system-announcements/[id].tsx",
+    "app/(tabs)/messages/moment/[id].tsx",
+    "app/(tabs)/messages/verification/[id].tsx",
+    "app/(tabs)/messages/invitation/[id].tsx",
+  ]) {
+    assert.ok(fs.existsSync(path.join(process.cwd(), file)), `${file} is missing`);
+  }
+});
+

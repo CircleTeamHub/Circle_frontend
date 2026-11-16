@@ -412,6 +412,7 @@
       "videoExpired": "동영상이 만료되었습니다",
       "voiceExpired": "음성 메시지가 만료되었습니다",
       "playVideo": "동영상 재생",
+      "openImage": "이미지 보기",
       "pauseVideo": "일시정지",
       "videoSkipBack": "15초 뒤로",
       "videoSkipForward": "15초 앞으로",
@@ -2241,7 +2242,12 @@
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "관리자가 「{{circle}}」에서 회원님의 신청을 승인했어요",
       "CIRCLE_POST_SIGNUP_CREATED": "회원님의 서클 게시물에 신청했어요",
       "CIRCLE_POST_AUTO_ENDED": "활동이 종료됐어요. 인정할 협업자를 선택하세요",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "회원님의 활동 협업을 인정했어요"
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "회원님의 활동 협업을 인정했어요",
+      "CIRCLE_INVITATION_RECEIVED": "「{{circle}}」에 초대했어요",
+      "GROUP_MEMBER_REMOVED": "이 그룹 채팅에서 내보내졌습니다",
+      "GROUP_DISSOLVED": "이 그룹 채팅은 해산되었습니다",
+      "CIRCLE_MEMBER_REMOVED": "이 서클에서 내보내졌습니다",
+      "CIRCLE_DISSOLVED": "이 서클은 해산되었습니다"
     },
     "signupMgmt": {
       "untitledPost": "(제목 없는 게시물)",
@@ -2265,7 +2271,19 @@
       "recognitionFailedTitle": "제출하지 못했어요"
     },
     "chatChannelName": "채팅 메시지",
-    "chatChannelDescription": "친구와 그룹의 새 메시지"
+    "chatChannelDescription": "친구와 그룹의 새 메시지",
+    "notice": {
+      "title": "알림",
+      "tabAll": "전체",
+      "tabInteractive": "상호작용",
+      "tabFriendsGroups": "친구·그룹",
+      "tabSystem": "시스템",
+      "emptySubtitle": "상호작용, 그룹, 시스템 알림이 여기에 표시돼요",
+      "newFriends": "새로운 친구",
+      "newFriendsHint": "친구 신청과 그룹 참여 신청",
+      "unnamedGroup": "그룹 채팅",
+      "unnamedCircle": "서클"
+    }
   },
   "search": {
     "loadFriendsFailed": "친구 목록을 불러오지 못했어요. 다시 시도하세요",
@@ -3532,7 +3550,13 @@
   "im": {
     "conversation": {
       "removedFromGroup": "그룹 채팅에서 내보내졌습니다",
-      "removedFromNamedGroup": "'{{name}}' 그룹에서 내보내졌습니다"
+      "removedFromNamedGroup": "'{{name}}' 그룹에서 내보내졌습니다",
+      "removedFromCircle": "이 서클에서 내보내졌습니다",
+      "removedFromNamedCircle": "'{{name}}' 서클에서 내보내졌습니다",
+      "dissolvedGroup": "이 그룹 채팅은 해산되었습니다",
+      "dissolvedNamedGroup": "'{{name}}' 그룹이 해산되었습니다",
+      "dissolvedCircle": "이 서클은 해산되었습니다",
+      "dissolvedNamedCircle": "'{{name}}' 서클이 해산되었습니다"
     },
     "time": {
       "yesterday": "어제"

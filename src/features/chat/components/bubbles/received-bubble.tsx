@@ -4,6 +4,7 @@ import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { MessageAvatar } from './shared';
+import { QuotedMessageBlock } from './quoted-message-block';
 
 interface ReceivedBubbleProps {
   /** G-07:点按某个回应 pill 切换自己的回应。 */
@@ -34,16 +35,11 @@ const sReceived = StyleSheet.create({
   },
   receivedContent: {
     maxWidth: 280,
+    // 气泡下方挂引用块后,列宽可能被引用块撑开:各自按内容宽,气泡别被拉宽。
+    alignItems: 'flex-start',
   },
   receivedAvatarSlot: {
     paddingBottom: 2,
-  },
-  quoteBox: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginBottom: 6,
-    maxWidth: 240,
   },
 });
 
@@ -75,13 +71,6 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },
-      quoteBox: {
-        backgroundColor: colors.surface,
-      },
-      quoteText: {
-        color: colors.text,
-        ...Typography.tinyRegular,
-      },
       // G-07 回应 pill：走主题色淡底，不再用中性灰（暗色下灰底/灰边几乎看不见）。
       pill: { backgroundColor: colors.primaryLight },
       pillMine: { borderColor: colors.primary },
@@ -110,20 +99,6 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
       )}
       <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
-          {message.quotedText ? (
-            onQuotePress ? (
-              <Pressable
-                style={[sReceived.quoteBox, d.quoteBox]}
-                onPress={onQuotePress}
-              >
-                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-              </Pressable>
-            ) : (
-              <View style={[sReceived.quoteBox, d.quoteBox]}>
-                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-              </View>
-            )
-          ) : null}
           <Text style={d.bubbleText}>
             {message.text}
             {message.edited
@@ -154,6 +129,9 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
             </View>
           ) : null}
         </View>
+        {message.quotedText ? (
+          <QuotedMessageBlock message={message} align="start" onPress={onQuotePress} />
+        ) : null}
         {message.time ? (
           <Text style={d.timeText}>{message.time}</Text>
         ) : null}

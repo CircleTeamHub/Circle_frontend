@@ -53,6 +53,8 @@ export interface MessageActionsParams {
   /** 聊天页所在的 tab 栈:子页面(已读成员)要压在同一个栈里。 */
   scope: UserProfileScope;
   setQuoteTarget: Dispatch<SetStateAction<ChatMessage | null>>;
+  /** 选了「引用」:页面随后把光标放进输入框,用户可以直接打字。 */
+  onQuoteStarted: () => void;
   setEditingMessageId: Dispatch<SetStateAction<string | null>>;
   handleCollectMessage: (message: ChatMessage, options?: { silent?: boolean }) => Promise<CollectMessageResult>;
 }
@@ -75,6 +77,7 @@ export function useMessageActions({
   conversationTitle,
   scope,
   setQuoteTarget,
+  onQuoteStarted,
   setEditingMessageId,
   handleCollectMessage,
 }: MessageActionsParams) {
@@ -287,7 +290,8 @@ export function useMessageActions({
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
     setQuoteTarget(message);
-  }, [setQuoteTarget]);
+    onQuoteStarted();
+  }, [onQuoteStarted, setQuoteTarget]);
 
   const handleDeleteMessage = useCallback(
     (message: ChatMessage) => {

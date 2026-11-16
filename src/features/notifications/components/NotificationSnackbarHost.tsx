@@ -24,13 +24,12 @@ import {
   useCircleNotificationStore,
 } from '@/features/discover/store/use-circle-notification-store';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
-import { notificationDomain } from '@/features/notifications/utils/notification-domain';
+import { decrementUnreadBadgesFor } from '@/features/notifications/utils/unread-badges';
 import {
   snackbarBannerKey,
   useNotificationSnackbarStore,
 } from '@/features/notifications/store/use-notification-snackbar-store';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
-import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { isCurrentRoute } from '@/utils/current-route';
@@ -216,17 +215,7 @@ export function NotificationSnackbarHost() {
       // Optimistically mark read locally so the notification center reflects
       // the tap immediately, regardless of the network call's outcome.
       useNotificationCenterStore.getState().markInteractiveReadLocal(shown.id);
-      if (!shown.read) {
-        // 总数和所属域的计数一起减；只减总数会让对应铃铛的红点一直挂着。
-        const badgeStore = useTabBadgeStore.getState();
-        const domain = notificationDomain(shown.type);
-        if (domain) badgeStore.setDiscoverUnread(Math.max(0, badgeStore.discoverUnread - 1));
-        if (domain === 'moments') {
-          badgeStore.setMomentsUnread(Math.max(0, badgeStore.momentsUnread - 1));
-        } else if (domain === 'circle') {
-          badgeStore.setCircleUnread(Math.max(0, badgeStore.circleUnread - 1));
-        }
-      }
+      if (!shown.read) decrementUnreadBadgesFor(shown.type);
       void markNotificationRead(shown.id).catch((error) => {
         reportHandledFailure('notifications', 'markRead', error);
       });

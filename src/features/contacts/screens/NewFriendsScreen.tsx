@@ -17,7 +17,10 @@ import {
   getFriendActivityCopy,
   getFriendActivityDisplayName,
 } from '@/features/contacts/friend-activities';
-import { getFriendActivityDetailHref } from '@/features/user/utils/routes';
+import {
+  getFriendActivityDetailHref,
+  getNewFriendsScope,
+} from '@/features/user/utils/routes';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import {
   fetchFriendActivities,
@@ -31,7 +34,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -82,6 +85,8 @@ const s = StyleSheet.create({
 export default function NewFriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // 通讯录的本家,或者消息页「通知」点进来的那份:往下点(详情、群)都留在同一个栈,返回才回得去。
+  const inboxScope = getNewFriendsScope(useSegments());
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
@@ -236,7 +241,7 @@ export default function NewFriendsScreen() {
                     ),
                   );
                 }
-                router.push(getFriendActivityDetailHref(item.activity.id));
+                router.push(getFriendActivityDetailHref(item.activity.id, inboxScope));
               } finally {
                 setNavigating(false);
               }
@@ -266,7 +271,7 @@ export default function NewFriendsScreen() {
         </View>
       );
     },
-    [d, i18n.language, inboxRows.length, navigating, router, t],
+    [d, i18n.language, inboxRows.length, inboxScope, navigating, router, t],
   );
 
   const emptyState = error ? (
@@ -309,8 +314,9 @@ export default function NewFriendsScreen() {
       <NavHeader
         title={t('contacts.friendActivity.title')}
         // 深链/推送直接落到这屏时栈里没有上一级，router.back() 会退到上一个 tab
-        // （用户看到的是「退出后到了消息页」）。给个上级页面兜底。
-        fallbackHref="/(tabs)/contacts"
+        // （用户看到的是「退出后到了消息页」）。给个上级页面兜底：从消息页「通知」
+        // 进来的那份兜底回消息页。
+        fallbackHref={inboxScope === 'messages' ? '/(tabs)/messages' : '/(tabs)/contacts'}
       />
       <View style={[s.panel, d.panel]}>
         <InboxTabsHeader
@@ -322,7 +328,7 @@ export default function NewFriendsScreen() {
           searchPlaceholder={t('contacts.friendActivity.searchPlaceholder')}
         />
         {activeTab === 'groups' ? (
-          <NewGroupsInboxList query={query} />
+          <NewGroupsInboxList query={query} scope={inboxScope} />
         ) : (
           <FlatList
             data={inboxRows}

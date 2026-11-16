@@ -183,6 +183,8 @@ export interface ChatMessage {
   quoteMessageId?: string;
   quoteHeight?: number;
   quoteRevoked?: boolean;
+  /** 被引用消息的发送者昵称(replyTo 快照);原消息在本页时引用块用它拼本地生成的摘要。 */
+  quoteSenderName?: string;
   // G-07:表情回应聚合(mine=本人是否已回应,点按切换)与编辑标记。
   reactions?: { emoji: string; count: number; mine: boolean }[];
   edited?: boolean;
@@ -663,7 +665,13 @@ export type NotificationType =
   | 'CIRCLE_POST_SIGNUP_CREATED'
   | 'CIRCLE_POST_AUTO_ENDED'
   | 'CIRCLE_POST_COLLABORATION_RECOGNIZED'
-  | 'PROFILE_LIKE';
+  | 'PROFILE_LIKE'
+  // 站内知会、不推送:本人被移出独立群聊 / 独立群聊解散(content = 当时的群名,可空)。
+  | 'GROUP_MEMBER_REMOVED'
+  | 'GROUP_DISSOLVED'
+  // 站内知会、不推送:本人被移出圈子 / 圈子解散(fromCircle 指向圈子)。
+  | 'CIRCLE_MEMBER_REMOVED'
+  | 'CIRCLE_DISSOLVED';
 
 export interface NotificationItem {
   title?: string | null;
@@ -683,6 +691,8 @@ export interface NotificationItem {
   } | null;
   fromInvitation: { id: string; status: string } | null;
   fromGroupAdmission?: { id: string; status: string } | null;
+  /** SYSTEM 才有:所属公告的标题。 */
+  systemAnnouncement?: { title: string } | null;
   fromMessage?: {
     id?: string;
     messageID?: string;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import NewFriendsScreen from './NewFriendsScreen';
 import { fetchFriendActivities, type FriendActivity } from '@/services/api/friends';
 
@@ -7,11 +7,14 @@ const mockTranslate = (key: string) => key;
 let mockFriendsMutated = false;
 let mockSessionEpoch = 1;
 let mockFocusCallback: (() => void | (() => void)) | null = null;
+const mockPush = jest.fn();
+let mockSegments: string[] = ['(tabs)', 'contacts', 'new-friends'];
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
-    useRouter: () => ({ push: jest.fn() }),
+    useRouter: () => ({ push: mockPush }),
+    useSegments: () => mockSegments,
     useFocusEffect: (callback: () => void | (() => void)) => {
       mockFocusCallback = callback;
       ReactModule.useEffect(() => callback(), [callback]);
@@ -63,7 +66,8 @@ jest.mock('@/features/contacts/utils/mark-friend-activities-read', () => ({
   markFriendActivitiesRead: jest.fn(),
 }));
 jest.mock('@/features/user/utils/routes', () => ({
-  getFriendActivityDetailHref: (id: string) => id,
+  getFriendActivityDetailHref: (id: string, scope: string) => `${scope}:${id}`,
+  getNewFriendsScope: jest.requireActual('@/features/user/utils/routes').getNewFriendsScope,
 }));
 jest.mock('@/features/notifications/utils/seen-target', () => ({
   markMatchingTargetNotificationsRead: jest.fn(async () => undefined),
@@ -125,6 +129,8 @@ async function visitOnce(activities: FriendActivity[]) {
 }
 
 beforeEach(() => {
+  mockPush.mockReset();
+  mockSegments = ['(tabs)', 'contacts', 'new-friends'];
   mockFriendsMutated = false;
   mockSessionEpoch += 1;
   mockTabs = [];
@@ -255,3 +261,17 @@ test('StrictMode effect replay completes the inbox request instead of staying on
   expect(await screen.findByText('Replay')).toBeTruthy();
   expect(screen.queryByText('contacts.friendActivity.loading')).toBeNull();
 });
+
+// 消息页「通知」点进来的那份「新的朋友」:往下点也留在消息栈,返回才回到通知。
+test.each([
+  [['(tabs)', 'contacts', 'new-friends'], 'contacts'],
+  [['(tabs)', 'messages', 'new-friends'], 'messages'],
+])('a request opened from %j stays in the %s stack', async (segments, scope) => {
+  mockSegments = segments;
+  const read = { ...activity('小李'), readAt: '2026-10-31T09:00:00.000Z' };
+  jest.mocked(fetchFriendActivities).mockResolvedValueOnce([read]);
+  render(<NewFriendsScreen />);
+  fireEvent.press(await screen.findByText('小李'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith(`${scope}:activity-小李`));
+});
+

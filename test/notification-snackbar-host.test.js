@@ -54,11 +54,14 @@ test("notification snackbar host keeps unread badges in sync when tapped", () =>
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
   );
-  assert.match(host, /useTabBadgeStore/);
-  assert.match(host, /if \(!shown\.read\)/);
-  assert.match(host, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
+  // 扣减规则收在 unread-badges.ts，与通知列表点开共用同一份。
+  assert.match(host, /if \(!shown\.read\) decrementUnreadBadgesFor\(shown\.type\)/);
+  const badges = read("src/features/notifications/utils/unread-badges.ts");
+  assert.match(badges, /useTabBadgeStore/);
+  assert.match(badges, /Math\.max\(0, badges\.discoverUnread - 1\)/);
   // systemUnread 已整体删除（#103）。
   assert.doesNotMatch(host, /systemUnread/i);
+  assert.doesNotMatch(badges, /systemUnread/i);
 });
 
 test("notification snackbar host suppresses only the active conversation", () => {
@@ -157,6 +160,8 @@ test("snackbar route resolver covers all actionable notification targets", () =>
 });
 
 test('admission banners preserve badges belonging to discover domains', () => {
-  const host = read('src/features/notifications/components/NotificationSnackbarHost.tsx');
-  assert.match(host, /const domain = notificationDomain\(shown.type\);\s*if \(domain\) badgeStore.setDiscoverUnread/);
+  // 入群申请等不属于两个铃铛的通知不扣 discoverUnread（那是两个铃铛的合计口径）。
+  const badges = read('src/features/notifications/utils/unread-badges.ts');
+  assert.match(badges, /const domain = notificationDomain\(type\);/);
+  assert.match(badges, /if \(domain === 'moments' \|\| domain === 'circle'\) \{\s*badges\.setDiscoverUnread/);
 });

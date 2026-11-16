@@ -2,8 +2,6 @@ import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { selectGroupConversations } from "@/features/contacts/utils/group-chat-rows";
 import { useNotificationCenterStore } from "@/features/notifications/store/use-notification-center-store";
 import { keyboardDismissOnDragProps } from "@/components/ui/keyboard-dismiss";
-import { fetchMyApplications, markCircleInvitationSeen } from "@/services/api/circles";
-import type { CircleInvitation } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -49,8 +47,6 @@ type Row = {
   avatar: string | null;
   admission?: GroupAdmissionDetail;
   admissionIds?: string[];
-  circleInvitationIds?: string[];
-  circleInvitation?: CircleInvitation;
   groupId?: string;
   sourceId?: string;
   unreadCount: number;
@@ -73,11 +69,8 @@ export function GroupAdmissionsList({
   const router = useRouter();
   const latestNotification = useNotificationCenterStore(
     (state) =>
-      state.interactive.find(
-        (n) =>
-          n.type === "GROUP_ADMISSION" ||
-          n.type === "CIRCLE_INVITATION_RECEIVED",
-      )?.id,
+      // 圈子邀请归飞机(圈子通知),这页只管群聊。
+      state.interactive.find((n) => n.type === "GROUP_ADMISSION")?.id,
   );
   const sessionEpoch = useAuthStore((s) => s.sessionEpoch);
   const userId = useAuthStore((s) => s.user?.id);
@@ -87,9 +80,6 @@ export function GroupAdmissionsList({
   const [snapshot] = useState(() =>
     readGroupAdmissionsSnapshot(sessionEpoch, groupId, groupOrCircleMutatedSince),
   );
-  const [circleInvitations, setCircleInvitations] = useState<
-    CircleInvitation[]
-  >(snapshot?.circleInvitations ?? []);
   const [items, setItems] = useState<GroupAdmissionDetail[]>(snapshot?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(snapshot?.nextCursor ?? null);
   const [loading, setLoading] = useState(snapshot === null);
@@ -115,7 +105,6 @@ export function GroupAdmissionsList({
       const stale = () => version !== generation.current || useAuthStore.getState().sessionEpoch !== sessionEpoch;
       const received: {
         admissions?: Awaited<ReturnType<typeof fetchGroupAdmissions>>;
-        circles?: CircleInvitation[];
       } = {};
       // 有快照时列表不空，这里只影响翻页守卫；空列表的转圈与顶部的下拉圈各自另有条件。
       if (!next) setLoading(true);
@@ -129,13 +118,6 @@ export function GroupAdmissionsList({
             setCursor(result.nextCursor);
             if (!next) setLoading(false);
           }),
-          !groupId && !next
-            ? fetchMyApplications().then((value) => {
-                if (stale() || !value) return;
-                received.circles = value;
-                setCircleInvitations(value);
-              })
-            : Promise.resolve(),
           // 「已加入」只需要一份新鲜的会话列表:刚拉过就直接用,不再每次刷新都全量拉。
           includeJoined && !next ? ensureChatConversations({ force }) : Promise.resolve(null),
         ]);
@@ -151,7 +133,6 @@ export function GroupAdmissionsList({
           if (received.admissions) {
             writeGroupAdmissionsSnapshot(sessionEpoch, groupId, {
               items: received.admissions.items,
-              circleInvitations: received.circles ?? [],
               nextCursor: received.admissions.nextCursor,
             }, startedAt, requestRevision);
           }
@@ -194,7 +175,6 @@ export function GroupAdmissionsList({
       // 只有换了账号才清空;同一个账号回来时保留旧行,第一页到了再整体替换,不闪成空白。
       if (loadedEpoch.current !== sessionEpoch) {
         setItems([]);
-        setCircleInvitations([]);
         setCursor(null);
       }
       void load();
@@ -241,18 +221,8 @@ export function GroupAdmissionsList({
         })
       : [];
     const needle = query.trim().toLocaleLowerCase();
-    const circleRows: Row[] = circleInvitations.map((invitation) => ({
-      key: `circle-${invitation.id}`,
-      identity: `circle-${invitation.circleId ?? invitation.id}`,
-      updatedAt: invitation.createdAt,
-      name: invitation.circleName,
-      avatar: null,
-      circleInvitation: invitation,
-      circleInvitationIds: (invitation.unreadCount ?? 0) > 0 ? [invitation.id] : [],
-      unreadCount: invitation.unreadCount ?? 0,
-    }));
     // The scoped manager view still lists individual people requiring decisions.
-    const allRows = [...admissions, ...circleRows].sort((a, b) =>
+    const allRows = [...admissions].sort((a, b) =>
       (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
     ).concat(groups);
     const byGroup = new Map<string, Row>();
@@ -261,7 +231,6 @@ export function GroupAdmissionsList({
       if (existing) {
         existing.unreadCount += row.unreadCount;
         existing.admissionIds = [...(existing.admissionIds ?? []), ...(row.admissionIds ?? [])];
-        existing.circleInvitationIds = [...(existing.circleInvitationIds ?? []), ...(row.circleInvitationIds ?? [])];
         existing.groupId ??= row.groupId;
         existing.sourceId ??= row.sourceId;
       } else byGroup.set(row.identity, { ...row, key: row.identity });
@@ -269,11 +238,11 @@ export function GroupAdmissionsList({
     return (groupId ? allRows : [...byGroup.values()]).filter(
       (row) =>
         !needle ||
-        `${row.name} ${row.admission?.applicantName ?? ""} ${row.admission?.inviterName ?? ""} ${row.circleInvitation?.inviter.nickname ?? ""} ${row.circleInvitation?.applicant.nickname ?? ""}`
+        `${row.name} ${row.admission?.applicantName ?? ""} ${row.admission?.inviterName ?? ""}`
           .toLocaleLowerCase()
           .includes(needle),
     );
-  }, [circleInvitations, conversations, groupId, includeJoined, items, query, userId]);
+  }, [conversations, groupId, includeJoined, items, query, userId]);
   return (
     <FlatList
       {...keyboardDismissOnDragProps}
@@ -316,24 +285,14 @@ export function GroupAdmissionsList({
             : item.name}
           onPress={() => {
             const admissionIds = item.admissionIds ?? [];
-            const circleIds = item.circleInvitationIds ?? [];
-            if (admissionIds.length || circleIds.length) void Promise.all([
-              ...admissionIds.map(id => markGroupAdmissionSeen(id)),
-              ...circleIds.map(id => markCircleInvitationSeen(id)),
-            ]).then(() => {
+            if (admissionIds.length) void Promise.all(
+              admissionIds.map(id => markGroupAdmissionSeen(id)),
+            ).then(() => {
               if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
               setItems(old => old.map(row => admissionIds.includes(row.id) ? { ...row, unreadCount: 0 } : row));
-              setCircleInvitations(old => old.map(row => circleIds.includes(row.id) ? { ...row, unreadCount: 0 } : row));
               return refreshGroupAdmissionUnread();
             }).catch(e => reportHandledFailure('groupAdmission', 'seen', e));
-            if (item.circleInvitation && item.groupId && ['APPROVED', 'ADMIN_APPROVED'].includes(item.circleInvitation.status))
-              router.push(getChatDetailHref(scope, item.sourceId ?? item.groupId, item.name, item.avatar ?? undefined, item.groupId, undefined, 'group'));
-            else if (item.circleInvitation)
-              router.push({
-                pathname: "/(tabs)/discover/invitation/[id]",
-                params: { id: item.circleInvitation.id },
-              });
-            else if (item.admission && includeJoined && item.admission.group.canManage)
+            if (item.admission && includeJoined && item.admission.group.canManage)
               router.push(getGroupEntryHref(scope, { groupId: item.admission.conversationId, manage: "1" }));
             else if (item.admission)
               router.push(
@@ -365,13 +324,7 @@ export function GroupAdmissionsList({
               {item.name || t("groupAdmission.unavailable")}
             </Text>
             <Text style={{ color: colors.textSecondary }}>
-              {item.circleInvitation
-                ? t(
-                    item.circleInvitation.status === 'APPROVED' || item.circleInvitation.status === 'ADMIN_APPROVED'
-                      ? 'groupAdmission.circleJoined'
-                      : `groupAdmission.status.${item.circleInvitation.status}`,
-                  )
-                : item.admission
+              {item.admission
                   ? `${getGroupAdmissionRelationship(item.admission, userId, t)} · ${getGroupAdmissionStatus(item.admission, userId, t)}`
                   : t("groupAdmission.status.JOINED")}
             </Text>
@@ -392,7 +345,7 @@ export function GroupAdmissionsList({
               </Text>
             ) : null}
           </View>
-          <UnreadCountBadge count={item.unreadCount} testID={`group-inbox-unread-${item.admission?.id ?? (item.circleInvitation ? `circle-${item.circleInvitation.id}` : item.key)}`} />
+          <UnreadCountBadge count={item.unreadCount} testID={`group-inbox-unread-${item.admission?.id ?? item.key}`} />
         </Pressable>
       )}
     />

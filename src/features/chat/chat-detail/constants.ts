@@ -5,6 +5,12 @@ import { LayoutAnimation, Platform, UIManager } from 'react-native';
  * 聊天详情页(ChatDetailScreen)的常量。拆分自原 4700 行的页面文件,内容未改。
  */
 
+/**
+ * 长按菜单(Modal,fade)收起所需的时间。点「引用」后要等它淡出完再聚焦输入框:
+ * 菜单还在收起时聚焦,键盘会跟着 Modal 一起被收走。
+ */
+export const ACTION_MENU_FADE_MS = 350;
+
 export type AttachmentId =
   | 'media'
   | 'voice-call'

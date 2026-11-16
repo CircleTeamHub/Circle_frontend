@@ -36,6 +36,7 @@ import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
+import { NoticeHeaderButton } from "@/features/messages/components/NoticeHeaderButton";
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { fetchFriends, friendsMutatedSince } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
@@ -1387,6 +1388,10 @@ export default function MessagesScreen() {
   const handleOpenCircleNotifications = useCallback(() => {
     router.push({ pathname: "/(tabs)/messages/notifications", params: { domain: "circle" } });
   }, [router]);
+  // 飞机旁边的「通知」:圈子以外的知会。圈子的事仍走飞机。
+  const handleOpenNotices = useCallback(() => {
+    router.push({ pathname: "/(tabs)/messages/notifications", params: { domain: "notice" } });
+  }, [router]);
 
   const handleFilterPress = useCallback(
     (index: number) => {
@@ -1592,6 +1597,7 @@ export default function MessagesScreen() {
               />
             ) : null}
           </Pressable>
+          <NoticeHeaderButton style={s.actionButton} onPress={handleOpenNotices} />
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
             <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
           </Pressable>
@@ -1647,6 +1653,7 @@ export default function MessagesScreen() {
     filterItems,
     handleFilterPress,
     handleOpenCircleNotifications,
+    handleOpenNotices,
     handleOpenFind,
     handleOpenGroups,
     handleOpenMenu,

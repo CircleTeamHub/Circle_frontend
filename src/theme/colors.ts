@@ -86,6 +86,10 @@ export const darkColors: ThemeColors = {
   // 字母索引气泡:中性浅灰,深浅色底上都托得住白色大字,两个主题同值。
   indexBubble: '#CBCBCB',
   chatBackgroundScrim: 'rgba(0, 0, 0, 0.35)',
+  // 微信深色:底 #111 / 引用块 #1D1D1D / 接收气泡 #2C2C2C,引用块夹在底色和气泡之间;
+  // 这里底色是纯黑、接收气泡 #1C1C1E,照同一层级取中间值,免得引用块被看成一个气泡。
+  quoteBlock: '#141416',
+  quoteBlockText: '#939393',
   statusBarStyle: 'light',
 };
 
@@ -163,5 +167,8 @@ export const lightColors: ThemeColors = {
   // 字母索引气泡:中性浅灰,深浅色底上都托得住白色大字,两个主题同值。
   indexBubble: '#CBCBCB',
   chatBackgroundScrim: 'rgba(248, 249, 250, 0.35)',
+  // 浅色接收气泡是白的,引用块往底色下压一档。
+  quoteBlock: '#EDEEF0',
+  quoteBlockText: '#6B7280',
   statusBarStyle: 'dark',
 };

@@ -83,18 +83,31 @@ test("moments and circle bells claim disjoint notification types", () => {
     "CIRCLE_ADMIN_OVERRIDE_APPROVED",
     "CIRCLE_POST_AUTO_ENDED",
     "CIRCLE_POST_COLLABORATION_RECOGNIZED",
+    // 圈子的事一律在飞机：收到圈子邀请、被移出圈子、圈子解散。
+    "CIRCLE_INVITATION_RECEIVED",
+    "CIRCLE_MEMBER_REMOVED",
+    "CIRCLE_DISSOLVED",
   ]) {
     assert.equal(notificationDomain(type), "circle", type);
   }
 
-  // 好友申请有专属「新的朋友」收件箱，系统公告在「我」页，两个铃铛都不收。
+  // 消息页「通知」的群聊知会：独立群的被移出 / 解散。
+  for (const type of ["GROUP_MEMBER_REMOVED", "GROUP_DISSOLVED"]) {
+    assert.equal(notificationDomain(type), "group", type);
+    assert.equal(BELL_NOTIFICATION_TYPES.has(type), true, type);
+  }
+  // 公告归「通知」的系统分类，但不推 notification.created，不进实时插入的白名单。
+  assert.equal(notificationDomain("SYSTEM"), "system");
+  assert.equal(BELL_NOTIFICATION_TYPES.has("SYSTEM"), false);
+
+  // 好友申请 / 入群申请有专属「新的朋友」收件箱，不进任何列表。
   for (const type of [
     "FRIEND_REQUEST_RECEIVED",
     "FRIEND_REQUEST_ACCEPTED",
     "FRIEND_REQUEST_REJECTED",
+    "GROUP_ADMISSION",
     // 报名走 signupUnread / seenByAuthor 与报名管理 tab，不计入互动铃铛。
     "CIRCLE_POST_SIGNUP_CREATED",
-    "SYSTEM",
     "MESSAGE_RECEIVED",
   ]) {
     assert.equal(notificationDomain(type), null, type);
@@ -102,11 +115,27 @@ test("moments and circle bells claim disjoint notification types", () => {
   }
 });
 
-test("parseNotificationDomain rejects anything but the two bell domains", () => {
+test("the message-page notice domain covers everything outside the circle", () => {
+  const { isNotificationInDomain } = load(DOMAIN);
+  for (const type of ["TRACE_LIKE", "GROUP_MEMBER_REMOVED", "GROUP_DISSOLVED", "SYSTEM"]) {
+    assert.equal(isNotificationInDomain(type, "notice"), true, type);
+  }
+  for (const type of ["CIRCLE_MEMBER_REMOVED", "CIRCLE_INVITATION_RECEIVED", "FRIEND_REQUEST_RECEIVED"]) {
+    assert.equal(isNotificationInDomain(type, "notice"), false, type);
+  }
+  // 分类只收自己那一类；不限域（推送兜底页）什么都收。
+  assert.equal(isNotificationInDomain("GROUP_DISSOLVED", "group"), true);
+  assert.equal(isNotificationInDomain("TRACE_LIKE", "group"), false);
+  assert.equal(isNotificationInDomain("SYSTEM", "system"), true);
+  assert.equal(isNotificationInDomain("CIRCLE_DISSOLVED", null), true);
+});
+
+test("parseNotificationDomain rejects anything but the known entry domains", () => {
   const { parseNotificationDomain } = load(DOMAIN);
 
-  assert.equal(parseNotificationDomain("moments"), "moments");
-  assert.equal(parseNotificationDomain("circle"), "circle");
+  for (const domain of ["moments", "circle", "notice", "group", "system"]) {
+    assert.equal(parseNotificationDomain(domain), domain);
+  }
   for (const bogus of [undefined, null, "", "interactive", "CIRCLE", 1, {}]) {
     assert.equal(parseNotificationDomain(bogus), null);
   }
@@ -207,6 +236,8 @@ test(
     for (const [constName, domain] of [
       ["MOMENT_NOTIFICATION_TYPES", "moments"],
       ["CIRCLE_NOTIFICATION_TYPES", "circle"],
+      ["GROUP_NOTICE_NOTIFICATION_TYPES", "group"],
+      ["PROFILE_NOTIFICATION_TYPES", "system"],
     ]) {
       for (const type of backendTypeSet(backend, constName)) {
         assert.equal(
@@ -218,12 +249,15 @@ test(
     }
 
     // 反向：客户端认领的每个类型也必须在后端对应的白名单里。
-    const beMoments = backendTypeSet(backend, "MOMENT_NOTIFICATION_TYPES");
-    const beCircle = backendTypeSet(backend, "CIRCLE_NOTIFICATION_TYPES");
+    const backendByDomain = {
+      moments: backendTypeSet(backend, "MOMENT_NOTIFICATION_TYPES"),
+      circle: backendTypeSet(backend, "CIRCLE_NOTIFICATION_TYPES"),
+      group: backendTypeSet(backend, "GROUP_NOTICE_NOTIFICATION_TYPES"),
+    };
     const feSource = fs.readFileSync(path.join(process.cwd(), DOMAIN), "utf8");
     for (const type of [...load(DOMAIN).BELL_NOTIFICATION_TYPES]) {
       const domain = notificationDomain(type);
-      const expected = domain === "moments" ? beMoments : beCircle;
+      const expected = backendByDomain[domain];
       assert.ok(
         expected.has(type),
         `client puts ${type} in ${domain} but the backend does not`,

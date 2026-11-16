@@ -62,7 +62,7 @@ beforeEach(() => {
     setDraft: jest.fn(), setSendError: jest.fn(), mountedRef: { current: true },
     reuploadPendingMediaRef: { current: jest.fn() }, sourceID: 'peer', conversationID: 'c1',
     conversationBurnEnabled: false, isGroupChat: false, conversationTitle: 'chat', scope: 'messages',
-    setQuoteTarget: jest.fn(), setEditingMessageId: jest.fn(), handleCollectMessage: jest.fn(),
+    setQuoteTarget: jest.fn(), onQuoteStarted: jest.fn(), setEditingMessageId: jest.fn(), handleCollectMessage: jest.fn(),
     messages: [],
   };
 });

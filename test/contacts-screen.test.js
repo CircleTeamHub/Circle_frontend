@@ -52,7 +52,8 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
   assert.match(screenSource, /useFocusEffect/);
   assert.match(screenSource, /getFriendActivityCopy/);
   assert.match(screenSource, /readIds\.includes\(activity\.id\)/);
-  assert.match(screenSource, /getFriendActivityDetailHref\(item\.activity\.id\)/);
+  // 详情跟着「新的朋友」所在的栈走（通讯录本家，或消息页「通知」点进来的那份）。
+  assert.match(screenSource, /getFriendActivityDetailHref\(item\.activity\.id, inboxScope\)/);
   assert.doesNotMatch(screenSource, /ListHeaderComponent/);
   assert.doesNotMatch(
     screenSource,

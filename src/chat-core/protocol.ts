@@ -363,6 +363,8 @@ export interface ChatConversationBroadcast {
   kind: ChatConversationChangeKind;
   conversationId: string;
   userId: string;
+  /** 只跟 removed 一起出现:群(圈子)被解散。老后端不带,按「被移出」提示。 */
+  reason?: 'dissolved';
 }
 
 export interface ChatTypingBroadcast {

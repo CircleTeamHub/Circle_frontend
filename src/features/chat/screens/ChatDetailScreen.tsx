@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import { type MentionTarget } from '@/features/chat/utils/chat-send-payloads';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
+import { ACTION_MENU_FADE_MS } from '@/features/chat/chat-detail/constants';
 import type { ChatSheetActions, EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { useVoiceRecording } from '@/features/chat/chat-detail/hooks/use-voice-recording';
 import { useMediaSend } from '@/features/chat/chat-detail/hooks/use-media-send';
@@ -64,6 +65,7 @@ import { ChatMessageArea } from '@/features/chat/chat-detail/components/ChatMess
 import { ChatConnectionBanner } from '@/features/chat/components/ChatConnectionBanner';
 import { MentionPickerPanel } from '@/features/chat/chat-detail/components/MentionPickerPanel';
 import { ComposerBanners } from '@/features/chat/chat-detail/components/ComposerBanners';
+import { QuoteSourcesContext } from '@/features/chat/components/bubbles/quoted-message-block';
 import { ChatComposerBar } from '@/features/chat/chat-detail/components/ChatComposerBar';
 import { MessageSelectionToolbar } from '@/features/chat/chat-detail/components/MessageSelectionToolbar';
 import { AttachmentPanel } from '@/features/chat/chat-detail/components/AttachmentPanel';
@@ -127,6 +129,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   const [expandedComposer, setExpandedComposer] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
   const [mentionFocusRequested, setMentionFocusRequested] = useState(false);
+  const [quoteFocusRequested, setQuoteFocusRequested] = useState(false);
+  const requestQuoteFocus = useCallback(() => setQuoteFocusRequested(true), []);
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCandidates, setMentionCandidates] = useState<MentionTarget[]>([]);
@@ -410,6 +414,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     conversationTitle,
     scope,
     setQuoteTarget,
+    onQuoteStarted: requestQuoteFocus,
     setEditingMessageId,
     handleCollectMessage,
   });
@@ -515,16 +520,31 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     isPreviewMode,
   });
 
+  /** 收起表情 / 附件面板、退出语音模式,然后把光标放进输入框(@ 发送者与引用共用)。 */
+  const focusComposerForTyping = useCallback(() => {
+    closeInputPanels(false);
+    if (voiceInputMode) toggleVoiceInputMode();
+    setMentionFocusRequested(true);
+  }, [closeInputPanels, toggleVoiceInputMode, voiceInputMode]);
+
   const handleMentionSender = useCallback((message: ChatMessage) => {
     if (!message.senderID || message.outgoing) return;
     handleInsertMention({
       userID: message.senderID,
       nickname: groupMemberNames[message.senderID]?.trim() || message.senderName?.trim() || message.senderID,
     });
-    closeInputPanels(false);
-    if (voiceInputMode) toggleVoiceInputMode();
-    setMentionFocusRequested(true);
-  }, [closeInputPanels, groupMemberNames, handleInsertMention, toggleVoiceInputMode, voiceInputMode]);
+    focusComposerForTyping();
+  }, [focusComposerForTyping, groupMemberNames, handleInsertMention]);
+
+  // 点「引用」后直接能打字:等长按菜单关掉并淡出完(见 ACTION_MENU_FADE_MS)再聚焦。
+  useEffect(() => {
+    if (!quoteFocusRequested || actionMenu) return;
+    const timer = setTimeout(() => {
+      setQuoteFocusRequested(false);
+      focusComposerForTyping();
+    }, ACTION_MENU_FADE_MS);
+    return () => clearTimeout(timer);
+  }, [actionMenu, focusComposerForTyping, quoteFocusRequested]);
 
   useEffect(() => {
     if (!mentionFocusRequested || voiceInputMode) return;
@@ -549,6 +569,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     renderItem,
     keyExtractor,
     imageViewer,
+    quoteSources,
   } = useMessageRenderer({
     isAssistantConversation,
     messages,
@@ -773,6 +794,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     >
       {isAssistantConversation ? header : null}
       {isAssistantConversation ? topBanners : null}
+      <QuoteSourcesContext.Provider value={quoteSources}>
       <View style={s.chatBody}>
         <BlurTargetView ref={messageBlurTarget} style={s.messageArea}>
           <ChatMessageArea
@@ -907,6 +929,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
           </>}
         </View>
       </View>
+      </QuoteSourcesContext.Provider>
       {imageViewer}
       {selectedMessageIds === null && emojiOpen ? (
         <View

@@ -101,6 +101,9 @@ export interface ThemeColors {
   /** 自定义聊天背景图上的薄蒙版；只把壁纸往主题底色推一点，保住浮在背景上的日期
    *  分隔和群昵称的对比度。刻意不复用 overlay（那是模态遮罩，40% 纯黑）。 */
   chatBackgroundScrim: string;
+  /** 气泡下方的引用块(微信式):底色比聊天底色亮一档、比接收气泡暗一档,文字是次要灰。 */
+  quoteBlock: string;
+  quoteBlockText: string;
   /** 通讯录字母索引按住时冒出的气泡底色(字母用 white)。 */
   indexBubble: string;
   statusBarStyle: 'light' | 'dark';

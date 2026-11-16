@@ -97,6 +97,11 @@ export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
         name: message.qrCard?.name ?? '',
         defaultValue: '[二维码] {{name}}',
       }).trim();
+    case 'plaza-post-card':
+      return t('im.preview.plazaPost', {
+        title: message.plazaPostCard?.title ?? '',
+        defaultValue: '[活动] {{title}}',
+      }).trim();
     default:
       return t('im.preview.default', { defaultValue: '[消息]' });
   }
