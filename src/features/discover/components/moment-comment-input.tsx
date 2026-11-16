@@ -122,6 +122,9 @@ const s = StyleSheet.create({
     height: 36,
     borderRadius: Radius.xxl,
     paddingHorizontal: Spacing.md,
+    // Android's default EditText padding clips text inside a fixed height.
+    paddingVertical: 0,
+    textAlignVertical: 'center',
     ...Typography.bodyRegular,
   },
   iconBtn: {

@@ -128,8 +128,9 @@ const s = StyleSheet.create({
     maxHeight: 120,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
+    // iOS multiline inputs pin text to the top; padding sized so one line
+    // fills minHeight keeps the placeholder vertically centered.
+    paddingVertical: 10,
     ...Typography.bodyRegular,
   },
   sendButton: {

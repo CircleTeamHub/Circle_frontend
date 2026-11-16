@@ -194,6 +194,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
+    // Android's EditText adds its own vertical padding, which leaves too little
+    // room inside the fixed 36dp height and clips the glyphs; iOS has none.
+    paddingVertical: 0,
+    textAlignVertical: 'center' as const,
   },
   addTagBtn: {
     height: 36,
