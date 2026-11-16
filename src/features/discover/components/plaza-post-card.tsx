@@ -9,7 +9,13 @@ import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getChatDetailHref, getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
+import {
+  getChatDetailHref,
+  getNoteDetailHref,
+  getUserProfileHref,
+  type CircleScope,
+} from '@/features/user/utils/routes';
+import { NoteCardBody, type NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useNavigationLock } from '@/hooks/use-navigation-lock';
@@ -475,6 +481,24 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     router.navigate(getUserProfileHref(scope, post.author.id));
   }, [post.canInteract, post.restrictions, post.author.id, router, scope, t]);
 
+  const noteCard = post.noteCard;
+  const noteOpenable = Boolean(noteCard) && noteCard?.publicationStatus !== 'DELETED';
+  const [noteCardWidth, setNoteCardWidth] = useState(0);
+  const handleOpenNote = useCallback(
+    (section: NoteCardSection | '') => {
+      if (!noteCard) return;
+      router.push(
+        getNoteDetailHref(
+          scope,
+          noteCard.noteId,
+          noteCard.ownerId ?? post.author.id,
+          section === 'text' ? '' : section,
+        ),
+      );
+    },
+    [noteCard, post.author.id, router, scope],
+  );
+
   const timeLabel = useMemo(
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
@@ -503,7 +527,13 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       <View style={[s.accent, { backgroundColor: accentColor }]} testID="plaza-card-accent" />
       {/* Header */}
       <View style={s.header}>
-        <Pressable onPress={handleAvatarPress}>
+        <Pressable
+          testID="plaza-card-author-avatar"
+          onPress={handleAvatarPress}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={post.author.nickname}
+        >
           <Avatar
             size={40}
             name={post.author.nickname}
@@ -597,6 +627,25 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         ] : undefined}
         uniformCells
       />
+
+      {/* 挂的笔记:和聊天里的笔记卡片同一个样子。点卡片 / 分块打开笔记详情(到对应分块),
+          开在卡片所在的 tab 栈里;已删除的笔记只留提示,点不开。宽度跟着帖子内容区走。 */}
+      {noteCard ? (
+        <View
+          testID="plaza-card-note"
+          onLayout={(event) => setNoteCardWidth(Math.floor(event.nativeEvent.layout.width))}
+        >
+          {noteCardWidth > 0 ? (
+            <NoteCardBody
+              note={noteCard}
+              outgoing={false}
+              width={noteCardWidth}
+              onPress={noteOpenable ? () => handleOpenNote('') : undefined}
+              onSectionPress={noteOpenable ? (_note, section) => handleOpenNote(section) : undefined}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
       {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
           无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}

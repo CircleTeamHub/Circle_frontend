@@ -1579,6 +1579,7 @@
     "selectNote": "选择笔记",
     "noNote": "不添加",
     "notePicker": {
+      "onlyListedHint": "只能挂上架中的笔记",
       "title": "选择笔记",
       "searchPlaceholder": "输入笔记标题",
       "none": "不关联笔记",

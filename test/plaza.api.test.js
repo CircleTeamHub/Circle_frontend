@@ -57,6 +57,11 @@ function loadPlazaApi(apiResponses) {
           normalizeUserAvatarFrameAppearance: (value) => value ?? null,
         };
       }
+      // 挂在帖子上的笔记卡片和聊天卡片共用 sanitizeNoteCard;真实的白名单校验在
+      // src/services/api/plaza.spec.tsx 里测,这里原样放过。
+      if (specifier === '@/chat-core/message-mappers') {
+        return { sanitizeNoteCard: (value) => value };
+      }
       if (specifier === './image-media') {
         return {
           normalizeImageMedia: (imagesValue) => ({

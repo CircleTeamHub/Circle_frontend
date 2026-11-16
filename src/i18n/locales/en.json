@@ -1583,6 +1583,7 @@
     "selectNote": "Attach Note",
     "noNote": "None",
     "notePicker": {
+      "onlyListedHint": "Only listed notes can be attached",
       "title": "Select Note",
       "searchPlaceholder": "Enter note title",
       "none": "Don't link a note",

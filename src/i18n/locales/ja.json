@@ -2103,6 +2103,7 @@
     "selectNote": "ノートを添付",
     "noNote": "なし",
     "notePicker": {
+      "onlyListedHint": "掲載中のノートだけ添付できます",
       "title": "ノートを選択",
       "searchPlaceholder": "ノートのタイトルを入力",
       "none": "ノートを紐付けない",

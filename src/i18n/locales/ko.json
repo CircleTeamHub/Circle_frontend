@@ -2103,6 +2103,7 @@
     "selectNote": "노트 첨부",
     "noNote": "없음",
     "notePicker": {
+      "onlyListedHint": "게시 중인 노트만 첨부할 수 있어요",
       "title": "노트 선택",
       "searchPlaceholder": "노트 제목 입력",
       "none": "노트 연결 안 함",

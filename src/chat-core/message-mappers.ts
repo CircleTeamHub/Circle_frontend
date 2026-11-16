@@ -222,7 +222,8 @@ function notePeerSnapshot(
   };
 }
 
-function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
+/** 对端可控的笔记卡片载荷 → 能直接渲染的卡片。聊天消息和圈子帖子带的笔记共用这一套。 */
+export function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
   const workStatus =
     content['workStatus'] === 'WORKING' ||
     content['workStatus'] === 'CLOSED' ||

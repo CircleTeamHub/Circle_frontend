@@ -8,13 +8,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { PlazaPostCard } from '@/features/discover/components/plaza-post-card';
+import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
 import { fetchPlazaPost } from '@/services/api/plaza';
 import { joinCircle } from '@/services/api/circles';
 import { ApiError } from '@/services/api/client';
@@ -54,6 +55,9 @@ export default function PlazaPostDetailScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // 详情页镜像在消息 / 圈子 / 探索三个栈里(聊天里点分享卡片进来的在消息栈)。卡片上点头像、
+  // 报名进私聊都要留在本栈,返回才回得到这里。
+  const scope = getCircleScopeFromSegments(useSegments());
 
   const [post, setPost] = useState<CirclePlazaPost | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
@@ -170,7 +174,7 @@ export default function PlazaPostDetailScreen() {
           contentContainerStyle={s.content}
           showsVerticalScrollIndicator={false}
         >
-          <PlazaPostCard post={post} />
+          <PlazaPostCard post={post} scope={scope} />
         </ScrollView>
       ) : restricted ? (
         <View style={s.center}>

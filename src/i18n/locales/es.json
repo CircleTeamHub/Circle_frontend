@@ -2111,6 +2111,7 @@
     "selectNote": "Adjuntar nota",
     "noNote": "Ninguna",
     "notePicker": {
+      "onlyListedHint": "Solo puedes adjuntar notas publicadas",
       "title": "Elegir nota",
       "searchPlaceholder": "Escribe el título de la nota",
       "none": "No vincular una nota",
