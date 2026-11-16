@@ -4,7 +4,10 @@ import {
   requestUploadPresign,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { uploadChatVideoPoster } from './chat-video-poster';
+
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
 jest.mock('expo-video', () => ({ createVideoPlayer: jest.fn() }));
 jest.mock('expo-image-manipulator', () => ({
@@ -102,13 +105,16 @@ describe('uploadChatVideoPoster', () => {
     expect(player.generateThumbnailsAsync).toHaveBeenCalledWith(0, { maxWidth: 512 });
   });
 
-  it('gives up quietly (and still releases the player) when no frame can be read', async () => {
-    const player = mockPlayer(new Error('unsupported codec'));
+  it('gives up without failing the send (and still releases the player) when no frame can be read', async () => {
+    const failure = new Error('unsupported codec');
+    const player = mockPlayer(failure);
     await expect(
       uploadChatVideoPoster('file:///picked/odd.mkv', 10, 'odd.mkv'),
     ).resolves.toBeNull();
     expect(mockPresign).not.toHaveBeenCalled();
     expect(player.release).toHaveBeenCalled();
+    // 没封面的气泡是一块黑:失败要上报,不然线上看不出是哪个平台、哪一步坏了。
+    expect(reportHandledFailure).toHaveBeenCalledWith('chatVideoPoster', 'captureFrame', failure);
   });
 
   it('gives up quietly when the poster upload fails', async () => {

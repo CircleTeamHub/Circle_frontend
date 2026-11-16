@@ -16,6 +16,7 @@ import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { BubbleStatusText, MessageAvatar } from './shared';
 import { MediaUploadProgress } from './media-upload-progress';
 import { ExpiredMediaPlaceholder } from './expired-media-placeholder';
+import { useVideoFrameFallback } from '@/features/chat/hooks/use-video-frame-fallback';
 
 interface VideoBubbleProps {
   message: ChatMessage;
@@ -132,6 +133,14 @@ export function VideoBubble({
   useEphemeralImageDiskCacheSweep(ephemeral, selfDestructCacheKey);
 
   const videoUrl = message.videoUrl;
+  // 没封面(老消息、封面截失败、还在上传)就在本机从视频截一帧,不然是一块黑、认不出是哪个视频。
+  // deliveryId 跨「发送中 → 已送达」不变,上传时从本机文件截的那帧送达后接着用。
+  const fallbackPoster = useVideoFrameFallback(
+    videoUrl,
+    message.deliveryId ?? message.id,
+    !posterUrl && !ephemeral,
+  );
+  const hasPoster = Boolean(posterUrl ?? fallbackPoster);
 
   const avatarNode = (
     <MessageAvatar
@@ -146,7 +155,7 @@ export function VideoBubble({
   );
   const playOverlay = (
     <View
-      style={[s.poster, posterUrl ? s.posterOverImage : null]}
+      style={[s.poster, hasPoster ? s.posterOverImage : null]}
       pointerEvents="none"
     >
       <View style={s.playBadge}>
@@ -186,6 +195,16 @@ export function VideoBubble({
                   style={StyleSheet.absoluteFillObject}
                   contentFit="cover"
                   cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
+                  pointerEvents="none"
+                  overlay={playOverlay}
+                />
+              ) : fallbackPoster ? (
+                <MediaImage
+                  testID="chat-video-fallback-poster"
+                  source={{ uri: fallbackPoster }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="cover"
+                  cachePolicy="memory"
                   pointerEvents="none"
                   overlay={playOverlay}
                 />
