@@ -227,6 +227,7 @@ const s = StyleSheet.create({
   circleStatus: { alignSelf: 'flex-start' },
   circleHint: { ...Typography.caption },
   submitWrap: { paddingTop: Spacing.md, paddingHorizontal: Spacing.lg },
+  submitHint: { ...Typography.caption, textAlign: 'center', marginBottom: Spacing.sm },
   submitBtn: {
     borderRadius: 25,
     height: 50,
@@ -434,11 +435,20 @@ export default function CreatePostScreen() {
     expiryOptions.find((o) => o.value === expiresInHours)?.label ??
     expiryOptions[0].label;
 
-  const canSubmit = content.trim().length > 0 && selectedCircles.length > 0;
+  // 城市必选:广场按城市筛选时只认帖子自己的 cities,不带城市的帖子在任何城市下都看不到。
+  const missingRequirement =
+    content.trim().length === 0
+      ? t('plaza.create.contentRequired', { defaultValue: '请填写动态内容' })
+      : selectedCircles.length === 0
+        ? t('plaza.create.circleRequired', { defaultValue: '请选择至少一个圈子' })
+        : selectedCities.length === 0
+          ? t('plaza.create.cityRequired', { defaultValue: '请选择城市' })
+          : null;
+  const canSubmit = missingRequirement === null;
 
   const handleSubmit = useCallback(async () => {
     if (inFlightRef.current || !canSubmit || submitting) return;
-    if (selectedCircles.length === 0) return;
+    if (selectedCircles.length === 0 || selectedCities.length === 0) return;
 
     inFlightRef.current = true;
     setSubmitting(true);
@@ -699,7 +709,7 @@ export default function CreatePostScreen() {
           rightText={
             selectedCities.length > 0
               ? selectedCities.join('、')
-              : t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
+              : t('plaza.create.pleaseSelectRequired', { defaultValue: '请选择（必选）' })
           }
           onPress={handleSelectCity}
         />
@@ -852,6 +862,11 @@ export default function CreatePostScreen() {
       />
 
       <View style={[s.submitWrap, { paddingBottom: insets.bottom || 34 }]}>
+        {missingRequirement && !submitting ? (
+          <Text style={[s.submitHint, d.hint]} testID="create-post-missing">
+            {missingRequirement}
+          </Text>
+        ) : null}
         <Pressable
           style={[
             s.submitBtn,
