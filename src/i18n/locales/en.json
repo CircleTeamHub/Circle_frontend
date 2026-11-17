@@ -415,8 +415,8 @@
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
       "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post",
-      "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "recognized your collaboration",
+      "CIRCLE_POST_AUTO_ENDED": "give a like to the friends you enjoyed working with",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "enjoyed working with you and gave you a like",
       "CIRCLE_INVITATION_RECEIVED": "invited you to join {{circle}}",
       "GROUP_MEMBER_REMOVED": "You have been removed from this group chat",
       "GROUP_DISSOLVED": "This group chat has been disbanded",
@@ -434,14 +434,14 @@
       "searchPlaceholder": "Search signups",
       "noSearchResults": "No matching signups",
       "recognitionSelectionSummary": "{{count}}/{{max}} selected",
-      "recognitionFull": "Recognition limit reached",
-      "recognizedTag": "Recognized",
-      "recognitionSubmit": "Submit",
+      "recognitionFull": "Like limit reached",
+      "recognizedTag": "Liked",
+      "recognitionSubmit": "Like your collaborators",
       "recognitionSubmitting": "Submitting",
       "recognitionLimitTitle": "Choose up to 3",
-      "recognitionLimitMessage": "Each activity can recognize up to 3 signed-up collaborators.",
-      "recognitionSuccessTitle": "Recognition submitted",
-      "recognitionSuccessMessage": "{{count}} collaborator(s) recognized.",
+      "recognitionLimitMessage": "You can like up to 3 people who signed up for each activity.",
+      "recognitionSuccessTitle": "Likes sent",
+      "recognitionSuccessMessage": "You liked {{count}} participant(s).",
       "recognitionFailedTitle": "Submit failed"
     },
     "chatChannelName": "Chat messages",
@@ -1405,7 +1405,7 @@
       "step1": "Start an activity: post in a circle, set how long it runs (1/3/7 days) and any sign-up requirements, and share it to several circles and cities at once.",
       "step2": "Sign up: tap 'Sign up' on an activity you like; join if you meet the requirements, and cancel anytime.",
       "step3": "Stay in the loop: when there are new activities, a red dot appears on the plane icon at the bottom. Tap it to see the latest (toggle it with the switches on this page).",
-      "step4": "Wrap up with recognition: after an activity ends, the host can recognize up to 3 standout participants, who each get a notification, a like, and a badge."
+      "step4": "Wrap up with likes: after an activity ends, the host can like up to 3 participants they enjoyed working with, who each get a notification and progress toward the Top Collaborator badge."
     },
     "filter": {
       "title": "Filter",
@@ -3449,7 +3449,7 @@
     "explain": {
       "empty": {
         "description": "Tap a badge to see what it represents.",
-        "condition": "Different badges are earned from membership, registration, collaboration recognition, profile trustworthiness, or circle-building contributions."
+        "condition": "Different badges are earned from membership, registration, collaboration likes, profile trustworthiness, or circle-building contributions."
       },
       "circle": {
         "description": "A circle-specific badge showing your identity or contribution within that circle.",
@@ -3482,8 +3482,8 @@
         "condition": "Granted during the new-member window after registration; the account must remain in good standing."
       },
       "topCollaborator": {
-        "description": "A collaboration-recognition badge reflecting how others have recognized your collaboration in circle activities.",
-        "condition": "Earned by signing up for circle activities and being recognized by the host after they end; upgrades at 100/1000/10000 recognitions."
+        "description": "A Top Collaborator badge showing the collaboration likes you've received in circle activities.",
+        "condition": "Earned by signing up for circle activities and getting a like from the host after they end; upgrades at 100/1000/10000 likes."
       },
       "verifiedProfile": {
         "description": "A profile-trust badge indicating the user is willing to share contact details, making the account more trustworthy.",
@@ -3926,12 +3926,12 @@
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
     "PLAZA_RECOGNIZE_MAX_THREE": "Select at most three collaborators",
-    "PLAZA_RECOGNIZE_SELF": "You can't recognize yourself",
-    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "At least three signups are needed to recognize collaborators",
-    "PLAZA_RECOGNIZE_NOT_SIGNED": "Only users who signed up can be recognized",
-    "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
-    "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
-    "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
+    "PLAZA_RECOGNIZE_SELF": "You can't like yourself",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "At least three signups are needed before you can send likes",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "You can only like users who signed up",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "You can only like active circle members",
+    "PLAZA_RECOGNIZE_BLOCKED": "You can't like a blocked user",
+    "PLAZA_RECOGNIZE_ALREADY": "You've already sent your likes",
     "PLAZA_REPORT_SELF": "You can't report your own post",
     "PLAZA_NOT_CIRCLE_MEMBER": "You're not a member of this circle",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",

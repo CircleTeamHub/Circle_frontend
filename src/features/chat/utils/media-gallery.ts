@@ -57,11 +57,18 @@ async function copyIntoAppCache(uri: string): Promise<string> {
   return target;
 }
 
-async function resolveGalleryAsset(asset: MediaLibrary.Asset): Promise<ImagePickerAsset | null> {
+async function localFileUri(asset: MediaLibrary.Asset): Promise<string | undefined> {
+  // 安卓的 asset.uri 本身就是 file:// 真实路径。不能走 getAssetInfoAsync:它在安卓 10+ 上会顺带
+  // 读每张照片原图里的 EXIF 定位,而 app.json 有意不申请 ACCESS_MEDIA_LOCATION,照片会全部读取失败。
+  if (Platform.OS === 'android') return asset.uri;
   // iOS 上 asset.uri 是 ph://,上传和压缩都要真实文件;只在 iCloud 上的会先下载下来。
   const info = await MediaLibrary.getAssetInfoAsync(asset, { shouldDownloadFromNetwork: true });
   // 个别 iOS 资源的 localUri 带 #fragment,文件名和类型推断都会被它带偏。
-  const libraryUri = info.localUri?.split('#')[0];
+  return info.localUri?.split('#')[0];
+}
+
+async function resolveGalleryAsset(asset: MediaLibrary.Asset): Promise<ImagePickerAsset | null> {
+  const libraryUri = await localFileUri(asset);
   // 慢动作这类合成视频没有单一文件,拿不到就跳过。
   if (!libraryUri) return null;
   // 拷不出来就照旧用原路径:压缩能产出新文件时仍发得出去,别因此把这一项丢掉。

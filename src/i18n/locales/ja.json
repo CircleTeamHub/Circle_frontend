@@ -1903,7 +1903,7 @@
     "explain": {
       "empty": {
         "description": "アイコンをタップして意味を確認しましょう。",
-        "condition": "アイコンは会員、登録、コラボの評価、プロフィールの信頼度、サークル貢献などに応じて獲得できます。"
+        "condition": "アイコンは会員、登録、協力へのいいね、プロフィールの信頼度、サークル貢献などに応じて獲得できます。"
       },
       "circle": {
         "description": "サークル専用アイコンで、そのサークルでのあなたの立場や貢献を示します。",
@@ -1936,8 +1936,8 @@
         "condition": "登録後の新規期間中に付与。アカウントは正常な状態である必要があります。"
       },
       "topCollaborator": {
-        "description": "コラボ評価アイコンで、サークル活動でのあなたの評価を反映します。",
-        "condition": "サークル活動に申し込み、終了後に主催者から評価されると獲得。100/1000/10000回でランクアップ。"
+        "description": "協力達人アイコンで、サークル活動で受け取った協力へのいいねを表します。",
+        "condition": "サークル活動に申し込み、終了後に主催者からいいねされると獲得。100/1000/10000回でランクアップ。"
       },
       "verifiedProfile": {
         "description": "信頼プロフィールアイコンで、連絡先を公開する意思を示し信頼度を高めます。",
@@ -2050,7 +2050,7 @@
       "step1": "アクティビティを立ち上げる：サークルに投稿し、期間（1/3/7日）や応募条件を設定。複数のサークル・都市に同時公開できます。",
       "step2": "応募する：気になるアクティビティで「応募」をタップ。条件を満たせば参加でき、いつでもキャンセルできます。",
       "step3": "見逃さない：新しいアクティビティがあると、下の紙飛行機アイコンに赤い点が付きます。タップすると最新の一覧を見られます（このページのスイッチで切替）。",
-      "step4": "認可で締めくくる：終了後、主催者は最大3名の活躍した参加者を認可でき、認可された人は通知・いいね・バッジを獲得します。"
+      "step4": "いいねで締めくくる：終了後、主催者は一緒に楽しく活動できた参加者に最大3名までいいねでき、いいねされた人には通知が届き、「協力達人」バッジに加算されます。"
     },
     "filter": {
       "title": "絞り込み",
@@ -2250,8 +2250,8 @@
       "CIRCLE_INVITATION_REJECTED": "「{{circle}}」の招待枠の1つが却下されました",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理者が「{{circle}}」でのあなたの申請を承認しました",
       "CIRCLE_POST_SIGNUP_CREATED": "あなたのサークル投稿に応募しました",
-      "CIRCLE_POST_AUTO_ENDED": "アクティビティが終了しました。認可する協力者を選んでください",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "あなたの活動での協力を認めました",
+      "CIRCLE_POST_AUTO_ENDED": "一緒に楽しく活動できた仲間にいいねを送りましょう",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "あなたと一緒に活動できて楽しかったと、いいねを送りました",
       "CIRCLE_INVITATION_RECEIVED": "「{{circle}}」に招待しました",
       "GROUP_MEMBER_REMOVED": "このグループチャットから削除されました",
       "GROUP_DISSOLVED": "このグループチャットは解散されました",
@@ -2269,14 +2269,14 @@
       "searchPlaceholder": "応募者を検索",
       "noSearchResults": "一致する応募者なし",
       "recognitionSelectionSummary": "{{count}}/{{max}}選択",
-      "recognitionFull": "認可枠がいっぱいです",
-      "recognizedTag": "認可済み",
-      "recognitionSubmit": "送信",
+      "recognitionFull": "いいねの枠がいっぱいです",
+      "recognizedTag": "いいね済み",
+      "recognitionSubmit": "協力した仲間にいいね",
       "recognitionSubmitting": "送信中",
       "recognitionLimitTitle": "最大3人まで",
-      "recognitionLimitMessage": "各アクティビティで最大3人の応募者を認可できます。",
-      "recognitionSuccessTitle": "認可を送信しました",
-      "recognitionSuccessMessage": "{{count}}人の協力者を認可しました。",
+      "recognitionLimitMessage": "各アクティビティで最大3人の応募者にいいねできます。",
+      "recognitionSuccessTitle": "いいねを送りました",
+      "recognitionSuccessMessage": "{{count}}人の応募者にいいねしました。",
       "recognitionFailedTitle": "送信に失敗しました"
     },
     "chatChannelName": "チャットメッセージ",
@@ -3920,12 +3920,12 @@
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
     "PLAZA_RECOGNIZE_MAX_THREE": "コラボレーターは最大3人まで選択できます",
-    "PLAZA_RECOGNIZE_SELF": "自分を認定することはできません",
-    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "コラボレーターを認定するには3人以上の応募が必要です",
-    "PLAZA_RECOGNIZE_NOT_SIGNED": "応募したユーザーのみを認定できます",
-    "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
-    "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
-    "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
+    "PLAZA_RECOGNIZE_SELF": "自分にいいねすることはできません",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "いいねするには3人以上の応募が必要です",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "応募したユーザーにのみいいねできます",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーにのみいいねできます",
+    "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーにはいいねできません",
+    "PLAZA_RECOGNIZE_ALREADY": "いいねは既に送信されています",
     "PLAZA_REPORT_SELF": "自分の投稿は通報できません",
     "PLAZA_NOT_CIRCLE_MEMBER": "このサークルのメンバーではありません",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",

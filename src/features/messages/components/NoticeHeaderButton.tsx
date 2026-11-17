@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Bell } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { NoticeBellIcon } from '@/features/messages/components/MessagesHeaderIcons';
 import { UnreadCountBadge } from '@/components/ui/unread-count-badge';
 import { useTheme } from '@/theme';
 import { selectNoticeUnread, useTabBadgeStore } from '@/stores/tabBadgeStore';
@@ -42,7 +42,7 @@ export const NoticeHeaderButton = memo(function NoticeHeaderButton({ style, onPr
       onPress={onPress}
       testID="messages-notice-button"
     >
-      <Bell size={24} strokeWidth={4} color={colors.text} />
+      <NoticeBellIcon color={colors.text} />
       {unread > 0 ? (
         <View style={[s.badge, { borderColor: colors.background }]} pointerEvents="none">
           <UnreadCountBadge count={unread} testID="messages-notice-badge" />

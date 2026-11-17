@@ -1909,7 +1909,7 @@
     "explain": {
       "empty": {
         "description": "Toca un icono para ver qué representa.",
-        "condition": "Los distintos iconos se obtienen por membresía, registro, reconocimiento de colaboración, confianza del perfil o aportes al círculo."
+        "condition": "Los distintos iconos se obtienen por membresía, registro, me gusta por colaboración, confianza del perfil o aportes al círculo."
       },
       "circle": {
         "description": "Un icono propio del círculo que muestra tu identidad o aporte dentro de él.",
@@ -1942,8 +1942,8 @@
         "condition": "Se otorga durante el periodo de miembro nuevo tras el registro; la cuenta debe estar en regla."
       },
       "topCollaborator": {
-        "description": "Un icono de reconocimiento que refleja cómo otros valoran tu colaboración en actividades del círculo.",
-        "condition": "Se obtiene al inscribirte en actividades y ser reconocido por el anfitrión al terminar; mejora a los 100/1000/10000 reconocimientos."
+        "description": "Un icono que refleja los me gusta por colaboración que recibiste en actividades del círculo.",
+        "condition": "Se obtiene al inscribirte en actividades y recibir un me gusta del anfitrión al terminar; mejora a los 100/1000/10000 me gusta."
       },
       "verifiedProfile": {
         "description": "Un icono de confianza que indica que el usuario comparte datos de contacto, haciendo la cuenta más fiable.",
@@ -2056,7 +2056,7 @@
       "step1": "Crea una actividad: publica en un círculo, define su duración (1/3/7 días) y los requisitos de inscripción, y compártela en varios círculos y ciudades a la vez.",
       "step2": "Inscríbete: toca «Inscribirse» en una actividad que te guste; únete si cumples los requisitos y cancela cuando quieras.",
       "step3": "Entérate al momento: cuando hay actividades nuevas, aparece un punto rojo en el icono del avión de abajo. Tócalo para ver las últimas (actívalo con los interruptores de esta página).",
-      "step4": "Cierra con reconocimiento: al terminar, el anfitrión puede reconocer hasta 3 participantes destacados, que reciben una notificación, un me gusta y una insignia."
+      "step4": "Cierra con me gusta: al terminar, el anfitrión puede dar me gusta a hasta 3 participantes con quienes disfrutó colaborar; reciben una notificación y suman para la insignia Colaborador."
     },
     "filter": {
       "title": "Filtrar",
@@ -2256,8 +2256,8 @@
       "CIRCLE_INVITATION_REJECTED": "se rechazó una plaza de invitación en {{circle}}",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "un administrador aprobó tu solicitud en {{circle}}",
       "CIRCLE_POST_SIGNUP_CREATED": "se inscribió en tu publicación del círculo",
-      "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer",
-      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración",
+      "CIRCLE_POST_AUTO_ENDED": "dale un me gusta a los amigos con quienes disfrutaste colaborar",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "disfrutó colaborar contigo y te dio un me gusta",
       "CIRCLE_INVITATION_RECEIVED": "te invitó a unirte a {{circle}}",
       "GROUP_MEMBER_REMOVED": "Te han eliminado de este chat de grupo",
       "GROUP_DISSOLVED": "Este chat de grupo se ha disuelto",
@@ -2275,14 +2275,14 @@
       "searchPlaceholder": "Buscar inscritos",
       "noSearchResults": "Sin inscritos coincidentes",
       "recognitionSelectionSummary": "{{count}}/{{max}} elegidos",
-      "recognitionFull": "Límite de reconocimiento alcanzado",
-      "recognizedTag": "Reconocido",
-      "recognitionSubmit": "Enviar",
+      "recognitionFull": "Límite de me gusta alcanzado",
+      "recognizedTag": "Me gusta enviado",
+      "recognitionSubmit": "Dar me gusta a colaboradores",
       "recognitionSubmitting": "Enviando",
       "recognitionLimitTitle": "Elige hasta 3",
-      "recognitionLimitMessage": "Cada actividad puede reconocer hasta 3 colaboradores inscritos.",
-      "recognitionSuccessTitle": "Reconocimiento enviado",
-      "recognitionSuccessMessage": "{{count}} colaborador(es) reconocido(s).",
+      "recognitionLimitMessage": "En cada actividad puedes dar me gusta a hasta 3 inscritos.",
+      "recognitionSuccessTitle": "Me gusta enviados",
+      "recognitionSuccessMessage": "Diste me gusta a {{count}} inscrito(s).",
       "recognitionFailedTitle": "Error al enviar"
     },
     "chatChannelName": "Mensajes de chat",
@@ -3926,12 +3926,12 @@
     "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
     "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
     "PLAZA_RECOGNIZE_MAX_THREE": "Selecciona como máximo tres colaboradores",
-    "PLAZA_RECOGNIZE_SELF": "No puedes reconocerte a ti mismo",
-    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "Se necesitan al menos tres inscritos para reconocer colaboradores",
-    "PLAZA_RECOGNIZE_NOT_SIGNED": "Solo se puede reconocer a usuarios inscritos",
-    "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
-    "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
-    "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "PLAZA_RECOGNIZE_SELF": "No puedes darte me gusta a ti mismo",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "Se necesitan al menos tres inscritos para dar me gusta",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "Solo puedes dar me gusta a usuarios inscritos",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo puedes dar me gusta a miembros activos del círculo",
+    "PLAZA_RECOGNIZE_BLOCKED": "No puedes dar me gusta a un usuario bloqueado",
+    "PLAZA_RECOGNIZE_ALREADY": "Ya enviaste tus me gusta",
     "PLAZA_REPORT_SELF": "No puedes reportar tu propia publicación",
     "PLAZA_NOT_CIRCLE_MEMBER": "No eres miembro de este círculo",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",

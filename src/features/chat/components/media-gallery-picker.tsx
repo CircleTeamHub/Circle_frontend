@@ -142,7 +142,9 @@ const s = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    // iOS multiline inputs pin text to the top; padding sized so one line
+    // fills minHeight keeps the placeholder vertically centered.
+    paddingVertical: 12,
     borderRadius: Radius.lg,
     backgroundColor: G.surface,
   },

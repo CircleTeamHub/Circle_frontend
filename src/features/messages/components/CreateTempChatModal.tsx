@@ -64,6 +64,9 @@ const s = StyleSheet.create({
     height: 44,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
+    // Android's default EditText padding clips text inside a fixed height.
+    paddingVertical: 0,
+    textAlignVertical: 'center',
   },
   chipRow: {
     flexDirection: 'row',
