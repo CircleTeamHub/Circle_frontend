@@ -10,8 +10,8 @@ import {
   fetchNotificationsPage,
   markAllNotificationsRead,
   markNotificationRead,
-  markTraceLikesRead,
 } from '@/services/api/notifications';
+import { markTraceLikeNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   fetchAllMyCirclePosts,
   markMyPostSignupsRead,
@@ -66,8 +66,6 @@ import { usePullRefresh } from '@/hooks/use-pull-refresh';
 interface Row {
   raw: NotificationItem | MyCirclePost;
   view: NotificationRowData;
-  /** 同一条动态合并成一行的点赞（含 raw 本身）；其余通知没有这个字段。 */
-  likes?: readonly NotificationItem[];
 }
 
 // 报名管理只属于圈子域；朋友圈铃铛和消息页「通知」不该出现这个 tab，也不该为它拉数据。
@@ -349,7 +347,6 @@ export default function NotificationCenterScreen() {
         ? groupTraceLikes(interactive).map((group) => ({
             raw: group[0],
             view: mapNotificationGroupToRow(group, t),
-            ...(group.length > 1 ? { likes: group } : {}),
           }))
         : signupPosts.map((p) => ({ raw: p, view: mapMyPostToRow(p, t) }));
     return filter === 'unread' ? mapped.filter((r) => r.view.unread) : mapped;
@@ -427,24 +424,11 @@ export default function NotificationCenterScreen() {
   }, [listDomain, isCurrentSession, isListTab, load, store]);
 
   const handleRowPress = useCallback(
-    (
-      raw: NotificationItem | MyCirclePost,
-      view: NotificationRowData,
-      likes?: readonly NotificationItem[],
-    ) => {
+    (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
       if (!isCurrentSession()) return;
       if ('type' in raw) {
-        if (likes && raw.fromTrace) {
-          // 合并行：这条动态的赞一次标完（含还没翻到的那些）。
-          for (const like of likes) {
-            if (like.read) continue;
-            store().markInteractiveReadLocal(like.id);
-            decrementUnreadBadgesFor(like.type);
-          }
-          void markTraceLikesRead(raw.fromTrace.id).catch((e) => {
-            if (isCurrentSession())
-              reportHandledFailure('notificationCenter', 'markTraceLikesRead', e);
-          });
+        if (raw.type === 'TRACE_LIKE' && raw.fromTrace?.id) {
+          void markTraceLikeNotificationsRead(raw.fromTrace.id);
         } else {
           store().markInteractiveReadLocal(raw.id);
           if (!raw.read) decrementUnreadBadgesFor(raw.type);
@@ -541,7 +525,7 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() => handleRowPress(item.raw, item.view, item.likes)}
+            onPress={() => handleRowPress(item.raw, item.view)}
           />
         )}
         ItemSeparatorComponent={Divider}

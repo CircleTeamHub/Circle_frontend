@@ -5,6 +5,7 @@ import NotificationCenterScreen from './NotificationCenterScreen';
 import { fetchNotificationsPage, markAllNotificationsRead, markNotificationRead, markTraceLikesRead } from '@/services/api/notifications';
 import { fetchAllMyCirclePosts, markMyPostSignupsRead } from '@/services/api/plaza';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
 import { reportHandledFailure } from '@/observability/report-failure';
 import type { MyCirclePost, NotificationItem } from '@/types';
@@ -87,6 +88,7 @@ beforeEach(() => {
   jest.mocked(fetchNotificationsPage).mockReset();
   jest.mocked(fetchAllMyCirclePosts).mockReset().mockResolvedValue([]);
   jest.mocked(markAllNotificationsRead).mockReset();
+  jest.mocked(markTraceLikesRead).mockReset();
   jest.mocked(markMyPostSignupsRead).mockReset();
   mockDomain = 'moments';
   mockSegments.splice(0, mockSegments.length, '(tabs)', 'messages');
@@ -117,28 +119,68 @@ test('the circle notifications page carries the settings gear and opens settings
   expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/discover/notifications');
 });
 
+const traceLike = (id: string, userId: string): NotificationItem => ({
+  id, type: 'TRACE_LIKE', content: '', read: false, createdAt: '2026-11-16T00:00:00.000Z',
+  fromUser: { id: userId, nickname: userId, avatarUrl: null },
+  fromTrace: { id: 'trace-1', excerpt: '', firstImage: null },
+  fromReply: null, fromCircle: null, fromCirclePost: null, fromInvitation: null,
+});
+
 test('likes on one moment show as one row and are marked read together', async () => {
-  const like = (id: string, userId: string): NotificationItem => ({
-    id, type: 'TRACE_LIKE', content: '', read: false, createdAt: '2026-11-16T00:00:00.000Z',
-    fromUser: { id: userId, nickname: userId, avatarUrl: null },
-    fromTrace: { id: 'trace-1', excerpt: '', firstImage: null },
-    fromReply: null, fromCircle: null, fromCirclePost: null, fromInvitation: null,
-  });
   jest.mocked(fetchNotificationsPage).mockResolvedValue({
-    items: [like('like-2', 'u2'), like('like-1', 'u1')], nextCursor: null,
+    items: [traceLike('like-2', 'u2'), traceLike('like-1', 'u1')], nextCursor: null,
   });
   jest.mocked(markTraceLikesRead).mockResolvedValue(undefined);
   mockBadges.momentsUnread = 2;
   mockBadges.discoverUnread = 2;
   render(<NotificationCenterScreen />);
 
-  fireEvent.press(await screen.findByText('like-2'));
+  const row = await screen.findByText('like-2');
+  await act(async () => {
+    fireEvent.press(row);
+    await markMatchingTargetNotificationsRead({ traceId: 'trace-1' });
+  });
 
   expect(screen.queryByText('like-1')).toBeNull();
   expect(markTraceLikesRead).toHaveBeenCalledWith('trace-1');
+  expect(markTraceLikesRead).toHaveBeenCalledTimes(1);
   expect(markNotificationRead).not.toHaveBeenCalled();
-  expect(mockBadges.momentsUnread).toBe(0);
-  expect(useNotificationCenterStore.getState().interactive.every((n) => n.read)).toBe(true);
+  await waitFor(() => expect(useNotificationCenterStore.getState().interactive.every((n) => n.read)).toBe(true));
+  expect(mockBadges.momentsUnread).toBe(2); // Updated by the server's badge snapshot.
+});
+
+test('a rejected bulk read keeps the likes and badges unread', async () => {
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({
+    items: [traceLike('like-2', 'u2'), traceLike('like-1', 'u1')], nextCursor: null,
+  });
+  jest.mocked(markTraceLikesRead).mockRejectedValueOnce(new Error('offline'));
+  mockBadges.momentsUnread = 2;
+  mockBadges.discoverUnread = 2;
+  render(<NotificationCenterScreen />);
+
+  fireEvent.press(await screen.findByText('like-2'));
+
+  await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith(
+    'notifications', 'markTraceLikesRead', expect.any(Error),
+  ));
+  expect(useNotificationCenterStore.getState().interactive.every((n) => !n.read)).toBe(true);
+  expect(mockBadges.momentsUnread).toBe(2);
+  expect(mockBadges.discoverUnread).toBe(2);
+});
+
+test('a single loaded like uses the bulk endpoint for likes on later pages', async () => {
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({
+    items: [traceLike('like-2', 'u2')], nextCursor: 'older-likes',
+  });
+  jest.mocked(markTraceLikesRead).mockResolvedValueOnce(undefined);
+  jest.mocked(markNotificationRead).mockResolvedValueOnce(undefined);
+  render(<NotificationCenterScreen />);
+
+  const row = await screen.findByText('like-2');
+  await act(async () => { fireEvent.press(row); });
+
+  expect(markTraceLikesRead).toHaveBeenCalledWith('trace-1');
+  expect(markNotificationRead).not.toHaveBeenCalled();
 });
 
 test('the moments notifications page has no circle settings gear', async () => {
@@ -460,11 +502,12 @@ test('a notification without its own destination does not stack another notifica
 });
 
 test('a notification with its own destination still opens it', async () => {
-  jest.mocked(markNotificationRead).mockResolvedValue(undefined);
+  jest.mocked(markTraceLikesRead).mockResolvedValueOnce(undefined);
   const liked = { ...notification('liked'), fromTrace: { id: 'trace-1', excerpt: 'x', firstImage: null } };
   jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [liked], nextCursor: null });
   render(<NotificationCenterScreen />);
-  fireEvent.press(await screen.findByText('liked'));
+  const row = await screen.findByText('liked');
+  await act(async () => { fireEvent.press(row); });
   // 这一页开在消息栈里:动态详情也开在消息栈,返回回到这一页(而不是探索 tab 首页)。
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/moment/[id]', params: { id: 'trace-1' } });
 });
