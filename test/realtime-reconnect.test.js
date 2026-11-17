@@ -193,6 +193,8 @@ function loadRealtimeHarness(options = {}) {
           return {
             useMomentsFeedSignalStore: stubStore({ bump: () => {} }),
           };
+        case '@/features/discover/utils/moments-update':
+          return { scheduleMomentsUpdateCheck: () => {} };
         case '@/features/notes/store/use-note-status-signal-store':
           return {
             useNoteStatusSignalStore: stubStore({ bump: () => {} }),

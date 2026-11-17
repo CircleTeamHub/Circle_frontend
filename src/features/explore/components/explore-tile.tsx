@@ -49,6 +49,12 @@ const s = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  // 和 Badge 同色，只是不带数字。
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
   // 可爱字体只有一个字重：字重回到 400（写 800 时 iOS 会退回系统字体），字号略大一点压住手写感。
   titleCute: {
     fontSize: 22,
@@ -64,6 +70,8 @@ interface ExploreTileProps {
   /** 画布坐标系里的 SVG 插画（见 explore-tile-art）。 */
   art: ReactNode;
   badgeCount?: number;
+  /** 没有数字时亮一个小点：只表示「有更新」。 */
+  showDot?: boolean;
   /** 标题字体；不传用系统粗体。 */
   titleFontFamily?: string;
   accessibilityLabel: string;
@@ -77,6 +85,7 @@ export function ExploreTile({
   gradient,
   art,
   badgeCount = 0,
+  showDot = false,
   titleFontFamily,
   accessibilityLabel,
   onPress,
@@ -143,6 +152,12 @@ export function ExploreTile({
             {title}
           </Text>
           <Badge count={badgeCount} />
+          {badgeCount <= 0 && showDot ? (
+            <View
+              testID={testID ? `${testID}-update-dot` : undefined}
+              style={[s.dot, { backgroundColor: colors.primary }]}
+            />
+          ) : null}
         </View>
       </View>
     </Pressable>

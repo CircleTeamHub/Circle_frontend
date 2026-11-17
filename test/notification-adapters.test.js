@@ -52,6 +52,69 @@ test("interactive: TRACE_LIKE → heart icon + liked summary", () => {
   assert.equal(row.title, "B");
 });
 
+function like(id, traceId, userId, read = false) {
+  return {
+    id,
+    type: "TRACE_LIKE",
+    content: "",
+    read,
+    createdAt: "2026-06-05T00:00:00Z",
+    fromUser: { id: userId, nickname: userId.toUpperCase(), avatarUrl: null },
+    fromTrace: { id: traceId, excerpt: "body", firstImage: null },
+    fromReply: null,
+  };
+}
+
+test("likes on the same moment merge into one row at the newest like", () => {
+  const { groupTraceLikes } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const comment = { ...like("c1", "t1", "u9"), type: "TRACE_COMMENT" };
+  const groups = groupTraceLikes([
+    like("n3", "t1", "u3"),
+    comment,
+    like("n2", "t2", "u2"),
+    like("n1", "t1", "u1"),
+  ]);
+  // VM 里建的数组跨 realm，按 JSON 比内容。
+  assert.equal(
+    JSON.stringify(groups.map((group) => group.map((n) => n.id))),
+    JSON.stringify([["n3", "n1"], ["c1"], ["n2"]]),
+  );
+});
+
+test("a merged like row counts distinct likers and is unread if any like is", () => {
+  const { mapNotificationGroupToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const calls = [];
+  const tr = (key, opts) => {
+    calls.push([key, opts]);
+    return key;
+  };
+  const row = mapNotificationGroupToRow(
+    [like("n3", "t1", "u3", true), like("n2", "t1", "u2"), like("n1", "t1", "u3", true)],
+    tr,
+  );
+  assert.equal(row.id, "n3");
+  assert.equal(row.title, "U3");
+  assert.equal(row.unread, true);
+  assert.equal(row.summary, "notifications.summary.TRACE_LIKE_GROUPED");
+  assert.equal(
+    JSON.stringify(calls.find(([key]) => key === "notifications.summary.TRACE_LIKE_GROUPED")[1]),
+    JSON.stringify({ others: 1 }),
+  );
+});
+
+test("a single like keeps the plain like row", () => {
+  const { mapNotificationGroupToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const row = mapNotificationGroupToRow([like("n1", "t1", "u1", true)], t);
+  assert.equal(row.summary, "notifications.summary.TRACE_LIKE");
+  assert.equal(row.unread, false);
+});
+
 test("interactive: CIRCLE_VERIFICATION_REQUESTED carries invitation id for tap-through", () => {
   const { mapNotificationToRow } = load(
     "src/features/notifications/utils/notification-summary.ts",

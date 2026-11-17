@@ -7,6 +7,7 @@ import { fetchAssistantBootstrap } from '@/services/api/assistant';
 
 const mockRouter = { push: jest.fn() };
 let mockMomentsUnread = 0;
+let mockMomentsHasUpdate = false;
 
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
@@ -63,8 +64,9 @@ jest.mock('@/theme', () => ({
 }));
 
 jest.mock('@/stores/tabBadgeStore', () => ({
-  useTabBadgeStore: (selector: (state: { momentsUnread: number }) => number) =>
-    selector({ momentsUnread: mockMomentsUnread }),
+  useTabBadgeStore: (
+    selector: (state: { momentsUnread: number; momentsHasUpdate: boolean }) => unknown,
+  ) => selector({ momentsUnread: mockMomentsUnread, momentsHasUpdate: mockMomentsHasUpdate }),
 }));
 
 describe('ExploreScreen', () => {
@@ -74,6 +76,7 @@ describe('ExploreScreen', () => {
     // Tests that do not care about the assistant leave the mount prefetch pending.
     jest.mocked(fetchAssistantBootstrap).mockReset().mockReturnValue(new Promise(() => {}));
     mockMomentsUnread = 0;
+    mockMomentsHasUpdate = false;
   });
 
   it('asks where the assistant leads as soon as the page shows, then opens it on tap without waiting', async () => {
@@ -196,5 +199,20 @@ describe('ExploreScreen', () => {
     const moments = screen.getByTestId(E2E_TEST_IDS.exploreMomentsEntry);
     expect(moments).toHaveTextContent(/3/);
     expect(moments.props.accessibilityLabel).toBe('discover.moments unread:3');
+  });
+
+  // 好友发了新动态：不推送，只在磁贴上亮一个不带数字的点；有未读数字时让数字占位。
+  it('lights a plain dot on the moments tile when friends posted something new', () => {
+    mockMomentsHasUpdate = true;
+    const view = render(<ExploreScreen />);
+
+    expect(screen.getByTestId(`${E2E_TEST_IDS.exploreMomentsEntry}-update-dot`)).toBeTruthy();
+    expect(screen.getByTestId(E2E_TEST_IDS.exploreMomentsEntry).props.accessibilityLabel).toBe(
+      'discover.moments discover.momentsHasUpdate',
+    );
+
+    mockMomentsUnread = 2;
+    view.rerender(<ExploreScreen />);
+    expect(screen.queryByTestId(`${E2E_TEST_IDS.exploreMomentsEntry}-update-dot`)).toBeNull();
   });
 });
