@@ -2976,6 +2976,7 @@
       "deleteTitle": "Delete note",
       "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
       "restoreFailedTitle": "Restore failed",
+      "restoreSourceDeleted": "The original note was deleted, so this saved copy can't be restored.",
       "purgeTitle": "Delete note now?",
       "purgeConfirm": "The note will be permanently deleted and cannot be recovered.",
       "batchFailedTitle": "Some actions failed",

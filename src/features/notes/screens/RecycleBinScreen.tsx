@@ -17,6 +17,7 @@ import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
 import { ApiError } from '@/services/api/api-error';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { fetchDeletedNotes, getCachedDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
@@ -205,9 +206,14 @@ function RecycleBinContent() {
       } catch (error) {
         reportHandledFailure('noteRecycleBin', 'restore', error);
         if (mountedRef.current) {
+          // 收藏的副本：原件已经删了，服务端拒绝恢复（恢复出来也是一份谁都打不开的笔记）。
+          const sourceGone =
+            error instanceof ApiError && error.errorCode === 'NOTE_NOT_FOUND' && Boolean(note.collectedFrom);
           Alert.alert(
             t('notes.alerts.restoreFailedTitle', { defaultValue: '恢复失败' }),
-            t('common.retryLater', { defaultValue: '请稍后重试' }),
+            sourceGone
+              ? t('notes.alerts.restoreSourceDeleted', { defaultValue: '原笔记已被删除，这份收藏无法恢复' })
+              : getApiErrorMessage(error, t('common.retryLater', { defaultValue: '请稍后重试' })),
           );
         }
         return;

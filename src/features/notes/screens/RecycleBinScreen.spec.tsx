@@ -47,8 +47,11 @@ jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ detachLocalNoteD
 // No persisted recycle-bin snapshot: every test starts from the network load.
 jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), getCachedDeletedNotes: () => null, purgeNote: jest.fn(), restoreNote: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('@/services/api/errors', () => ({
+  getApiErrorMessage: (error: unknown, fallback: string) => (error instanceof Error && error.message === 'duplicate' ? 'serverErrors.NOTE_RESTORE_DUPLICATE' : fallback),
+}));
 
-const note = { id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };
+const note ={ id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };
 
 function deferred<T>() {
   let reject!: (error: unknown) => void;
@@ -128,6 +131,35 @@ test('a rejected restore keeps the row and reports the failed action', async () 
     fireEvent.press(screen.getByLabelText('notes.actions.restore'));
     await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'restore', error));
     expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+
+// 收藏的副本:原件已删,服务端拒绝恢复。说清楚原因,而不是「请稍后重试」让人一直重试。
+test('restoring a saved copy whose original was deleted says so, and keeps the row', async () => {
+  jest.mocked(fetchDeletedNotes).mockReset()
+    .mockResolvedValueOnce([{ ...note, collectedFrom: { sourceNoteId: 'gone' } }] as never)
+    .mockResolvedValue([] as never);
+  jest.mocked(restoreNote).mockRejectedValueOnce(
+    new ApiError('原笔记已被删除', { status: 404, failureKind: 'http', errorCode: 'NOTE_NOT_FOUND' }),
+  );
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<RecycleBinScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    fireEvent.press(screen.getByLabelText('notes.actions.restore'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('notes.alerts.restoreFailedTitle', 'notes.alerts.restoreSourceDeleted'));
+    expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+
+test('other restore rejections show the server reason instead of a generic retry hint', async () => {
+  jest.mocked(restoreNote).mockRejectedValueOnce(new ApiError('duplicate', { status: 409, failureKind: 'http', errorCode: 'NOTE_RESTORE_DUPLICATE' }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<RecycleBinScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    fireEvent.press(screen.getByLabelText('notes.actions.restore'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('notes.alerts.restoreFailedTitle', 'serverErrors.NOTE_RESTORE_DUPLICATE'));
   } finally { alert.mockRestore(); }
 });
 

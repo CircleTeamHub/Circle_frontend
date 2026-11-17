@@ -1266,6 +1266,7 @@
       "deleteTitle": "ノートを削除",
       "deleteConfirm": "削除したノートはごみ箱から復元でき、30日後に自動的に消去されます。",
       "restoreFailedTitle": "復元に失敗しました",
+      "restoreSourceDeleted": "元のノートが削除されたため、この保存したコピーは復元できません。",
       "purgeTitle": "ノートを今すぐ削除しますか？",
       "purgeConfirm": "ノートは完全に削除され、復元できません。",
       "batchFailedTitle": "一部の操作に失敗しました",

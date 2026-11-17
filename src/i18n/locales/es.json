@@ -1270,6 +1270,7 @@
       "deleteTitle": "Eliminar nota",
       "deleteConfirm": "Las notas eliminadas se pueden recuperar desde la papelera y se borran definitivamente a los 30 días.",
       "restoreFailedTitle": "No se pudo restaurar",
+      "restoreSourceDeleted": "La nota original se eliminó, así que esta copia guardada no se puede restaurar.",
       "purgeTitle": "¿Eliminar la nota ahora?",
       "purgeConfirm": "La nota se eliminará de forma permanente y no se podrá recuperar.",
       "batchFailedTitle": "Algunas acciones fallaron",

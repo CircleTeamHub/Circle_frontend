@@ -1266,6 +1266,7 @@
       "deleteTitle": "노트 삭제",
       "deleteConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
       "restoreFailedTitle": "복원 실패",
+      "restoreSourceDeleted": "원본 노트가 삭제되어 이 저장한 사본은 복원할 수 없습니다.",
       "purgeTitle": "노트를 지금 삭제할까요?",
       "purgeConfirm": "노트가 영구적으로 삭제되며 복구할 수 없습니다.",
       "batchFailedTitle": "일부 작업 실패",

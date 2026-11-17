@@ -2970,6 +2970,7 @@
       "deleteTitle": "删除笔记",
       "deleteConfirm": "删除后可在回收站找回，30 天后自动清除。",
       "restoreFailedTitle": "恢复失败",
+      "restoreSourceDeleted": "原笔记已被删除，这份收藏无法恢复",
       "purgeTitle": "立即删除笔记？",
       "purgeConfirm": "笔记会被永久删除，无法恢复。",
       "batchFailedTitle": "部分操作失败",
