@@ -801,8 +801,8 @@ export function refreshSessionAccessToken(rejectedAccessToken?: string): Promise
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   // Auth anomalies are captured once at their decision boundary.
   if (error instanceof ApiError && ['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
-  // iOS 挂起后台 App 时 JS 整段停住，回来后在途请求一起「超时 / 卡住」（线上一次挂起
-  // 91 秒就报了 6 个接口，loopLagMs≈全程）。那是系统冻结，不是网络故障。只认真的进过后台：
+  // iOS 挂起后台 App、安卓冻结后台进程时 JS 整段停住，回来后在途请求一起「超时 / 卡住」
+  // （线上一次挂起 91 秒就报了 6 个接口，loopLagMs≈全程）。那是系统冻结，不是网络故障。只认真的进过后台：
   // 结束时还在后台，或前后台切过、且等待的大半时间 JS 都没在跑。下拉通知栏、Face ID
   // 这类只到 inactive 的短暂切换照报。判断在 reportApiFailure 里：要看重试结果。
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
@@ -841,7 +841,7 @@ function reportApiFailure(
 ): void {
   const status = error instanceof ApiError ? error.status : undefined;
   if (!shouldReportApiFailure(error, status)) return;
-  // 备份请求也失败了的，用户回到前台后确实看到了报错：照报。
+  // 备份请求在回到前台后也失败了的，用户确实看到了报错：照报（备份是否也被冻住由 sendGet 判断）。
   if (stallRetry?.retry !== 'failed' && error instanceof ApiError && wasSuspendedInBackground(error)) return;
   const reportEndpoint =
     error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
@@ -929,8 +929,12 @@ async function sendGet<T>(
     executeRequest<T>(endpoint, options, undefined, { timeoutMs, cancelSignal, transport: 'fresh-connection' });
   const giveUp = (stuck: unknown, error: unknown): never => {
     // 第二次也没拿到响应：用户看到的是第二次的报错，上报的是第一次卡住的现场。
+    // 第二次自己也跨过了挂起（冻结前就发出、和第一次一起在冻结里耗尽预算），那不是回来后
+    // 真失败的，同样不报。
     if (error instanceof ApiError && error.status === 0 && sessionUnchanged()) {
-      reportApiFailure(stuck, endpoint, options, { attempts: 2, retry: 'failed' });
+      if (!wasSuspendedInBackground(error)) {
+        reportApiFailure(stuck, endpoint, options, { attempts: 2, retry: 'failed' });
+      }
       report.done = true;
     }
     throw error;

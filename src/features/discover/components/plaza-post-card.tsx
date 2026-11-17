@@ -16,11 +16,13 @@ import { useNavigationLock } from '@/hooks/use-navigation-lock';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   cancelSignup,
+  fetchPlazaPost,
   signupForPost,
   deletePlazaPost,
   reportPlazaPost,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { isAmbiguousMutationFailure } from '@/services/api/mutation-outcome';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { MomentMedia } from './moment-media';
@@ -443,9 +445,15 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       setSigned(res.signed);
       setSignupCount(res.signupCount);
       if (next && res.signed) void openAuthorChat();
-    } catch {
-      // 回滚
-      const latest = deferredSignupRef.current;
+    } catch (error) {
+      // 超时 / 断网 / 5xx 不知道落没落库（线上见过取消已在服务端执行、回包没赶上预算）。
+      // 报名和取消在服务端都可重复执行，先读一次真实状态；读不到再回滚。
+      const truth = isAmbiguousMutationFailure(error)
+        ? await fetchPlazaPost(post.id).catch(() => null)
+        : null;
+      const latest = truth
+        ? { signed: truth.signedByMe, count: truth.signupCount }
+        : deferredSignupRef.current;
       setSigned(latest?.signed ?? !next);
       setSignupCount((c) => latest?.count ?? Math.max(0, c + (next ? -1 : 1)));
     } finally {

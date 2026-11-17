@@ -2,7 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
-import { cancelSignup, signupForPost } from '@/services/api/plaza';
+import { cancelSignup, fetchPlazaPost, signupForPost } from '@/services/api/plaza';
+import { ApiError } from '@/services/api/api-error';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { useTheme } from '@/theme';
@@ -36,6 +37,7 @@ jest.mock('@/features/discover/store/use-discover-store', () => ({
 jest.mock('@/services/api/plaza', () => ({
   cancelSignup: jest.fn(),
   signupForPost: jest.fn(),
+  fetchPlazaPost: jest.fn(),
   deletePlazaPost: jest.fn(),
   reportPlazaPost: jest.fn(),
 }));
@@ -87,6 +89,7 @@ beforeEach(() => {
   jest.mocked(ensureDirectConversation).mockReset().mockResolvedValue({ conversationID: 'dm-author' } as never);
   jest.mocked(signupForPost).mockReset();
   jest.mocked(cancelSignup).mockReset();
+  jest.mocked(fetchPlazaPost).mockReset();
 });
 
 const pressSignup = async () => {
@@ -122,6 +125,36 @@ test('cancelling a signup stays on the post', async () => {
   expect(cancelSignup).toHaveBeenCalledWith('p1');
   expect(ensureDirectConversation).not.toHaveBeenCalled();
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+// 线上样本（2026-11-15，国内红米）：取消报名的 DELETE 晚到服务端 6.6 秒、已成功执行，
+// 回包没赶上 15 秒预算。原来一律回滚成「已报名」，界面和服务端从此对不上。
+const timedOut = () => new ApiError('请求超时', { status: 0, failureKind: 'timeout' });
+const signupButtonText = () => (within(screen.getByTestId('plaza-card-signup')).queryByText(/^已报名/) ? '已报名' : '报名');
+
+test('a cancel that timed out but went through on the server shows the real state', async () => {
+  jest.mocked(cancelSignup).mockRejectedValueOnce(timedOut());
+  jest.mocked(fetchPlazaPost).mockResolvedValueOnce({ ...post, signedByMe: false, signupCount: 0 });
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  await pressSignup();
+  expect(fetchPlazaPost).toHaveBeenCalledWith('p1');
+  expect(signupButtonText()).toBe('报名');
+});
+
+test('a timed-out cancel is rolled back when the real state cannot be read either', async () => {
+  jest.mocked(cancelSignup).mockRejectedValueOnce(timedOut());
+  jest.mocked(fetchPlazaPost).mockRejectedValueOnce(timedOut());
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  await pressSignup();
+  expect(signupButtonText()).toBe('已报名');
+});
+
+test('a cancel the server refused is rolled back without re-reading', async () => {
+  jest.mocked(cancelSignup).mockRejectedValueOnce(new ApiError('Forbidden', { status: 403, failureKind: 'http' }));
+  render(<PlazaPostCard post={{ ...post, signedByMe: true, signupCount: 1 }} />);
+  await pressSignup();
+  expect(fetchPlazaPost).not.toHaveBeenCalled();
+  expect(signupButtonText()).toBe('已报名');
 });
 
 test('opens a video-only circle post in the media viewer', () => {
