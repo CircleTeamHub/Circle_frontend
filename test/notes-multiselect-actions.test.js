@@ -283,13 +283,14 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
   }
 });
 
-test('lifecycle copy: 下架 60 天后自动删除，回收站已取消', () => {
+test('lifecycle copy: 下架 60 天后自动删除；删除进回收站，30 天后清除', () => {
   const zh = read('src/i18n/locales/zh.json');
   const unlistedScreen = read('src/features/notes/screens/UnlistedNotesScreen.tsx');
 
-  // 语义拍板（2026-11-13）：两种下架合并，下架 60 天后服务端永久删除；删除即永久删除。
-  assert.doesNotMatch(zh, /已下架笔记不会自动删除|回收站/);
+  // 2026-11-13 两种下架合并，下架 60 天后服务端永久删除；2026-11-16 回收站恢复，删除 30 天内可找回。
+  assert.doesNotMatch(zh, /已下架笔记不会自动删除/);
   assert.match(zh, /下架 60 天后自动删除/);
+  assert.match(JSON.parse(zh).notes.alerts.deleteConfirm, /回收站.*30 天/);
   assert.match(unlistedScreen, /unlistedDaysLeft\(item\.unlistedAt, Date\.now\(\)\)/);
   assert.match(unlistedScreen, /relistNote/);
 });

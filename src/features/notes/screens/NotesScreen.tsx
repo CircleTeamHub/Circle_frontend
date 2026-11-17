@@ -60,6 +60,9 @@ import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-orde
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
 import { createNoteDraftId } from '@/features/notes/utils/note-editor-drafts';
+import { publishInterruptedNotes, type ResumeDraft } from '@/features/notes/utils/interrupted-note-recovery';
+import { topNotice } from '@/components/app/top-notice-store';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { rateNoteGood, startBadNoteRating } from '@/features/notes/rating/note-rating-flow';
 import {
   applyNoteSourceStatusToSummaries,
@@ -68,6 +71,7 @@ import {
 import {
   getChatDetailHref,
   getNoteBadRatingsHref,
+  getNoteEditHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
   toCircleScope,
@@ -130,6 +134,7 @@ function NotesContent() {
   const [loading, setLoading] = useState(!cachedNotes);
   const loadedRef = useRef(cachedNotes !== null);
   const [loadError, setLoadError] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState<ResumeDraft | null>(null);
   // 「⋯」动作菜单针对的笔记（null = 关闭）
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
   // 多选「下一步」打开的批量动作菜单（与 ⋯ 菜单同一个 sheet 组件的批量态）
@@ -265,6 +270,35 @@ function NotesContent() {
           }
         });
     }, [load, noteListVersion, noteStatusRecovery, sessionEpoch]),
+  );
+
+  // 草稿箱已取消:编辑到一半被打断(闪退、被杀、退出时没存成)的内容,回到这里时存成笔记。
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUserId) return;
+      let focused = true;
+      const isCurrent = () => {
+        const auth = useAuthStore.getState();
+        return auth.user?.id === currentUserId && auth.sessionEpoch === sessionEpoch;
+      };
+      void publishInterruptedNotes({
+        userId: currentUserId,
+        fallbackTitle: t('notes.edit.untitledNote', { defaultValue: '未命名笔记' }),
+        isCurrent,
+      })
+        .then(({ published, resumeDraft: draft }) => {
+          if (!focused || !isCurrent()) return;
+          setResumeDraft(draft);
+          if (published === 0) return;
+          topNotice.success(t('notes.interruptedSaved', {
+            count: published,
+            defaultValue: '已把 {{count}} 篇没保存完的编辑存成笔记',
+          }));
+          return load();
+        })
+        .catch((error: unknown) => reportHandledFailure('noteRecovery', 'run', error));
+      return () => { focused = false; };
+    }, [currentUserId, load, sessionEpoch, t]),
   );
 
   const reloadAfterMembershipChange = useCallback(async () => {
@@ -432,12 +466,12 @@ function NotesContent() {
   }, [groups, t, tabOrderIds]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
-  const openUnlisted = useCallback(
-    () => router.push('/(tabs)/profile/notes/unlisted' as never),
+  const openRecycleBin = useCallback(
+    () => router.push('/(tabs)/profile/notes/recycle-bin' as never),
     [router],
   );
-  const openDrafts = useCallback(
-    () => router.push('/(tabs)/profile/notes/drafts' as never),
+  const openUnlisted = useCallback(
+    () => router.push('/(tabs)/profile/notes/unlisted' as never),
     [router],
   );
   const openSettings = useCallback(
@@ -948,8 +982,8 @@ function NotesContent() {
             ) : (
               <NotesHeaderActions
                 compact={compactActions}
+                onOpenRecycleBin={openRecycleBin}
                 onOpenUnlisted={openUnlisted}
-                onOpenDrafts={openDrafts}
                 onOpenSettings={openSettings}
               />
             )}
@@ -976,6 +1010,22 @@ function NotesContent() {
             })}
           </Text>
         )}
+
+        {!selectionMode && resumeDraft ? (
+          <Pressable
+            accessibilityRole="button"
+            style={[s.unlistedBtn, d.unlistedBtn, { alignSelf: 'flex-start' }]}
+            onPress={() => router.push(getNoteEditHref(scope, {
+              draftId: resumeDraft.draftId,
+              draftMode: 'recovery',
+              ...(resumeDraft.noteId ? { id: resumeDraft.noteId } : {}),
+            }))}
+          >
+            <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+              {t('notes.resumeInterrupted', { defaultValue: '继续编辑未保存的笔记' })}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <View style={s.tabsRow}>
           <ScrollView

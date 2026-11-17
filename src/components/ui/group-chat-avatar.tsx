@@ -19,6 +19,11 @@ interface GroupChatAvatarProps {
   onImageReady?: () => void;
   /** 临时群聊额外显示金色时钟角标；普通群聊不显示。 */
   temporary?: boolean;
+  /**
+   * 普通群聊显示紫色「多人」角标。会话列表里群头像和单聊头像都是圆角方块，群一旦设了
+   * 头像就和单聊分不出来；临时群仍是时钟角标（它本身就说明是群）。
+   */
+  showGroupBadge?: boolean;
   /** 让临时角标外圈融入所在列表或标题栏的背景。 */
   badgeBorderColor?: string;
   /** 默认圆角方块(与列表里的单聊头像一致);聊天页顶栏的胶囊里用圆形。 */
@@ -37,6 +42,7 @@ export function GroupChatAvatar({
   uri,
   onImageReady,
   temporary = false,
+  showGroupBadge = false,
   badgeBorderColor = FALLBACK_BADGE_BORDER,
   shape = 'square',
 }: GroupChatAvatarProps) {
@@ -122,11 +128,13 @@ export function GroupChatAvatar({
           </Svg>
         )}
       </View>
-      {temporary ? (
+      {temporary || showGroupBadge ? (
         <View
+          testID={temporary ? 'group-avatar-temporary-badge' : 'group-avatar-group-badge'}
           pointerEvents="none"
           style={[
             s.badge,
+            temporary ? s.badgeTemporary : s.badgeGroup,
             {
               width: badgeSize,
               height: badgeSize,
@@ -137,9 +145,9 @@ export function GroupChatAvatar({
           ]}
         >
           <Ionicons
-            name="time-outline"
+            name={temporary ? 'time-outline' : 'people'}
             size={Math.round(badgeSize * 0.58)}
-            color="#5A3600"
+            color={temporary ? '#5A3600' : '#FFFFFF'}
           />
         </View>
       ) : null}
@@ -158,6 +166,8 @@ const s = StyleSheet.create({
     bottom: -3,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFC857',
   },
+  badgeTemporary: { backgroundColor: '#FFC857' },
+  // 与默认群头像渐变的中段同一个品牌紫。
+  badgeGroup: { backgroundColor: '#7467F5' },
 });

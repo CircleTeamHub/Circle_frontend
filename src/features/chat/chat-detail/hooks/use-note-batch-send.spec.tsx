@@ -7,6 +7,7 @@ import type { NoteCardData } from '@/types';
 import { act, renderHook } from '@testing-library/react-native';
 import type { NoteSummary } from '@/features/notes/types';
 import { useAppDialogStore } from '@/components/app/app-dialog-store';
+import { useNoteSectionSendStore } from '@/features/chat/store/use-note-section-send-store';
 import { useNoteBatchSend } from './use-note-batch-send';
 
 jest.mock('@/services/api/notes', () => ({
@@ -53,7 +54,9 @@ beforeEach(() => {
     (send: (callback: () => void) => Promise<unknown>) => ({ queued: true, delivered: Promise.resolve(send(() => {})) }),
   );
   jest.mocked(sendCardMessage).mockReset().mockResolvedValue({} as never);
+  jest.mocked(fetchNoteDetail).mockReset();
   useAppDialogStore.getState().reset();
+  useNoteSectionSendStore.setState({ sending: {} });
 });
 
 afterEach(() => {
@@ -124,15 +127,42 @@ describe('handleSendNoteSection', () => {
   test.each([
     ['media', ['media']],
     ['showcase', ['showcase']],
-  ] as const)('the %s chip copies only that section straight away, without loading the note first', async (section, expected) => {
+  ] as const)('the %s chip copies only that section straight away, without waiting for the note to load', async (section, expected) => {
+    // 卡片上有视频:详情(截封面用)和拷贝同时拉;详情迟迟不回,拷贝也照样已经发出。
+    jest.mocked(fetchNoteDetail).mockImplementationOnce(() => new Promise(() => {}));
     jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
     const hook = create('conversation-a');
     await act(async () => { await hook.result.current.handleSendNoteSection(card, section); });
-    expect(fetchNoteDetail).not.toHaveBeenCalled();
     expect(importNoteChatMedia).toHaveBeenCalledWith('note-a', expected);
     expect(sendCardMessage).not.toHaveBeenCalled();
-    // 消息进队就出现在会话里:不再弹「正在发送…」。
+    // 进度显示在卡片标签上,不弹「正在发送…」。
     expect(showTopNotice).not.toHaveBeenCalled();
+  });
+
+  test('a note without videos is never loaded for a poster', async () => {
+    jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
+    const hook = create('conversation-a');
+    await act(async () => {
+      await hook.result.current.handleSendNoteSection({ ...card, videoCount: 0 }, 'showcase');
+    });
+    expect(fetchNoteDetail).not.toHaveBeenCalled();
+    expect(importNoteChatMedia).toHaveBeenCalledWith('note-a', ['showcase']);
+  });
+
+  test('the chip shows as sending from the tap until the section has gone out', async () => {
+    let resolveImport!: (value: unknown) => void;
+    const pendingImport = new Promise((resolve) => { resolveImport = resolve; });
+    jest.mocked(fetchNoteDetail).mockImplementationOnce(() => new Promise(() => {}));
+    jest.mocked(importNoteChatMedia).mockImplementationOnce(() => pendingImport as never);
+    const hook = create('conversation-a');
+    let pending!: Promise<void>;
+    act(() => { pending = hook.result.current.handleSendNoteSection(card, 'media'); });
+    expect(useNoteSectionSendStore.getState().sending).toEqual({ 'note-a:media': 1 });
+    await act(async () => {
+      resolveImport({ items: [] });
+      await pending;
+    });
+    expect(useNoteSectionSendStore.getState().sending).toEqual({});
   });
 
   test('the location chip sends the note location as my message', async () => {
@@ -177,6 +207,7 @@ describe('handleSendNoteSection', () => {
   test('tapping the same chip again while it is still sending sends it only once', async () => {
     let resolveImport!: (value: unknown) => void;
     const pendingImport = new Promise((resolve) => { resolveImport = resolve; });
+    jest.mocked(fetchNoteDetail).mockImplementation(() => new Promise(() => {}));
     jest.mocked(importNoteChatMedia).mockImplementationOnce(() => pendingImport as never);
     const hook = create('conversation-a');
     let first!: Promise<void>;
@@ -243,6 +274,30 @@ describe('handleSendNoteSection', () => {
         thumbKey: undefined,
       }));
       expect(setSendError).not.toHaveBeenCalled();
+    });
+
+    test('a poster capture that hangs on a large video does not hold the video back', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
+        jest.mocked(fetchNoteDetail).mockResolvedValueOnce(withVideo as never);
+        jest.mocked(uploadChatVideoPoster).mockImplementationOnce(() => new Promise(() => {}));
+        const hook = create('conversation-a');
+        let pending!: Promise<void>;
+        act(() => { pending = hook.result.current.handleSendNoteSection(card, 'showcase'); });
+        await act(async () => { await jest.advanceTimersByTimeAsync(9_000); });
+        expect(sendVideoMessage).not.toHaveBeenCalled();
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(1_500);
+          await pending;
+        });
+        expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({
+          key: 'chat/me/note-import/abc.mp4',
+          thumbKey: undefined,
+        }));
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test('still go out without a poster when no frame can be captured', async () => {

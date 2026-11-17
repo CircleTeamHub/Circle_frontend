@@ -48,6 +48,9 @@ let mockRegistered = false;
 let mockNativeIdle: (() => void) | undefined;
 jest.mock('expo-video', () => ({ clearVideoCacheAsync: jest.fn(() => Promise.resolve()) }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
+jest.mock('@/features/chat/hooks/use-video-frame-fallback', () => ({
+  useVideoFrameFallback: jest.fn(() => undefined),
+}));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -165,9 +168,34 @@ describe('VideoBubble poster', () => {
     expect(posterProps.at(-1)?.cachePolicy).toBe('memory-disk');
   });
 
-  it('keeps the plain dark frame for older videos without a poster', () => {
+  it('keeps the plain dark frame for a video without a poster until a frame is captured', () => {
     render(<VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} />);
     expect(screen.queryByTestId('chat-video-poster')).toBeNull();
+    expect(screen.queryByTestId('chat-video-fallback-poster')).toBeNull();
+  });
+
+  // 没封面(老消息、封面截失败、还在上传)的视频:在本机截一帧顶上,不再是一块黑。
+  it('shows a frame captured on the device when the video has no poster', () => {
+    const { useVideoFrameFallback } = jest.requireMock('@/features/chat/hooks/use-video-frame-fallback');
+    useVideoFrameFallback.mockReturnValue('file:///cache/frame.jpg');
+    try {
+      render(<VideoBubble message={{ ...video, deliveryId: 'video-delivery' } as ChatMessage} outgoing onVideoPress={jest.fn()} />);
+      expect(useVideoFrameFallback).toHaveBeenLastCalledWith(video.videoUrl, 'video-delivery', true);
+      expect(screen.getByTestId('chat-video-fallback-poster')).toBeTruthy();
+      expect(posterProps.at(-1)?.source).toEqual({ uri: 'file:///cache/frame.jpg' });
+      expect(posterProps.at(-1)?.cachePolicy).toBe('memory');
+      expect(screen.getByText('play')).toBeTruthy();
+    } finally {
+      useVideoFrameFallback.mockReturnValue(undefined);
+    }
+  });
+
+  it('does not capture a frame when the server sent a poster or the video is disappearing', () => {
+    const { useVideoFrameFallback } = jest.requireMock('@/features/chat/hooks/use-video-frame-fallback');
+    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(useVideoFrameFallback).toHaveBeenLastCalledWith(video.videoUrl, 'v1', false);
+    render(<VideoBubble message={{ ...video, burnDurationSec: 30 } as ChatMessage} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(useVideoFrameFallback).toHaveBeenLastCalledWith(video.videoUrl, 'v1', false);
   });
 
   it('keeps a disappearing video poster out of the disk cache', () => {

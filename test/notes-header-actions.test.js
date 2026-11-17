@@ -26,8 +26,9 @@ test('页头入口不垫底色块，只有图标和文字', () => {
   assert.doesNotMatch(actions, /colors\.surface/);
 });
 
-test('入口都带文字标签和无障碍名称（回收站已取消）', () => {
-  for (const key of ['notes.unlisted', 'notes.drafts.title', 'notes.settings.entry']) {
+test('入口都带文字标签和无障碍名称（回收站 / 已下架 / 设置；草稿箱已取消）', () => {
+  assert.doesNotMatch(actions, /notes\.drafts\.title|onOpenDrafts/);
+  for (const key of ['notes.recycleBin', 'notes.unlisted', 'notes.settings.entry']) {
     assert.match(actions, new RegExp(key.replace(/\./g, '\\.')));
   }
   assert.match(actions, /accessibilityLabel=\{action\.label\}/);

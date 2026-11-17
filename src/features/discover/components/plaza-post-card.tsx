@@ -9,7 +9,12 @@ import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getChatDetailHref, getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
+import {
+  getChatDetailHref,
+  getNoteDetailHref,
+  type CircleScope,
+} from '@/features/user/utils/routes';
+import { NoteCardBody, type NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useNavigationLock } from '@/hooks/use-navigation-lock';
@@ -463,25 +468,23 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     }
   }, [signed, post.id, post.canSignup, buildSignupReasonText, chatLock, openAuthorChat, t]);
 
-  const handleAvatarPress = useCallback(() => {
-    if (!post.canInteract) {
-      // 和报名那条路一样：门槛只剩前端隐藏项（靓号）时 requirements 是空串，
-      // 原来弹的是「需要 才能查看对方主页」这种半截话。
-      const requirements = buildRestrictionReasonText(post.restrictions, t, {
-        showFancyNumber: FEATURE_FLAGS.fancyNumbers,
-      });
-      Alert.alert(
-        t('plaza.cannotView'),
-        requirements
-          ? t('plaza.restrictionMessage', { requirements })
-          : t('plaza.profileBlockedGeneric', {
-              defaultValue: '你暂不满足查看对方主页的条件',
-            }),
+  const noteCard = post.noteCard;
+  const noteOpenable = Boolean(noteCard) && noteCard?.publicationStatus !== 'DELETED';
+  const [noteCardWidth, setNoteCardWidth] = useState(0);
+  const handleOpenNote = useCallback(
+    (section: NoteCardSection | '') => {
+      if (!noteCard) return;
+      router.push(
+        getNoteDetailHref(
+          scope,
+          noteCard.noteId,
+          noteCard.ownerId ?? post.author.id,
+          section === 'text' ? '' : section,
+        ),
       );
-      return;
-    }
-    router.navigate(getUserProfileHref(scope, post.author.id));
-  }, [post.canInteract, post.restrictions, post.author.id, router, scope, t]);
+    },
+    [noteCard, post.author.id, router, scope],
+  );
 
   const timeLabel = useMemo(
     () => formatRelativeTime(post.createdAt, t),
@@ -509,18 +512,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   return (
     <View style={d.card}>
       <View style={[s.accent, { backgroundColor: accentColor }]} testID="plaza-card-accent" />
-      {/* Header */}
+      {/* Header：圈子动态里发帖人的头像、名字只展示、点不进主页（产品要求 2026-11-16）；
+          想联系对方走报名，报名成功直接进私聊。 */}
       <View style={s.header}>
-        <Pressable onPress={handleAvatarPress}>
+        <View testID="plaza-card-author-avatar">
           <Avatar
             size={40}
             name={post.author.nickname}
             uri={post.author.avatarUrl ?? undefined}
           />
-        </Pressable>
+        </View>
         <View style={s.headerText}>
           <View style={s.nameRow}>
-            <Pressable onPress={handleAvatarPress} style={s.nameShrink}>
+            <View style={s.nameShrink}>
               <MemberName
                 name={post.author.nickname}
                 userId={post.author.id}
@@ -528,7 +532,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
                 style={d.authorName}
                 numberOfLines={1}
               />
-            </Pressable>
+            </View>
             {authorDisplayIcons.length > 0 ? (
               <View style={s.authorBadgeRow}>
                 {/* 第一行只剩用户名 + 身份徽章（圈子标签已下移）：固定展示前 3 枚，
@@ -605,6 +609,27 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         ] : undefined}
         uniformCells
       />
+
+      {/* 挂的笔记:和聊天里的笔记卡片同一个样子。点卡片 / 分块打开笔记详情(到对应分块),
+          开在卡片所在的 tab 栈里;已删除的笔记只留提示,点不开。宽度跟着帖子内容区走。 */}
+      {noteCard ? (
+        <View
+          testID="plaza-card-note"
+          onLayout={(event) => setNoteCardWidth(Math.floor(event.nativeEvent.layout.width))}
+        >
+          {noteCardWidth > 0 ? (
+            // 收到方的白底和帖子卡片同色,会和正文糊成一片;用聊天里自己发出的那套
+            // 主题紫底白字,一眼看出这是挂上的笔记。
+            <NoteCardBody
+              note={noteCard}
+              outgoing
+              width={noteCardWidth}
+              onPress={noteOpenable ? () => handleOpenNote('') : undefined}
+              onSectionPress={noteOpenable ? (_note, section) => handleOpenNote(section) : undefined}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
       {/* 底栏一行:左边报名条件(始终显示;绑定 signup-restriction 集,即后端 403 实际校验的那套,
           无门槛时显示"不限制"),右边自己的帖子显示报名人数(点进报名管理)、别人的帖子显示报名按钮。 */}

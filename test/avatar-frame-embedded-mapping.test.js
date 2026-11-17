@@ -172,6 +172,8 @@ test('plaza feed author preserves normalized avatarFrameAppearance', async () =>
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
       if (request === './image-media') return imageMediaShim();
+      // 帖子挂的笔记卡片(这条没有)。
+      if (request === '@/chat-core/message-mappers') return { sanitizeNoteCard: (value) => value };
       throw new Error(`Unexpected import: ${request}`);
     },
   });

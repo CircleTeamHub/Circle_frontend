@@ -54,6 +54,13 @@ test('selects a popular city and keeps the selection while searching the full li
   expect(mockBack).toHaveBeenCalledTimes(1);
 });
 
+// 帖子城市必选:「全国」存下来是空城市,广场按城市筛选时哪个城市都看不到这条帖子。
+test('posting offers real cities only, no 全国', () => {
+  usePostFormStore.setState({ selectedCities: [] });
+  render(<SelectCityScreen />);
+  expect(screen.queryByText('city.nationwide')).toBeNull();
+});
+
 test('the note title picks exactly one city, starts from the current one and hides 全国', () => {
   mockParams = { target: 'note', city: '上海' };
   render(<SelectCityScreen />);

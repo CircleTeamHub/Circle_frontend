@@ -88,7 +88,7 @@ jest.mock('@/services/api/upload', () => ({
 }));
 
 test('publishes a selected video with photos in separate media fields', async () => {
-  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: ['上海'], selectedNote: null });
   mockFetchMyCircles.mockResolvedValue({ ok: true, created: [], joined: [circle] });
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
     canceled: false,
@@ -135,6 +135,26 @@ test('publishes a selected video with photos in separate media fields', async ()
   expect(mockBack).toHaveBeenCalledTimes(1);
 });
 
+// 广场按城市筛选只认帖子的 cities:没城市的帖子在任何城市下都看不到,所以城市必选。
+test('a post cannot be published until a city is chosen, and says so', async () => {
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  render(<CreatePostScreen />);
+  fireEvent.changeText(screen.getByPlaceholderText('plaza.create.contentPlaceholder'), 'No city yet');
+  expect(screen.getByTestId('create-post-missing')).toHaveTextContent('plaza.create.cityRequired');
+  fireEvent.press(screen.getByText('plaza.create.submit'));
+  await Promise.resolve();
+  expect(createPlazaPost).not.toHaveBeenCalled();
+
+  usePostFormStore.setState({ selectedCities: ['上海', '杭州'] });
+  await waitFor(() => expect(screen.queryByTestId('create-post-missing')).toBeNull());
+  jest.mocked(createPlazaPost).mockResolvedValue({ id: 'published' } as never);
+  fireEvent.press(screen.getByText('plaza.create.submit'));
+  await waitFor(() => expect(createPlazaPost).toHaveBeenCalledWith(
+    expect.objectContaining({ cities: ['上海', '杭州'] }),
+    { idempotencyKey: 'post-key' },
+  ));
+});
+
 function mockPresign() {
   jest.mocked(requestUploadPresign).mockImplementation(async ({ filename, contentType }) => ({
     uploadUrl: 'https://upload.test',
@@ -145,7 +165,7 @@ function mockPresign() {
 }
 
 test('uploads photos right after they are picked and publishing does not upload them again', async () => {
-  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: ['上海'], selectedNote: null });
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
     canceled: false,
     assets: [{ type: 'image', uri: 'file:///photo.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg', width: 1200, height: 800 }],
@@ -170,7 +190,7 @@ test('uploads photos right after they are picked and publishing does not upload 
 });
 
 test('a photo that failed in the background is uploaded again on publish', async () => {
-  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: [], selectedNote: null });
+  usePostFormStore.setState({ selectedCircles: [circle], selectedCities: ['上海'], selectedNote: null });
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
     canceled: false,
     assets: [{ type: 'image', uri: 'file:///photo.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg', width: 1200, height: 800 }],

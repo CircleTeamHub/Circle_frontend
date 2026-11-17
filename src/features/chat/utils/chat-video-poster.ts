@@ -1,5 +1,6 @@
 import { createVideoPlayer, type VideoPlayer } from 'expo-video';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { reportHandledFailure } from '@/observability/report-failure';
 import {
   requestUploadPresign,
   sanitizeUploadFilename,
@@ -11,7 +12,11 @@ const POSTER_JPEG_QUALITY = 0.7;
 /** 很多视频第一帧是黑的(淡入、相机刚启动),取第 0.5 秒;不到一秒的短片取第一帧。 */
 const POSTER_FRAME_SECONDS = 0.5;
 
-async function generateChatVideoPoster(
+/**
+ * 从视频(本机文件或远端地址)截一帧,存成本机 JPEG。截不到返回 null。
+ * 不支持 Web(expo-video 在 Web 上没有截帧)。
+ */
+export async function captureVideoPosterFrame(
   uri: string,
   durationSeconds: number | undefined,
 ): Promise<{ uri: string } | null> {
@@ -36,7 +41,9 @@ async function generateChatVideoPoster(
       format: SaveFormat.JPEG,
     });
     return { uri: saved.uri };
-  } catch {
+  } catch (error) {
+    // 截帧失败 = 气泡没封面、一块黑。原来静默吞掉,线上完全看不出是哪一步、哪个平台坏了。
+    reportHandledFailure('chatVideoPoster', 'captureFrame', error);
     return null;
   } finally {
     // 这个播放器不跟组件走,用完必须手动释放,否则原生解码器一直占着。
@@ -61,7 +68,7 @@ export async function uploadChatVideoPoster(
   progressKey?: string,
 ): Promise<{ key: string } | null> {
   try {
-    const poster = await generateChatVideoPoster(uri, durationSeconds);
+    const poster = await captureVideoPosterFrame(uri, durationSeconds);
     if (!poster) return null;
     const base = filename.replace(/\.[^./]*$/, '') || 'video';
     const presign = await requestUploadPresign({

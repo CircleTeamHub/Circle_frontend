@@ -223,7 +223,7 @@ export default function SelectCityScreen() {
       isMultiSelect,
       singleCity: singlePick ? (params.city ?? null) : null,
       multiCities,
-      // 发帖城市为可选标签，空 = 不限定（非「全国」）；仅建圈空选才视为全国。
+      // 发帖城市必选（空 = 还没选，不是「全国」）；仅建圈空选才视为全国。
       emptyMultiSelectIsNationwide: target === 'circle',
     });
 
@@ -376,8 +376,9 @@ export default function SelectCityScreen() {
         </View>
       ) : null}
 
-      {/* Nationwide option：单选入口（笔记城市、大众点评榜）自己处理「不选/全国」，这里不出现。 */}
-      {singlePick ? null : (
+      {/* Nationwide option：单选入口（笔记城市、大众点评榜）自己处理「不选/全国」，这里不出现。
+          发帖也不出现：帖子城市必选，「全国」存下来是空城市，广场按城市筛选时哪个城市都看不到它。 */}
+      {singlePick || target === 'post' ? null : (
         <>
           <Pressable style={s.nationwideRow} onPress={toggleNationwide}>
             <View style={s.nationwideLeft}>

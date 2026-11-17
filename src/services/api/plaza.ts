@@ -5,6 +5,7 @@ import {
   allowPeerMediaUrl,
 } from '@/services/api/utils';
 import { normalizeImageMedia } from './image-media';
+import { sanitizeNoteCard } from '@/chat-core/message-mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { clearPageSnapshots } from '@/storage/page-snapshots';
 import type {
@@ -19,8 +20,10 @@ import type {
   AvatarFrameAppearance,
 } from '@/types';
 
-type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author' | 'videos'> & {
+type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author' | 'videos' | 'noteCard'> & {
   videos?: unknown;
+  /** 旧后端不下发；字段同聊天笔记卡片载荷，进来先过 sanitizeNoteCard。 */
+  noteCard?: unknown;
   author: Omit<
     CirclePlazaPost['author'],
     'avatarFrame' | 'avatarFrameAppearance'
@@ -72,6 +75,11 @@ export function normalizePlazaPost(
         return url ? [url] : [];
       })
     : [];
+  // 帖子作者可控的载荷：和聊天里的笔记卡片同样只认白名单字段、图片地址过 allowPeerMediaUrl。
+  const noteCard =
+    post.noteCard && typeof post.noteCard === 'object' && !Array.isArray(post.noteCard)
+      ? sanitizeNoteCard(post.noteCard as Record<string, unknown>)
+      : null;
   return {
     ...post,
     // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
@@ -83,6 +91,8 @@ export function normalizePlazaPost(
     // 后端若漏发 expiresAt，类型声明为 string 会骗过 TS，运行时拿到 undefined → new Date() 变 Invalid Date。
     // 与 normalizeMyPost 对齐，统一兜成 ''，由展示层判空。
     expiresAt: typeof post.expiresAt === 'string' ? post.expiresAt : '',
+    // 没有 id 的卡片点不开，当成没挂笔记。
+    noteCard: noteCard?.noteId ? noteCard : null,
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl

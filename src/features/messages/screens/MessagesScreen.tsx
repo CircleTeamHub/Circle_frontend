@@ -625,6 +625,7 @@ function ConversationRowImpl({
               name={item.name}
               uri={item.avatarUrl}
               temporary={item.isTempChat}
+              showGroupBadge
               badgeBorderColor={badgeBorderColor}
             />
             </Pressable>

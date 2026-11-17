@@ -1088,7 +1088,8 @@
         "note": "Note",
         "video": "Video",
         "display": "Display",
-        "location": "Location"
+        "location": "Location",
+        "sending": "Sending"
       },
       "imageCount": "{{count}} images",
       "videoCount": "{{count}} videos",
@@ -1584,6 +1585,7 @@
     "selectNote": "Attach Note",
     "noNote": "None",
     "notePicker": {
+      "onlyListedHint": "Only listed notes can be attached",
       "title": "Select Note",
       "searchPlaceholder": "Enter note title",
       "none": "Don't link a note",
@@ -1598,8 +1600,6 @@
     "tagsLabel": "Tags (up to 5)",
     "tagPlaceholder": "Enter tag keyword",
     "publishFailed": "Publish Failed",
-    "cannotView": "Cannot View",
-    "restrictionMessage": "Requires {{requirements}} to view this profile",
     "create": {
       "allUploadsFailed": "Could not upload media. Check your connection and try again.",
       "pickerFailed": "Cannot select photos or videos",
@@ -1614,6 +1614,10 @@
       "selectCircle": "Select circle",
       "selectCity": "Select city",
       "pleaseSelect": "Please select",
+      "contentRequired": "Write something to post",
+      "circleRequired": "Choose at least one circle",
+      "cityRequired": "Choose a city",
+      "pleaseSelectRequired": "Select (required)",
       "expiryLabel": "Post expiry",
       "expiryPickerTitle": "Choose post expiry",
       "expiry6h": "Expires in 6 hours",
@@ -1668,7 +1672,6 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
-    "profileBlockedGeneric": "You do not meet the requirements to view this profile yet",
     "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {
@@ -2943,6 +2946,8 @@
       "editNote": "Edit note",
       "editGroups": "Edit groups",
       "delete": "Delete",
+      "restore": "Restore",
+      "purge": "Delete now",
       "download": "Download"
     },
     "alerts": {
@@ -2968,14 +2973,18 @@
       "refreshFailedTitle": "Refresh failed",
       "remarkFailedTitle": "Failed to save remark",
       "deleteTitle": "Delete note",
-      "deleteConfirm": "Deleted notes can't be recovered. To keep a way back, unlist it instead: you can relist it within 60 days.",
+      "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
+      "restoreFailedTitle": "Restore failed",
+      "restoreSourceDeleted": "The original note was deleted, so this saved copy can't be restored.",
+      "purgeTitle": "Delete note now?",
+      "purgeConfirm": "The note will be permanently deleted and cannot be recovered.",
       "batchFailedTitle": "Some actions failed",
       "batchPartialFailed": "{{count}} notes failed and remain selected. Please try again.",
       "batchUnlistTitle": "Unlist notes",
       "batchUnlistConfirm": "Unlist the {{count}} selected notes? Unlisted notes are deleted after 60 days; you can relist them any time before that.",
       "batchDeleteTitle": "Delete notes",
-      "batchDeleteConfirm": "Delete the {{count}} selected notes? This can't be undone.",
-      "deleteUnlistedConfirm": "Deleted notes can't be recovered. If you leave it, it is deleted automatically when its 60 days are up."
+      "batchDeleteConfirm": "Delete the {{count}} selected notes? They can be recovered from the recycle bin.",
+      "deleteUnlistedConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2994,22 +3003,8 @@
       "openGroupSource": "View the original message in \"{{name}}\""
     },
     "drafts": {
-      "title": "Drafts",
-      "empty": "Your drafts are empty",
-      "deleteTitle": "Delete draft?",
-      "deleteMessage": "This draft cannot be recovered after deletion.",
-      "deleteUnconfirmedMessage": "The save result for this draft hasn't been confirmed: the server may not have saved it, or may have saved content that differs from this draft. The draft can't be recovered after deletion, so consider opening it to check first.",
-      "deleteAnyway": "Delete anyway",
-      "untitled": "Untitled note",
-      "noContent": "No content yet",
-      "mediaCount": "{{count}} media files",
-      "deleteLabel": "Delete draft",
-      "deleteFailed": "Could not delete the draft. Please try again.",
-      "pendingSubmitDeleteBlocked": "The save result for this draft is still unconfirmed. Open it and retry the original save before deciding whether to delete it.",
-      "deletePending": "Local cleanup or server deletion is still pending. The content is hidden; retry to finish deleting it.",
-      "saveFailed": "Could not save the draft. Please try again.",
-      "mediaCount_one": "{{count}} media file",
-      "mediaCount_other": "{{count}} media files"
+      "saveFailed": "Could not save your changes. Please try again.",
+      "deleteFailed": "Could not clean up. Please try again."
     },
     "edit": {
       "addImage": "Add image",
@@ -3059,9 +3054,9 @@
       "audioRecording": "Recording, tap to stop",
       "waitForMediaTitle": "Finish the current action first",
       "waitForMediaMessage": "Stop recording or wait for the upload or save to finish before leaving.",
-      "pendingSubmitMessage": "Confirming the save result. Editing is paused; your content is saved in a local draft. Retry to confirm the original save.",
+      "pendingSubmitMessage": "Confirming the save result. Editing is paused; your content is kept on this device. Retry to confirm the original save.",
       "pendingSubmitStorageFailed": "The submission could not be kept on this device and has not been sent. Check available storage and retry.",
-      "pendingSubmitConflict": "Confirming the save result. Editing is paused; your content is saved in a local draft. Retry to confirm the original save.",
+      "pendingSubmitConflict": "Confirming the save result. Editing is paused; your content is kept on this device. Retry to confirm the original save.",
       "openCommittedNote": "View saved note",
       "audioDuration": "{{seconds}} s",
       "audioPickerUnavailableTitle": "Audio selection unavailable",
@@ -3080,6 +3075,12 @@
       },
       "validationTitle": "Check your note",
       "titleRequired": "Please enter a title",
+      "untitledNote": "Untitled note",
+      "keepEditing": "Keep editing",
+      "exitWithoutSaving": "Leave without saving",
+      "exitMediaNotUploaded": "Some photos, videos or recordings haven't finished uploading. Keep editing to upload them again, or leave without saving.",
+      "exitSaveLater": "The connection is poor, so this wasn't saved. You can leave now; it will be saved as a note when you come back to My notes.",
+      "exitAndSaveLater": "Leave for now",
       "titleHint": "Title required, up to {{max}} characters",
       "textTooLong": "The body, including the line breaks between paragraphs, can contain up to {{max}} characters; you have {{count}}. Your text is preserved. Shorten it before saving.",
       "tooManyParagraphs": "Text can contain up to {{max}} paragraphs. Your text is preserved. Combine some paragraphs before saving.",
@@ -3139,7 +3140,8 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes"
+      "noUnlisted": "No unlisted notes",
+      "noDeleted": "The recycle bin is empty"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -3185,6 +3187,11 @@
     },
     "title": "My notes",
     "unlisted": "Unlisted",
+    "recycleBin": "Recycle bin",
+    "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
+    "recycleBinTitle": "Recycle bin",
+    "interruptedSaved": "Saved {{count}} unfinished edits as notes",
+    "resumeInterrupted": "Continue editing the unsaved note",
     "unlistedTitle": "Unlisted notes",
     "unlistedAutoDeleteHint": "Unlisted notes are deleted after 60 days and can be relisted any time before that. Others still see them, marked \"Off shelf\".",
     "format": {
@@ -3957,7 +3964,7 @@
     "FRIEND_LIMIT_REACHED": "You've reached your friend limit — upgrade for more",
     "NOTE_GROUP_EXISTS": "A group with that name already exists",
     "NOTE_STORAGE_QUOTA_REACHED": "You've reached your membership tier's note storage limit",
-    "NOTE_PUBLICATION_QUOTA_REACHED": "This note has reached its save limit. Keep your draft and save the added content as a new note.",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "This note has reached its save limit. Save the added content as a new note.",
     "NOTE_GROUP_LIMIT": "You've reached the note group limit",
     "NOTE_EXPORT_NO_MEDIA": "No exportable media found",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "A media file is too large to export",

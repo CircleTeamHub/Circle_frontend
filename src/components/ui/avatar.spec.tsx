@@ -42,6 +42,16 @@ test('avatars without an identity still clear an old list item when their source
   expect(screen.queryByLabelText('https://image.test/a')).toBeNull();
 });
 
+test('a group avatar can carry a group badge, and a temporary group keeps its clock instead', () => {
+  const view = render(<GroupChatAvatar uri="https://image.test/group" showGroupBadge />);
+  expect(screen.getByTestId('group-avatar-group-badge')).toBeTruthy();
+  view.rerender(<GroupChatAvatar uri="https://image.test/group" temporary showGroupBadge />);
+  expect(screen.getByTestId('group-avatar-temporary-badge')).toBeTruthy();
+  expect(screen.queryByTestId('group-avatar-group-badge')).toBeNull();
+  view.rerender(<GroupChatAvatar uri="https://image.test/group" />);
+  expect(screen.queryByTestId(/^group-avatar-.*-badge$/)).toBeNull();
+});
+
 test('keeps the default avatar behind a pending image and after a failed load', () => {
   render(<Avatar identityKey="account-a" uri="https://image.test/pending" />);
   expect(screen.getByTestId('avatar-fallback')).toBeTruthy();

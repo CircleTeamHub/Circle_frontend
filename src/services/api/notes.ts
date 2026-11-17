@@ -55,6 +55,10 @@ export function getCachedNoteDrafts() {
   return readPageSnapshot<NoteDraftSummary[]>(useAuthStore.getState().user?.id, 'drafts:summaries');
 }
 
+export function getCachedDeletedNotes() {
+  return readPageSnapshot<NoteSummary[]>(useAuthStore.getState().user?.id, 'notes:recycle');
+}
+
 function sanitizeNoteMediaItem<T extends Record<string, unknown>>(item: T): T {
   const next = { ...item };
   const record = next as Record<string, unknown>;
@@ -538,7 +542,30 @@ export async function setNoteSourceGroup(
   ));
 }
 
-/** 删除即永久删除（回收站已取消）；想留后悔余地用下架，60 天内可重新上架。 */
+/** 回收站：已删除（30 天内可恢复）的笔记列表。 */
+export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  const notes = (await apiClient<NoteSummary[]>('/note/recycle-bin')).map(sanitizeNoteSummary);
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(user?.id, 'notes:recycle', notes, startedAt);
+  }
+  return notes;
+}
+
+/** 回收站「立即删除」：不等 30 天到期，直接永久删除（只接受已在回收站的笔记）。 */
+export async function purgeNote(id: string): Promise<void> {
+  await markNoteWrite(apiClient<void>(`/note/${id}/permanent`, { method: 'DELETE' }));
+}
+
+/** 回收站：恢复已删除的笔记。 */
+export async function restoreNote(id: string): Promise<void> {
+  return markNoteWrite(apiClient<void>(`/note/${id}/restore`, { method: 'POST' }));
+}
+
+/** 删除 = 进回收站，30 天内可恢复，到期由服务端永久删除。 */
 export async function deleteNote(id: string): Promise<void> {
   await markNoteWrite(apiClient<void>(`/note/${id}`, { method: 'DELETE' }));
 }

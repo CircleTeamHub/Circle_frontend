@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
 import { cancelSignup, fetchPlazaPost, signupForPost } from '@/services/api/plaza';
 import { ApiError } from '@/services/api/api-error';
@@ -19,8 +19,9 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush, navigate: jest.fn() }),
+  useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
   // The card's screen never regains focus in these tests, so a navigation lock stays held.
   useFocusEffect: jest.fn(),
 }));
@@ -51,6 +52,7 @@ jest.mock('@/components/ui/member-name', () => {
 jest.mock('./image-grid', () => ({ ...jest.requireActual('./image-grid'), ImageGrid: () => null }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
 jest.mock('./plaza-post-actions-sheet', () => ({ PlazaPostActionsSheet: () => null }));
+jest.mock('@/features/notes/components/NoteRatingCounts', () => ({ NoteRatingCounts: () => null }));
 
 const noLimits = { vipLevel: null, creditScore: null, fancyNumber: false };
 const post: CirclePlazaPost = {
@@ -62,6 +64,7 @@ const post: CirclePlazaPost = {
   cities: [],
   isHorn: false,
   noteId: null,
+  noteCard: null,
   restrictions: noLimits,
   signupCount: 0,
   signedByMe: false,
@@ -86,6 +89,7 @@ const post: CirclePlazaPost = {
 beforeEach(() => {
   mockUserId = 'me';
   mockPush.mockReset();
+  mockNavigate.mockReset();
   jest.mocked(ensureDirectConversation).mockReset().mockResolvedValue({ conversationID: 'dm-author' } as never);
   jest.mocked(signupForPost).mockReset();
   jest.mocked(cancelSignup).mockReset();
@@ -106,6 +110,85 @@ test('signing up opens the chat with the poster in the same tab stack', async ()
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/(tabs)/discover/chat-detail',
     params: { sourceID: 'author', conversationType: 'private', title: '丁哥只认钱', conversationID: 'dm-author' },
+  });
+});
+
+// 圈子动态里发帖人的头像、名字只展示，点不进主页（产品要求 2026-11-17）：想联系对方走报名。
+test("the poster's avatar and name do not open their profile", () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    render(<PlazaPostCard post={{ ...post, canInteract: false }} scope="discover" />);
+    fireEvent.press(screen.getByTestId('plaza-card-author-avatar'));
+    fireEvent.press(screen.getByText('丁哥只认钱'));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(alert).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '丁哥只认钱' })).toBeNull();
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+describe('the note attached to a post', () => {
+  const noteCard = {
+    noteId: 'note-1',
+    ownerId: 'author',
+    title: '外滩夜景机位',
+    contentPreview: '三个机位',
+    coverUrl: null,
+    previewUrls: [],
+    imageCount: 2,
+    videoCount: 0,
+    showcaseCount: 2,
+    hasText: true,
+    hasLocation: true,
+    groupNames: [],
+    workStatus: 'UNSET' as const,
+    publicationStatus: 'ACTIVE' as const,
+  };
+  const layoutNote = () =>
+    fireEvent(screen.getByTestId('plaza-card-note'), 'layout', {
+      nativeEvent: { layout: { width: 320, height: 0, x: 0, y: 0 } },
+    });
+
+  test('shows as a note card and opens the note, or the tapped section, in the same tab stack', () => {
+    // themeColors() renders its own probe, so read it before rendering the card.
+    const { sentBubble } = themeColors();
+    render(<PlazaPostCard post={{ ...post, noteId: 'note-1', noteCard }} scope="messages" />);
+    layoutNote();
+    expect(screen.getByText('外滩夜景机位')).toBeTruthy();
+    // 和帖子正文拉开：卡片本身是主题紫（聊天里自己发出的样式），宽度跟着内容区走，外面不再套框。
+    const cardStyle = StyleSheet.flatten(screen.getByTestId('note-card-body').props.style);
+    expect(cardStyle.backgroundColor).toBe(sentBubble);
+    expect(cardStyle.width).toBe(320);
+    expect(screen.queryByText('附带笔记')).toBeNull();
+    fireEvent.press(screen.getByTestId('note-card-body'));
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: '/(tabs)/messages/notes/[id]',
+      params: { id: 'note-1', ownerId: 'author' },
+    });
+    fireEvent.press(screen.getByTestId('note-card-chip-location'));
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: '/(tabs)/messages/notes/[id]',
+      params: { id: 'note-1', ownerId: 'author', section: 'location' },
+    });
+  });
+
+  test('a deleted note says so and does not open', () => {
+    render(
+      <PlazaPostCard
+        post={{ ...post, noteId: 'note-1', noteCard: { ...noteCard, publicationStatus: 'DELETED' } }}
+      />,
+    );
+    layoutNote();
+    expect(screen.getByText('笔记已删除')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('note-card-body'));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test('a post without a note shows no note card', () => {
+    render(<PlazaPostCard post={post} />);
+    expect(screen.queryByTestId('plaza-card-note')).toBeNull();
   });
 });
 

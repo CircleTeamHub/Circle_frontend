@@ -163,6 +163,7 @@ import {
   retainDeletedNoteDraftRecording,
   type NoteEditorDraftRecord,
 } from '@/features/notes/utils/note-editor-drafts';
+import { trackOpenNoteEditor } from '@/features/notes/utils/interrupted-note-recovery';
 import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
 import { stopNoteRecorder } from '@/features/notes/utils/note-recorder-lifecycle';
 import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteContentDropped, noteSubmissionMatchesResult, noteUpdateResultMatchesTarget, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
@@ -514,7 +515,7 @@ export default function EditNoteScreen() {
   const generatedDraftRef = useRef<{ context: string; id: string } | null>(null);
   if (generatedDraftRef.current?.context !== editorContext) {
     // A fresh edit cannot reuse an ID that a previous save/discard consumed.
-    // DraftsScreen supplies an explicit routeDraftId when resuming a draft.
+    // 新建笔记时笔记页带一个新的 draftId 进来(draftMode=new);它同时是提交的 clientDraftID。
     generatedDraftRef.current = { context: editorContext, id: createNoteDraftId() };
   }
   const editorDraftId = (typeof routeDraftId === 'string' && routeDraftId.trim()) || generatedDraftRef.current.id;
@@ -1561,6 +1562,10 @@ export default function EditNoteScreen() {
   }, [buildCurrentDraftRecord, currentUser?.id, sessionEpoch, editorDraftId, draftRouteKey, draftRemoteQueue, hasUndurableRecording]);
   const persistDraftRef = useRef(persistDraft);
   persistDraftRef.current = persistDraft;
+  // 退出时存成笔记走的是下面的 submitNote(定义在后面),这里先占个位。
+  const submitNoteRef = useRef<((leaving: { action?: NavigationAction }) => Promise<void>) | null>(null);
+  // 这份草稿正开着:「我的笔记」回来时的补存(publishInterruptedNotes)不能替它发布。
+  useEffect(() => trackOpenNoteEditor(editorDraftId), [editorDraftId]);
 
   useEffect(() => {
     const revertedPersistedDraft = baselineFingerprintRef.current === currentDraftFingerprint && draftPersistedFingerprintRef.current !== currentDraftFingerprint;
@@ -1609,56 +1614,26 @@ export default function EditNoteScreen() {
     [invalidateUploadOwnership],
   );
 
-  const exitEditor = useCallback(
+  const discardDraftAndExit = useCallback(
     (action?: NavigationAction) => {
-      const isCurrentEditor = () => {
-        const auth = useAuthStore.getState();
-        return auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
-      };
-      if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) { draftRemoteQueue.cancel(); completeNavigation(action); return; }
-      if (recordingAudioRef.current || uploadInFlightRef.current || saveInFlightRef.current) {
-        Alert.alert(
-          t('notes.edit.waitForMediaTitle', { defaultValue: '请先完成当前操作' }),
-          t('notes.edit.waitForMediaMessage', { defaultValue: '请先结束录音或等待上传、保存完成，再返回。' }),
-        );
-        return;
-      }
-      const saveAndExit = () => {
-        saveInFlightRef.current = true;
-        setIsSubmitting(true);
-        setTextBlocksById({ ...textBlocksByIdRef.current });
-        void persistDraft(true, true).then((saved) => {
-          if (!isCurrentEditor()) return;
-          if (saved) completeNavigation(action);
-          else {
-            saveInFlightRef.current = false;
-            setIsSubmitting(false);
-            Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed'));
-          }
-        });
-      };
-      if (pendingSubmissionRef.current) {
-        saveAndExit();
-        return;
-      }
       const userId = currentUser?.id;
       if (!userId) { completeNavigation(action); return; }
-      const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
-      const changedThisSession = hasUndurableRecording || (
-        draftHydratedRef.current &&
-        entryFingerprintRef.current != null &&
-        entryFingerprintRef.current !== currentFingerprint);
-      // 有改动就直接存进草稿箱再退出，不弹窗问。
-      if (changedThisSession || entryDraftRecordRef.current || draftPersistedFingerprintRef.current === currentFingerprint) {
-        saveAndExit();
+      const isCurrentEditor = () => {
+        const auth = useAuthStore.getState();
+        return auth.user?.id === userId && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
+      };
+      if (!isCurrentEditor()) return;
+      try {
+        const recordingIds = buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []);
+        if (!stageLocalNoteDraftDeletion(userId, editorDraftId, recordingIds)) return;
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftDiscard', error);
+        Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
         return;
       }
-      // 新笔记改了又全部改回去：自动保存替闪退写下的中间状态删掉，草稿箱里不留东西。
-      try { if (!stageLocalNoteDraftDeletion(userId, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-      catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
       draftRemoteQueue.cancel();
       completeNavigation(action);
-      // Delete after in-flight saves, so their late response cannot revive a discarded draft.
+      // Keep the deletion record until the server draft is gone, even after a restart.
       void draftSavePromiseRef.current.catch(() => false).then(async () => {
         if (!isCurrentEditor()) return;
         try {
@@ -1669,15 +1644,55 @@ export default function EditNoteScreen() {
         } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
       });
     },
+    [buildCurrentDraftRecord, completeNavigation, currentUser?.id, draftRemoteQueue, draftRouteKey, editorDraftId, sessionEpoch, t],
+  );
+
+  const exitEditor = useCallback(
+    (action?: NavigationAction) => {
+      if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) { draftRemoteQueue.cancel(); completeNavigation(action); return; }
+      if (recordingAudioRef.current || uploadInFlightRef.current || saveInFlightRef.current) {
+        Alert.alert(
+          t('notes.edit.waitForMediaTitle', { defaultValue: '请先完成当前操作' }),
+          t('notes.edit.waitForMediaMessage', { defaultValue: '请先结束录音或等待上传、保存完成，再返回。' }),
+        );
+        return;
+      }
+      // 草稿箱已取消:有改动就直接存成笔记再退出(没写标题用「未命名笔记」),不弹窗问。
+      // 存不成时 submitNote 会让人选:继续编辑,或者先退出、联网后自动存。
+      const saveAndExit = () => {
+        void submitNoteRef.current?.({ action });
+      };
+      if (pendingSubmissionRef.current) {
+        if (draftMode === 'recovery') completeNavigation(action);
+        else saveAndExit();
+        return;
+      }
+      const userId = currentUser?.id;
+      if (!userId) { completeNavigation(action); return; }
+      const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
+      const changedThisSession = hasUndurableRecording || (
+        draftHydratedRef.current &&
+        entryFingerprintRef.current != null &&
+        entryFingerprintRef.current !== currentFingerprint);
+      if (draftMode === 'recovery' && !changedThisSession) {
+        completeNavigation(action);
+        return;
+      }
+      if (changedThisSession || entryDraftRecordRef.current) {
+        saveAndExit();
+        return;
+      }
+      // 新笔记改了又全部改回去：自动保存替闪退写下的中间状态删掉，不留着等下次被存成笔记。
+      discardDraftAndExit(action);
+    },
     [
       completeNavigation,
       currentUser?.id,
-      sessionEpoch,
-      draftRouteKey,
+      discardDraftAndExit,
+      draftMode,
       buildCurrentDraftRecord,
       editorDraftId,
       draftRemoteQueue,
-      persistDraft,
       hasUndurableRecording,
       t,
     ],
@@ -2721,8 +2736,46 @@ export default function EditNoteScreen() {
         return null;
     }
   }, [t]);
-  const handleSubmit = useCallback(async () => {
+  /**
+   * 保存笔记。leaving = 从退出(返回键 / 右滑 / 顶栏返回)进来:草稿箱已取消,改动直接存成
+   * 笔记,没写标题用「未命名笔记」,存好后接着完成那次返回;存不成就让人选继续编辑还是走。
+   */
+  const submitNote = useCallback(async (leaving: { action?: NavigationAction } | null = null) => {
     const saveStartedAt = diagnosticNow();
+    const exitAction = leaving?.action;
+    const offerExitWithoutSaving = (alertTitle: string, message: string) => {
+      Alert.alert(alertTitle, message, [
+        { text: t('notes.edit.keepEditing', { defaultValue: '继续编辑' }), style: 'cancel' },
+        {
+          text: t('notes.edit.exitWithoutSaving', { defaultValue: '不保存，退出' }),
+          style: 'destructive',
+          onPress: () => discardDraftAndExit(exitAction),
+        },
+      ]);
+    };
+    const mediaReady = canSubmitNoteMedia(mediaItems) && canSubmitNoteMedia(showcaseItems) && canSubmitNoteMedia(audioItems);
+    if (leaving && (loading || !isRouteDataReady)) {
+      // 还没加载完就返回:没有可存的改动,直接走。
+      completeNavigation(exitAction, true);
+      return;
+    }
+    if (leaving && (isSubmitting || groupCreating || uploadingSection !== null)) {
+      // 返回不能悄悄没反应:说清楚在等什么。
+      Alert.alert(
+        t('notes.edit.waitForMediaTitle', { defaultValue: '请先完成当前操作' }),
+        t('notes.edit.waitForMediaMessage', { defaultValue: '请先结束录音或等待上传、保存完成，再返回。' }),
+      );
+      return;
+    }
+    if (leaving && !mediaReady && !pendingSubmissionRef.current) {
+      offerExitWithoutSaving(
+        t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
+        t('notes.edit.exitMediaNotUploaded', {
+          defaultValue: '有图片、视频或录音还没上传成功。可以继续编辑重新上传，或者不保存直接退出。',
+        }),
+      );
+      return;
+    }
     if (
       loading ||
       !isRouteDataReady ||
@@ -2732,21 +2785,20 @@ export default function EditNoteScreen() {
       recordingAudioRef.current ||
       uploadInFlightRef.current ||
       uploadingSection !== null ||
-      !canSubmitNoteMedia(mediaItems) ||
-      !canSubmitNoteMedia(showcaseItems) ||
-      !canSubmitNoteMedia(audioItems)
+      !mediaReady
     )
       return;
     if (unrecoverableMediaCount) {
-      Alert.alert(
-        t('notes.edit.legacyMediaUnavailableTitle', { defaultValue: '无法安全保存媒体' }),
-        t('notes.edit.legacyMediaUnavailableMessage', {
-          defaultValue: '这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。',
-        }),
-      );
+      const unrecoverableTitle = t('notes.edit.legacyMediaUnavailableTitle', { defaultValue: '无法安全保存媒体' });
+      const unrecoverableMessage = t('notes.edit.legacyMediaUnavailableMessage', {
+        defaultValue: '这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。',
+      });
+      if (leaving) offerExitWithoutSaving(unrecoverableTitle, unrecoverableMessage);
+      else Alert.alert(unrecoverableTitle, unrecoverableMessage);
       return;
     }
-    const trimmedTitle = title.trim();
+    const trimmedTitle =
+      title.trim() || (leaving ? t('notes.edit.untitledNote', { defaultValue: '未命名笔记' }) : '');
     if (!trimmedTitle) {
       setTitleAdded(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -2766,10 +2818,9 @@ export default function EditNoteScreen() {
     const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
     const currentTextError = getTextError(getNoteTextStats(currentBlocks));
     if (currentTextError) {
-      Alert.alert(
-        t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' }),
-        currentTextError,
-      );
+      const validationTitle = t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' });
+      if (leaving) offerExitWithoutSaving(validationTitle, currentTextError);
+      else Alert.alert(validationTitle, currentTextError);
       return;
     }
     saveInFlightRef.current = true;
@@ -2912,7 +2963,7 @@ export default function EditNoteScreen() {
       recordMetric('app.operation.duration', Math.max(0, completedAt - saveStartedAt), {
         operation: isEdit ? 'noteUpdate' : 'noteCreate', outcome: 'success',
       });
-      completeNavigation(undefined, true);
+      completeNavigation(exitAction, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
       logClientDiagnostic('note.save.failed', { stage: savePhase, durationMs: Math.max(0, Math.round(diagnosticNow() - phaseStartedAt)) });
@@ -2941,16 +2992,29 @@ export default function EditNoteScreen() {
       const message = isTransportFailure
         ? apiMessage
         : pendingSubmissionRef.current
-          ? t('notes.edit.pendingSubmitMessage', { defaultValue: '正在确认保存结果。编辑已暂停；内容已保存到本地草稿，点击「重试」确认原提交。' })
+          ? t('notes.edit.pendingSubmitMessage', { defaultValue: '正在确认保存结果。编辑已暂停；内容已保存在本机，点击「重试」确认原提交。' })
           : apiMessage;
-      Alert.alert(
-        t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
-        message,
-      );
       reportHandledFailure('noteEditor', 'save', error);
+      const failureTitle = t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' });
+      if (leaving && requestStarted && !isDefinitiveNoteSubmissionFailure(error)) {
+        // 断网、超时这类:这次提交已经记在本机,先放人走,回到「我的笔记」时会自动补存成笔记。
+        Alert.alert(failureTitle, t('notes.edit.exitSaveLater', {
+          defaultValue: '网络不好，这次没存上。可以先退出，回到「我的笔记」时会自动存成笔记。',
+        }), [
+          { text: t('notes.edit.keepEditing', { defaultValue: '继续编辑' }), style: 'cancel' },
+          { text: t('notes.edit.exitAndSaveLater', { defaultValue: '先退出' }), onPress: () => completeNavigation(exitAction, true) },
+        ]);
+        return;
+      }
+      if (leaving) {
+        offerExitWithoutSaving(failureTitle, message);
+        return;
+      }
+      Alert.alert(failureTitle, message);
     }
   }, [
     getTextError,
+    discardDraftAndExit,
     buildCurrentDraftRecord,
     city,
     draftRemoteQueue,
@@ -2977,6 +3041,11 @@ export default function EditNoteScreen() {
     loading,
     composerBlocks,
   ]);
+  submitNoteRef.current = submitNote;
+  // 「完成」按钮:onPress 会把点击事件当第一个参数传进来,不能直接交给 submitNote。
+  const handleSubmit = useCallback(() => {
+    void submitNote();
+  }, [submitNote]);
 
   const d = useMemo(
     () => ({

@@ -48,9 +48,10 @@ test('create post screen exposes a post expiry picker and submits expiresInHours
 test('select note screen loads active notes and stores the chosen note for the post composer', () => {
   const src = read('src/features/social/screens/SelectNoteScreen.tsx');
 
-  // 选择器展示全部非删除笔记（不限 ACTIVE，含「不公开」），后端 status 省略即默认非删除。
+  // 拉全部非删除笔记（缓存和笔记页共用），但只列上架中的：帖子挂下架的笔记服务端会拒绝。
   assert.match(src, /fetchNotes\(\)/);
   assert.doesNotMatch(src, /fetchNotes\(\{ status: 'ACTIVE'/);
+  assert.match(src, /note\.status === 'ACTIVE' && note\.available !== false/);
   assert.match(src, /setSelectedNote/);
   assert.match(src, /router\.back\(\)/);
   assert.match(src, /t\('plaza\.notePicker\.searchPlaceholder'\)/);

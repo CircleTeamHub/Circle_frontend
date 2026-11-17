@@ -30,19 +30,16 @@ test('signup blocking keeps an explanation when no visible requirement is left',
 
   assert.match(card, /const requirements = buildSignupReasonText\(\)/);
   assert.match(card, /requirements\s*\?[\s\S]{0,240}signupBlockedGeneric/);
-  // 看主页那条路是**另一段**代码，同样的门槛、同样的空串问题；两处都走同一个
-  // helper，免得下次只修一边。
-  assert.match(card, /requirements\s*\?[\s\S]{0,240}profileBlockedGeneric/);
+  // 门槛文案只走共享 helper（头像已经不能点进主页，只剩报名这一处）。
   assert.equal(
     (card.match(/buildRestrictionReasonText\(/g) ?? []).length,
-    2,
-    '报名与看主页都必须走共享 helper',
+    1,
+    '报名门槛必须走共享 helper',
   );
   assert.doesNotMatch(card, /reasons\.push\(/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
     assert.ok(messages.plaza.signupBlockedGeneric, `${locale} 缺 signupBlockedGeneric`);
-    assert.ok(messages.plaza.profileBlockedGeneric, `${locale} 缺 profileBlockedGeneric`);
   }
 });
 

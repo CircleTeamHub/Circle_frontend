@@ -2,6 +2,8 @@ import { storage } from '@/storage';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import type {
+  CreateNoteInput,
+  CreateNoteMediaInput,
   EditorNoteMediaDraft,
   NoteDraftSummary,
   NoteSections,
@@ -524,6 +526,59 @@ export function removeAllLocalNoteDrafts(
   }
   storage.remove(indexKey(userId));
   records.forEach((record) => cleanRecordings(userId, record));
+}
+
+/** 本机快照和服务端草稿共有的那部分内容。 */
+export type InterruptedNoteContent = Pick<
+  NoteEditorDraftRecord,
+  'id' | 'title' | 'content' | 'contentJson' | 'sections' | 'groupIds' | 'mediaKeys'
+> & { city?: string | null };
+
+/**
+ * 被打断的编辑（退出没存成、闪退、被系统杀掉）→ 正式笔记的提交内容。草稿箱已经取消，
+ * 这类内容一律存成笔记：只带已经传完的媒体，没写标题的用 fallbackTitle。clientDraftID
+ * 沿用草稿 id —— 服务端发布时一并消费掉同名草稿，同一份内容重放也只会得到同一篇笔记。
+ */
+export function interruptedNoteToInput(
+  draft: InterruptedNoteContent,
+  fallbackTitle: string,
+): CreateNoteInput {
+  const uploaded = new Set(draft.mediaKeys);
+  const onlyUploaded = <T extends { objectKey?: string }>(items: readonly T[] | undefined) =>
+    (items ?? []).filter((item) => typeof item.objectKey === 'string' && uploaded.has(item.objectKey));
+  const sections = sanitizeNoteSectionsForServer({
+    ...draft.sections,
+    media: { items: onlyUploaded(draft.sections.media?.items) },
+    showcase: { items: onlyUploaded(draft.sections.showcase?.items) },
+    audio: { items: onlyUploaded(draft.sections.audio?.items) },
+  }) ?? {};
+  // 顶层 media 是三个分区的并集（同一对象可能同时在「图片·视频」和「展示」里），和编辑页提交时一样。
+  const seen = new Set<string>();
+  const media = (['media', 'showcase', 'audio'] as const)
+    .flatMap((section) => (sections[section]?.items ?? []) as CreateNoteMediaInput[])
+    .filter((item) => {
+      if (seen.has(item.objectKey)) return false;
+      seen.add(item.objectKey);
+      return true;
+    })
+    .map((item, index) => ({ ...item, sortOrder: index }));
+  return {
+    title: draft.title.trim() || fallbackTitle,
+    ...(draft.city ? { city: draft.city } : {}),
+    content: draft.content,
+    contentJson: draft.contentJson,
+    sections,
+    groupIds: draft.groupIds,
+    media,
+    clientDraftID: draft.id,
+  };
+}
+
+/** 一条快照有没有值得存成笔记的内容（只开了个新笔记、什么都没写的不算）。 */
+export function interruptedNoteHasContent(draft: InterruptedNoteContent): boolean {
+  return Boolean(draft.title.trim() || draft.content.trim() || draft.mediaKeys.length > 0 ||
+    (draft.sections.contacts?.items.length ?? 0) > 0 || (draft.sections.groups?.items.length ?? 0) > 0 ||
+    draft.sections.location);
 }
 
 export function localDraftSummaryToServerInput(record: NoteEditorDraftRecord) {

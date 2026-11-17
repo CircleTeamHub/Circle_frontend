@@ -94,8 +94,8 @@ function SelectNoteContent() {
     setLoading(!loadedRef.current);
     setError(null);
 
-    // No status filter: omitting status returns all non-deleted notes (ACTIVE +
-    // UNLISTED). Filtering to ACTIVE hid unlisted notes, so the picker looked empty.
+    // Load every non-deleted note (listed + unlisted) so the cache stays shared with the
+    // notes page; only listed ones are offered below.
     fetchNotes()
       .then((data) => {
         if (!isCurrent()) return;
@@ -117,15 +117,20 @@ function SelectNoteContent() {
     };
   }, [reloadGate, sessionEpoch, t]));
 
+  // A post can only carry a listed (ACTIVE) note; the server rejects unlisted ones too.
+  const attachableNotes = useMemo(
+    () => notes.filter((note) => note.status === 'ACTIVE' && note.available !== false),
+    [notes],
+  );
   const filteredNotes = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return notes;
-    return notes.filter(
+    if (!q) return attachableNotes;
+    return attachableNotes.filter(
       (note) =>
         note.title.toLowerCase().includes(q) ||
         (note.contentPreview ?? '').toLowerCase().includes(q),
     );
-  }, [notes, search]);
+  }, [attachableNotes, search]);
 
   const handleSelectNote = useCallback(
     (note: NoteSummary) => {
@@ -221,7 +226,9 @@ function SelectNoteContent() {
             ListEmptyComponent={
               <View style={s.empty}>
                 <Text style={[s.emptyText, { color: colors.textSecondary }]}>
-                  {t('plaza.notePicker.empty')}
+                  {notes.length > attachableNotes.length && !search.trim()
+                    ? t('plaza.notePicker.onlyListedHint')
+                    : t('plaza.notePicker.empty')}
                 </Text>
               </View>
             }

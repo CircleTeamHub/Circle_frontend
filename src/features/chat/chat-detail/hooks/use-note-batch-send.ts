@@ -9,10 +9,12 @@ import { type NoteSummary } from '@/features/notes/types';
 import { type NoteCardData } from '@/types';
 import {
   appendNoteBatchRun,
+  noteSectionSendKey,
   type NoteSendOptions,
   resolveSendableNoteLocation,
 } from '@/features/chat/utils/note-batch-send';
 import { sendNotesToConversation } from '@/features/chat/utils/send-notes-to-conversation';
+import { useNoteSectionSendStore } from '@/features/chat/store/use-note-section-send-store';
 import { fetchNoteDetail, getCachedNoteDetail } from '@/services/api/notes';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
@@ -51,7 +53,8 @@ export function useNoteBatchSend({
   // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
   const noteSendTimestampsRef = useRef<number[]>([]);
   // 卡片小标签「视频 / 展示 / 位置」正在发的 noteId:section。拷媒体弱网下要好几秒,
-  // 期间再点同一块直接忽略,否则同一组内容会被发两三遍。
+  // 期间再点同一块直接忽略,否则同一组内容会被发两三遍。同时登记到 note-section-send
+  // store,卡片标签据此画「发送中」—— 大视频要先拷贝、截封面,第一条消息出现前有好几秒。
   const sectionSendsInFlightRef = useRef<Set<string>>(new Set());
   /**
    * 批量发笔记(SharePicker 多选 + 发送选项 sheet 的执行端)。
@@ -116,17 +119,19 @@ export function useNoteBatchSend({
    * 发到当前聊天,走同一条批量发送管线(媒体由服务端拷进我的 chat/ 命名空间,
    * 和批量发笔记同一套限流)。
    *
-   * 要快:视频/展示不再先拉一遍详情 —— 卡片上已有计数,服务端拷贝接口自己按笔记
-   * 校验权限、按分区取媒体;位置优先用本机缓存的详情,没有才拉。不弹「正在发送」,
-   * 消息一进队就出现在会话里,那就是反馈。
+   * 要快:视频/展示不先拉详情再拷 —— 卡片上已有计数,服务端拷贝接口自己按笔记
+   * 校验权限、按分区取媒体(要截视频封面时详情和拷贝同时拉);位置优先用本机缓存的
+   * 详情,没有才拉。点下去到这块发完,标签一直显示「发送中」。
    */
   const handleSendNoteSection = useCallback(
     (card: NoteCardData, section: NoteCardSendSection) => {
       if (!sourceID || isPreviewMode) return Promise.resolve();
-      const inFlightKey = `${card.noteId}:${section}`;
+      const inFlightKey = noteSectionSendKey(card.noteId, section);
       const inFlight = sectionSendsInFlightRef.current;
       if (inFlight.has(inFlightKey)) return Promise.resolve();
       inFlight.add(inFlightKey);
+      const sendStore = useNoteSectionSendStore.getState();
+      sendStore.begin(inFlightKey);
       const reportFailure = (error: unknown) => {
         reportHandledFailure('chatDetail', 'fetchNoteForSection', error);
         if (mountedRef.current) {
@@ -156,10 +161,12 @@ export function useNoteBatchSend({
             return;
           }
         } else {
-          // 只用到 id 和「有媒体」:卡片的计数足够,拷哪些对象由服务端按分区决定。
+          // 只用到 id、「有媒体」和「有视频」(要不要截封面):卡片的计数足够,
+          // 拷哪些对象由服务端按分区决定。
           note = {
             id: card.noteId,
             mediaCount: Math.max(1, card.imageCount + card.videoCount),
+            videoCount: card.videoCount,
             hasLocation: false,
           } as NoteSummary;
         }
@@ -173,6 +180,7 @@ export function useNoteBatchSend({
       });
       const settled = run.catch(() => undefined).finally(() => {
         inFlight.delete(inFlightKey);
+        sendStore.end(inFlightKey);
       });
       noteBatchQueueRef.current = settled;
       return run;

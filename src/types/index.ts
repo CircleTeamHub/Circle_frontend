@@ -449,6 +449,11 @@ export interface CirclePlazaPost {
   cities: string[];
   isHorn: boolean;
   noteId: string | null;
+  /**
+   * 帖子挂的笔记，服务端读帖时按笔记现状投影成和聊天笔记卡片同一套字段（图片现签）。
+   * 没挂笔记、笔记已彻底删除、或旧后端没下发时为 null。
+   */
+  noteCard: NoteCardData | null;
   restrictions: {
     vipLevel: number | null;
     creditScore: number | null;

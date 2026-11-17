@@ -47,6 +47,8 @@ export type NoteSendTask =
   | {
       kind: 'video';
       noteId: string;
+      /** 笔记里这条媒体的 id:截封面时按它找笔记原视频的地址。 */
+      mediaId: string;
       key: string;
       width?: number;
       height?: number;
@@ -64,6 +66,11 @@ export type NoteSendTask =
       title?: string;
       address?: string;
     };
+
+/** 聊天里笔记卡片某一块(视频 / 展示 / 位置)正在发送的标识:发送端去重、卡片画「发送中」共用。 */
+export function noteSectionSendKey(noteId: string, section: string): string {
+  return `${noteId}:${section}`;
+}
 
 /** 一次最多勾选的笔记数（对齐常见 IM 转发上限，也约束批量消息总量）。 */
 export const MAX_NOTE_BATCH_SELECTION = 9;
@@ -153,8 +160,6 @@ export function buildNoteSendTasks(
   options: NoteSendOptions,
   imported: ImportedNoteChatMedia[],
   location: NoteLocationSection | null | undefined,
-  /** 拷贝后的视频 key → 封面 key。 */
-  posterKeys?: ReadonlyMap<string, string>,
 ): NoteSendTask[] {
   const tasks: NoteSendTask[] = [];
   if (options.card) {
@@ -167,16 +172,15 @@ export function buildNoteSendTasks(
     seenKeys.add(item.key);
     if (item.type === 'VIDEO') {
       const durationMs = finitePositive(item.durationMs);
-      const thumbKey = posterKeys?.get(item.key);
       tasks.push({
         kind: 'video',
         noteId: note.id,
+        mediaId: item.id,
         key: item.key,
         width: finitePositive(item.width),
         height: finitePositive(item.height),
         duration: durationMs ? Math.max(1, Math.ceil(durationMs / 1000)) : undefined,
         size: finitePositive(item.size),
-        ...(thumbKey ? { thumbKey } : {}),
       });
     } else {
       tasks.push({

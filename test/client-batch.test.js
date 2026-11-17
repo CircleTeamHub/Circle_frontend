@@ -84,12 +84,14 @@ test('网络错误日志只使用已归一化的路由，不记录请求 URL (re
   );
 });
 
-test('回收站（FE#92）已于 2026-11-13 取消：删除即永久删除，后悔路改为下架 60 天', () => {
+test('回收站（FE#92，2026-11-16 恢复）：删除进回收站，可恢复、可立即永久删除', () => {
   const api = read('src/services/api/notes.ts');
-  assert.doesNotMatch(api, /\/note\/recycle-bin|\/restore`/);
+  assert.match(api, /apiClient<NoteSummary\[\]>\('\/note\/recycle-bin'\)/);
+  assert.match(api, /`\/note\/\$\{id\}\/restore`, \{ method: 'POST' \}/);
+  assert.match(api, /`\/note\/\$\{id\}\/permanent`, \{ method: 'DELETE' \}/);
   assert.equal(
     fs.existsSync(path.join(process.cwd(), 'app/(tabs)/profile/notes/recycle-bin.tsx')),
-    false,
+    true,
   );
 });
 
