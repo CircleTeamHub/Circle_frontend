@@ -6,7 +6,7 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 const mockTranslate = (key: string, options?: Record<string, unknown>) =>
   options ? `${key}:${JSON.stringify(options)}` : key;
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
-jest.mock('lucide-react-native', () => ({ Bell: () => null }));
+jest.mock('@/features/messages/components/MessagesHeaderIcons', () => ({ NoticeBellIcon: () => null }));
 jest.mock('@/components/ui/unread-count-badge', () => ({
   UnreadCountBadge: ({ count, testID }: { count: number; testID?: string }) => {
     const { Text } = jest.requireActual('react-native');

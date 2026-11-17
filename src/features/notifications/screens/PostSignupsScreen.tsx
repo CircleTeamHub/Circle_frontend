@@ -226,11 +226,11 @@ export default function PostSignupsScreen() {
       setRecognitionPickerOpen(false);
       Alert.alert(
         t('notifications.signupMgmt.recognitionSuccessTitle', {
-          defaultValue: '已提交合作认可',
+          defaultValue: '点赞已送出',
         }),
         t('notifications.signupMgmt.recognitionSuccessMessage', {
           count: result.count,
-          defaultValue: `已认可 ${result.count} 位报名者。`,
+          defaultValue: `已给 ${result.count} 位报名者点赞。`,
         }),
       );
       // 重新拉取，让 recognized 标记成为「已提交」的唯一真相，刷新/重进都不会丢、也无法重复提交。
@@ -378,8 +378,8 @@ export default function PostSignupsScreen() {
                 <Ionicons name="ribbon-outline" size={15} color={colors.white} />
                 <Text style={[s.recognitionButtonText, { color: colors.white }]}>
                   {recognitionLocked
-                    ? t('notifications.signupMgmt.recognitionFull', { defaultValue: '认可名额已用完' })
-                    : t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '提交认可' })}
+                    ? t('notifications.signupMgmt.recognitionFull', { defaultValue: '点赞名额已用完' })
+                    : t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '给合作愉快的朋友点赞' })}
                 </Text>
               </Pressable>
             ) : null}
@@ -416,7 +416,7 @@ export default function PostSignupsScreen() {
                     {item.recognized ? (
                       <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
                         {t('notifications.signupMgmt.recognizedTag', {
-                          defaultValue: '已认可',
+                          defaultValue: '已点赞',
                         })}
                       </Text>
                     ) : null}

@@ -71,7 +71,7 @@ export function RecognitionPickerModal({
       Alert.alert(
         t('notifications.signupMgmt.recognitionLimitTitle', { defaultValue: '最多选择 3 人' }),
         t('notifications.signupMgmt.recognitionLimitMessage', {
-          defaultValue: '每个活动最多给 3 位报名者合作认可。',
+          defaultValue: '每个活动最多给 3 位报名者点赞。',
         }),
       );
       return;
@@ -89,7 +89,7 @@ export function RecognitionPickerModal({
             <Text style={[s.headerAction, { color: colors.text }]}>{t('common.cancel')}</Text>
           </Pressable>
           <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
-            {t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '提交认可' })}
+            {t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '给合作愉快的朋友点赞' })}
           </Text>
           <Pressable
             testID="collaboration-recognition-submit"
@@ -175,7 +175,7 @@ export function RecognitionPickerModal({
                   />
                   {item.recognized ? (
                     <Text style={[s.recognizedTag, { color: colors.iconAccent }]}>
-                      {t('notifications.signupMgmt.recognizedTag', { defaultValue: '已认可' })}
+                      {t('notifications.signupMgmt.recognizedTag', { defaultValue: '已点赞' })}
                     </Text>
                   ) : null}
                 </View>
