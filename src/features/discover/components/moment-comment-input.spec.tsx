@@ -411,6 +411,9 @@ test('the picked image starts uploading before send and send does not upload it 
 
   fireEvent.press(screen.getByLabelText('添加图片'));
   await waitFor(() => expect(mockUpload).toHaveBeenCalledTimes(1));
+  expect(mockPresign).toHaveBeenCalledWith(
+    expect.objectContaining({ purpose: 'MOMENT_COMMENT' }),
+  );
   expect(mockUpload).toHaveBeenCalledWith(
     expect.any(String), expect.any(String), expect.any(String), expect.any(Object), undefined,
     { progressKey: expect.any(String), foreground: true },

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import CreateMomentScreen from './CreateMomentScreen';
 import { createMoment } from '@/services/api/moments';
 import { requestUploadPresign, uploadLocalFileToPresignedUrl } from '@/services/api/upload';
+import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { ApiError } from '@/services/api/api-error';
 
@@ -65,6 +66,18 @@ test('selects and publishes multiple videos mixed with images in selection order
     expect.objectContaining({ type: 'video', key: 'posts/me/clip2.mov' }),
   ] }), { idempotencyKey: 'key-1' });
   expect(prepareChatImageForUpload).toHaveBeenCalledTimes(1);
+  expect(requestUploadPresign).toHaveBeenCalledWith(
+    expect.objectContaining({ purpose: 'MOMENT' }),
+  );
+  expect(uploadChatVideoPoster).toHaveBeenCalledWith(
+    'file:///clip.mp4',
+    3,
+    'clip.mp4',
+    'posts',
+    undefined,
+    expect.any(String),
+    'MOMENT',
+  );
   const progress = { progressKey: expect.any(String), foreground: true };
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test', 'video/mp4', 'file:///clip.mp4', expect.any(Object), 5 * 60_000, progress,

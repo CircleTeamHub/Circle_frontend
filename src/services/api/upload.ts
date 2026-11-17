@@ -203,6 +203,21 @@ export type PublicUploadFolder = 'avatars' | 'covers' | 'posts' | 'friends';
 export type PrivateUploadFolder = 'notes' | 'chat' | 'stickers';
 export type UploadFolder = PublicUploadFolder | PrivateUploadFolder;
 
+export type UploadPurpose =
+  | 'PROFILE_AVATAR'
+  | 'CIRCLE_AVATAR'
+  | 'PLAZA_POST'
+  | 'MOMENT'
+  | 'MOMENT_COMMENT';
+
+const UPLOAD_PURPOSE_FOLDERS: Readonly<Record<UploadPurpose, UploadFolder>> = {
+  PROFILE_AVATAR: 'avatars',
+  CIRCLE_AVATAR: 'avatars',
+  PLAZA_POST: 'posts',
+  MOMENT: 'posts',
+  MOMENT_COMMENT: 'posts',
+};
+
 const PUBLIC_UPLOAD_FOLDERS: ReadonlySet<string> = new Set<PublicUploadFolder>([
   'avatars',
   'covers',
@@ -464,8 +479,15 @@ export async function requestUploadPresign<F extends UploadFolder>(
     filename: string;
     contentType: string;
     folder: F;
+    purpose?: UploadPurpose;
   } & UploadSizeSource,
 ): Promise<UploadPresignResponseFor<F>> {
+  if (
+    payload.purpose &&
+    UPLOAD_PURPOSE_FOLDERS[payload.purpose] !== payload.folder
+  ) {
+    throw new Error('Upload purpose does not match folder');
+  }
   const isSessionCurrent = captureUploadProgressScope();
   let convertedUri: string | undefined;
   let filename = payload.filename;
@@ -502,6 +524,7 @@ export async function requestUploadPresign<F extends UploadFolder>(
         contentType,
         folder: payload.folder,
         sizeBytes,
+        ...(payload.purpose ? { purpose: payload.purpose } : {}),
       },
     });
     assertUploadSessionCurrent(isSessionCurrent);

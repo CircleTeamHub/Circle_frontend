@@ -99,6 +99,24 @@ describe('uploadChatVideoPoster', () => {
     expect(player.generateThumbnailsAsync).toHaveBeenCalledTimes(1);
   });
 
+  it('tags a posts poster only when its caller supplies a moment purpose', async () => {
+    mockPlayer([{ width: 512, height: 288 }]);
+
+    await uploadChatVideoPoster(
+      'file:///picked/trip.mov',
+      42,
+      'trip.mov',
+      'posts',
+      undefined,
+      'moment-video',
+      'MOMENT',
+    );
+
+    expect(mockPresign).toHaveBeenCalledWith(
+      expect.objectContaining({ folder: 'posts', purpose: 'MOMENT' }),
+    );
+  });
+
   it('uses the very first frame of a clip shorter than a second', async () => {
     const player = mockPlayer([{ width: 512, height: 288 }]);
     await uploadChatVideoPoster('file:///picked/blink.mp4', 1, 'blink.mp4');

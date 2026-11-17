@@ -4,6 +4,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import {
   requestUploadPresign,
   sanitizeUploadFilename,
+  type UploadPurpose,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 
@@ -66,6 +67,7 @@ export async function uploadChatVideoPoster(
   folder: 'chat' | 'posts' = 'chat',
   beforeUpload?: () => void,
   progressKey?: string,
+  purpose?: UploadPurpose,
 ): Promise<{ key: string } | null> {
   try {
     const poster = await captureVideoPosterFrame(uri, durationSeconds);
@@ -75,6 +77,7 @@ export async function uploadChatVideoPoster(
       filename: sanitizeUploadFilename(`poster-${base}.jpg`),
       contentType: 'image/jpeg',
       folder,
+      ...(purpose ? { purpose } : {}),
       fileUri: poster.uri,
     });
     beforeUpload?.();
