@@ -45,6 +45,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
+    // Android's default EditText padding clips text inside a fixed height.
+    paddingVertical: 0,
+    textAlignVertical: 'center',
   },
   actionButton: {
     minWidth: 76,

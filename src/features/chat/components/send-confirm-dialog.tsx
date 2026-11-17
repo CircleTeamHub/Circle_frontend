@@ -60,8 +60,9 @@ const s = StyleSheet.create({
     minHeight: 40,
     maxHeight: 120,
     paddingHorizontal: 0,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
+    // iOS multiline inputs pin text to the top; padding sized so one line
+    // fills minHeight keeps the placeholder vertically centered.
+    paddingVertical: 10,
   },
   counter: {
     ...Typography.tinyRegular,
