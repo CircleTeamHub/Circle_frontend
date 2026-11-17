@@ -21,7 +21,6 @@ export function mapMyPostToRow(p: MyCirclePost, t: TFunc): NotificationRowData {
     // 我方帖子汇总通知，无外部发送者，名字特效不适用。
     fromUserId: null,
     summary,
-    icon: 'megaphone-outline',
     previewImage: null,
     unread: p.unreadSignupCount > 0,
     createdAt: p.createdAt,

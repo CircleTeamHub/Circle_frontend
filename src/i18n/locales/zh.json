@@ -1588,15 +1588,12 @@
       "selectA11y": "选择笔记 {{title}}",
       "noneA11y": "不关联笔记"
     },
-    "noteAttachment": "附带笔记",
     "vipRestriction": "VIP限制",
     "creditRestriction": "信用值限制",
     "fancyRequired": "需要靓号",
     "tagsLabel": "关键词标签（最多5个）",
     "tagPlaceholder": "输入标签关键词",
     "publishFailed": "发布失败",
-    "cannotView": "无法查看",
-    "restrictionMessage": "需要{{requirements}}才能查看对方主页",
     "create": {
       "allUploadsFailed": "媒体上传失败，请检查网络后重试",
       "pickerFailed": "无法选择图片或视频",
@@ -1669,7 +1666,6 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
-    "profileBlockedGeneric": "你暂不满足查看对方主页的条件",
     "signupBlockedGeneric": "你暂不满足该动态的报名条件",
     "signupRestrictionMessage": "报名需满足：{{requirements}}",
     "circlePicker": {

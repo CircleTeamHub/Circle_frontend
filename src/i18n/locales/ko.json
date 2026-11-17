@@ -2117,15 +2117,12 @@
       "selectA11y": "노트 {{title}} 선택",
       "noneA11y": "노트 연결 안 함"
     },
-    "noteAttachment": "첨부 노트",
     "vipRestriction": "VIP 제한",
     "creditRestriction": "신용도 제한",
     "fancyRequired": "특별 ID 필요",
     "tagsLabel": "태그 (최대 5개)",
     "tagPlaceholder": "태그 키워드 입력",
     "publishFailed": "게시하지 못했어요",
-    "cannotView": "볼 수 없음",
-    "restrictionMessage": "이 프로필을 보려면 {{requirements}}이(가) 필요해요",
     "create": {
       "allUploadsFailed": "미디어를 업로드하지 못했어요. 연결을 확인하고 다시 시도하세요",
       "pickerFailed": "사진이나 동영상을 선택할 수 없어요",
@@ -2198,7 +2195,6 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
-    "profileBlockedGeneric": "아직 상대방 프로필을 볼 수 있는 조건을 충족하지 않았습니다",
     "signupBlockedGeneric": "아직 이 게시물의 참가 조건을 충족하지 않았습니다",
     "signupRestrictionMessage": "신청 조건: {{requirements}}",
     "circlePicker": {

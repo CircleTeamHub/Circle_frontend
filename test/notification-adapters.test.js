@@ -29,7 +29,7 @@ function load(rel) {
 
 const t = (key, opts) => (opts && opts.name ? `${key}:${opts.name}` : key);
 
-test("interactive: TRACE_LIKE → heart icon + liked summary", () => {
+test("interactive: TRACE_LIKE → liked summary", () => {
   const { mapNotificationToRow } = load(
     "src/features/notifications/utils/notification-summary.ts",
   );
@@ -46,7 +46,6 @@ test("interactive: TRACE_LIKE → heart icon + liked summary", () => {
     },
     t,
   );
-  assert.equal(row.icon, "heart-outline");
   assert.equal(row.unread, true);
   assert.equal(row.previewImage, "img1");
   assert.equal(row.title, "B");
@@ -71,7 +70,6 @@ test("interactive: CIRCLE_VERIFICATION_REQUESTED carries invitation id for tap-t
     },
     t,
   );
-  assert.equal(row.icon, "shield-checkmark-outline");
   assert.equal(row.verificationInvitationId, "inv9");
 });
 
@@ -116,7 +114,6 @@ test("signup management: post row uses post excerpt and unread count", () => {
   assert.equal(row.unread, true);
   assert.equal(row.title, "Hiking");
   assert.equal(row.avatarUrl, "img1");
-  assert.equal(row.icon, "megaphone-outline");
   assert.equal(row.summary, "notifications.signupMgmt.rowWithUnread");
 });
 
@@ -142,26 +139,7 @@ test("signup management: post row falls back for untitled posts", () => {
   assert.equal(row.unread, false);
 });
 
-test("interactive: iconFor branches → FRIEND_REQUEST person-add", () => {
-  const { mapNotificationToRow } = load(
-    "src/features/notifications/utils/notification-summary.ts",
-  );
-  const base = {
-    content: "",
-    read: false,
-    createdAt: "2026-06-05T00:00:00Z",
-    fromUser: { id: "u2", nickname: "B", avatarUrl: null },
-    fromTrace: null,
-    fromReply: null,
-  };
-  const friend = mapNotificationToRow(
-    { ...base, id: "n2", type: "FRIEND_REQUEST_RECEIVED" },
-    t,
-  );
-  assert.equal(friend.icon, "person-add-outline");
-});
-
-test("interactive: circle signup notification uses megaphone icon and summary", () => {
+test("interactive: circle signup notification summary", () => {
   const { mapNotificationToRow } = load(
     "src/features/notifications/utils/notification-summary.ts",
   );
@@ -181,7 +159,6 @@ test("interactive: circle signup notification uses megaphone icon and summary", 
     },
     t,
   );
-  assert.equal(row.icon, "megaphone-outline");
   assert.equal(row.summary, "notifications.summary.CIRCLE_POST_SIGNUP_CREATED");
 });
 
@@ -205,6 +182,5 @@ test("interactive: auto-ended circle post notification routes to signup manageme
     },
     t,
   );
-  assert.equal(row.icon, "megaphone-outline");
   assert.equal(row.summary, "notifications.summary.CIRCLE_POST_AUTO_ENDED");
 });

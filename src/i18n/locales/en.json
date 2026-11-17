@@ -1592,15 +1592,12 @@
       "selectA11y": "Select note {{title}}",
       "noneA11y": "Don't link a note"
     },
-    "noteAttachment": "Attached note",
     "vipRestriction": "VIP Restriction",
     "creditRestriction": "Credit Restriction",
     "fancyRequired": "Fancy Number Required",
     "tagsLabel": "Tags (up to 5)",
     "tagPlaceholder": "Enter tag keyword",
     "publishFailed": "Publish Failed",
-    "cannotView": "Cannot View",
-    "restrictionMessage": "Requires {{requirements}} to view this profile",
     "create": {
       "allUploadsFailed": "Could not upload media. Check your connection and try again.",
       "pickerFailed": "Cannot select photos or videos",
@@ -1673,7 +1670,6 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
-    "profileBlockedGeneric": "You do not meet the requirements to view this profile yet",
     "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {

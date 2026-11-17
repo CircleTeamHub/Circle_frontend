@@ -28,7 +28,6 @@ const s = StyleSheet.create({
   unreadDot: { position: 'absolute', top: -1, right: -1, width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF4D4F' },
   body: { flex: 1, gap: 5 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   preview: { width: 52, height: 52, borderRadius: Radius.sm },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   actionButton: {
@@ -71,12 +70,9 @@ export const NotificationRow = memo(function NotificationRow({
           />
           <Text style={{ fontSize: 12, color: colors.textSecondary }}>{formatRelativeTime(data.createdAt, t)}</Text>
         </View>
-        <View style={s.summaryRow}>
-          <Ionicons name={data.icon} size={13} color={colors.textSecondary} />
-          <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.textSecondary }}>
-            {data.summary}
-          </Text>
-        </View>
+        <Text numberOfLines={1} style={{ fontSize: 14, color: colors.textSecondary }}>
+          {data.summary}
+        </Text>
       </View>
       {data.previewImage ? (
         <Image source={{ uri: data.previewImage }} recyclingKey={data.previewImage} style={s.preview} contentFit="cover" cachePolicy="memory-disk" transition={0} />

@@ -132,10 +132,11 @@ test('circle route helpers return scoped paths and params for each sub-flow', ()
 test('plaza post cards stay in the tab they are shown in', () => {
   const card = read('src/features/discover/components/plaza-post-card.tsx');
   const posts = read('src/features/discover/screens/CirclePostsScreen.tsx');
-  // 圈子帖子页在三个栈都有:点头像/报名管理不能把用户扔去圈子 tab。
+  // 圈子帖子页在三个栈都有:打开挂的笔记/报名管理不能把用户扔去圈子 tab。
   assert.match(card, /scope = 'discover'/);
-  assert.match(card, /getUserProfileHref\(scope, post\.author\.id\)/);
-  assert.doesNotMatch(card, /getUserProfileHref\('discover', post\.author\.id\)/);
+  assert.match(card, /getNoteDetailHref\(\s*scope,/);
+  // 发帖人的头像和名字只展示,不进主页(产品要求):卡片里不该再有去主页的跳转。
+  assert.doesNotMatch(card, /getUserProfileHref/);
   assert.match(posts, /getCircleScopeFromSegments\(useSegments\(\)\)/);
   assert.match(posts, /<PlazaPostCard post=\{item\} onDeleted=\{handleDeleted\} scope=\{scope\} \/>/);
 });

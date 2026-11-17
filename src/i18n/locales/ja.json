@@ -2117,15 +2117,12 @@
       "selectA11y": "ノート{{title}}を選択",
       "noneA11y": "ノートを紐付けない"
     },
-    "noteAttachment": "添付ノート",
     "vipRestriction": "VIP制限",
     "creditRestriction": "信用度制限",
     "fancyRequired": "特別IDが必要",
     "tagsLabel": "タグ（最大5個）",
     "tagPlaceholder": "タグのキーワードを入力",
     "publishFailed": "投稿に失敗しました",
-    "cannotView": "閲覧できません",
-    "restrictionMessage": "このプロフィールの閲覧には{{requirements}}が必要です",
     "create": {
       "allUploadsFailed": "メディアをアップロードできませんでした。接続を確認して再試行してください",
       "pickerFailed": "写真や動画を選択できません",
@@ -2198,7 +2195,6 @@
     "signUp": "応募",
     "signedUp": "応募済み",
     "signupBlockedTitle": "現在応募できません",
-    "profileBlockedGeneric": "相手のプロフィールを閲覧する条件をまだ満たしていません",
     "signupBlockedGeneric": "この投稿の応募条件をまだ満たしていません",
     "signupRestrictionMessage": "応募条件：{{requirements}}",
     "circlePicker": {

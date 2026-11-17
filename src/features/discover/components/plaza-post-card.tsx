@@ -8,7 +8,7 @@ import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { UserIconRow } from '@/components/ui/user-icon-row';
-import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
   getChatDetailHref,
   getNoteDetailHref,
@@ -52,8 +52,6 @@ interface PlazaPostCardProps {
 
 // "不限制" 徽章配色（绿色=开放给所有人），与 RestrictionBadge 的彩色徽章风格统一。
 const OPEN_BADGE_COLOR = '#10B981';
-/** 「附带笔记」框的内边距;里面的笔记卡片按框宽减去两边内边距排版。 */
-const NOTE_ATTACHMENT_INSET = Spacing.sm;
 
 // 广场卡头部只固定展示 3 枚徽章且不折叠 "+N"，因此按「身份/信誉」优先级排序，优先露出
 // VIP 和信誉相关（VERIFIED_PROFILE 认证 / TOP_COLLABORATOR 协作口碑）徽章；圈子(CIRCLE)
@@ -81,19 +79,6 @@ function badgeDisplayRank(icon: DisplayIcon): number {
 const s = StyleSheet.create({
   // 左侧竖条:告诉看帖的人「我能不能报」(配色见 accentColor)。
   // 卡片 overflow:hidden 让竖条顶到圆角内被裁切，观感干净。
-  noteAttachment: {
-    padding: NOTE_ATTACHMENT_INSET,
-    gap: Spacing.xs + 2,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  noteAttachmentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: 2,
-  },
-  noteAttachmentLabel: { ...Typography.small, fontWeight: '600' },
   accent: {
     position: 'absolute',
     left: 0,
@@ -242,12 +227,6 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         fontSize: 14,
         lineHeight: 21,
       },
-      // 品牌紫的淡底 + 描边：和白色（暗色模式下深灰）的帖子卡片、里面的笔记卡片都拉开。
-      noteAttachment: {
-        backgroundColor: withAlpha(colors.brandPurple, 0.08),
-        borderColor: withAlpha(colors.brandPurple, 0.35),
-      },
-      noteAttachmentLabel: { color: colors.iconAccent },
     }),
     [colors],
   );
@@ -525,7 +504,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   return (
     <View style={d.card}>
       <View style={[s.accent, { backgroundColor: accentColor }]} testID="plaza-card-accent" />
-      {/* Header：圈子动态里发帖人的头像、名字只展示、点不进主页（产品要求 2026-11-17）；
+      {/* Header：圈子动态里发帖人的头像、名字只展示、点不进主页（产品要求 2026-11-16）；
           想联系对方走报名，报名成功直接进私聊。 */}
       <View style={s.header}>
         <View testID="plaza-card-author-avatar">
@@ -626,27 +605,16 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       {/* 挂的笔记:和聊天里的笔记卡片同一个样子。点卡片 / 分块打开笔记详情(到对应分块),
           开在卡片所在的 tab 栈里;已删除的笔记只留提示,点不开。宽度跟着帖子内容区走。 */}
       {noteCard ? (
-        // 笔记卡片的底色和帖子卡片是同一个 surface 色,直接放进来就和正文糊成一片:
-        // 外面套一圈淡紫底 + 描边的框,顶上标「附带笔记」,一眼看出这是挂上的附件。
         <View
           testID="plaza-card-note"
-          style={[s.noteAttachment, d.noteAttachment]}
-          onLayout={(event) =>
-            setNoteCardWidth(
-              Math.floor(event.nativeEvent.layout.width) - NOTE_ATTACHMENT_INSET * 2,
-            )
-          }
+          onLayout={(event) => setNoteCardWidth(Math.floor(event.nativeEvent.layout.width))}
         >
-          <View style={s.noteAttachmentHeader}>
-            <Ionicons name="document-text" size={14} color={colors.iconAccent} />
-            <Text style={[s.noteAttachmentLabel, d.noteAttachmentLabel]}>
-              {t('plaza.noteAttachment', { defaultValue: '附带笔记' })}
-            </Text>
-          </View>
           {noteCardWidth > 0 ? (
+            // 收到方的白底和帖子卡片同色,会和正文糊成一片;用聊天里自己发出的那套
+            // 主题紫底白字,一眼看出这是挂上的笔记。
             <NoteCardBody
               note={noteCard}
-              outgoing={false}
+              outgoing
               width={noteCardWidth}
               onPress={noteOpenable ? () => handleOpenNote('') : undefined}
               onSectionPress={noteOpenable ? (_note, section) => handleOpenNote(section) : undefined}

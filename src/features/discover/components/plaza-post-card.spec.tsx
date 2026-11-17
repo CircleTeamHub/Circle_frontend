@@ -149,12 +149,16 @@ describe('the note attached to a post', () => {
     });
 
   test('shows as a note card and opens the note, or the tapped section, in the same tab stack', () => {
+    // themeColors() renders its own probe, so read it before rendering the card.
+    const { sentBubble } = themeColors();
     render(<PlazaPostCard post={{ ...post, noteId: 'note-1', noteCard }} scope="messages" />);
     layoutNote();
     expect(screen.getByText('外滩夜景机位')).toBeTruthy();
-    // 和帖子正文拉开：带「附带笔记」标的框，里面的卡片按框宽减去内边距排。
-    expect(screen.getByText('附带笔记')).toBeTruthy();
-    expect(StyleSheet.flatten(screen.getByTestId('note-card-body').props.style).width).toBe(320 - 16);
+    // 和帖子正文拉开：卡片本身是主题紫（聊天里自己发出的样式），宽度跟着内容区走，外面不再套框。
+    const cardStyle = StyleSheet.flatten(screen.getByTestId('note-card-body').props.style);
+    expect(cardStyle.backgroundColor).toBe(sentBubble);
+    expect(cardStyle.width).toBe(320);
+    expect(screen.queryByText('附带笔记')).toBeNull();
     fireEvent.press(screen.getByTestId('note-card-body'));
     expect(mockPush).toHaveBeenLastCalledWith({
       pathname: '/(tabs)/messages/notes/[id]',

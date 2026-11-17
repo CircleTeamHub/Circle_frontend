@@ -2123,15 +2123,12 @@
       "selectA11y": "Elegir nota {{title}}",
       "noneA11y": "No vincular una nota"
     },
-    "noteAttachment": "Nota adjunta",
     "vipRestriction": "Restricción VIP",
     "creditRestriction": "Restricción de crédito",
     "fancyRequired": "Requiere ID premium",
     "tagsLabel": "Etiquetas (hasta 5)",
     "tagPlaceholder": "Escribe una etiqueta",
     "publishFailed": "Error al publicar",
-    "cannotView": "No se puede ver",
-    "restrictionMessage": "Necesitas {{requirements}} para ver este perfil",
     "create": {
       "allUploadsFailed": "No se pudieron subir los archivos. Comprueba tu conexión e inténtalo de nuevo.",
       "pickerFailed": "No se pueden seleccionar fotos o vídeos",
@@ -2204,7 +2201,6 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
-    "profileBlockedGeneric": "Aún no cumples los requisitos para ver este perfil",
     "signupBlockedGeneric": "Aún no cumples los requisitos de inscripción de esta publicación",
     "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
     "circlePicker": {

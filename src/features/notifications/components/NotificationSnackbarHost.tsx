@@ -197,7 +197,6 @@ export function NotificationSnackbarHost() {
           avatarUrl: shown.avatarUrl,
           title: shown.title,
           summary: shown.summary,
-          icon: 'chatbubble-outline' as const,
         };
       }
       return mapNotificationToRow(shown, t);
