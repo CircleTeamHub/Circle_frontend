@@ -1,7 +1,8 @@
 import { fetchMomentsFeed } from '@/services/api/moments';
 import { useMomentsStore } from './use-moments-store';
 import { reportHandledFailure } from '@/observability/report-failure';
-import type { MomentPost, PaginatedResponse } from '@/types';
+import { markMomentsSeen } from '@/features/discover/utils/moments-update';
+import type { MomentPost } from '@/types';
 
 jest.mock('@/services/api/moments', () => ({
   fetchMomentsFeed: jest.fn(),
@@ -11,6 +12,9 @@ jest.mock('@/services/api/moments', () => ({
 jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: jest.fn(),
 }));
+jest.mock('@/features/discover/utils/moments-update', () => ({
+  markMomentsSeen: jest.fn(),
+}));
 
 let mockAuth = { user: { id: 'account-a' }, sessionEpoch: 1 };
 jest.mock('@/stores/authStore', () => ({
@@ -18,8 +22,13 @@ jest.mock('@/stores/authStore', () => ({
 }));
 
 const mockFetch = fetchMomentsFeed as jest.MockedFunction<typeof fetchMomentsFeed>;
+type Feed = Awaited<ReturnType<typeof fetchMomentsFeed>>;
 
-function page(ids: string[], hasMore: boolean): PaginatedResponse<MomentPost> {
+function page(
+  ids: string[],
+  hasMore: boolean,
+  snapshotAt: string | null = null,
+): Feed {
   return {
     items: ids.map((id) => ({ id }) as MomentPost),
     total: ids.length,
@@ -27,6 +36,7 @@ function page(ids: string[], hasMore: boolean): PaginatedResponse<MomentPost> {
     limit: 20,
     hasMore,
     nextCursor: hasMore ? 'next' : null,
+    snapshotAt,
   };
 }
 
@@ -47,8 +57,8 @@ function deferred<T>() {
 test.each(['success', 'failure'] as const)(
   'a delayed account A %s cannot change account B feed or loading state',
   async (outcome) => {
-    const oldRequest = deferred<PaginatedResponse<MomentPost>>();
-    const newRequest = deferred<PaginatedResponse<MomentPost>>();
+    const oldRequest = deferred<Feed>();
+    const newRequest = deferred<Feed>();
     mockFetch.mockReturnValueOnce(oldRequest.promise).mockReturnValueOnce(newRequest.promise);
     const loadingA = useMomentsStore.getState().fetchMoments(true);
     const oldRequestId = useMomentsStore.getState().latestRequestId;
@@ -75,7 +85,7 @@ test.each(['success', 'failure'] as const)(
 );
 
 test('a previous login for the same account cannot repopulate the renewed session', async () => {
-  const oldRequest = deferred<PaginatedResponse<MomentPost>>();
+  const oldRequest = deferred<Feed>();
   mockFetch.mockReturnValueOnce(oldRequest.promise);
   const loading = useMomentsStore.getState().fetchMoments(true);
   mockAuth = { user: { id: 'account-a' }, sessionEpoch: 2 };
@@ -119,7 +129,7 @@ test('a failed refresh retains the cached cursor and permits pagination', async 
 });
 
 test('a response started before deletion does not restore the deleted post', async () => {
-  const request = deferred<PaginatedResponse<MomentPost>>();
+  const request = deferred<Feed>();
   mockFetch.mockReturnValueOnce(request.promise);
   const refresh = useMomentsStore.getState().fetchMoments(true);
   useMomentsStore.getState().removeMoment('deleted');
@@ -129,4 +139,37 @@ test('a response started before deletion does not restore the deleted post', asy
 
   expect(useMomentsStore.getState().moments.map((item) => item.id)).toEqual(['remaining']);
   expect(useMomentsStore.getState().cursor).toBe('next');
+});
+
+test('a refresh acknowledges the server feed snapshot instead of response time', async () => {
+  const snapshotAt = '2026-11-17T08:20:00.123Z';
+  mockFetch.mockResolvedValueOnce({
+    ...page(['visible'], false),
+    snapshotAt,
+  } as Awaited<ReturnType<typeof fetchMomentsFeed>>);
+
+  await useMomentsStore.getState().fetchMoments(true);
+
+  expect(markMomentsSeen).toHaveBeenCalledWith(snapshotAt);
+  expect(useMomentsStore.getState().lastRefreshTime).toBe(snapshotAt);
+});
+
+test('a feed response without a server snapshot falls back to the request start watermark', async () => {
+  jest.useFakeTimers();
+  try {
+    const startedAt = '2026-11-17T08:20:00.123Z';
+    jest.setSystemTime(new Date(startedAt));
+    const request = deferred<Feed>();
+    mockFetch.mockReturnValueOnce(request.promise);
+
+    const refresh = useMomentsStore.getState().fetchMoments(true);
+    jest.setSystemTime(new Date('2026-11-17T08:20:05.123Z'));
+    request.resolve(page(['legacy'], false));
+    await refresh;
+
+    expect(markMomentsSeen).toHaveBeenCalledWith(startedAt);
+    expect(useMomentsStore.getState().lastRefreshTime).toBe(startedAt);
+  } finally {
+    jest.useRealTimers();
+  }
 });
