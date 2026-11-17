@@ -7,6 +7,7 @@ import { useLayoutEffect } from 'react';
 import { Platform } from 'react-native';
 import { getEncryptedInstance } from '@/storage/encrypted-init';
 import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
+import { markMomentsSeen } from '@/features/discover/utils/moments-update';
 
 interface MomentsState {
   moments: MomentPost[];
@@ -108,6 +109,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
 
     try {
       const result = await fetchMomentsFeed({ cursor, limit: 20 });
+      const refreshedAt = new Date().toISOString();
       set((current) => {
         // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 cursor 推到错误值或
         // 把过期数据塞回去（map dedup 能避免重复 key，但 cursor / hasMore 还是会污染）。
@@ -123,13 +125,13 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
           cursor: result.nextCursor ?? null,
           hasMore: result.hasMore,
           fetchError: false,
-          lastRefreshTime: reset
-            ? new Date().toISOString()
-            : current.lastRefreshTime,
+          lastRefreshTime: reset ? refreshedAt : current.lastRefreshTime,
           loading: false,
           refreshing: false,
         };
       });
+      // 刷到的就是看过的：探索 tab 的「好友有新动态」红点熄掉，水位推到这次刷新。
+      if (reset && get().lastRefreshTime === refreshedAt) markMomentsSeen(refreshedAt);
     } catch (error) {
       if (!isCurrentSession() || get().latestRequestId !== requestId) return;
       set((current) => {

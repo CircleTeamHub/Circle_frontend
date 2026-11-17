@@ -11,6 +11,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/services/api/notifications';
+import { markTraceLikeNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   fetchAllMyCirclePosts,
   markMyPostSignupsRead,
@@ -30,7 +31,8 @@ import { decrementUnreadBadgesFor } from '@/features/notifications/utils/unread-
 import { NewFriendsShortcutRow } from '@/features/notifications/components/NewFriendsShortcutRow';
 import { orderNotificationTabs } from '@/features/notifications/utils/notification-tabs';
 import {
-  mapNotificationToRow,
+  groupTraceLikes,
+  mapNotificationGroupToRow,
   type NotificationRowData,
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
@@ -342,7 +344,10 @@ export default function NotificationCenterScreen() {
   const rows = useMemo<Row[]>(() => {
     const mapped: Row[] =
       isListTab
-        ? interactive.map((n) => ({ raw: n, view: mapNotificationToRow(n, t) }))
+        ? groupTraceLikes(interactive).map((group) => ({
+            raw: group[0],
+            view: mapNotificationGroupToRow(group, t),
+          }))
         : signupPosts.map((p) => ({ raw: p, view: mapMyPostToRow(p, t) }));
     return filter === 'unread' ? mapped.filter((r) => r.view.unread) : mapped;
   }, [isListTab, filter, interactive, signupPosts, t]);
@@ -422,12 +427,16 @@ export default function NotificationCenterScreen() {
     (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
       if (!isCurrentSession()) return;
       if ('type' in raw) {
-        store().markInteractiveReadLocal(raw.id);
-        if (!raw.read) decrementUnreadBadgesFor(raw.type);
-        void markNotificationRead(raw.id).catch((e) => {
-          if (isCurrentSession())
-            reportHandledFailure('notificationCenter', 'markRead', e);
-        });
+        if (raw.type === 'TRACE_LIKE' && raw.fromTrace?.id) {
+          void markTraceLikeNotificationsRead(raw.fromTrace.id);
+        } else {
+          store().markInteractiveReadLocal(raw.id);
+          if (!raw.read) decrementUnreadBadgesFor(raw.type);
+          void markNotificationRead(raw.id).catch((e) => {
+            if (isCurrentSession())
+              reportHandledFailure('notificationCenter', 'markRead', e);
+          });
+        }
         // 被移出 / 解散：群已经不在了，没有可去的地方，看过即可。
         if (MEMBERSHIP_NOTICE_TYPES.has(raw.type)) return;
         const route = getSnackbarRoute(

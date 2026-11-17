@@ -2022,6 +2022,7 @@
     "myApplied": "自分の申請",
     "noCircles": "サークルなし",
     "newPosts": "新着投稿{{count}}件、タップして表示",
+    "momentsHasUpdate": "友達の新しい投稿があります",
     "noMoments": "モーメントはまだありません",
     "addFriendHint": "友だちを追加するとモーメントが見られます",
     "notifications": {
@@ -2239,6 +2240,7 @@
     "summary": {
       "default": "通知を送りました",
       "TRACE_LIKE": "あなたのモーメントにいいねしました",
+      "TRACE_LIKE_GROUPED": "ほか{{others}}人があなたのモーメントにいいねしました",
       "PROFILE_LIKE": "あなたにいいねしました",
       "TRACE_COMMENT": "あなたのモーメントにコメントしました",
       "COMMENT_REPLY": "あなたに返信しました",

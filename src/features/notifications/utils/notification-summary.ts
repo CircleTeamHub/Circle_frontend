@@ -43,6 +43,47 @@ function subjectRow(n: NotificationItem, t: TFunc): { title: string; summary: st
   return null;
 }
 
+/**
+ * 同一条动态的点赞合并成一组，排在最新那个赞的位置（列表本身新的在前）。其余通知各自一组。
+ * 只合并已经加载的部分：往下翻页时，这一行的人数会跟着变大。
+ */
+export function groupTraceLikes(
+  items: readonly NotificationItem[],
+): NotificationItem[][] {
+  const groups: NotificationItem[][] = [];
+  const likesByTrace = new Map<string, NotificationItem[]>();
+  for (const item of items) {
+    const traceId = item.type === 'TRACE_LIKE' ? item.fromTrace?.id : undefined;
+    const group = traceId ? likesByTrace.get(traceId) : undefined;
+    if (group) {
+      group.push(item);
+      continue;
+    }
+    const created = [item];
+    if (traceId) likesByTrace.set(traceId, created);
+    groups.push(created);
+  }
+  return groups;
+}
+
+/** 一组 → 一行：头像和名字是最新点赞的人，摘要写「和另外 N 人点赞了你的动态」，任一条未读即未读。 */
+export function mapNotificationGroupToRow(
+  group: readonly NotificationItem[],
+  t: TFunc,
+): NotificationRowData {
+  const row = mapNotificationToRow(group[0], t);
+  if (group.length === 1) return row;
+  const likers = new Set(group.map((n) => n.fromUser?.id ?? n.id)).size;
+  return {
+    ...row,
+    summary:
+      likers > 1
+        ? t('notifications.summary.TRACE_LIKE_GROUPED', { others: likers - 1 })
+        : row.summary,
+    unread: group.some((n) => !n.read),
+  };
+}
+
 export function mapNotificationToRow(
   n: NotificationItem,
   t: TFunc,

@@ -58,8 +58,10 @@ export default function ExploreScreen() {
     titleFontLoaded && TILE_TITLE_FONT_LANGUAGES.includes(i18n.language?.slice(0, 2))
       ? TILE_TITLE_FONT
       : undefined;
-  // 朋友圈磁贴的红点 = 朋友圈铃铛的未读（与探索 tab 的红点同一口径）。
+  // 朋友圈磁贴的红点 = 朋友圈铃铛的未读（与探索 tab 的红点同一口径）；
+  // 没有未读时，好友发了新动态亮一个不带数字的小点。
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
+  const momentsHasUpdate = useTabBadgeStore((state) => state.momentsHasUpdate);
 
   const d = useMemo(
     () => ({
@@ -154,10 +156,13 @@ export default function ExploreScreen() {
             titleFontFamily={titleFontFamily}
             art={<MomentsTileArt gradient={Gradients.exploreMoments} />}
             badgeCount={momentsUnread}
+            showDot={momentsHasUpdate}
             accessibilityLabel={
               momentsUnread > 0
                 ? `${momentsTitle} ${t('tabs.unreadCount', { count: momentsUnread })}`
-                : momentsTitle
+                : momentsHasUpdate
+                  ? `${momentsTitle} ${t('discover.momentsHasUpdate')}`
+                  : momentsTitle
             }
             onPress={handleOpenMoments}
           />

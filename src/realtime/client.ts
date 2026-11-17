@@ -21,6 +21,7 @@ import {
   useCircleNotificationStore,
 } from '@/features/discover/store/use-circle-notification-store';
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
+import { scheduleMomentsUpdateCheck } from '@/features/discover/utils/moments-update';
 import {
   useNoteStatusSignalStore,
   type NoteSourceStatusChange,
@@ -379,6 +380,9 @@ function runPostAuthenticationRecovery(): void {
   // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
   // recovery，把断线期间错过的 notification.created 列表项拉回来。
   void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
+  // 探索 tab 的「好友有新动态」红点：冷启动、回前台重连都要补问一次，
+  // App 关着或断线时好友发的动态没有 poke 可等。
+  scheduleMomentsUpdateCheck();
   if (!shouldForceRecovery) return;
   // 首次认证时页面会后台核对,保留跨重启展示快照;重连才清掉可能错过撤回的公告。
   useAnnouncementSignalStore.getState().bump();
@@ -681,6 +685,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       // 轻量 poke（#89）：不带内容，只表示「你的朋友圈 feed 变了」。bump 后由
       // feed 组件自行决定拉不拉（权限判定始终在 GET /trace/feed 服务端）。
       useMomentsFeedSignalStore.getState().bump();
+      scheduleMomentsUpdateCheck();
       return;
     case 'note.source.status.changed':
       if (!isNoteSourceStatusChange(message.payload)) {
