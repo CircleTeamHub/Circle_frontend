@@ -8,7 +8,6 @@ import {
   updateNote,
 } from '@/services/api/notes';
 import { reportHandledFailure } from '@/observability/report-failure';
-import type { CreateNoteInput, NoteDetail } from '@/features/notes/types';
 import {
   confirmNoteDraftDeletion,
   finishLocalNoteDraftDeletion,
@@ -19,8 +18,14 @@ import {
   loadLocalNoteDraftSummaries,
   loadPendingNoteDraftDeletions,
   removeLocalNoteDraft,
+  saveLocalNoteDraft,
   type InterruptedNoteContent,
+  type NoteEditorDraftRecord,
 } from './note-editor-drafts';
+import {
+  noteSubmissionMatchesResult,
+  noteUpdateResultMatchesTarget,
+} from './note-submission';
 
 /**
  * 草稿箱取消以后，编辑到一半被打断的内容（闪退、被系统杀掉、退出时没存成）一律存成笔记。
@@ -52,26 +57,12 @@ interface RecoveryTarget {
   content: InterruptedNoteContent;
   /** 编辑的是已有笔记时它的 id。 */
   noteId: string | null;
-  /** 闪退前已经发出、结果未知的那次提交：原样重放，不能换成更新的内容。 */
-  pendingInput?: CreateNoteInput;
+  updatedAt: number;
+  local?: NoteEditorDraftRecord;
 }
 
-async function publishOne(target: RecoveryTarget, fallbackTitle: string): Promise<NoteDetail> {
-  const input = target.pendingInput ?? interruptedNoteToInput(target.content, fallbackTitle);
-  if (target.noteId) {
-    // PATCH 是整份替换：不带 pinned 就是取消置顶，所以先读出当前值。
-    let current: NoteDetail | null = null;
-    try {
-      current = await fetchNoteDetail(target.noteId);
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 404)) throw error;
-    }
-    // 要更新的那篇已经不在了（被彻底删除）：内容另存成一篇新笔记，不丢。
-    if (current) return updateNote(target.noteId, { ...input, pinned: input.pinned ?? current.pinned });
-  }
-  const { pinned: _pinned, ...createInput } = input;
-  return createNote({ ...createInput, status: 'ACTIVE' });
-}
+export type ResumeDraft = { draftId: string; noteId: string | null };
+type RecoveryResult = { published: number; resumeDraft: ResumeDraft | null };
 
 async function retryDraftDeletions(userId: string, isCurrent: () => boolean) {
   // 逐条来:断网时不要一下子打出一串 DELETE。
@@ -93,23 +84,24 @@ function localTargets(userId: string): RecoveryTarget[] {
     if (openEditors.has(summary.id)) return [];
     const record = loadLocalNoteDraft(userId, summary.id);
     if (!record) return [];
-    // 服务端回过一篇对不上号的笔记:结果说不清,留着这份记录,不再自动重放。
-    if (record.pendingSubmission?.conflictingNoteId) return [];
     return [{
       content: record,
       noteId: record.pendingSubmission ? record.pendingSubmission.noteId : record.noteId,
-      ...(record.pendingSubmission ? { pendingInput: record.pendingSubmission.input } : {}),
+      updatedAt: record.updatedAt,
+      local: record,
     }];
   });
 }
 
-async function remoteTargets(userId: string, skip: ReadonlySet<string>, now: number): Promise<RecoveryTarget[]> {
+async function remoteTargets(userId: string, skip: ReadonlySet<string>, now: number, isCurrent: () => boolean): Promise<RecoveryTarget[]> {
   const summaries = await fetchNoteDrafts();
   const targets: RecoveryTarget[] = [];
   for (const summary of summaries) {
+    if (!isCurrent()) break;
     if (skip.has(summary.id) || openEditors.has(summary.id) || isLocalNoteDraftDeleted(userId, summary.id)) continue;
     if (now - new Date(summary.updatedAt).getTime() < REMOTE_DRAFT_IDLE_MS) continue;
     const draft = await fetchNoteDraft(summary.id);
+    if (now - new Date(draft.updatedAt).getTime() < REMOTE_DRAFT_IDLE_MS) continue;
     targets.push({
       content: {
         id: draft.id,
@@ -122,15 +114,16 @@ async function remoteTargets(userId: string, skip: ReadonlySet<string>, now: num
         city: draft.city ?? null,
       },
       noteId: draft.sourceNoteId ?? null,
+      updatedAt: Date.parse(draft.updatedAt),
     });
   }
   return targets;
 }
 
-let running: Promise<number> | null = null;
+let running: { userId: string; isCurrent: () => boolean; work: Promise<RecoveryResult> } | null = null;
 
 /**
- * 把被打断的编辑存成笔记，返回存成了几篇。单飞：并发调用拿到同一次的结果。
+ * 把被打断的编辑存成笔记，也返回需要回编辑器处理的本机草稿。
  * 单条失败不影响其余的，记录留着，下次回到笔记页再试。
  */
 export function publishInterruptedNotes(options: {
@@ -140,11 +133,13 @@ export function publishInterruptedNotes(options: {
   /** 换了账号 / 会话就停。 */
   isCurrent: () => boolean;
   now?: number;
-}): Promise<number> {
-  running ??= run(options).finally(() => {
-    running = null;
+}): Promise<RecoveryResult> {
+  if (running?.userId === options.userId && running.isCurrent()) return running.work;
+  const work = run(options).finally(() => {
+    if (running?.work === work) running = null;
   });
-  return running;
+  running = { userId: options.userId, isCurrent: options.isCurrent, work };
+  return work;
 }
 
 async function run({
@@ -152,42 +147,70 @@ async function run({
   fallbackTitle,
   isCurrent,
   now = Date.now(),
-}: Parameters<typeof publishInterruptedNotes>[0]): Promise<number> {
+}: Parameters<typeof publishInterruptedNotes>[0]): Promise<RecoveryResult> {
   await retryDraftDeletions(userId, isCurrent);
+  const result: RecoveryResult = { published: 0, resumeDraft: null };
+  if (!isCurrent()) return result;
   const local = localTargets(userId);
   let remote: RecoveryTarget[] = [];
   const remoteDue = !lastRemoteCheck || lastRemoteCheck.userId !== userId ||
     now - lastRemoteCheck.at >= REMOTE_CHECK_INTERVAL_MS || now < lastRemoteCheck.at;
   if (remoteDue) {
     try {
-      remote = await remoteTargets(userId, new Set(local.map((target) => target.content.id)), now);
-      lastRemoteCheck = { userId, at: now };
+      remote = await remoteTargets(userId, new Set(local.map((target) => target.content.id)), now, isCurrent);
+      if (isCurrent()) lastRemoteCheck = { userId, at: now };
     } catch (error) {
       // 拉不到服务端草稿不影响本机这些；下次回来再看。
       reportHandledFailure('noteRecovery', 'loadRemoteDrafts', error);
     }
   }
-  let published = 0;
   for (const target of [...local, ...remote]) {
     if (!isCurrent()) break;
     const draftId = target.content.id;
     if (openEditors.has(draftId)) continue;
-    if (!target.pendingInput && !interruptedNoteHasContent(target.content)) {
+    const pending = target.local?.pendingSubmission;
+    if (pending?.conflictingNoteId || target.local?.audioItems.some((item) => item.uploadStatus !== 'UPLOADED')) {
+      result.resumeDraft ??= { draftId, noteId: target.noteId };
+      continue;
+    }
+    if (!pending && !interruptedNoteHasContent(target.content)) {
       // 只打开过、什么都没写：没有可存的，记录直接清掉。
       removeLocalNoteDraft(userId, draftId);
       void deleteNoteDraft(draftId).catch((error) => reportHandledFailure('noteRecovery', 'emptyDraftDelete', error));
       continue;
     }
     try {
-      await publishOne(target, fallbackTitle);
+      const input = pending?.input ?? interruptedNoteToInput(target.content, fallbackTitle);
+      // 普通更新保留置顶，已发出的提交则原样重放。详情 404 可能是回收站里的笔记，不能另建一篇。
+      const current = target.noteId && !pending ? await fetchNoteDetail(target.noteId) : null;
       if (!isCurrent()) break;
+      if (current && Date.parse(current.updatedAt) > target.updatedAt) {
+        result.resumeDraft ??= { draftId, noteId: target.noteId };
+        continue;
+      }
+      const saved = target.noteId
+        ? await updateNote(target.noteId, current ? { ...input, pinned: current.pinned } : input)
+        : await createNote(pending ? input : { ...input, status: 'ACTIVE' });
+      if (!isCurrent()) break;
+      if (pending && target.local && !(pending.noteId
+        ? noteUpdateResultMatchesTarget(pending, saved)
+        : noteSubmissionMatchesResult(pending, saved))) {
+        saveLocalNoteDraft(userId, {
+          ...target.local,
+          pendingSubmission: { ...pending, conflictingNoteId: saved?.id },
+        });
+        result.resumeDraft ??= { draftId, noteId: target.noteId };
+        reportHandledFailure('noteRecovery', 'publish', new Error('Note submission outcome differs from the saved snapshot'));
+        continue;
+      }
       removeLocalNoteDraft(userId, draftId);
-      published += 1;
+      result.published += 1;
       // 新建/更新时服务端已经按 clientDraftID 消费了草稿；这里只是兜底清理，失败不要紧。
       void deleteNoteDraft(draftId).catch((error) => reportHandledFailure('noteRecovery', 'consumedDraftDelete', error));
     } catch (error) {
+      if (target.noteId && error instanceof ApiError && error.status === 404) continue;
       reportHandledFailure('noteRecovery', 'publish', error);
     }
   }
-  return published;
+  return result;
 }

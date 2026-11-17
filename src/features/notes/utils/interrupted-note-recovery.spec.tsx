@@ -31,7 +31,7 @@ jest.mock('@/storage/page-snapshots', () => ({
   writePageSnapshot: jest.fn(),
 }));
 jest.mock('./note-recording-storage', () => ({
-  isNoteRecordingId: () => false,
+  isNoteRecordingId: (id: unknown) => id === 'recording-local.m4a',
   removeNoteRecording: jest.fn(async () => undefined),
   restoreNoteRecording: jest.fn(async () => undefined),
 }));
@@ -88,8 +88,9 @@ function record(overrides: Partial<NoteEditorDraftRecord> = {}): NoteEditorDraft
   } as NoteEditorDraftRecord;
 }
 
-const run = () =>
-  publishInterruptedNotes({ userId: USER, fallbackTitle: '未命名笔记', isCurrent: () => true, now: (clock += 60 * 60_000) });
+const recover = (isCurrent = () => true) =>
+  publishInterruptedNotes({ userId: USER, fallbackTitle: '未命名笔记', isCurrent, now: (clock += 60 * 60_000) });
+const run = async (isCurrent?: () => boolean) => (await recover(isCurrent)).published;
 
 beforeEach(() => {
   USER = `user-${++userSeq}`;
@@ -130,19 +131,63 @@ test('interrupted edits to an existing note update it and keep it pinned', async
   expect(createNote).not.toHaveBeenCalled();
 });
 
-test('if the note being edited no longer exists, the content is kept as a new note', async () => {
+test('an older draft is offered for review instead of replacing a newer note', async () => {
+  saveLocalNoteDraft(USER, record({ noteId: 'note-old' }));
+  jest.mocked(fetchNoteDetail).mockResolvedValueOnce({
+    id: 'note-old', pinned: false, updatedAt: new Date(NOW + 60_000).toISOString(),
+  } as never);
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: { draftId: 'draft-1', noteId: 'note-old' } });
+  expect(updateNote).not.toHaveBeenCalled();
+  expect(loadLocalNoteDraft(USER, 'draft-1')).not.toBeNull();
+});
+
+test('a trashed note stays in the recycle bin and its local edits are retained', async () => {
   saveLocalNoteDraft(USER, record({ noteId: 'note-gone', title: '没了' }));
   jest.mocked(fetchNoteDetail).mockRejectedValue(new ApiError('NOT_FOUND', { status: 404, failureKind: 'http' }));
-  await expect(run()).resolves.toBe(1);
+  await expect(run()).resolves.toBe(0);
   expect(updateNote).not.toHaveBeenCalled();
-  expect(createNote).toHaveBeenCalledWith(expect.objectContaining({ title: '没了', status: 'ACTIVE' }));
+  expect(createNote).not.toHaveBeenCalled();
+  expect(loadLocalNoteDraft(USER, 'draft-1')).not.toBeNull();
 });
 
 test('a save that was already sent when the app died is replayed exactly, not rebuilt from newer content', async () => {
   const sent = { title: '发出去的那次', media: [], clientDraftID: 'draft-1', status: 'ACTIVE' as const };
   saveLocalNoteDraft(USER, record({ title: '之后又改了', pendingSubmission: { noteId: null, input: sent } }));
+  jest.mocked(createNote).mockResolvedValueOnce({ id: 'note-new', title: sent.title } as never);
   await expect(run()).resolves.toBe(1);
   expect(createNote).toHaveBeenCalledWith(sent);
+});
+
+test('a replay that returns different content keeps the original submission', async () => {
+  const sent = { title: '发出去的那次', media: [], clientDraftID: 'draft-1', status: 'ACTIVE' as const };
+  saveLocalNoteDraft(USER, record({ pendingSubmission: { noteId: null, input: sent } }));
+  jest.mocked(createNote).mockResolvedValueOnce({ id: 'note-other', title: '另一篇' } as never);
+  await expect(run()).resolves.toBe(0);
+  expect(deleteNoteDraft).not.toHaveBeenCalled();
+  expect(loadLocalNoteDraft(USER, 'draft-1')?.pendingSubmission?.input).toEqual(sent);
+});
+
+test('a failed recording upload stays available to resume in the editor', async () => {
+  saveLocalNoteDraft(USER, record({ audioItems: [{
+    type: 'AUDIO', clientId: 'recording:local', objectKey: '', sortOrder: 0,
+    localRecordingId: 'recording-local.m4a', previewUri: 'file:///rec.m4a', uploadStatus: 'PENDING',
+  }] }));
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: { draftId: 'draft-1', noteId: null } });
+  expect(createNote).not.toHaveBeenCalled();
+  expect(deleteNoteDraft).not.toHaveBeenCalled();
+  expect(loadLocalNoteDraft(USER, 'draft-1')?.audioItems[0]?.localRecordingId).toBe('recording-local.m4a');
+});
+
+test('an account switch while checking the note stops recovery before issuing the write', async () => {
+  saveLocalNoteDraft(USER, record({ noteId: 'note-old' }));
+  let current = true;
+  jest.mocked(fetchNoteDetail).mockImplementationOnce(async () => {
+    current = false;
+    return { id: 'note-old', pinned: false } as never;
+  });
+  await expect(run(() => current)).resolves.toBe(0);
+  expect(updateNote).not.toHaveBeenCalled();
+  expect(createNote).not.toHaveBeenCalled();
 });
 
 test('a draft whose editor is still open somewhere is left alone', async () => {
@@ -180,7 +225,7 @@ test('server drafts from another device are published only once they have sat un
   ]);
   jest.mocked(fetchNoteDraft).mockResolvedValue({
     id: 'remote-idle', title: '另一台', content: '内容', contentJson: null, sections: null,
-    groupIds: [], mediaKeys: [], sourceNoteId: null, contentPreview: null, mediaCount: 0, createdAt: '', updatedAt: '',
+    groupIds: [], mediaKeys: [], sourceNoteId: null, contentPreview: null, mediaCount: 0, createdAt: '', updatedAt: new Date(at - 31 * 60_000).toISOString(),
   });
   await expect(run()).resolves.toBe(1);
   expect(fetchNoteDraft).toHaveBeenCalledTimes(1);

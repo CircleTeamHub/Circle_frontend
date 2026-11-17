@@ -1614,12 +1614,41 @@ export default function EditNoteScreen() {
     [invalidateUploadOwnership],
   );
 
-  const exitEditor = useCallback(
+  const discardDraftAndExit = useCallback(
     (action?: NavigationAction) => {
+      const userId = currentUser?.id;
+      if (!userId) { completeNavigation(action); return; }
       const isCurrentEditor = () => {
         const auth = useAuthStore.getState();
-        return auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
+        return auth.user?.id === userId && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
       };
+      if (!isCurrentEditor()) return;
+      try {
+        const recordingIds = buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []);
+        if (!stageLocalNoteDraftDeletion(userId, editorDraftId, recordingIds)) return;
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftDiscard', error);
+        Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
+        return;
+      }
+      draftRemoteQueue.cancel();
+      completeNavigation(action);
+      // Keep the deletion record until the server draft is gone, even after a restart.
+      void draftSavePromiseRef.current.catch(() => false).then(async () => {
+        if (!isCurrentEditor()) return;
+        try {
+          const cleanedRecordings = await finishLocalNoteDraftDeletion(userId, editorDraftId);
+          if (!isCurrentEditor()) return;
+          await deleteNoteDraft(editorDraftId);
+          if (isCurrentEditor()) confirmNoteDraftDeletion(userId, editorDraftId, cleanedRecordings);
+        } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
+      });
+    },
+    [buildCurrentDraftRecord, completeNavigation, currentUser?.id, draftRemoteQueue, draftRouteKey, editorDraftId, sessionEpoch, t],
+  );
+
+  const exitEditor = useCallback(
+    (action?: NavigationAction) => {
       if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) { draftRemoteQueue.cancel(); completeNavigation(action); return; }
       if (recordingAudioRef.current || uploadInFlightRef.current || saveInFlightRef.current) {
         Alert.alert(
@@ -1634,7 +1663,8 @@ export default function EditNoteScreen() {
         void submitNoteRef.current?.({ action });
       };
       if (pendingSubmissionRef.current) {
-        saveAndExit();
+        if (draftMode === 'recovery') completeNavigation(action);
+        else saveAndExit();
         return;
       }
       const userId = currentUser?.id;
@@ -1644,31 +1674,22 @@ export default function EditNoteScreen() {
         draftHydratedRef.current &&
         entryFingerprintRef.current != null &&
         entryFingerprintRef.current !== currentFingerprint);
-      if (changedThisSession || entryDraftRecordRef.current || draftPersistedFingerprintRef.current === currentFingerprint) {
+      if (draftMode === 'recovery' && !changedThisSession) {
+        completeNavigation(action);
+        return;
+      }
+      if (changedThisSession || entryDraftRecordRef.current) {
         saveAndExit();
         return;
       }
       // 新笔记改了又全部改回去：自动保存替闪退写下的中间状态删掉，不留着等下次被存成笔记。
-      try { if (!stageLocalNoteDraftDeletion(userId, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-      catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
-      draftRemoteQueue.cancel();
-      completeNavigation(action);
-      // Delete after in-flight saves, so their late response cannot revive a discarded draft.
-      void draftSavePromiseRef.current.catch(() => false).then(async () => {
-        if (!isCurrentEditor()) return;
-        try {
-          const cleanedRecordings = await finishLocalNoteDraftDeletion(userId, editorDraftId);
-          if (!isCurrentEditor()) return;
-          await deleteNoteDraft(editorDraftId);
-          if (isCurrentEditor()) confirmNoteDraftDeletion(userId, editorDraftId, cleanedRecordings);
-        } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
-      });
+      discardDraftAndExit(action);
     },
     [
       completeNavigation,
       currentUser?.id,
-      sessionEpoch,
-      draftRouteKey,
+      discardDraftAndExit,
+      draftMode,
       buildCurrentDraftRecord,
       editorDraftId,
       draftRemoteQueue,
@@ -2722,24 +2743,13 @@ export default function EditNoteScreen() {
   const submitNote = useCallback(async (leaving: { action?: NavigationAction } | null = null) => {
     const saveStartedAt = diagnosticNow();
     const exitAction = leaving?.action;
-    // 不存就走:把这份内容的记录一并删掉,免得回到「我的笔记」时又被补存成笔记。
-    const discardAndExit = () => {
-      draftRemoteQueue.cancel();
-      removeLocalNoteDraft(currentUser?.id, editorDraftId);
-      cleanupRecordingCopies();
-      // 等在途的自动保存回来再删服务端那份,不然它晚到一步又把草稿写回去。
-      void draftSavePromiseRef.current.catch(() => false).then(() => deleteNoteDraft(editorDraftId)).catch((error) => {
-        reportHandledFailure('noteEditor', 'discardDraftDelete', error);
-      });
-      completeNavigation(exitAction, true);
-    };
     const offerExitWithoutSaving = (alertTitle: string, message: string) => {
       Alert.alert(alertTitle, message, [
         { text: t('notes.edit.keepEditing', { defaultValue: '继续编辑' }), style: 'cancel' },
         {
           text: t('notes.edit.exitWithoutSaving', { defaultValue: '不保存，退出' }),
           style: 'destructive',
-          onPress: discardAndExit,
+          onPress: () => discardDraftAndExit(exitAction),
         },
       ]);
     };
@@ -3004,6 +3014,7 @@ export default function EditNoteScreen() {
     }
   }, [
     getTextError,
+    discardDraftAndExit,
     buildCurrentDraftRecord,
     city,
     draftRemoteQueue,

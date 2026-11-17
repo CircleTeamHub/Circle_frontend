@@ -3189,6 +3189,7 @@
     "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
     "recycleBinTitle": "Recycle bin",
     "interruptedSaved": "Saved {{count}} unfinished edits as notes",
+    "resumeInterrupted": "Continue editing the unsaved note",
     "unlistedTitle": "Unlisted notes",
     "unlistedAutoDeleteHint": "Unlisted notes are deleted after 60 days and can be relisted any time before that. Others still see them, marked \"Off shelf\".",
     "format": {

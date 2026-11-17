@@ -2250,6 +2250,31 @@ function signedInDraft() {
   mockRouteDraftId = reviewDraftId;
 }
 
+test('Back from a new untouched editor does not publish an untitled note', async () => {
+  signedInDraft();
+  mockDraftMode = 'new';
+  render(<EditNoteScreen />);
+  const done = await screen.findByText('notes.edit.done');
+  expect(done).toBeTruthy();
+  const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+  await act(async () => { guard?.({ data: { action: { type: 'GO_BACK' } } } as never); });
+  expect(createNote).not.toHaveBeenCalled();
+  expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' });
+});
+
+test('viewing a recovered draft and going back leaves it for review', async () => {
+  signedInDraft();
+  mockDraftMode = 'recovery';
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  render(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+  await act(async () => { guard?.({ data: { action: { type: 'GO_BACK' } } } as never); });
+  expect(createNote).not.toHaveBeenCalled();
+  expect(mockDeleteDraft).not.toHaveBeenCalled();
+  expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' });
+});
+
 test('server draft hydration restores each media region rather than combining them', () => {
   const record = draftRecordFromServer(reviewDraft({ sections: {
     text: { content: '', contentJson: [{ type: 'noteLayout', props: {
@@ -3339,6 +3364,28 @@ function storedReviewDraft(values: Map<string, string>) {
   const value = [...values.entries()].find(([key]) => key.startsWith('circle-im-note-draft:v1:') && key.endsWith(`:${reviewDraftId}`))?.[1];
   return value ? JSON.parse(value) as { title: string; pendingSubmission?: { noteId: string | null; input: CreateNoteInput } } : undefined;
 }
+
+test('leaving without saving keeps a durable deletion record if the remote draft cannot be deleted', async () => {
+  signedInDraft();
+  const values = durableDraftStorage();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(createNote).mockRejectedValueOnce(new ApiError('invalid note', { status: 400, failureKind: 'http' }));
+  mockDeleteDraft.mockRejectedValueOnce(new Error('offline'));
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    await act(async () => { guard?.({ data: { action: { type: 'GO_BACK' } } } as never); });
+    const buttons = alert.mock.calls.at(-1)?.[2];
+    const discard = buttons?.find((button) => button.text === 'notes.edit.exitWithoutSaving');
+    expect(discard?.onPress).toBeDefined();
+    await act(async () => { discard?.onPress?.(); });
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith(reviewDraftId));
+    expect(values.get('circle-im-note-draft-deletions:v1:owner-a')).toContain(reviewDraftId);
+    expect(storedReviewDraft(values)).toBeUndefined();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
 
 test.each(['POST', 'PATCH'] as const)('an ambiguous %s freezes keyboard/DOM edits and retries the durably stored original write', async (method) => {
   signedInDraft();

@@ -1486,6 +1486,7 @@
     "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí y se borran automáticamente a los 30 días.",
     "recycleBinTitle": "Papelera",
     "interruptedSaved": "{{count}} ediciones sin terminar se guardaron como notas",
+    "resumeInterrupted": "Seguir editando la nota sin guardar",
     "unlistedTitle": "Notas retiradas",
     "unlistedAutoDeleteHint": "Las notas retiradas se eliminan a los 60 días y puedes volver a publicarlas antes. Los demás las siguen viendo, marcadas como «Retirado».",
     "format": {

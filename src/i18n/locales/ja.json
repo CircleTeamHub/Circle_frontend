@@ -1482,6 +1482,7 @@
     "recycleBinHint": "削除したノートはここから復元できます。30日後に自動的に消去されます。",
     "recycleBinTitle": "ごみ箱",
     "interruptedSaved": "保存しきれなかった編集 {{count}} 件をノートとして保存しました",
+    "resumeInterrupted": "未保存のノートの編集を続ける",
     "unlistedTitle": "非公開のノート",
     "unlistedAutoDeleteHint": "掲載停止のノートは60日後に自動で削除され、それまではいつでも再掲載できます。他の人には「掲載停止」と表示されます。",
     "format": {

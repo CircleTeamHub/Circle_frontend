@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import NotesScreen from './NotesScreen';
 import NoteManagementScreen from './NoteManagementScreen';
 import { fetchNoteDraft, fetchNotes, fetchNoteGroups, getCachedNotes } from '@/services/api/notes';
+import { publishInterruptedNotes } from '@/features/notes/utils/interrupted-note-recovery';
 import type { NoteSummary } from '@/features/notes/types';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), setParams: jest.fn() };
@@ -28,6 +29,9 @@ jest.mock('@/stores/authStore', () => {
 jest.mock('@/features/notes/store/use-notes-tab-order-store', () => ({ useNotesTabOrderStore: (selector: (state: { orderIds: string[] }) => unknown) => selector({ orderIds: mockOrder }) }));
 jest.mock('@/storage', () => ({ storage: { getString: () => undefined } }));
 jest.mock('@/features/notes/utils/note-recording-storage', () => ({}));
+jest.mock('@/features/notes/utils/interrupted-note-recovery', () => ({
+  publishInterruptedNotes: jest.fn(async () => ({ published: 0, resumeDraft: null })),
+}));
 jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteGroups: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteDraft: jest.fn(),
   // No persisted page snapshot by default: every screen starts from the network load under test.
   getCachedNotes: jest.fn(() => null), getCachedNoteGroups: () => null }));
@@ -91,6 +95,18 @@ test('offline New generates distinct route IDs and explicitly requests a fresh e
   expect(routes[0].pathname).toBe('/(tabs)/profile/notes/edit'); expect(routes[0].params.draftMode).toBe('new');
   expect(routes[0].params.draftId).toBeTruthy(); expect(routes[1].params.draftId).not.toBe(routes[0].params.draftId);
   expect(fetchNoteDraft).not.toHaveBeenCalled();
+});
+
+test('a note requiring recovery opens the existing editor with the saved draft ID', async () => {
+  mockRouter.push.mockClear();
+  jest.mocked(publishInterruptedNotes).mockResolvedValueOnce({
+    published: 0, resumeDraft: { draftId: 'saved-draft', noteId: 'existing-note' },
+  });
+  render(<NotesScreen />);
+  fireEvent.press(await screen.findByRole('button', { name: 'notes.resumeInterrupted' }));
+  expect(mockRouter.push).toHaveBeenCalledWith({
+    pathname: '/(tabs)/profile/notes/edit', params: { draftId: 'saved-draft', draftMode: 'recovery', id: 'existing-note' },
+  });
 });
 
 describe.each([['notes', NotesScreen], ['group notes', NoteManagementScreen]] as const)('%s contact navigation', (_name, Screen) => {

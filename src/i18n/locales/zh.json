@@ -3183,6 +3183,7 @@
     "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",
     "recycleBinTitle": "回收站",
     "interruptedSaved": "已把 {{count}} 篇没保存完的编辑存成笔记",
+    "resumeInterrupted": "继续编辑未保存的笔记",
     "unlistedTitle": "已下架笔记",
     "unlistedAutoDeleteHint": "下架 60 天后自动删除，期间可随时重新上架；别人仍能看到，显示为「下架」。",
     "format": {
