@@ -1592,6 +1592,7 @@
       "selectA11y": "Select note {{title}}",
       "noneA11y": "Don't link a note"
     },
+    "noteAttachment": "Attached note",
     "vipRestriction": "VIP Restriction",
     "creditRestriction": "Credit Restriction",
     "fancyRequired": "Fancy Number Required",

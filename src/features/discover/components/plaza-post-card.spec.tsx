@@ -110,30 +110,17 @@ test('signing up opens the chat with the poster in the same tab stack', async ()
   });
 });
 
-// 广场里点别人的头像或名字:进对方主页,开在卡片所在的 tab 栈里(返回回到广场)。
-test("tapping the poster's avatar or name opens their profile in the same tab stack", () => {
-  render(<PlazaPostCard post={post} scope="discover" />);
-  fireEvent.press(screen.getByTestId('plaza-card-author-avatar'));
-  expect(mockNavigate).toHaveBeenCalledWith({
-    pathname: '/(tabs)/discover/user/[id]',
-    params: { id: 'author' },
-  });
-  fireEvent.press(screen.getByText('丁哥只认钱'));
-  expect(mockNavigate).toHaveBeenCalledTimes(2);
-});
-
-test("a viewer below the post's view requirements is told why instead of nothing happening", () => {
+// 圈子动态里发帖人的头像、名字只展示，点不进主页（产品要求 2026-11-17）：想联系对方走报名。
+test("the poster's avatar and name do not open their profile", () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   try {
-    render(
-      <PlazaPostCard
-        post={{ ...post, canInteract: false, restrictions: { ...noLimits, vipLevel: 3 } }}
-        scope="discover"
-      />,
-    );
+    render(<PlazaPostCard post={{ ...post, canInteract: false }} scope="discover" />);
     fireEvent.press(screen.getByTestId('plaza-card-author-avatar'));
+    fireEvent.press(screen.getByText('丁哥只认钱'));
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(alert).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(alert).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '丁哥只认钱' })).toBeNull();
   } finally {
     alert.mockRestore();
   }
@@ -165,6 +152,9 @@ describe('the note attached to a post', () => {
     render(<PlazaPostCard post={{ ...post, noteId: 'note-1', noteCard }} scope="messages" />);
     layoutNote();
     expect(screen.getByText('外滩夜景机位')).toBeTruthy();
+    // 和帖子正文拉开：带「附带笔记」标的框，里面的卡片按框宽减去内边距排。
+    expect(screen.getByText('附带笔记')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('note-card-body').props.style).width).toBe(320 - 16);
     fireEvent.press(screen.getByTestId('note-card-body'));
     expect(mockPush).toHaveBeenLastCalledWith({
       pathname: '/(tabs)/messages/notes/[id]',

@@ -2117,6 +2117,7 @@
       "selectA11y": "노트 {{title}} 선택",
       "noneA11y": "노트 연결 안 함"
     },
+    "noteAttachment": "첨부 노트",
     "vipRestriction": "VIP 제한",
     "creditRestriction": "신용도 제한",
     "fancyRequired": "특별 ID 필요",

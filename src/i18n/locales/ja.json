@@ -2117,6 +2117,7 @@
       "selectA11y": "ノート{{title}}を選択",
       "noneA11y": "ノートを紐付けない"
     },
+    "noteAttachment": "添付ノート",
     "vipRestriction": "VIP制限",
     "creditRestriction": "信用度制限",
     "fancyRequired": "特別IDが必要",

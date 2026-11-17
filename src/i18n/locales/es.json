@@ -2123,6 +2123,7 @@
       "selectA11y": "Elegir nota {{title}}",
       "noneA11y": "No vincular una nota"
     },
+    "noteAttachment": "Nota adjunta",
     "vipRestriction": "Restricción VIP",
     "creditRestriction": "Restricción de crédito",
     "fancyRequired": "Requiere ID premium",

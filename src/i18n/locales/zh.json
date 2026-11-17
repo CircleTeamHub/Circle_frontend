@@ -1588,6 +1588,7 @@
       "selectA11y": "选择笔记 {{title}}",
       "noneA11y": "不关联笔记"
     },
+    "noteAttachment": "附带笔记",
     "vipRestriction": "VIP限制",
     "creditRestriction": "信用值限制",
     "fancyRequired": "需要靓号",
