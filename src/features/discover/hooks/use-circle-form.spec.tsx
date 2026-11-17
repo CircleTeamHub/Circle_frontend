@@ -47,6 +47,9 @@ test('a picked avatar is compressed and uploaded right away, and settle reuses t
   expect(result.current.pickedAvatarUri).toBe('file:///big.jpg');
   expect(prepareChatImageForUpload).toHaveBeenCalledWith(expect.objectContaining({ uri: 'file:///big.jpg' }));
   await waitFor(() => expect(result.current.avatarUpload?.status).toBe('done'));
+  expect(requestUploadPresign).toHaveBeenCalledWith(
+    expect.objectContaining({ purpose: 'CIRCLE_AVATAR' }),
+  );
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test', 'image/jpeg', 'file:///big.jpg.small.jpg', expect.any(Object), undefined,
     { progressKey: result.current.avatarUpload?.id, foreground: true },

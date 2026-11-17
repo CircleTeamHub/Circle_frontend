@@ -81,6 +81,7 @@ async function uploadPostMedia(
     filename: sanitizeUploadFilename(prepared.filename),
     contentType: prepared.contentType,
     folder: 'posts',
+    purpose: 'PLAZA_POST',
     fileUri: prepared.uri,
   });
   await uploadLocalFileToPresignedUrl(

@@ -81,6 +81,7 @@ async function uploadCommentImage(asset: ImagePicker.ImagePickerAsset, progressK
     filename: sanitizeUploadFilename(prepared.filename),
     contentType: prepared.contentType,
     folder: 'posts',
+    purpose: 'MOMENT_COMMENT',
     fileUri: prepared.uri,
   });
   await uploadLocalFileToPresignedUrl(

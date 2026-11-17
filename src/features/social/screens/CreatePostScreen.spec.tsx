@@ -124,6 +124,9 @@ test('publishes a selected video with photos in separate media fields', async ()
     { idempotencyKey: 'post-key' },
   ));
   expect(prepareChatImageForUpload).toHaveBeenCalledTimes(1);
+  expect(requestUploadPresign).toHaveBeenCalledWith(
+    expect.objectContaining({ purpose: 'PLAZA_POST' }),
+  );
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test',
     'video/quicktime',

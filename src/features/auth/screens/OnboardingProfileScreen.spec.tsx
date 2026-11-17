@@ -101,6 +101,9 @@ test('the avatar uploads as soon as it is picked and finishing does not upload i
     fireEvent.press(screen.getByText('profileFields.selectFromAlbum'));
   });
   await waitFor(() => expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1));
+  expect(requestUploadPresign).toHaveBeenCalledWith(
+    expect.objectContaining({ purpose: 'PROFILE_AVATAR' }),
+  );
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test', 'image/jpeg', 'file:///me.jpg', expect.any(Object), undefined,
     { progressKey: expect.any(String), foreground: true },

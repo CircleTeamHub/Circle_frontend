@@ -69,6 +69,7 @@ async function uploadOnboardingAvatar(asset: ImagePickerAsset, progressKey: stri
     filename: sanitizeUploadFilename(prepared.filename),
     contentType: prepared.contentType,
     folder: 'avatars',
+    purpose: 'PROFILE_AVATAR',
     fileUri: prepared.uri,
   });
   await uploadLocalFileToPresignedUrl(

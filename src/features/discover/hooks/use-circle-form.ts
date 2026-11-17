@@ -32,6 +32,7 @@ async function uploadCircleAvatar(asset: ImagePicker.ImagePickerAsset, progressK
     filename: sanitizeUploadFilename(prepared.filename),
     contentType: prepared.contentType,
     folder: 'avatars',
+    purpose: 'CIRCLE_AVATAR',
     fileUri: prepared.uri,
   });
   await uploadLocalFileToPresignedUrl(

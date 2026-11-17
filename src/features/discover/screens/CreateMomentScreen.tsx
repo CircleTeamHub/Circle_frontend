@@ -69,6 +69,7 @@ async function uploadMomentMedia(
     filename: sanitizeUploadFilename(prepared.filename),
     contentType: prepared.contentType,
     folder: 'posts',
+    purpose: 'MOMENT',
     fileUri: prepared.uri,
   });
   await uploadLocalFileToPresignedUrl(
@@ -81,7 +82,15 @@ async function uploadMomentMedia(
   );
   const duration = typeof asset.duration === 'number' ? asset.duration / 1000 : undefined;
   const poster = isVideo
-    ? await uploadChatVideoPoster(asset.uri, duration, fileName, 'posts', undefined, progressKey)
+    ? await uploadChatVideoPoster(
+        asset.uri,
+        duration,
+        fileName,
+        'posts',
+        undefined,
+        progressKey,
+        'MOMENT',
+      )
     : null;
   return {
     url: presign.fileUrl,
