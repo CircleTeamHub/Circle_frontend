@@ -98,13 +98,19 @@ export async function fetchMomentsFeed(params?: {
   page?: number;
   limit?: number;
   cursor?: string;
-}): Promise<PaginatedResponse<MomentPost>> {
-  const result = await apiClient<PaginatedResponse<BackendMomentPost>>(
+}): Promise<PaginatedResponse<MomentPost> & { snapshotAt: string | null }> {
+  const result = await apiClient<PaginatedResponse<BackendMomentPost> & { snapshotAt?: unknown }>(
     `/trace/feed${buildQuery(params ?? {})}`,
   );
 
   return {
     ...result,
+    // New nodes return a canonical DB watermark; old or malformed responses
+    // fall back to the request-start watermark in the store.
+    snapshotAt: typeof result.snapshotAt === 'string'
+      && Number.isFinite(Date.parse(result.snapshotAt))
+      && new Date(result.snapshotAt).toISOString() === result.snapshotAt
+      ? result.snapshotAt : null,
     items: result.items.map(normalizeMoment),
   };
 }

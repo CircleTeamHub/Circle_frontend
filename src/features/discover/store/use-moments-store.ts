@@ -109,7 +109,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
 
     try {
       const result = await fetchMomentsFeed({ cursor, limit: 20 });
-      const refreshedAt = new Date().toISOString();
+      const refreshedAt = result.snapshotAt ?? new Date(startedAt).toISOString();
       set((current) => {
         // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 cursor 推到错误值或
         // 把过期数据塞回去（map dedup 能避免重复 key，但 cursor / hasMore 还是会污染）。
