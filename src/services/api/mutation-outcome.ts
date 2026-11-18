@@ -6,6 +6,7 @@ import { ApiError } from './api-error';
  * 只有真的不知道才算：请求发出去了，但我们没拿到结论。
  *  - network / timeout / body-read：fetch 没拿到完整结论；即使报 network，连接也
  *    可能在上传完成、服务端提交后才被代理或系统重置。
+ *  - 成功 HTTP 状态下的 invalid-json：服务端可能已提交，只是成功信封损坏。
  *  - 5xx：服务端收到了，可能在提交之后才炸。
  *  - 不是 ApiError 的抛出值：来路不明，保守当成不确定。
  *
@@ -16,7 +17,10 @@ export function isAmbiguousMutationFailure(error: unknown): boolean {
   if (
     error.failureKind === 'network' ||
     error.failureKind === 'timeout' ||
-    error.failureKind === 'body-read'
+    error.failureKind === 'body-read' ||
+    (error.failureKind === 'invalid-json' &&
+      error.status >= 200 &&
+      error.status < 300)
   ) {
     return true;
   }

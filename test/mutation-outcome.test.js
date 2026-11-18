@@ -42,6 +42,15 @@ test('network rejection → 结果不确定（请求可能已被服务端接收�
   );
 });
 
+test('2xx 响应体损坏 → 结果不确定（写操作可能已经提交）', () => {
+  assert.equal(
+    isAmbiguousMutationFailure(
+      apiError({ status: 200, failureKind: 'invalid-json' }),
+    ),
+    true,
+  );
+});
+
 test('明确的 4xx → 确定失败，重试是对的', () => {
   assert.equal(isAmbiguousMutationFailure(apiError({ status: 400 })), false);
   assert.equal(isAmbiguousMutationFailure(apiError({ status: 409 })), false);

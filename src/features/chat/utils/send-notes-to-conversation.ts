@@ -42,16 +42,23 @@ async function captureNoteVideoPoster(
   const source = await detail;
   const url = source?.media.find((media) => media.id === task.mediaId)?.url;
   if (!url) return undefined;
+  let abandoned = false;
   const poster = await withThumbnailTimeout(
     uploadChatVideoPoster(
       url,
       task.duration,
       task.key.split('/').pop() ?? 'video',
       'chat',
+      // The capture keeps running after the timeout; one that lands late must not
+      // upload a poster no message will ever reference.
+      () => {
+        if (abandoned) throw new Error('Note video poster abandoned after timeout');
+      },
     ),
     () => undefined,
     NOTE_VIDEO_POSTER_TIMEOUT_MS,
   );
+  abandoned = true;
   return poster?.key;
 }
 
