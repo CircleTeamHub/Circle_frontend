@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -39,9 +39,9 @@ import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import {
   getCircleDetailHref,
+  getNoteDetailHref,
   getUserProfileHref,
   getUserProfileScopeFromSegments,
-  toCircleScope,
 } from '@/features/user/utils/routes';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -257,6 +257,34 @@ export default function SharePickerScreen() {
 
   const atSelectionLimit = selectedNotes.length >= MAX_NOTE_BATCH_SELECTION;
 
+  // 点笔记打开详情(发之前看一眼、改几个字),点卡片左边的圆圈才是勾选。盖在半屏聊天上的那份
+  // (app/chat-sheet)没法往 tab 栈压详情页,点卡片也是勾选。
+  const currentUserId = useAuthStore((state) => state.user?.id ?? '');
+  const canOpenNoteDetail = segments[0] !== 'chat-sheet';
+  const openedNoteDetailRef = useRef(false);
+  const openNoteDetail = useCallback((note: NoteSummary) => {
+    openedNoteDetailRef.current = true;
+    router.push(getNoteDetailHref(scope, note.id, currentUserId));
+  }, [currentUserId, router, scope]);
+
+  // 从详情 / 编辑回来:重拉一遍,列表和已勾选的都换成改过的内容,删掉的从已选里去掉。
+  useFocusEffect(useCallback(() => {
+    if (shareType !== 'note' || !openedNoteDetailRef.current) return;
+    openedNoteDetailRef.current = false;
+    let cancelled = false;
+    fetchNotes()
+      .then((res) => {
+        if (cancelled) return;
+        const byId = new Map(res.map((note) => [note.id, note]));
+        setNotes(res);
+        setSelectedNotes((prev) => prev.flatMap((note) => byId.get(note.id) ?? []));
+      })
+      .catch((err) => reportHandledFailure('sharePicker', 'refreshNotes', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [shareType]));
+
   const handleSourcePress = useCallback(async (note: NoteSummary, target: NoteSourceTarget) => {
     if (sourceOpeningRef.current) return;
     const { contact, group } = resolveNoteCardButtons(note);
@@ -304,7 +332,7 @@ export default function SharePickerScreen() {
       )));
     } else if (target === 'group' && group) {
       if (group.target === 'circle') {
-        leaveOverChatPage(segments, () => router.push(getCircleDetailHref(toCircleScope(scope), group.id)));
+        leaveOverChatPage(segments, () => router.push(getCircleDetailHref(scope, group.id)));
       } else {
         leaveOverChatPage(segments, () => router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID })));
       }
@@ -328,7 +356,8 @@ export default function SharePickerScreen() {
   const renderNote = ({ item }: { item: NoteSummary }) => (
     <NoteCard
       note={item}
-      onPress={toggleNote}
+      onPress={canOpenNoteDetail ? openNoteDetail : toggleNote}
+      onSelectPress={toggleNote}
       onSourcePress={handleSourcePress}
       showActions={false}
       selectionMode

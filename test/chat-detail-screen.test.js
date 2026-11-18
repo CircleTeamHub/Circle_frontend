@@ -51,6 +51,23 @@ test('direct chats show a duration-aware disappearing-message notice when enable
   assert.match(source, /chat\.detail\.disappearingMessageNotice/);
 });
 
+test('disappearing-message notice does not describe platform-side retention', () => {
+  // 用户拍板:聊天页只讲对方看到的效果,平台留存/审计不在这里说。
+  const hook = fs.readFileSync(
+    path.join(__dirname, '../src/features/chat/chat-detail/hooks/use-burn-notice.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(hook, /180|审计|留存|不影响对方/);
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const detail = JSON.parse(
+      fs.readFileSync(path.join(__dirname, `../src/i18n/locales/${locale}.json`), 'utf8'),
+    ).chat.detail;
+    for (const key of ['disappearingMessageNotice', 'personalDisappearingMessageNotice']) {
+      assert.doesNotMatch(detail[key], /180|不影响对方|unaffected|no cambian|影響しません|영향을 주지/, `${locale}.${key}`);
+    }
+  }
+});
+
 test('disappearing-message notice stays hidden when both sides are disabled', () => {
   const source = readChatDetailSource();
 
@@ -479,7 +496,9 @@ test('chat detail forwards long-pressed messages through a conversation picker',
 
   assert.match(source, /useMessageForwardStore/);
   assert.match(source, /setPendingForward/);
-  assert.match(source, /pathname:\s*'\/\(tabs\)\/messages\/forward-picker'/);
+  // 转发选择页开在聊天所在的栈里(从哪个 tab 进的聊天就回哪个 tab)。
+  assert.match(source, /pathname:\s*`\/\(tabs\)\/\$\{scope\}\/forward-picker`/);
+  assert.doesNotMatch(source, /'\/\(tabs\)\/messages\/forward-picker'/);
   assert.match(source, /handleMessageLongPress/);
   // Forward action is now localized via i18n instead of a hardcoded label.
   assert.match(source, /t\('chat\.messageActions\.forward'\)/);

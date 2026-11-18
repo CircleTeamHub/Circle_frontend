@@ -15,7 +15,7 @@ import {
 import { reportHandledFailure } from '@/observability/report-failure';
 import type { NotificationItem } from '@/types';
 let mockOwner='user-a';
-jest.mock('expo-router',()=>({useLocalSearchParams:()=>({id:'notice-id'})}));
+jest.mock('expo-router',()=>({useLocalSearchParams:()=>({id:'notice-id'}),useSegments:()=>['(tabs)','profile','system-announcements','[id]']}));
 jest.mock('@/stores/authStore',()=>{
  const getState=()=>({user:{id:mockOwner},sessionEpoch:1});
  return {useAuthStore:Object.assign((selector:(state:unknown)=>unknown)=>selector(getState()),{getState})};

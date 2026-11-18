@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,6 +28,7 @@ import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const keyExtractor = (item: NoteSummary) => item.id;
 
 export default function UnlistedNotesScreen() {
@@ -36,6 +37,7 @@ export default function UnlistedNotesScreen() {
 }
 
 function UnlistedNotesContent() {
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -130,10 +132,10 @@ function UnlistedNotesContent() {
   const openNote = useCallback(
     (note: NoteSummary) =>
       router.push({
-        pathname: '/(tabs)/profile/notes/[id]',
+        pathname: `/(tabs)/${scope}/notes/[id]`,
         params: { id: note.id, ownerId: note.ownerId ?? '' },
       } as never),
-    [router],
+    [router, scope],
   );
 
   const closeMenu = useCallback(() => setMenuNote(null), []);

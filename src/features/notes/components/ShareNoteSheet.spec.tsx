@@ -30,7 +30,11 @@ jest.mock('@/stores/authStore', () => ({
     { getState: () => ({ user: { id: mockUserId } }) },
   ),
 }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
+// 面板挂在「我的」栈的笔记页里:「查看」要在这个栈里打开聊天。
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn(), navigate: jest.fn() },
+  useSegments: () => ['(tabs)', 'profile', 'notes'],
+}));
 jest.mock('@/components/app/top-notice-store', () => ({
   showTopNotice: (...args: unknown[]) => mockShowTopNotice(...args),
 }));
@@ -155,7 +159,7 @@ test('"view" opens the chat as soon as it is known, while the notes are still se
   });
   expect(onClose).toHaveBeenCalled();
   expect(jest.mocked(router.push)).toHaveBeenCalledWith(expect.objectContaining({
-    pathname: '/(tabs)/messages/chat-detail',
+    pathname: '/(tabs)/profile/chat-detail',
     params: expect.objectContaining({ conversationID: 'conv-1' }),
   }));
 });

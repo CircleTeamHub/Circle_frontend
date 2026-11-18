@@ -23,13 +23,13 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { ensureDirectConversation } from '@/chat-core/client';
-import { getChatDetailHref, getCircleScopeFromSegments } from '@/features/user/utils/routes';
+import { getChatDetailHref, getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import type { CirclePlazaPost } from '@/types';
 
 export default function SharePlazaPostScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const scope = getCircleScopeFromSegments(useSegments());
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { postId } = useLocalSearchParams<{ postId?: string }>();

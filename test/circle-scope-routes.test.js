@@ -69,7 +69,7 @@ test('circle screens derive scope from segments for every internal push', () => 
     'src/features/discover/screens/InvitationVerificationScreen.tsx',
   );
 
-  assert.match(detail, /getCircleScopeFromSegments\(segments\)/);
+  assert.match(detail, /getUserProfileScopeFromSegments\(segments\)/);
   for (const helper of [
     'getCircleEditHref',
     'getCircleInviteHref',
@@ -84,7 +84,7 @@ test('circle screens derive scope from segments for every internal push', () => 
 
   assert.match(inviteMenu, /getCircleShareHref\(circleScope/);
   assert.match(inviteMenu, /getCircleInviteFriendsHref\(circleScope/);
-  assert.match(invitation, /getSelectVerifierHref\(getCircleScopeFromSegments\(segments\)/);
+  assert.match(invitation, /getSelectVerifierHref\(getUserProfileScopeFromSegments\(segments\)/);
 });
 
 test('circle route helpers return scoped paths and params for each sub-flow', () => {
@@ -137,6 +137,6 @@ test('plaza post cards stay in the tab they are shown in', () => {
   assert.match(card, /getNoteDetailHref\(\s*scope,/);
   // 发帖人的头像和名字只展示,不进主页(产品要求):卡片里不该再有去主页的跳转。
   assert.doesNotMatch(card, /getUserProfileHref/);
-  assert.match(posts, /getCircleScopeFromSegments\(useSegments\(\)\)/);
+  assert.match(posts, /getUserProfileScopeFromSegments\(useSegments\(\)\)/);
   assert.match(posts, /<PlazaPostCard post=\{item\} onDeleted=\{handleDeleted\} scope=\{scope\} \/>/);
 });

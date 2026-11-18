@@ -200,8 +200,8 @@ export default function AddFriendScreen() {
   }, [router]);
 
   const handleOpenScan = useCallback(() => {
-    router.push('/(tabs)/messages/scan');
-  }, [router]);
+    router.push(`/(tabs)/${scope === 'contacts' ? 'contacts' : 'messages'}/scan`);
+  }, [router, scope]);
 
   return (
     <View

@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
@@ -34,6 +34,7 @@ import { Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 type PendingForward = {
   message: ChatMessage;
   dto?: ChatMessageDto;
@@ -185,6 +186,7 @@ async function sendForwardedMessage(
 
 export default function ForwardPickerScreen() {
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -307,6 +309,7 @@ export default function ForwardPickerScreen() {
       return [];
     });
     announceSent({
+      scope,
       t,
       targets,
       resolution,

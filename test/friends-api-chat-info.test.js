@@ -95,7 +95,14 @@ test('chat info screen routes blacklist, delete, and report through real friend 
   // chat.report became an object namespace (report screen keys); the row label
   // now uses the report-screen title string chat.report.title (same "投诉举报").
   assert.match(source, /label=\{t\('chat\.report\.title'\)\}/);
-  assert.match(source, /messages\/report-friend/);
+  // 举报页开在资料页所在的栈里,每个栈都有镜像。
+  assert.match(source, /pathname: `\/\(tabs\)\/\$\{scope\}\/report-friend`/);
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.ok(
+      fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/report-friend.tsx`)),
+      `${scope} 栈缺举报页`,
+    );
+  }
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.report\.title'\)\)/);
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.deleteFriend'\)\)/);
 });

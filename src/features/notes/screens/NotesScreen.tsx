@@ -74,7 +74,6 @@ import {
   getNoteEditHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
-  toCircleScope,
 } from '@/features/user/utils/routes';
 import {
   deleteNote,
@@ -467,16 +466,16 @@ function NotesContent() {
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
   const openRecycleBin = useCallback(
-    () => router.push('/(tabs)/profile/notes/recycle-bin' as never),
-    [router],
+    () => router.push(`/(tabs)/${scope}/notes/recycle-bin` as never),
+    [router, scope],
   );
   const openUnlisted = useCallback(
-    () => router.push('/(tabs)/profile/notes/unlisted' as never),
-    [router],
+    () => router.push(`/(tabs)/${scope}/notes/unlisted` as never),
+    [router, scope],
   );
   const openSettings = useCallback(
-    () => router.push('/(tabs)/profile/notes/settings' as never),
-    [router],
+    () => router.push(`/(tabs)/${scope}/notes/settings` as never),
+    [router, scope],
   );
 
   const handleActiveGroupDeleted = useCallback(
@@ -566,16 +565,16 @@ function NotesContent() {
   const openNote = useCallback(
     (note: NoteSummary) =>
       router.push({
-        pathname: '/(tabs)/profile/notes/[id]',
+        pathname: `/(tabs)/${scope}/notes/[id]`,
         params: { id: note.id, ownerId: currentUserId ?? '' },
       } as never),
-    [currentUserId, router],
+    [currentUserId, router, scope],
   );
 
   const openNoteEditor = useCallback(
     (note: NoteSummary) =>
-      router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never),
-    [router],
+      router.push(`/(tabs)/${scope}/notes/edit?id=${note.id}` as never),
+    [router, scope],
   );
 
   const openMenu = useCallback((note: NoteSummary) => setMenuNote(note), []);
@@ -621,7 +620,7 @@ function NotesContent() {
         return;
       }
       if (card.target === 'circle') {
-        router.push(getCircleDetailHref(toCircleScope(scope), card.id));
+        router.push(getCircleDetailHref(scope, card.id));
         return;
       }
       // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），不写死 messages ——
@@ -1155,7 +1154,7 @@ function NotesContent() {
           style={{ bottom: insets.bottom + Spacing.lg }}
           onPress={() =>
             router.push({
-              pathname: '/(tabs)/profile/notes/edit',
+              pathname: `/(tabs)/${scope}/notes/edit`,
               params: { draftId: createNoteDraftId(), draftMode: 'new' },
             } as never)
           }

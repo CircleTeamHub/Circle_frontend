@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { sendCardMessage, sendTextMessage } from '@/chat-core/client';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { diagnosticErrorMessage, logClientDiagnostic } from '@/utils/client-diagnostics';
 import { Typography, useTheme } from '@/theme';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const s = StyleSheet.create({
   container: { flex: 1 },
   preview: { ...Typography.small },
@@ -50,6 +51,7 @@ async function queueSend(
 
 // 选聊天把圈子名片发过去,对方点名片进圈子详情就能申请加入。和转发、发笔记用同一个选择页。
 export default function ShareCircleCardScreen() {
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const { colors } = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; title?: string; avatar?: string }>();
@@ -150,9 +152,9 @@ export default function ShareCircleCardScreen() {
         });
         return [];
       });
-      announceSent({ t, targets, resolution, onDismiss: () => router.back() });
+      announceSent({ scope, t, targets, resolution, onDismiss: () => router.back() });
     },
-    [circleId, sendInBackground, t],
+    [circleId, sendInBackground, t, scope],
   );
 
   return (

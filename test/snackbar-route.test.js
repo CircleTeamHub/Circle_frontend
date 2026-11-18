@@ -34,7 +34,8 @@ function load(rel) {
 const { getSnackbarRoute, isUserProfileSnackbarRoute } = load(
   "src/features/notifications/utils/snackbar-route.ts",
 );
-const OPTS = { untitledPost: "(untitled post)" };
+const OPTS = { untitledPost: "(untitled post)", scope: "messages" };
+const TABS = ["messages", "contacts", "discover", "explore", "profile"];
 const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
 const EXPLORE_OPTS = { untitledPost: "(untitled post)", scope: "explore" };
 
@@ -174,7 +175,7 @@ test("getSnackbarRoute routes verification requests to the verify screen", () =>
     }),
     OPTS,
   );
-  assert.equal(route.pathname, "/(tabs)/discover/verification/[id]");
+  assert.equal(route.pathname, "/(tabs)/messages/verification/[id]");
   assert.equal(route.params.id, "inv1");
 });
 
@@ -186,7 +187,7 @@ test("getSnackbarRoute routes circle invitation result notifications to invitati
     }),
     OPTS,
   );
-  assert.equal(route.pathname, "/(tabs)/discover/invitation/[id]");
+  assert.equal(route.pathname, "/(tabs)/messages/invitation/[id]");
   assert.equal(route.params.id, "inv2");
 });
 
@@ -234,7 +235,7 @@ test("getSnackbarRoute routes friend requests to new-friends", () => {
     notification({ type: "FRIEND_REQUEST_RECEIVED" }),
     OPTS,
   );
-  assert.equal(route, "/(tabs)/contacts/new-friends");
+  assert.equal(route, "/(tabs)/messages/new-friends");
 });
 
 test("getSnackbarRoute routes message-linked notifications to the exact chat message", () => {
@@ -263,16 +264,12 @@ test("getSnackbarRoute routes message-linked notifications to the exact chat mes
 
 test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
   const item = notification({ fromTrace: { id: "t9", excerpt: "x", firstImage: null } });
-  // 朋友圈住在探索 tab：消息栈、探索栈都落到探索那份详情。
-  for (const opts of [OPTS, EXPLORE_OPTS]) {
-    const route = getSnackbarRoute(item, opts);
-    assert.equal(route.pathname, "/(tabs)/explore/moment/[id]");
+  // 在哪个 tab 上点就在哪个栈打开，不跨 tab。
+  for (const scope of TABS) {
+    const route = getSnackbarRoute(item, { ...OPTS, scope });
+    assert.equal(route.pathname, `/(tabs)/${scope}/moment/[id]`);
     assert.equal(route.params.id, "t9");
   }
-  // 正在圈子 tab 上时留在本栈，不跨 tab。
-  const discoverRoute = getSnackbarRoute(item, DISCOVER_OPTS);
-  assert.equal(discoverRoute.pathname, "/(tabs)/discover/moment/[id]");
-  assert.equal(discoverRoute.params.id, "t9");
 });
 
 test("getSnackbarRoute carries reply anchors into moment detail", () => {
@@ -283,7 +280,7 @@ test("getSnackbarRoute carries reply anchors into moment detail", () => {
     }),
     OPTS,
   );
-  assert.equal(route.pathname, "/(tabs)/explore/moment/[id]");
+  assert.equal(route.pathname, "/(tabs)/messages/moment/[id]");
   assert.equal(route.params.id, "t9");
   assert.equal(route.params.targetCommentId, "r7");
 });
@@ -308,7 +305,7 @@ test("getSnackbarRoute opens a system announcement by its notification id", () =
     notification({ id: "notice-1", type: "SYSTEM" }),
     DISCOVER_OPTS,
   );
-  assert.equal(route.pathname, "/(tabs)/profile/system-announcements/[id]");
+  assert.equal(route.pathname, "/(tabs)/discover/system-announcements/[id]");
   assert.equal(route.params.id, "notice-1");
 });
 
@@ -333,10 +330,10 @@ test("getSnackbarRoute's explore fallback only owns the moments bell", () => {
   assert.equal(moments.pathname, "/(tabs)/explore/notification-center");
   assert.equal(moments.params.domain, "moments");
 
-  // 探索 tab 没有圈子铃铛:圈子 / 其他类兜底仍回消息页的通知中心。
+  // 不属于朋友圈/圈子铃铛的,兜底到本栈不限域的通知列表,不跨回消息页。
   assert.equal(
     getSnackbarRoute(notification({ type: "MESSAGE_RECEIVED" }), EXPLORE_OPTS),
-    "/(tabs)/messages/notifications",
+    "/(tabs)/explore/notification-center",
   );
 });
 
@@ -344,7 +341,10 @@ test("getNotificationScope maps the current tab stack to a notification scope", 
   const { getNotificationScope } = load("src/features/notifications/utils/snackbar-route.ts");
   assert.equal(getNotificationScope(["(tabs)", "discover", "circle", "[id]"]), "discover");
   assert.equal(getNotificationScope(["(tabs)", "explore", "moment", "[id]"]), "explore");
-  assert.equal(getNotificationScope(["(tabs)", "contacts"]), "messages");
+  assert.equal(getNotificationScope(["(tabs)", "contacts"]), "contacts");
+  assert.equal(getNotificationScope(["(tabs)", "profile", "settings"]), "profile");
+  // 根上的页面(半屏聊天、搜索)不在任何 tab 里,算消息栈。
+  assert.equal(getNotificationScope(["quick-chat"]), "messages");
 });
 
 // 消息页的「通知」和飞机都在消息栈里:点进去的落点也要在消息栈,返回才回到通知列表,
@@ -387,3 +387,33 @@ test("every messages-stack destination the notices can open has a route file", (
   }
 });
 
+
+test("getSnackbarRoute keeps every notification kind inside the tab it was tapped in", () => {
+  const items = [
+    { kind: "chat", id: "m0", conversationID: "c0", sourceID: "u0", title: "A", conversationType: "private" },
+    notification({ fromMessage: { conversationID: "c1", sourceID: "u1", clientMsgID: "m1" } }),
+    notification({ type: "CIRCLE_POST_SIGNUP_CREATED", fromCirclePost: { id: "p1", excerpt: "x" } }),
+    notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: { id: "i1", status: "PENDING" } }),
+    notification({ type: "CIRCLE_INVITATION_APPROVED", fromInvitation: { id: "i2", status: "APPROVED" } }),
+    notification({ type: "FRIEND_REQUEST_RECEIVED" }),
+    notification({ id: "n1", type: "SYSTEM" }),
+    notification({ type: "PROFILE_LIKE", fromUser: { id: "u2", nickname: "a" } }),
+    notification({ fromTrace: { id: "t1", excerpt: "x", firstImage: null } }),
+    notification({ fromGroupAdmission: { id: "g1" } }),
+    notification({ type: "TRACE_LIKE" }),
+    notification({ type: "CIRCLE_POST_PUBLISHED" }),
+    notification({ type: "MESSAGE_RECEIVED" }),
+  ];
+  for (const scope of TABS) {
+    for (const item of items) {
+      const route = getSnackbarRoute(item, { ...OPTS, scope });
+      const pathname = typeof route === "string" ? route : route.pathname;
+      assert.ok(pathname.startsWith(`/(tabs)/${scope}/`), `${item.type ?? item.kind} @${scope} → ${pathname}`);
+      const page = path.join(process.cwd(), "app", pathname);
+      assert.ok(
+        fs.existsSync(`${page}.tsx`) || fs.existsSync(path.join(page, "index.tsx")),
+        `${pathname} has no route file`,
+      );
+    }
+  }
+});

@@ -62,12 +62,12 @@ test('the moments screen reaches the moment notifications its badge counts', () 
   const explore = read('src/features/explore/screens/ExploreScreen.tsx');
 
   assert.match(moments, /momentsUnread/);
-  assert.match(moments, /\(tabs\)\/discover\/notification-center/);
   assert.match(moments, /params: \{ domain: 'moments' \}/);
   assert.match(moments, /<Badge count=\{momentsUnread\}/);
-  // 从探索栈打开的朋友圈，铃铛和发动态都留在探索栈。
-  assert.match(moments, /inExplore\s*\?\s*'\/\(tabs\)\/explore\/notification-center'/);
-  assert.match(moments, /inExplore \? '\/\(tabs\)\/explore\/create-moment'/);
+  // 从探索栈打开的朋友圈，铃铛和发动态都留在探索栈(其它栈同理,留在本栈)。
+  assert.match(moments, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
+  assert.match(moments, /pathname: `\/\(tabs\)\/\$\{scope\}\/notification-center`/);
+  assert.match(moments, /`\/\(tabs\)\/\$\{scope\}\/create-moment`/);
   assert.match(read('app/(tabs)/explore/notification-center.tsx'), /NotificationCenterScreen/);
   // 朋友圈入口已迁入探索 tab 首页的卡片。
   assert.match(explore, /momentsUnread = useTabBadgeStore/);

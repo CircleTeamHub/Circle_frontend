@@ -29,6 +29,8 @@ import {
   useNoteCollectPreferencesStore,
 } from '@/features/notes/store/use-note-collect-preferences-store';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import { useSegments } from 'expo-router';
 /**
  * React Native Modal measures its iOS host window when it is presented. If the
  * chat composer still has an active IME inset at that exact moment, the new
@@ -119,6 +121,7 @@ export function useCollectMessage({
   const [noteCollectOpening, setNoteCollectOpening] = useState(false);
   const [noteCollectSaving, setNoteCollectSaving] = useState(false);
   const chatRouter = useChatRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const sessionEpoch = useAuthStore.getState().sessionEpoch;
   const mountedRef = useRef(false);
   const contextRef = useRef({ conversationID, currentUserID });
@@ -235,7 +238,7 @@ export function useCollectMessage({
                   onPress: () => {
                     if (!isCurrentContext(request)) return;
                     chatRouter.push({
-                      pathname: '/(tabs)/profile/notes',
+                      pathname: `/(tabs)/${scope}/notes`,
                       params: { highlightNoteId: copiedNoteId },
                     } as never);
                   },
@@ -262,7 +265,7 @@ export function useCollectMessage({
         }
       }
     },
-    [t, isCurrentContext, finishNoteCollect, chatRouter],
+    [t, isCurrentContext, finishNoteCollect, chatRouter, scope],
   );
 
   const handleCollectMessage = useCallback(

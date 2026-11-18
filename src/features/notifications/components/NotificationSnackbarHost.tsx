@@ -34,6 +34,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { isCurrentRoute } from '@/utils/current-route';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
 const EXIT_MS = 180;
@@ -232,7 +233,11 @@ export function NotificationSnackbarHost() {
     // 已经在消息列表时没有要留住的页面,直接进完整聊天。
     const onMessageList = segments.length === 2 && segments[0] === '(tabs)' && segments[1] === 'messages';
     if (notificationSettings.quickChatSheet && !onMessageList && shown.kind === 'chat' && typeof route === 'object' && 'params' in route) {
-      router.push({ pathname: '/quick-chat', params: route.params });
+      // 记下横幅下面是哪个 tab:点「展开」时在那个栈里打开完整聊天,返回回到原页面。
+      router.push({
+        pathname: '/quick-chat',
+        params: { ...route.params, originScope: getUserProfileScopeFromSegments(segments) },
+      });
       return;
     }
     // 正看着的就是横幅指向的那一页（如报名列表开着时又来一条报名）：原地换成新的，

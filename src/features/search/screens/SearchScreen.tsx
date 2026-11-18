@@ -325,7 +325,7 @@ export default function SearchScreen() {
       params.searchedMsgID = targetMsgID;
     }
     router.push({
-      pathname: '/(tabs)/messages/chat-detail',
+      pathname: `/(tabs)/${currentScope}/chat-detail`,
       params,
     });
   };

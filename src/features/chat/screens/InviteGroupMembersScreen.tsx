@@ -11,7 +11,7 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { topNotice } from '@/components/app/top-notice-store';
@@ -26,6 +26,7 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const s = StyleSheet.create({
   container: { flex: 1 },
   subtitle: {
@@ -84,6 +85,7 @@ const Sep = () => <View style={{ height: Spacing.xs }} />;
 export default function InviteGroupMembersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const { colors } = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
@@ -245,7 +247,7 @@ export default function InviteGroupMembersScreen() {
     >
       <NavHeader
         title={t('messages.inviteGroupMembersTitle')}
-        fallbackHref="/(tabs)/messages"
+        fallbackHref={`/(tabs)/${scope}`}
       />
       {groupName ? (
         <Text

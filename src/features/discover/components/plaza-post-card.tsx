@@ -12,7 +12,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
   getChatDetailHref,
   getNoteDetailHref,
-  type CircleScope,
+  type UserProfileScope,
 } from '@/features/user/utils/routes';
 import { NoteCardBody, type NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { ensureDirectConversation } from '@/chat-core/client';
@@ -46,10 +46,10 @@ interface PlazaPostCardProps {
   showSignupAction?: boolean;
   showShareAction?: boolean;
   /**
-   * 卡片所在的 tab 栈。圈子帖子页在消息/圈子/探索三个栈都有,点头像、报名管理要留在
+   * 卡片所在的 tab 栈。圈子帖子页每个栈都有,点头像、报名管理、分享要留在
    * 进来的那个 tab,不能跨 tab 压栈。广场只在圈子栈,默认 discover。
    */
-  scope?: CircleScope;
+  scope?: UserProfileScope;
 }
 
 // "不限制" 徽章配色（绿色=开放给所有人），与 RestrictionBadge 的彩色徽章风格统一。
@@ -260,9 +260,9 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
     (FEATURE_FLAGS.fancyNumbers && post.signupRestrictions.fancyNumber);
 
   const handleManageSignups = useCallback(() => {
-    // 留在当前 tab 栈,返回时回到来时的列表。探索栈没有报名管理页,只能回落到圈子栈。
+    // 留在当前 tab 栈,返回时回到来时的列表。
     router.push({
-      pathname: `/(tabs)/${scope === 'explore' ? 'discover' : scope}/post-signups` as const,
+      pathname: `/(tabs)/${scope}/post-signups` as const,
       params: { postId: post.id, title: post.content.slice(0, 24) },
     });
   }, [router, post.id, post.content, scope]);
@@ -303,7 +303,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   const handleShare = useCallback(() => {
     // 分享到对话：进好友选择页，选中后把帖子作为聊天卡片发到该会话。
     router.push({
-      pathname: scope === 'messages' ? '/(tabs)/messages/share-post' : '/(tabs)/discover/share-post',
+      pathname: `/(tabs)/${scope}/share-post`,
       params: { postId: post.id },
     });
   }, [router, post.id, scope]);

@@ -90,7 +90,7 @@ import {
   getNoteManagementHref,
   getRecommendFriendHref,
   getUserProfileHref,
-  toCircleScope,
+  type UserProfileScope,
 } from '@/features/user/utils/routes';
 import {
   addFriendToBlacklist,
@@ -315,7 +315,7 @@ export default function ChatInfoScreen() {
       ? params.fallbackName.trim()
       : friendName;
   const routeSourceID = friendId;
-  const originScope =
+  const originScope: UserProfileScope =
     params.originScope === 'contacts' ||
     params.originScope === 'profile' ||
     params.originScope === 'discover' ||
@@ -943,16 +943,16 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(getChatBackgroundHref(resolvedConversationID, routeSourceID, friendName));
-  }, [friendName, resolvedConversationID, routeSourceID]);
+    router.push(getChatBackgroundHref(scope, resolvedConversationID, routeSourceID, friendName));
+  }, [friendName, resolvedConversationID, routeSourceID, scope]);
 
   const handleOpenRecommendFriend = useCallback(() => {
     if (!resolvedConversationID || !friendId) {
       return;
     }
 
-    router.push(getRecommendFriendHref(resolvedConversationID, friendId, friendName));
-  }, [friendId, friendName, resolvedConversationID]);
+    router.push(getRecommendFriendHref(scope, resolvedConversationID, friendId, friendName));
+  }, [friendId, friendName, resolvedConversationID, scope]);
 
   const resolveConversationIDForNavigation = useCallback(async () => {
     const existingConversationID = resolvedConversationID.trim();
@@ -1001,9 +1001,9 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(getChatHistorySearchHubHref(nextConversationID, routeSourceID, friendName));
+      router.push(getChatHistorySearchHubHref(scope, nextConversationID, routeSourceID, friendName));
     })();
-  }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
+  }, [friendName, resolveConversationIDForNavigation, routeSourceID, scope]);
 
   const handleCopyTempChatInviteLink = useCallback(async () => {
     if (!isTempConversation || !resolvedConversationID || inviteLinkCopyInFlightRef.current) {
@@ -1208,23 +1208,19 @@ export default function ChatInfoScreen() {
   const handleOpenInviteGroupMembers = useCallback(() => {
     if (isStandaloneGroup) {
       // 独立群聊:好友多选直接进群(无担保流程)。
-      let pathname:
-        | '/(tabs)/discover/invite-group-members'
-        | '/(tabs)/explore/invite-group-members'
-        | '/(tabs)/messages/invite-group-members' = '/(tabs)/messages/invite-group-members';
-      if (scope === 'discover') pathname = '/(tabs)/discover/invite-group-members';
-      if (scope === 'explore') pathname = '/(tabs)/explore/invite-group-members';
-      router.push({ pathname, params: { conversationID, title: groupTitle } });
+      router.push({
+        pathname: `/(tabs)/${scope}/invite-group-members`,
+        params: { conversationID, title: groupTitle },
+      });
       return;
     }
     if (!groupID) {
       return;
     }
 
-    // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页挂在
-    // messages/discover/explore 三个栈,联系人/我的两个 scope 走 messages 栈。
+    // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页每个栈都有,留在本栈。
     router.push(
-      getCircleInviteFriendsHref(toCircleScope(scope), groupID, groupTitle),
+      getCircleInviteFriendsHref(scope, groupID, groupTitle),
     );
   }, [conversationID, groupID, groupTitle, isStandaloneGroup, scope]);
 
@@ -1373,14 +1369,14 @@ export default function ChatInfoScreen() {
     }
 
     router.push({
-      pathname: '/(tabs)/messages/report-friend',
+      pathname: `/(tabs)/${scope}/report-friend`,
       params: {
         targetType: 'group',
         groupID,
         groupName: groupTitle,
       },
     });
-  }, [groupID, groupTitle]);
+  }, [groupID, groupTitle, scope]);
 
   const handleLeaveGroup = useCallback(() => {
     if (isStandaloneGroup && standaloneDirectoryAccess !== 'allowed') return;
@@ -2289,7 +2285,7 @@ export default function ChatInfoScreen() {
             label={t('chat.report.title')}
             onPress={() =>
               router.push({
-                pathname: '/(tabs)/messages/report-friend',
+                pathname: `/(tabs)/${scope}/report-friend`,
                 params: { friendUserId: friendId, friendName },
               })
             }

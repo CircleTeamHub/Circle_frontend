@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -18,7 +18,7 @@ import {
 import { searchChatMessages } from '@/chat-core/api';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { ChatMessageDto } from '@/chat-core/protocol';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import { getChatDetailHref, getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -54,6 +54,7 @@ export default function ChatHistoryFilesScreen() {
 }
 
 function ChatHistoryFilesContent() {
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -199,14 +200,14 @@ function ChatHistoryFilesContent() {
       return;
     }
 
-    router.push(getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType));
-  }, [conversationID, conversationType, sourceID, title]);
+    router.push(getChatDetailHref(scope, sourceID, title, undefined, conversationID, clientMsgID, conversationType));
+  }, [conversationID, conversationType, sourceID, title, scope]);
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.files', { defaultValue: '文件' })}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
+        fallbackHref={getChatDetailHref(scope, sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <View style={s.content}>
         <FlatList

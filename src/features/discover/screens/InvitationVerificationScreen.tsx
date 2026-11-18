@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  getCircleScopeFromSegments,
+  getUserProfileScopeFromSegments,
   getSelectVerifierHref,
 } from '@/features/user/utils/routes';
 import { Avatar } from '@/components/ui/avatar';
@@ -260,7 +260,7 @@ export default function InvitationVerificationScreen() {
   const handleAddVerifier = useCallback(() => {
     if (!invitation) return;
     router.push(
-      getSelectVerifierHref(getCircleScopeFromSegments(segments), {
+      getSelectVerifierHref(getUserProfileScopeFromSegments(segments), {
         id: invitation.id,
         circleId: invitation.circleId,
         circleName: invitation.circleName,

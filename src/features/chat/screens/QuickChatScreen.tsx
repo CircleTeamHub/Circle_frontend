@@ -8,6 +8,7 @@ import type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { ChatSheetNavigationContext } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { Radius, useTheme } from '@/theme';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 /** 面板占屏幕(键盘以上)的比例;上面一截留着能看见原来的页面。 */
 const PANEL_FLEX = 7;
 const BACKDROP_FLEX = 3;
@@ -38,7 +39,7 @@ const s = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: Radius.full, marginVertical: 8 },
 });
 
-type QuickChatParams = Partial<Record<keyof EmbeddedChatParams, string>>;
+type QuickChatParams = Partial<Record<keyof EmbeddedChatParams | 'originScope', string>>;
 
 /**
  * 收到消息点横幅弹出的半屏聊天:能看消息、能直接回复,不用离开手上的页面(比如正在写笔记)。
@@ -59,6 +60,7 @@ export default function QuickChatScreen() {
   }, [slide]);
 
   const conversationID = typeof params.conversationID === 'string' ? params.conversationID : '';
+  const originScope = getUserProfileScopeFromSegments([params.originScope ?? '']);
   const embedded: EmbeddedChatParams = {
     conversationID,
     sourceID: params.sourceID,
@@ -75,7 +77,7 @@ export default function QuickChatScreen() {
   const expand = useCallback(() => {
     close();
     router.push({
-      pathname: '/(tabs)/messages/chat-detail',
+      pathname: `/(tabs)/${originScope}/chat-detail`,
       params: {
         conversationID,
         ...(params.sourceID ? { sourceID: params.sourceID } : {}),
@@ -84,7 +86,7 @@ export default function QuickChatScreen() {
         ...(params.avatarUrl ? { avatarUrl: params.avatarUrl } : {}),
       },
     });
-  }, [close, conversationID, params.avatarUrl, params.conversationType, params.sourceID, params.title]);
+  }, [close, conversationID, originScope, params.avatarUrl, params.conversationType, params.sourceID, params.title]);
 
   // 发笔记 / 名片 / 转账等「选完回到聊天」的页面盖在半屏上打开,不再借道展开;
   // 只有右上角展开才进完整聊天页(sheet.onExpand)。

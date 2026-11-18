@@ -76,9 +76,10 @@ test('share note picker renders full note cards with stable search input', () =>
   assert.match(src, /NoteCard/);
   assert.match(src, /showActions=\{false\}/);
   assert.match(src, /filteredNotes/);
-  // 多选模式:整卡点按即切换选中;勾选指示复用 NoteCard 自带的 selectionMode,
-  // 不许在选择器里再手搓一套 checkbox(视觉/无障碍来源必须唯一)。
-  assert.match(src, /onPress=\{toggleNote\}/);
+  // 多选模式:点卡片左边的圆圈切换选中,点卡片打开详情(半屏聊天上点卡片也切换);勾选指示复用
+  // NoteCard 自带的 selectionMode,不许在选择器里再手搓一套 checkbox(视觉/无障碍来源必须唯一)。
+  assert.match(src, /onPress=\{canOpenNoteDetail \? openNoteDetail : toggleNote\}/);
+  assert.match(src, /onSelectPress=\{toggleNote\}/);
   assert.match(src, /selectionMode\s/);
   assert.match(src, /selected=\{selectedNotes\.some/);
   assert.doesNotMatch(src, /noteCheck/);

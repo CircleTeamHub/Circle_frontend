@@ -196,8 +196,8 @@ export function getUserMomentsHref(
 }
 
 /**
- * 朋友圈详情只镜像在探索（朋友圈的家）和圈子两个栈。其余栈（如联系人/我的里
- * 的个人相册）仍落到 discover 那份，保持改版前的行为。
+ * 朋友圈详情在每个栈都有镜像，从哪个栈点进来就在哪个栈打开。跨到圈子栈的话，
+ * 圈子 tab 已打开过时返回会落到圈子动态，而不是来时的个人相册。
  */
 export function getMomentDetailHref(
   scope: UserProfileScope,
@@ -205,27 +205,40 @@ export function getMomentDetailHref(
   targetCommentId?: string,
 ): Href {
   const params = { id, ...(targetCommentId ? { targetCommentId } : {}) };
-  if (scope === 'explore') {
-    return { pathname: '/(tabs)/explore/moment/[id]', params };
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/moment/[id]', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/moment/[id]', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/moment/[id]', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/moment/[id]', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/moment/[id]', params };
   }
-  return { pathname: '/(tabs)/discover/moment/[id]', params };
 }
 
-/** 「新的朋友」住两个栈:通讯录的本家,和消息页「通知」点进来的那份(返回要回到通知)。 */
-export type NewFriendsScope = 'messages' | 'contacts';
-
-export function getNewFriendsScope(segments: readonly string[] | undefined): NewFriendsScope {
-  return getUserProfileScopeFromSegments(segments) === 'messages' ? 'messages' : 'contacts';
+/** 通知列表:消息页的「通知」叫 notifications,其余栈是同一个页面,叫 notification-center。 */
+export function getNotificationCenterHref(scope: UserProfileScope, domain?: string): Href {
+  if (scope === 'messages') {
+    return domain
+      ? { pathname: '/(tabs)/messages/notifications', params: { domain } }
+      : '/(tabs)/messages/notifications';
+  }
+  return domain
+    ? { pathname: `/(tabs)/${scope}/notification-center`, params: { domain } }
+    : `/(tabs)/${scope}/notification-center`;
 }
 
-export function getNewFriendsHref(scope: NewFriendsScope): Href {
-  return scope === 'messages' ? '/(tabs)/messages/new-friends' : '/(tabs)/contacts/new-friends';
+/** 「新的朋友」每个栈都有一份:从哪个栈点进来就在哪个栈打开,返回回到来处。 */
+export function getNewFriendsHref(scope: UserProfileScope): Href {
+  return `/(tabs)/${scope}/new-friends`;
 }
 
-export function getFriendActivityDetailHref(id: string, scope: NewFriendsScope = 'contacts'): Href {
-  return scope === 'messages'
-    ? { pathname: '/(tabs)/messages/new-friends/[id]', params: { id } }
-    : { pathname: '/(tabs)/contacts/new-friends/[id]', params: { id } };
+export function getFriendActivityDetailHref(id: string, scope: UserProfileScope): Href {
+  return { pathname: `/(tabs)/${scope}/new-friends/[id]`, params: { id } };
 }
 
 export function getChatDetailHref(
@@ -495,12 +508,13 @@ export function getChatInfoHref(
 }
 
 export function getChatBackgroundHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-background',
+    pathname: `/(tabs)/${scope}/chat-background`,
     params: {
       conversationID,
       ...(sourceID ? { sourceID } : {}),
@@ -566,6 +580,10 @@ export function getCircleNotificationSettingsHref(
       return '/(tabs)/messages/circle-notifications' as unknown as Href;
     case 'contacts':
       return '/(tabs)/contacts/circle-notifications' as unknown as Href;
+    case 'explore':
+      return '/(tabs)/explore/circle-notifications' as unknown as Href;
+    case 'profile':
+      return '/(tabs)/profile/circle-notifications' as unknown as Href;
     case 'discover':
     default:
       return '/(tabs)/discover/notifications' as unknown as Href;
@@ -579,6 +597,10 @@ export function getCircleGuideHref(scope: UserProfileScope): Href {
       return '/(tabs)/messages/circle-guide' as unknown as Href;
     case 'contacts':
       return '/(tabs)/contacts/circle-guide' as unknown as Href;
+    case 'explore':
+      return '/(tabs)/explore/circle-guide' as unknown as Href;
+    case 'profile':
+      return '/(tabs)/profile/circle-guide' as unknown as Href;
     case 'discover':
     default:
       return '/(tabs)/discover/guide' as unknown as Href;
@@ -694,12 +716,13 @@ export function getGroupMemberSearchHref(
 }
 
 export function getRecommendFriendHref(
+  scope: UserProfileScope,
   conversationID: string,
   friendId: string,
   friendName?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/recommend-friend',
+    pathname: `/(tabs)/${scope}/recommend-friend`,
     params: {
       conversationID,
       friendId,
@@ -721,24 +744,26 @@ function buildChatHistoryParams(
 }
 
 export function getChatHistorySearchHubHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-search',
+    pathname: `/(tabs)/${scope}/chat-history-search`,
     params: buildChatHistoryParams(conversationID, sourceID, title),
   };
 }
 
 export function getChatHistoryTextHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
   keyword?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-text',
+    pathname: `/(tabs)/${scope}/chat-history-text`,
     params: {
       ...buildChatHistoryParams(conversationID, sourceID, title),
       ...(keyword ? { keyword } : {}),
@@ -747,47 +772,51 @@ export function getChatHistoryTextHref(
 }
 
 export function getChatHistoryMediaHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-media',
+    pathname: `/(tabs)/${scope}/chat-history-media`,
     params: buildChatHistoryParams(conversationID, sourceID, title),
   };
 }
 
 export function getChatHistoryFilesHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-files',
+    pathname: `/(tabs)/${scope}/chat-history-files`,
     params: buildChatHistoryParams(conversationID, sourceID, title),
   };
 }
 
 export function getChatHistoryDateHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID?: string,
   title?: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-date',
+    pathname: `/(tabs)/${scope}/chat-history-date`,
     params: buildChatHistoryParams(conversationID, sourceID, title),
   };
 }
 
 // 按日期日历里点某天 → 进入「当天聊天记录」结果页（date = 'YYYY-MM-DD'）。
 export function getChatHistoryDateResultsHref(
+  scope: UserProfileScope,
   conversationID: string,
   sourceID: string | undefined,
   title: string | undefined,
   date: string,
 ): Href {
   return {
-    pathname: '/(tabs)/messages/chat-history-date-results',
+    pathname: `/(tabs)/${scope}/chat-history-date-results`,
     params: {
       ...buildChatHistoryParams(conversationID, sourceID, title),
       date,
@@ -820,25 +849,10 @@ export function getUserProfileScopeFromSegments(
 }
 
 // ── Circle scope routes ──────────────────────────────────────────────────────
-// 圈子详情及其子页镜像在 messages / discover / explore 三个栈：聊天里的圈子名片、
+// 圈子详情及其子页在每个 tab 栈都有镜像：聊天里的圈子名片、
 // 笔记里的圈子来源都必须在本 tab 内打开（从哪进从哪出），不允许跨 tab 压栈。
 
-export type CircleScope = 'messages' | 'discover' | 'explore';
-
-export function getCircleScopeFromSegments(
-  segments: readonly string[],
-): CircleScope {
-  if (segments.includes('messages')) return 'messages';
-  if (segments.includes('explore')) return 'explore';
-  return 'discover';
-}
-
-// 联系人/我的两个 tab 没有圈子栈，只能落到消息栈。
-export function toCircleScope(scope: UserProfileScope): CircleScope {
-  return scope === 'discover' || scope === 'explore' ? scope : 'messages';
-}
-
-export function getCircleDetailHref(scope: CircleScope, circleId: string): Href {
+export function getCircleDetailHref(scope: UserProfileScope, circleId: string): Href {
   return {
     pathname: `/(tabs)/${scope}/circle/[id]` as const,
     params: { id: circleId },
@@ -846,7 +860,7 @@ export function getCircleDetailHref(scope: CircleScope, circleId: string): Href 
 }
 
 export function getPlazaPostDetailHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   postId: string,
 ): Href {
   return {
@@ -855,7 +869,7 @@ export function getPlazaPostDetailHref(
   };
 }
 
-export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
+export function getCircleEditHref(scope: UserProfileScope, circleId: string): Href {
   return {
     pathname: `/(tabs)/${scope}/circle/[id]/edit` as const,
     params: { id: circleId },
@@ -863,7 +877,7 @@ export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
 }
 
 export function getCirclePostsHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   circleId: string,
   circleName: string,
 ): Href {
@@ -873,7 +887,7 @@ export function getCirclePostsHref(
   };
 }
 
-export function getCircleAdminHref(scope: CircleScope, circleId: string): Href {
+export function getCircleAdminHref(scope: UserProfileScope, circleId: string): Href {
   return {
     pathname: `/(tabs)/${scope}/circle/[id]/admin` as const,
     params: { id: circleId },
@@ -881,7 +895,7 @@ export function getCircleAdminHref(scope: CircleScope, circleId: string): Href {
 }
 
 export function getCircleInviteHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   circleId: string,
   title: string,
   avatar: string,
@@ -896,7 +910,7 @@ export function getCircleInviteHref(
 }
 
 export function getCircleShareHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   circleId: string,
   title: string,
   avatar: string,
@@ -908,7 +922,7 @@ export function getCircleShareHref(
 }
 
 export function getCircleInviteFriendsHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   circleId: string,
   title: string,
 ): Href {
@@ -919,7 +933,7 @@ export function getCircleInviteFriendsHref(
 }
 
 export function getInvitationDetailHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   invitationId: string,
 ): Href {
   return {
@@ -929,7 +943,7 @@ export function getInvitationDetailHref(
 }
 
 export function getSelectVerifierHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   params: { id: string; circleId: string; circleName: string },
 ): Href {
   return {
@@ -939,7 +953,7 @@ export function getSelectVerifierHref(
 }
 
 export function getVerificationDetailHref(
-  scope: CircleScope,
+  scope: UserProfileScope,
   invitationId: string,
 ): Href {
   return {

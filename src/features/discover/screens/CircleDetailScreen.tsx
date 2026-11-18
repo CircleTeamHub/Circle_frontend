@@ -22,7 +22,7 @@ import {
   getCircleEditHref,
   getCirclePostsHref,
   getCircleInviteHref,
-  getCircleScopeFromSegments,
+  getUserProfileScopeFromSegments,
   getInvitationDetailHref,
 } from '@/features/user/utils/routes';
 import { Ionicons } from '@expo/vector-icons';
@@ -289,7 +289,7 @@ function CircleDetailContent() {
   // 本页镜像在 messages/discover 两个栈（聊天圈子名片在本 tab 内打开），
   // 所有内部跳转都要留在当前栈里，做到「从哪进从哪出」。
   const segments = useSegments();
-  const circleScope = getCircleScopeFromSegments(segments);
+  const circleScope = getUserProfileScopeFromSegments(segments);
 
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   // 看过的圈子先用内存缓存画出来,聚焦回调照常在后台重拉(见 circle-detail-cache);

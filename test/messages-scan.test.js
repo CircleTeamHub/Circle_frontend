@@ -49,11 +49,16 @@ test('messages scan screen routes recognized app results and copies unknown resu
   const layout = read('app/(tabs)/messages/_layout.tsx');
 
   assert.match(source, /resolveMessageScanResult/);
-  // replace 换掉摄像头页可以防止返回时重复扫码，但目标必须留在同一个 messages
-  // 栈：跳去顶层 /qr 会把栈换掉，落地页走完加好友就没有可返回的目标。
+  // replace 换掉摄像头页可以防止返回时重复扫码，但目标必须留在扫码页所在的栈
+  // (消息 / 通讯录)：跳去顶层 /qr 会把栈换掉，落地页走完加好友就没有可返回的目标。
   assert.match(source, /router\.replace\(action\.href\)/);
-  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr'/);
-  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr-login'/);
+  assert.match(
+    source,
+    /const scanScope = getUserProfileScopeFromSegments\(useSegments\(\)\) === 'contacts' \? 'contacts' : 'messages';/,
+  );
+  assert.match(source, /resolveMessageScanResult\(result\.data, scanScope\)/);
+  assert.match(resolver, /pathname: `\/\(tabs\)\/\$\{scope\}\/qr`/);
+  assert.match(resolver, /pathname: `\/\(tabs\)\/\$\{scope\}\/qr-login`/);
   assert.match(layout, /<Stack\.Screen name="qr" \/>/);
   assert.match(layout, /<Stack\.Screen name="qr-login" \/>/);
   // 钉住两个路由的内容而不只是存在性。普通二维码进入落地页；已停用的
@@ -74,6 +79,12 @@ test('messages scan screen routes recognized app results and copies unknown resu
   assert.match(resolver, /APP_LINK_PROTOCOLS/);
   assert.match(branding, /windnoteai/);
   assert.match(branding, /circleim/);
-  assert.match(resolver, /\/\(tabs\)\/messages\/temp-chats/);
+  assert.match(resolver, /'temp-chats'/);
+  assert.match(resolver, /href: `\/\(tabs\)\/\$\{scope\}\/\$\{messagePath\}`/);
+  for (const scope of ['messages', 'contacts']) {
+    for (const page of ['qr', 'qr-login', 'temp-chats']) {
+      assert.equal(exists(`app/(tabs)/${scope}/${page}.tsx`), true, `${scope}/${page}`);
+    }
+  }
   assert.match(resolver, /type: 'copy'/);
 });

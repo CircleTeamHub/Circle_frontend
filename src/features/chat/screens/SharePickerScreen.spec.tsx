@@ -14,17 +14,19 @@ const mockRefreshConversation = jest.fn();
 const mockFetchMembers = jest.fn();
 const mockNavigation = { isFocused: jest.fn(() => true) };
 const mockChatState = { currentUserId: 'me', conversations: [] as { id: string; type: string; circleId?: string; policies?: { membersCanViewProfiles: boolean } }[] };
-const mockAuthState = { sessionEpoch: 1 };
+const mockAuthState = { sessionEpoch: 1, user: { id: 'me' } };
+const mockFocusEffect: { current: null | (() => void | (() => void)) } = { current: null };
+let mockSegments: string[] | null = null;
 let mockScope = 'messages';
 let mockParams = { type: 'note', conversationID: 'target', sourceID: 'peer' };
 function mockTranslate(key: string, options?: Record<string, unknown>) {
   return String(options?.defaultValue ?? key).replace(/\{\{(\w+)\}\}/g, (_match, name) => String(options?.[name] ?? ''));
 }
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useNavigation: () => mockNavigation, useSegments: () => ['(tabs)', mockScope, 'share-picker'], useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useNavigation: () => mockNavigation, useSegments: () => mockSegments ?? ['(tabs)', mockScope, 'share-picker'], useFocusEffect: (effect: () => void | (() => void)) => { mockFocusEffect.current = effect; }, useLocalSearchParams: () => mockParams }));
 jest.mock('@/chat-core/api', () => ({ refreshChatConversation: (...args: unknown[]) => mockRefreshConversation(...args), fetchChatMembers: (...args: unknown[]) => mockFetchMembers(...args) }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: (dto: { name?: string; peer?: { nickname?: string; avatarUrl?: string } }) => ({ name: dto.peer?.nickname ?? dto.name ?? '', avatarUrl: dto.peer?.avatarUrl }) }));
 jest.mock('@/chat-core/store', () => ({ useChatStore: Object.assign((selector: (state: typeof mockChatState) => unknown) => selector(mockChatState), { getState: () => mockChatState }) }));
-jest.mock('@/stores/authStore', () => ({ useAuthStore: { getState: () => mockAuthState } }));
+jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState), { getState: () => mockAuthState }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate, i18n: { language: 'zh-CN' } }) }));
 jest.mock('@/i18n', () => ({ __esModule: true, default: { t: mockTranslate } }));
 jest.mock('@/services/api/notes', () => ({ fetchNotes: (...args: unknown[]) => mockFetchNotes(...args) }));
@@ -65,7 +67,7 @@ function note(overrides: Partial<NoteSummary>): NoteSummary {
     cardPreview: { contacts: [{ id: 'person', name: 'Ada' }], groups: [{ id: 'old-group-id', circleId: 'circle', name: 'Circle' }] }, ...overrides };
 }
 beforeEach(() => {
-  jest.clearAllMocks(); mockScope = 'messages';
+  jest.clearAllMocks(); mockScope = 'messages'; mockSegments = null; mockFocusEffect.current = null;
   mockParams = { type: 'note', conversationID: 'target', sourceID: 'peer' };
   mockNavigation.isFocused.mockReturnValue(true);
   mockAuthState.sessionEpoch += 1;
@@ -132,7 +134,8 @@ test.each(['messages', 'profile', 'discover', 'contacts', 'explore'])('personal 
 
 test('circle card uses the canonical circle ID and keeps search and selected notes for return', async () => {
   render(<SharePickerScreen />);
-  fireEvent.press(await screen.findByText('With cards'));
+  await screen.findByText('With cards');
+  fireEvent.press(screen.getByTestId('note-card-select-note'));
   fireEvent.changeText(screen.getByPlaceholderText('搜索'), 'With');
   const stop = jest.fn();
   fireEvent.press(screen.getByText('Circle'), { stopPropagation: stop });
@@ -219,7 +222,8 @@ test('source profile uses refreshed policies rather than a previously open snaps
 test('source circle card opens the original conversation and message without changing the note selection', async () => {
   mockFetchNotes.mockResolvedValue([note({ cardPreview: null, collectedFrom: { conversationType: 'group', conversationID: 'source-conversation', clientMsgID: 'message', sender: { id: 'source-person', name: 'Source person' }, group: { id: 'source-circle', name: 'Source circle' } } })]);
   render(<SharePickerScreen />);
-  fireEvent.press(await screen.findByText('With cards'));
+  await screen.findByText('With cards');
+  fireEvent.press(screen.getByTestId('note-card-select-note'));
   fireEvent.changeText(screen.getByPlaceholderText('搜索'), 'With');
   fireEvent.press(screen.getByText('Source circle'), { stopPropagation: jest.fn() });
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/group-entry', params: { groupId: 'source-conversation', searchedMsgID: 'message' } });
@@ -282,4 +286,46 @@ describe('send card', () => {
     });
     expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
+});
+
+test.each(['messages', 'profile', 'discover', 'contacts', 'explore'])('tapping a note opens its detail in the %s stack; only the circle picks it', async (scope) => {
+  mockScope = scope;
+  render(<SharePickerScreen />);
+  fireEvent.press(await screen.findByText('With cards'));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: `/(tabs)/${scope}/notes/[id]`, params: { id: 'note', ownerId: 'me' } });
+  expect(screen.queryByText('发送 (1)')).toBeNull();
+  fireEvent.press(screen.getByTestId('note-card-select-note'));
+  expect(screen.getByText('发送 (1)')).toBeTruthy();
+});
+
+test('coming back from the note detail reloads the list and the picked notes with the edits', async () => {
+  render(<SharePickerScreen />);
+  await screen.findByText('With cards');
+  fireEvent.press(screen.getByTestId('note-card-select-note'));
+  fireEvent.press(screen.getByTestId('note-card-select-plain'));
+  // 没进过详情的回到前台不重拉。
+  await act(async () => { mockFocusEffect.current?.(); });
+  expect(mockFetchNotes).toHaveBeenCalledTimes(1);
+
+  fireEvent.press(screen.getByText('With cards'));
+  // 在详情里改了标题,另一篇被删掉了。
+  mockFetchNotes.mockResolvedValue([note({ title: 'Edited title' })]);
+  await act(async () => { mockFocusEffect.current?.(); });
+  expect(await screen.findByText('Edited title')).toBeTruthy();
+  expect(mockFetchNotes).toHaveBeenCalledTimes(2);
+  fireEvent.press(screen.getByText('发送 (1)'));
+  expect(mockPending).toHaveBeenCalledWith('peer', expect.objectContaining({
+    kind: 'note-batch',
+    notes: [expect.objectContaining({ id: 'note', title: 'Edited title' })],
+  }));
+});
+
+test('over the half-screen chat the card picks the note too (no tab stack to open the detail in); the left circle still works', async () => {
+  mockSegments = ['chat-sheet', 'share-picker'];
+  render(<SharePickerScreen />);
+  fireEvent.press(await screen.findByText('With cards'));
+  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(screen.getByText('发送 (1)')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('note-card-select-note'));
+  expect(screen.queryByText('发送 (1)')).toBeNull();
 });

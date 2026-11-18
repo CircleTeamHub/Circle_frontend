@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -15,6 +15,7 @@ import type { ChatMessageDto } from '@/chat-core/protocol';
 import {
   getChatDetailHref,
   getChatHistoryDateHref,
+  getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -53,6 +54,7 @@ function ChatHistoryDateResultsContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
@@ -173,17 +175,17 @@ function ChatHistoryDateResultsContent() {
         return;
       }
       router.push(
-        getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType),
+        getChatDetailHref(scope, sourceID, title, undefined, conversationID, clientMsgID, conversationType),
       );
     },
-    [conversationID, conversationType, sourceID, title],
+    [conversationID, conversationType, sourceID, title, scope],
   );
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={formatChatHistoryDateTitle(date)}
-        fallbackHref={getChatHistoryDateHref(conversationID, sourceID, title)}
+        fallbackHref={getChatHistoryDateHref(scope, conversationID, sourceID, title)}
       />
       <View style={s.content}>
         <FlatList

@@ -94,7 +94,10 @@ test('NoteCard renders selection state, owner remark, and tappable source chips'
   assert.match(card, /selectionMode/);
   assert.match(card, /checkmark-circle/);
   assert.match(card, /ellipse-outline/);
-  assert.match(card, /accessibilityState=\{selectionMode \? \{ selected \} : undefined\}/);
+  // 整卡是勾选开关时卡片带选中态;圆圈挪到卡片外左边单独负责勾选时(onSelectPress)选中态挂在圆圈上。
+  assert.match(card, /const selectOutside = selectionMode && Boolean\(onSelectPress\);/);
+  assert.match(card, /accessibilityState=\{selectionMode && !selectOutside \? \{ selected \} : undefined\}/);
+  assert.match(card, /accessibilityRole="checkbox"\s+accessibilityState=\{\{ checked: selected \}\}/);
 
   // 备注行：仅笔记主人可见的私人标注。
   assert.match(card, /note\.remark/);
@@ -175,7 +178,9 @@ test('ShareNoteSheet sends the selected notes to each chosen conversation throug
     /sendNotesToConversation\(\{\s*conversationId,\s*notes: shared\.notes,\s*options: shared\.options,/,
   );
   // 点发送立刻提示「已发送」(确定 / 查看),内容在后台接着发;关掉面板不停发,换账号才停。
-  assert.match(sheet, /announceSent\(\{ t, targets: chosen, resolution, onDismiss: onClose \}\)/);
+  // 「查看」进聊天时开在面板所在的栈里,返回回到笔记。
+  assert.match(sheet, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
+  assert.match(sheet, /announceSent\(\{ scope, t, targets: chosen, resolution, onDismiss: onClose \}\)/);
   assert.match(sheet, /const isActive = \(\) => useAuthStore\.getState\(\)\.user\?\.id === userId;/);
   assert.match(sheet, /failures \+= result\.failures/);
   assert.match(sheet, /sendTextMessage\(\{ conversationId, text: caption \}\)/);
@@ -303,8 +308,10 @@ test('collecting a note offers 查看 that locates it in the notes list', () => 
   // 添加成功的提示给两个按钮：查看(定位) + 确认。
   assert.match(chat, /common\.view/);
   assert.match(chat, /common\.confirm/);
-  // 「查看」跳的是我的笔记**列表**并带定位参数，不是直接开详情页。
-  assert.match(chat, /pathname: '\/\(tabs\)\/profile\/notes'/);
+  // 「查看」跳的是我的笔记**列表**并带定位参数，不是直接开详情页；列表开在聊天所在的栈里，
+  // 返回回到聊天，不跳去「我的」tab。
+  assert.match(chat, /pathname: `\/\(tabs\)\/\$\{scope\}\/notes`/);
+  assert.doesNotMatch(chat, /pathname: '\/\(tabs\)\/profile\/notes'/);
   assert.match(chat, /params: \{ highlightNoteId: copiedNoteId \}/);
 
   // 列表侧：复位到「全部」+ 清搜索（目标可能被 tab/搜索滤掉），滚动定位并高亮。

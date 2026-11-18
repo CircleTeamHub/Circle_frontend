@@ -437,7 +437,7 @@
       "recognitionSelectionSummary": "已选 {{count}}/{{max}}",
       "recognitionFull": "点赞名额已用完",
       "recognizedTag": "已点赞",
-      "recognitionSubmit": "给合作愉快的朋友点赞",
+      "recognitionSubmit": "点赞",
       "recognitionSubmitting": "提交中",
       "recognitionLimitTitle": "最多选择 3 人",
       "recognitionLimitMessage": "每个活动最多给 3 位报名者点赞。",
@@ -499,8 +499,8 @@
       "expandComposer": "展开输入框",
       "collapseComposer": "收起输入框",
       "expandedComposerTitle": "编辑消息",
-      "disappearingMessageNotice": "你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。",
-      "personalDisappearingMessageNotice": "你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。",
+      "disappearingMessageNotice": "你发送的新消息将在对方已读 {{duration}} 后消失。",
+      "personalDisappearingMessageNotice": "你发送的新消息将在对方已读 {{duration}} 后消失。",
       "attachmentPanelLabel": "打开附件面板",
       "voiceInputLabel": "语音输入",
       "emojiPanelLabel": "打开表情面板",
@@ -2942,7 +2942,8 @@
       "delete": "删除",
       "restore": "恢复",
       "purge": "立即删除",
-      "download": "下载"
+      "download": "下载",
+      "select": "选择"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",

@@ -42,7 +42,6 @@ import {
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
-  toCircleScope,
 } from '@/features/user/utils/routes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
@@ -235,7 +234,7 @@ function NoteDetailContent() {
         );
         return;
       }
-      router.push(getCircleDetailHref(toCircleScope(scope), id));
+      router.push(getCircleDetailHref(scope, id));
     },
     [router, scope],
   );
@@ -559,7 +558,7 @@ function NoteDetailContent() {
             onPress: () => {
               if (!isCurrentRequest()) return;
               router.push({
-                pathname: '/(tabs)/profile/notes',
+                pathname: `/(tabs)/${scope}/notes`,
                 params: { highlightNoteId: result.note.id },
               } as never);
             },
@@ -583,7 +582,8 @@ function NoteDetailContent() {
       }
     }
   }, [addedNote, canEditNote, collectionKey, detailVerified, hasChatSource, id, note, router, sessionEpoch,
-    sourceConversationId, sourceMessageHeight, sourceMessageId, t]);
+    sourceConversationId, sourceMessageHeight, sourceMessageId, t,
+    scope,]);
 
   const d = useMemo(
     () => ({
@@ -751,7 +751,7 @@ function NoteDetailContent() {
               accessibilityLabel={t('notes.list.openGroupChat', { name: group.name })}
               onPress={() => {
                 if (group.target === 'circle') {
-                  router.push(getCircleDetailHref(toCircleScope(scope), group.id));
+                  router.push(getCircleDetailHref(scope, group.id));
                   return;
                 }
                 const groupId = group.conversationID ?? group.id;

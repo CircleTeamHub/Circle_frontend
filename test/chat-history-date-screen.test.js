@@ -70,8 +70,10 @@ test('by-date calendar navigates into the day results page on tap', () => {
 
   assert.match(
     screen,
-    /getChatHistoryDateResultsHref\(conversationID, sourceID, title, day\.date\)/,
+    /getChatHistoryDateResultsHref\(scope, conversationID, sourceID, title, day\.date\)/,
   );
+  // 结果页开在日历页所在的栈里,返回回到日历。
+  assert.match(screen, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
   // 相邻月份的日子：先翻月，不直接进结果页
   assert.match(screen, /if \(!day\.isCurrentMonth\)/);
   // 日历页本身不再内联搜索 / 渲染结果列表
@@ -88,20 +90,29 @@ test('day results screen searches the picked date and opens the message in chat'
   assert.match(screen, /formatChatHistoryDateTitle\(date\)/);
   assert.match(
     screen,
-    /getChatDetailHref\('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType\)/,
+    /getChatDetailHref\(scope, sourceID, title, undefined, conversationID, clientMsgID, conversationType\)/,
   );
+  assert.match(screen, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
   assert.match(screen, /chat\.history\.noRecordsForDate/);
   assert.match(screen, /onEndReached=\{handleLoadMore\}/);
 });
 
-test('day results page is registered as a route in the messages stack', () => {
+test('day results page is registered as a route in every tab stack', () => {
   const route = read('app/(tabs)/messages/chat-history-date-results.tsx');
   assert.match(route, /ChatHistoryDateResultsScreen/);
 
   const layout = read('app/(tabs)/messages/_layout.tsx');
   assert.match(layout, /name="chat-history-date-results"/);
 
+  // 聊天可以从任意 tab 打开,聊天记录各页跟着开在同一个栈里:每个栈都要有这份路由。
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.ok(
+      fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/chat-history-date-results.tsx`)),
+      `${scope} 栈缺当天聊天记录页`,
+    );
+  }
+
   const routes = read('src/features/user/utils/routes.ts');
-  assert.match(routes, /export function getChatHistoryDateResultsHref/);
-  assert.match(routes, /'\/\(tabs\)\/messages\/chat-history-date-results'/);
+  assert.match(routes, /export function getChatHistoryDateResultsHref\(\s*scope: UserProfileScope,/);
+  assert.match(routes, /pathname: `\/\(tabs\)\/\$\{scope\}\/chat-history-date-results`/);
 });

@@ -151,12 +151,13 @@ test("snackbar route resolver covers all actionable notification targets", () =>
   const route = read(
     "src/features/notifications/utils/snackbar-route.ts",
   );
+  // 各类通知都在点下去的那个 tab 栈里打开(逐类逐栈的检查在 snackbar-route.test.js)。
   assert.match(route, /CIRCLE_POST_SIGNUP_CREATED/);
-  assert.match(route, /\/\(tabs\)\/messages\/post-signups/);
+  assert.match(route, /pathname: `\/\(tabs\)\/\$\{scope\}\/post-signups`/);
   assert.match(route, /FRIEND_REQUEST/);
-  assert.match(route, /\/\(tabs\)\/contacts\/new-friends/);
+  assert.match(route, /return getNewFriendsHref\(scope\);/);
   assert.match(route, /fromTrace\?\.id/);
-  assert.match(route, /\/\(tabs\)\/discover\/moment\/\[id\]/);
+  assert.match(route, /getMomentDetailHref\(scope, item\.fromTrace\.id/);
 });
 
 test('admission banners preserve badges belonging to discover domains', () => {

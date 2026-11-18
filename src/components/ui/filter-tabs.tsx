@@ -9,6 +9,8 @@ interface FilterTabsProps {
   scrollable?: boolean;
   testIDForIndex?: (index: number) => string;
   compact?: boolean;
+  /** 标签多、要尽量一屏放下时用:标签左右内边距收窄,标签之间不另留空。 */
+  dense?: boolean;
 }
 
 const s = StyleSheet.create({
@@ -32,6 +34,9 @@ const s = StyleSheet.create({
   tabCompact: {
     marginRight: -Spacing.xs,
   },
+  tabDense: {
+    paddingHorizontal: Spacing.sm + Spacing.xs,
+  },
 });
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
@@ -41,6 +46,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
   scrollable = false,
   testIDForIndex,
   compact = false,
+  dense = false,
 }) => {
   const { colors } = useTheme();
 
@@ -71,6 +77,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
           style={[
             s.tab,
             compact && index < tabs.length - 1 && s.tabCompact,
+            dense && s.tabDense,
             active && d.tabActive,
           ]}
           accessibilityRole="tab"
@@ -83,7 +90,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         </Pressable>
       );
     },
-    [activeIndex, compact, onTabPress, tabs.length, d, testIDForIndex],
+    [activeIndex, compact, dense, onTabPress, tabs.length, d, testIDForIndex],
   );
 
   if (scrollable) {
@@ -91,7 +98,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[s.row, compact && s.rowCompact, s.scrollContent]}
+        contentContainerStyle={[s.row, (compact || dense) && s.rowCompact, s.scrollContent]}
         accessibilityRole="tablist"
       >
         {tabs.map(renderTab)}
@@ -100,7 +107,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
   }
 
   return (
-    <View style={[s.row, compact && s.rowCompact]} accessibilityRole="tablist">
+    <View style={[s.row, (compact || dense) && s.rowCompact]} accessibilityRole="tablist">
       {tabs.map(renderTab)}
     </View>
   );

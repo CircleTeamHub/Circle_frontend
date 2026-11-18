@@ -67,7 +67,7 @@ jest.mock('@/features/contacts/utils/mark-friend-activities-read', () => ({
 }));
 jest.mock('@/features/user/utils/routes', () => ({
   getFriendActivityDetailHref: (id: string, scope: string) => `${scope}:${id}`,
-  getNewFriendsScope: jest.requireActual('@/features/user/utils/routes').getNewFriendsScope,
+  getUserProfileScopeFromSegments: jest.requireActual('@/features/user/utils/routes').getUserProfileScopeFromSegments,
 }));
 jest.mock('@/features/notifications/utils/seen-target', () => ({
   markMatchingTargetNotificationsRead: jest.fn(async () => undefined),

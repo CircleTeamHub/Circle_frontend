@@ -23,6 +23,7 @@ jest.mock('react-i18next', () => ({
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
+  useSegments: () => ['(tabs)', 'discover', 'my-circles'],
   // 每次聚焦都后台刷新「我的圈子」。
   useFocusEffect: (callback: () => void) => {
     const { useEffect } = jest.requireActual('react');
