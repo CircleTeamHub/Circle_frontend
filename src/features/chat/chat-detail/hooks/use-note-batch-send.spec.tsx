@@ -253,10 +253,20 @@ describe('handleSendNoteSection', () => {
     test('get a poster captured from the note\'s own copy of the video', async () => {
       jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
       jest.mocked(fetchNoteDetail).mockResolvedValueOnce(withVideo as never);
-      jest.mocked(uploadChatVideoPoster).mockResolvedValueOnce({ key: 'chat/me/poster-abc.jpg' });
+      // In time, the before-upload check lets the poster through.
+      jest.mocked(uploadChatVideoPoster).mockImplementationOnce(async (...args) => {
+        args[4]?.();
+        return { key: 'chat/me/poster-abc.jpg' };
+      });
       await send();
       expect(fetchNoteDetail).toHaveBeenCalledTimes(1);
-      expect(uploadChatVideoPoster).toHaveBeenCalledWith('https://cdn.test/notes/clip.mp4?sig=1', 14, 'abc.mp4', 'chat');
+      expect(uploadChatVideoPoster).toHaveBeenCalledWith(
+        'https://cdn.test/notes/clip.mp4?sig=1',
+        14,
+        'abc.mp4',
+        'chat',
+        expect.any(Function),
+      );
       expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({
         key: 'chat/me/note-import/abc.mp4',
         thumbKey: 'chat/me/poster-abc.jpg',
@@ -295,6 +305,32 @@ describe('handleSendNoteSection', () => {
           key: 'chat/me/note-import/abc.mp4',
           thumbKey: undefined,
         }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    // The capture is not cancelled by the timeout. If it finishes later, its upload must be
+    // refused, or an orphan poster lands in chat/ that no message points at.
+    test('a poster capture that finishes after the timeout is not uploaded', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.mocked(importNoteChatMedia).mockResolvedValueOnce(copied as never);
+        jest.mocked(fetchNoteDetail).mockResolvedValueOnce(withVideo as never);
+        let beforeUpload: (() => void) | undefined;
+        jest.mocked(uploadChatVideoPoster).mockImplementationOnce((...args) => {
+          beforeUpload = args[4];
+          return new Promise(() => {});
+        });
+        const hook = create('conversation-a');
+        let pending!: Promise<void>;
+        act(() => { pending = hook.result.current.handleSendNoteSection(card, 'showcase'); });
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(10_500);
+          await pending;
+        });
+        expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({ thumbKey: undefined }));
+        expect(() => beforeUpload?.()).toThrow();
       } finally {
         jest.useRealTimers();
       }

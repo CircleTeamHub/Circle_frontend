@@ -319,9 +319,9 @@ export function useAuth() {
           });
           safeSetError(i18n.t('auth.errors.registerSucceededSessionFailed'));
         } else if (isAmbiguousMutationFailure(requestError)) {
-          // 超时/读包失败/5xx:请求可能已经落库,不能催用户「重试注册」——
-          // 那会撞上自己刚占掉的邮箱。断网(failureKind==='network')不算,
-          // 那种情况请求根本没出去。
+          // 断网/超时/读包失败/5xx:请求可能已经落库,不能催用户「重试注册」——
+          // 那会撞上自己刚占掉的邮箱。断网也算在内:连接可能在服务端提交之后才断
+          // (判定见 isAmbiguousMutationFailure)。
           safeSetError(i18n.t('auth.errors.registerOutcomeUnknown'));
         } else {
           safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
