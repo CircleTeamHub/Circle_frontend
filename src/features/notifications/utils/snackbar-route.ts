@@ -7,66 +7,40 @@ import { getGroupEntryHref } from '@/features/groups/routes';
 import type { Href } from 'expo-router';
 import type { NotificationSnackbarItem } from '@/features/notifications/store/use-notification-snackbar-store';
 import { notificationDomain } from '@/features/notifications/utils/notification-domain';
+import {
+  getMomentDetailHref,
+  getNewFriendsHref,
+  getNotificationCenterHref,
+  type UserProfileScope,
+} from '@/features/user/utils/routes';
 
 export type SnackbarRouteOptions = {
   /** Fallback title for an untitled circle post. */
   untitledPost: string;
-  /** Tab stack that should own non-chat notification detail routes. */
-  scope?: 'messages' | 'discover' | 'explore';
+  /**
+   * 点通知时所在的 tab 栈。详情页每个栈都有一份,留在本栈打开,返回才回到点进来的地方
+   * (横幅下面的页面 / 通知列表)。
+   */
+  scope: UserProfileScope;
 };
 
-const DISCOVER_NOTIFICATION_CENTER_ROUTE =
-  '/(tabs)/discover/notification-center' satisfies Href;
-const EXPLORE_NOTIFICATION_CENTER_ROUTE =
-  '/(tabs)/explore/notification-center' satisfies Href;
-const MESSAGES_NOTIFICATION_CENTER_ROUTE =
-  '/(tabs)/messages/notifications' satisfies Href;
-
-function getNotificationCenterFallback(
-  scope: SnackbarRouteOptions['scope'],
-  type: string,
-): Href {
-  // 拆成多条 return 收敛推断,避免三元合并出巨型 Href 联合触发 TS2590。
-  // 探索 tab 上只认朋友圈域:那里只有朋友圈的铃铛。
-  if (scope === 'explore' && notificationDomain(type) === 'moments') {
-    return {
-      pathname: EXPLORE_NOTIFICATION_CENTER_ROUTE,
-      params: { domain: 'moments' },
-    };
-  }
-  if (scope === 'discover') {
-    // 兜底也认域:圈子的通知落在圈子铃铛,朋友圈的落在朋友圈铃铛,
-    // 否则点进去看到的是另一个入口的列表。
-    // 圈子 tab 上只有这两个铃铛；群聊知会 / 公告不在这里，按不限域兜底。
-    const domain = notificationDomain(type);
-    if (domain === 'moments' || domain === 'circle') {
-      return {
-        pathname: DISCOVER_NOTIFICATION_CENTER_ROUTE,
-        params: { domain },
-      };
-    }
-    return DISCOVER_NOTIFICATION_CENTER_ROUTE;
-  }
-  return MESSAGES_NOTIFICATION_CENTER_ROUTE;
-}
-
-/** 当前所在 tab 栈 → 通知详情该落在哪个栈(其余 tab 统一回消息栈)。 */
-export function getNotificationScope(
-  segments: readonly string[],
-): NonNullable<SnackbarRouteOptions['scope']> {
-  if (segments.includes('discover')) return 'discover';
-  if (segments.includes('explore')) return 'explore';
-  return 'messages';
+function getNotificationCenterFallback(scope: UserProfileScope, type: string): Href {
+  // 兜底也认域:圈子的通知落在圈子铃铛,朋友圈的落在朋友圈铃铛,否则点进去看到的是
+  // 另一个入口的列表。群聊知会 / 公告不属于这两个铃铛,按不限域兜底;消息页的「通知」不分域。
+  const domain = notificationDomain(type);
+  const bell = scope !== 'messages' && (domain === 'moments' || domain === 'circle') ? domain : undefined;
+  return getNotificationCenterHref(scope, bell);
 }
 
 export function getSnackbarRoute(
   item: NotificationSnackbarItem,
   options: SnackbarRouteOptions,
 ): Href {
-  if (item.kind === 'notification' && item.fromGroupAdmission?.id) return getGroupEntryHref(options.scope ?? 'messages', { admissionId: item.fromGroupAdmission.id });
+  const { scope } = options;
+  if (item.kind === 'notification' && item.fromGroupAdmission?.id) return getGroupEntryHref(scope, { admissionId: item.fromGroupAdmission.id });
   if (item.kind === 'chat') {
     return {
-      pathname: '/(tabs)/messages/chat-detail',
+      pathname: `/(tabs)/${scope}/chat-detail`,
       params: {
         conversationID: item.conversationID,
         sourceID: item.sourceID,
@@ -88,7 +62,7 @@ export function getSnackbarRoute(
       message.clientMsgID || message.messageID || message.id || '';
     if (sourceID) {
       return {
-        pathname: '/(tabs)/messages/chat-detail',
+        pathname: `/(tabs)/${scope}/chat-detail`,
         params: {
           ...(message.conversationID
             ? { conversationID: message.conversationID }
@@ -109,10 +83,7 @@ export function getSnackbarRoute(
     item.fromCirclePost?.id
   ) {
     return {
-      pathname:
-        options.scope === 'discover'
-          ? '/(tabs)/discover/post-signups'
-          : '/(tabs)/messages/post-signups',
+      pathname: `/(tabs)/${scope}/post-signups`,
       params: {
         postId: item.fromCirclePost.id,
         title: item.fromCirclePost.excerpt || options.untitledPost,
@@ -120,13 +91,9 @@ export function getSnackbarRoute(
     };
   }
 
-  // 「邀请你为入圈申请验证」→ 直达担保验证页，可直接同意/拒绝。三个通知栈都有这页：
-  // 留在当前栈，返回才回到点进来的通知列表（消息页飞机进来的不该被甩到圈子 tab）。
+  // 「邀请你为入圈申请验证」→ 直达担保验证页，可直接同意/拒绝。
   if (item.type === 'CIRCLE_VERIFICATION_REQUESTED' && item.fromInvitation?.id) {
-    const params = { id: item.fromInvitation.id };
-    if (options.scope === 'messages') return { pathname: '/(tabs)/messages/verification/[id]', params };
-    if (options.scope === 'explore') return { pathname: '/(tabs)/explore/verification/[id]', params };
-    return { pathname: '/(tabs)/discover/verification/[id]', params };
+    return { pathname: `/(tabs)/${scope}/verification/[id]`, params: { id: item.fromInvitation.id } };
   }
 
   if (
@@ -135,24 +102,16 @@ export function getSnackbarRoute(
       item.type === 'CIRCLE_ADMIN_OVERRIDE_APPROVED') &&
     item.fromInvitation?.id
   ) {
-    const params = { id: item.fromInvitation.id };
-    if (options.scope === 'messages') return { pathname: '/(tabs)/messages/invitation/[id]', params };
-    if (options.scope === 'explore') return { pathname: '/(tabs)/explore/invitation/[id]', params };
-    return { pathname: '/(tabs)/discover/invitation/[id]', params };
+    return { pathname: `/(tabs)/${scope}/invitation/[id]`, params: { id: item.fromInvitation.id } };
   }
 
   if (item.type.startsWith('FRIEND_REQUEST')) {
-    return '/(tabs)/contacts/new-friends';
+    return getNewFriendsHref(scope);
   }
 
-  // 系统公告只会从消息页「通知」点进来（公告不弹横幅）；详情页按通知 id 取，放在消息栈里，
-  // 返回回到通知。其余入口仍去「我」页的公告详情。
+  // 系统公告(公告不弹横幅,只从通知列表点进来):详情页按通知 id 取。
   if (item.kind === 'notification' && item.type === 'SYSTEM') {
-    const params = { id: item.id };
-    if (options.scope === 'messages') {
-      return { pathname: '/(tabs)/messages/system-announcements/[id]', params };
-    }
-    return { pathname: '/(tabs)/profile/system-announcements/[id]', params };
+    return { pathname: `/(tabs)/${scope}/system-announcements/[id]`, params: { id: item.id } };
   }
 
   // 资料点赞 / 活动协作认可：直达对方（点赞者 / 认可者）主页，方便回赞 / 加好友。
@@ -162,32 +121,16 @@ export function getSnackbarRoute(
     item.fromUser?.id
   ) {
     return {
-      pathname:
-        options.scope === 'discover'
-          ? '/(tabs)/discover/user/[id]'
-          : options.scope === 'explore'
-            ? '/(tabs)/explore/user/[id]'
-            : '/(tabs)/messages/user/[id]',
+      pathname: `/(tabs)/${scope}/user/[id]`,
       params: { id: item.fromUser.id, name: item.fromUser.nickname },
     };
   }
 
   if (item.fromTrace?.id) {
-    const params = {
-      id: item.fromTrace.id,
-      ...(item.fromReply?.id ? { targetCommentId: item.fromReply.id } : {}),
-    };
-    // 朋友圈住在探索 tab;正在圈子 tab 或消息页(「通知」)上时留在本栈,不跨 tab。
-    if (options.scope === 'discover') {
-      return { pathname: '/(tabs)/discover/moment/[id]', params };
-    }
-    if (options.scope === 'messages') {
-      return { pathname: '/(tabs)/messages/moment/[id]', params };
-    }
-    return { pathname: '/(tabs)/explore/moment/[id]', params };
+    return getMomentDetailHref(scope, item.fromTrace.id, item.fromReply?.id);
   }
 
-  return getNotificationCenterFallback(options.scope, item.type);
+  return getNotificationCenterFallback(scope, item.type);
 }
 
 export function isUserProfileSnackbarRoute(route: Href): boolean {

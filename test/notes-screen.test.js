@@ -36,7 +36,11 @@ test('NotesScreen opens a standalone unlisted notes page instead of filtering in
   assert.doesNotMatch(src, /showUnlisted/);
   assert.doesNotMatch(src, /status: showUnlisted \? 'UNLISTED' : 'ACTIVE'/);
   assert.match(src, /fetchNotes\(\{ status: 'ACTIVE' \}\)/);
-  assert.match(src, /\/\(tabs\)\/profile\/notes\/unlisted/);
+  // 已下架页开在笔记列表所在的栈里(每个栈都有镜像),不跨到「我的」tab。
+  assert.match(src, /`\/\(tabs\)\/\$\{scope\}\/notes\/unlisted`/);
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.ok(fs.existsSync(path.join(ROOT, `app/(tabs)/${scope}/notes/unlisted.tsx`)), scope);
+  }
   assert.doesNotMatch(src, /notes\.unlistedAutoDeleteHint/);
 });
 
@@ -99,11 +103,14 @@ test('NotesScreen no longer exposes the old notes settings page', () => {
 test('the notes settings entry opens the collect preferences page', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /onOpenSettings=\{openSettings\}/);
-  assert.match(src, /\/\(tabs\)\/profile\/notes\/settings/);
-  assert.match(
-    read('app/(tabs)/profile/notes/settings.tsx'),
-    /features\/notes\/screens\/NoteSettingsScreen/,
-  );
+  assert.match(src, /`\/\(tabs\)\/\$\{scope\}\/notes\/settings`/);
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.match(
+      read(`app/(tabs)/${scope}/notes/settings.tsx`),
+      /features\/notes\/screens\/NoteSettingsScreen/,
+      scope,
+    );
+  }
 });
 
 test('NotesScreen fetches notes and groups', () => {
@@ -117,7 +124,9 @@ test('NotesScreen passes the current user as owner when opening note details', (
 
   assert.match(src, /useAuthStore/);
   assert.match(src, /currentUserId/);
-  assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
+  // 详情开在列表所在的栈里,返回回到列表。
+  assert.match(src, /pathname: `\/\(tabs\)\/\$\{scope\}\/notes\/\[id\]`/);
+  assert.doesNotMatch(src, /'\/\(tabs\)\/profile\/notes/);
   // NoteCard 已 memo，跳转回调改为稳定 useCallback（携带 note 参数）。
   // 多选模式加入后卡片 onPress 先走 handleCardPress 分流：选择态勾选、常态进详情。
   assert.match(src, /params: \{ id: note\.id, ownerId: currentUserId \?\? '' \}/);

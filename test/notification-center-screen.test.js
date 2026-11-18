@@ -52,8 +52,12 @@ test('interactive notification taps delegate to the shared notification route re
 test('notification center keeps circle signup navigation in the current tab stack', () => {
   const source = readScreen();
 
-  assert.match(source, /pathname:\s*notificationScope === 'discover'\s*\?\s*'\/\(tabs\)\/discover\/post-signups'\s*:\s*'\/\(tabs\)\/messages\/post-signups'/);
+  assert.match(source, /pathname: `\/\(tabs\)\/\$\{notificationScope\}\/post-signups`/);
   assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/messages\/post-signups'/);
+  // 报名管理页在每个栈都有镜像,哪个栈的通知中心点进去都留在那个栈。
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    assert.ok(fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/post-signups.tsx`)), scope);
+  }
 });
 
 test('notification center keeps the bell badges in sync when interactive items are read', () => {

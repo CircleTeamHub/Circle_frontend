@@ -13,7 +13,7 @@ import {
   type AddNoteToNotesSelection,
 } from '@/features/notes/components/AddNoteToNotesSheet';
 import { Alert, Keyboard } from 'react-native';
-import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
+import { useChatRouter, useChatScope } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -119,6 +119,7 @@ export function useCollectMessage({
   const [noteCollectOpening, setNoteCollectOpening] = useState(false);
   const [noteCollectSaving, setNoteCollectSaving] = useState(false);
   const chatRouter = useChatRouter();
+  const scope = useChatScope();
   const sessionEpoch = useAuthStore.getState().sessionEpoch;
   const mountedRef = useRef(false);
   const contextRef = useRef({ conversationID, currentUserID });
@@ -235,7 +236,7 @@ export function useCollectMessage({
                   onPress: () => {
                     if (!isCurrentContext(request)) return;
                     chatRouter.push({
-                      pathname: '/(tabs)/profile/notes',
+                      pathname: `/(tabs)/${scope}/notes`,
                       params: { highlightNoteId: copiedNoteId },
                     } as never);
                   },
@@ -262,7 +263,7 @@ export function useCollectMessage({
         }
       }
     },
-    [t, isCurrentContext, finishNoteCollect, chatRouter],
+    [t, isCurrentContext, finishNoteCollect, chatRouter, scope],
   );
 
   const handleCollectMessage = useCallback(

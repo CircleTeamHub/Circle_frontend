@@ -32,6 +32,11 @@ interface Props {
   onSourcePress?: (note: NoteSummary, target: NoteSourceTarget) => void;
   /** 多选模式：右侧 ⋯ 槽位换成选择圈，整卡点击由父层当作勾选处理 */
   selectionMode?: boolean;
+  /**
+   * 多选模式下只让选择圈负责勾选：传了它，选择圈挪到卡片外的最左边单独一列，点圈 = 勾选，
+   * 点卡片仍走 onPress(发笔记选择页用来打开详情，发之前看一眼或改几个字)。
+   */
+  onSelectPress?: (note: NoteSummary) => void;
   /** 发送笔记选择页允许查看名片资料；其他多选页默认禁用来源按钮。 */
   selectionSourceDetails?: boolean;
   selected?: boolean;
@@ -48,6 +53,7 @@ function NoteCardInner({
   onMorePress,
   onLongPress,
   onSourcePress,
+  onSelectPress,
   selectionMode = false,
   selectionSourceDetails = false,
   selected = false,
@@ -116,6 +122,9 @@ function NoteCardInner({
     [note, onMorePress],
   );
 
+  const handleSelectPress = useCallback(() => onSelectPress?.(note), [note, onSelectPress]);
+  const selectOutside = selectionMode && Boolean(onSelectPress);
+
   const handleSenderPress = useCallback(
     (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
@@ -135,7 +144,7 @@ function NoteCardInner({
   const chipsEnabled = Boolean(onSourcePress) && (!selectionMode || selectionSourceDetails);
   const canShowActions = showActions && Boolean(onMorePress) && !selectionMode;
 
-  return (
+  const card = (
     <Pressable
       style={[
         s.container,
@@ -149,7 +158,7 @@ function NoteCardInner({
       // 桌面网页版外层降级为可点 div;原生保持按钮语义不变。
       accessibilityRole={Platform.OS === 'web' ? undefined : accessibilityRole}
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={selectionMode ? { selected } : undefined}
+      accessibilityState={selectionMode && !selectOutside ? { selected } : undefined}
     >
       <View style={s.topRow}>
       {/* 封面 + 下面的好评/差评:评价不再和时间、分组、图片数挤在一行,那一行的字才显示得全。 */}
@@ -248,7 +257,7 @@ function NoteCardInner({
         </Text>
       </View>
 
-      {selectionMode ? (
+      {selectionMode && !selectOutside ? (
         <View style={s.moreBtn}>
           <Ionicons
             name={selected ? 'checkmark-circle' : 'ellipse-outline'}
@@ -335,6 +344,27 @@ function NoteCardInner({
         </View>
       ) : null}
     </Pressable>
+  );
+
+  if (!selectOutside) return card;
+  return (
+    <View style={s.selectRow}>
+      <Pressable
+        onPress={handleSelectPress}
+        style={s.selectCircle}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+        accessibilityLabel={`${t('notes.actions.select', { defaultValue: '选择' })} ${note.title}`.trim()}
+        testID={`note-card-select-${note.id}`}
+      >
+        <Ionicons
+          name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+          size={24}
+          color={selected ? colors.iconAccent : colors.textSecondary}
+        />
+      </Pressable>
+      <View style={s.selectCard}>{card}</View>
+    </View>
   );
 }
 
@@ -435,6 +465,10 @@ const s = StyleSheet.create({
   sourceDetailsChip: {
     height: 44,
   },
+  // 选择圈在卡片外的最左边单独一列，卡片让出位置。整列和卡片同高都能点(hitSlop 出不了父视图)。
+  selectRow: { flexDirection: 'row' },
+  selectCircle: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  selectCard: { flex: 1, minWidth: 0 },
   moreBtn: {
     width: 32,
     height: 32,

@@ -43,7 +43,6 @@ import {
   getQrLandingHref,
   getVerificationDetailHref,
   type UserProfileScope,
-  toCircleScope,
 } from '@/features/user/utils/routes';
 import { type ThemeColors } from '@/theme';
 import type { NoteCardSendSection } from '@/features/chat/chat-detail/hooks/use-note-batch-send';
@@ -419,7 +418,7 @@ export function useMessageRenderer({
           />
         ));
       case 'group-invitation':
-        return withMessageActions(item, (<GroupInvitationBubble message={item} onLongPress={getMessageLongPressHandler(item)} senderName={receivedDisplayName(item)} senderAvatarUri={receivedAvatarUri(item)} selfName={selfName} selfAvatarUri={selfAvatarUri} onPress={(admissionId, circle) => { if (circle) chatRouter.push(getInvitationDetailHref(toCircleScope(scope), admissionId)); else chatRouter.push(getGroupEntryHref(scope, { admissionId })); }} />));
+        return withMessageActions(item, (<GroupInvitationBubble message={item} onLongPress={getMessageLongPressHandler(item)} senderName={receivedDisplayName(item)} senderAvatarUri={receivedAvatarUri(item)} selfName={selfName} selfAvatarUri={selfAvatarUri} onPress={(admissionId, circle) => { if (circle) chatRouter.push(getInvitationDetailHref(scope, admissionId)); else chatRouter.push(getGroupEntryHref(scope, { admissionId })); }} />));
       case 'circle-card':
         return withMessageActions(item, (
           <CircleCardBubble
@@ -436,7 +435,7 @@ export function useMessageRenderer({
               // 在当前栈内打开圈子详情（从哪进从哪出），不跨 tab 压栈。
               chatRouter.push(
                 getCircleDetailHref(
-                  toCircleScope(scope),
+                  scope,
                   card.circleId,
                 ),
               )
@@ -481,7 +480,7 @@ export function useMessageRenderer({
             onPress={(card) =>
               chatRouter.push(
                 getPlazaPostDetailHref(
-                  toCircleScope(scope),
+                  scope,
                   card.postId,
                 ),
               )
@@ -503,7 +502,7 @@ export function useMessageRenderer({
             onPress={(card) =>
               chatRouter.push(
                 getVerificationDetailHref(
-                  toCircleScope(scope),
+                  scope,
                   card.invitationId,
                 ),
               )

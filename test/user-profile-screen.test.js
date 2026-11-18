@@ -362,61 +362,33 @@ test('user profile route helpers preserve scope for the request form', () => {
       params: { id: 'note-1', ownerId: 'owner-1' },
     },
   );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatHistorySearchHubHref('conversation-1', 'user-1', '小李'))),
-    {
-      pathname: '/(tabs)/messages/chat-history-search',
-      params: {
-        conversationID: 'conversation-1',
-        sourceID: 'user-1',
-        title: '小李',
-      },
-    },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatHistoryTextHref('conversation-1', 'user-1', '小李'))),
-    {
-      pathname: '/(tabs)/messages/chat-history-text',
-      params: {
-        conversationID: 'conversation-1',
-        sourceID: 'user-1',
-        title: '小李',
-      },
-    },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatHistoryMediaHref('conversation-1', 'user-1', '小李'))),
-    {
-      pathname: '/(tabs)/messages/chat-history-media',
-      params: {
-        conversationID: 'conversation-1',
-        sourceID: 'user-1',
-        title: '小李',
-      },
-    },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatHistoryFilesHref('conversation-1', 'user-1', '小李'))),
-    {
-      pathname: '/(tabs)/messages/chat-history-files',
-      params: {
-        conversationID: 'conversation-1',
-        sourceID: 'user-1',
-        title: '小李',
-      },
-    },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatHistoryDateHref('conversation-1', 'user-1', '小李'))),
-    {
-      pathname: '/(tabs)/messages/chat-history-date',
-      params: {
-        conversationID: 'conversation-1',
-        sourceID: 'user-1',
-        title: '小李',
-      },
-    },
-  );
+  // 聊天记录各页开在聊天所在的栈里(每个 tab 栈都有镜像),返回回到来时的聊天。
+  const historyPages = [
+    [getChatHistorySearchHubHref, 'chat-history-search'],
+    [getChatHistoryTextHref, 'chat-history-text'],
+    [getChatHistoryMediaHref, 'chat-history-media'],
+    [getChatHistoryFilesHref, 'chat-history-files'],
+    [getChatHistoryDateHref, 'chat-history-date'],
+  ];
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
+    for (const [helper, page] of historyPages) {
+      assert.deepEqual(
+        JSON.parse(JSON.stringify(helper(scope, 'conversation-1', 'user-1', '小李'))),
+        {
+          pathname: `/(tabs)/${scope}/${page}`,
+          params: {
+            conversationID: 'conversation-1',
+            sourceID: 'user-1',
+            title: '小李',
+          },
+        },
+      );
+      assert.ok(
+        fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/${page}.tsx`)),
+        `${scope} 栈缺 ${page}`,
+      );
+    }
+  }
   assert.deepEqual(
     JSON.parse(JSON.stringify(getEditFriendRemarkHref('contacts', 'user-1', 'old-remark', 'profile-name'))),
     {

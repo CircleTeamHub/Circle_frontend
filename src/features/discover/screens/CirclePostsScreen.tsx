@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { PlazaPostCard } from '@/features/discover/components/plaza-post-card';
-import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchPlazaFeed, plazaMutatedSince } from '@/services/api/plaza';
@@ -47,7 +47,7 @@ export default function CirclePostsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const scope = getCircleScopeFromSegments(useSegments());
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const [posts, setPosts] = useState<CirclePlazaPost[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,7 +144,7 @@ export default function CirclePostsScreen() {
       <View style={s.centered}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/(tabs)/profile/member-center' as never)}
+          onPress={() => router.push(`/(tabs)/${scope}/member-center`)}
         >
           <Text style={{ color: colors.iconAccent, ...Typography.body }}>
             {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', { defaultValue: '升级会员查看圈子动态' })}

@@ -5,8 +5,8 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('share-post stays available in both signup-management stacks', () => {
-  for (const scope of ['discover', 'messages']) {
+test('share-post stays available in every tab stack', () => {
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     assert.match(read(`app/(tabs)/${scope}/share-post.tsx`), /SharePlazaPostScreen/);
   }
 });
@@ -27,7 +27,8 @@ test('plaza post card share opens the friend picker, not the OS share sheet', ()
   const src = read(
     'src/features/discover/components/plaza-post-card.tsx',
   );
-  assert.match(src, /pathname: scope === 'messages' \? '\/\(tabs\)\/messages\/share-post' : '\/\(tabs\)\/discover\/share-post'/);
+  // 分享页开在卡片所在的栈里(每个栈都有镜像),返回回到来时的列表。
+  assert.match(src, /pathname: `\/\(tabs\)\/\$\{scope\}\/share-post`/);
   assert.doesNotMatch(src, /Share\.share/);
 });
 

@@ -92,7 +92,9 @@ test('ShareCircleCardScreen sends the card to the chats picked in the shared cha
   assert.match(share, /await resolveChatTargets\(targets\)/);
   assert.match(share, /for \(const \{ target, conversationId \} of resolved\)/);
   // 点发送立刻提示「已发送」(确定 / 查看),名片在后台接着发,失败改用顶部提示。
-  assert.match(share, /announceSent\(\{ t, targets, resolution, onDismiss: \(\) => router\.back\(\) \}\)/);
+  // 「查看」进聊天时开在分享页所在的栈里,返回回到来处。
+  assert.match(share, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
+  assert.match(share, /announceSent\(\{ scope, t, targets, resolution, onDismiss: \(\) => router\.back\(\) \}\)/);
   assert.match(share, /showTopNotice\(/);
   assert.match(share, /type: 'circle-card'/);
 });

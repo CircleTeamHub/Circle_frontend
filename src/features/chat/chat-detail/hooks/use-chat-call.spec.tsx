@@ -38,7 +38,7 @@ afterEach(() => {
 
 function renderCall(mounted: boolean, dismiss: jest.Mock) {
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <ChatSheetNavigationContext.Provider value={{ dismiss }}>{children}</ChatSheetNavigationContext.Provider>
+    <ChatSheetNavigationContext.Provider value={{ dismiss, scope: 'messages' }}>{children}</ChatSheetNavigationContext.Provider>
   );
   return renderHook(
     () =>

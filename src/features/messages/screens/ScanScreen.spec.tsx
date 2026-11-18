@@ -18,8 +18,10 @@ jest.mock('expo-camera', () => ({
   CameraView: () => null,
   useCameraPermissions: () => [{ granted: true }, jest.fn()],
 }));
+// 通讯录栈里的那份扫码页:识别结果留在通讯录栈。
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, back: jest.fn() }),
+  useSegments: () => ['(tabs)', 'contacts', 'scan'],
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -53,7 +55,7 @@ test('Android album selection scans the original photo and opens its QR result w
   }));
   expect(mockScan).toHaveBeenCalledWith(asset);
   expect(mockReplace).toHaveBeenCalledWith({
-    pathname: '/(tabs)/messages/qr',
+    pathname: '/(tabs)/contacts/qr',
     params: { t: 'album-test-token' },
   });
 });

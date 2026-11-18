@@ -87,6 +87,9 @@ test('the half-screen sheet swaps back/more for close/expand and skips the statu
   expect(sheet.onClose).toHaveBeenCalledTimes(1);
   fireEvent.press(screen.getByRole('button', { name: 'chat.quickChat.expand' }));
   expect(sheet.onExpand).toHaveBeenCalledTimes(1);
+  // 展开键是两个斜箭头(与输入栏的展开键同一个字形),不是四角箭头。
+  expect(screen.UNSAFE_getByProps({ name: 'arrow-expand' })).toBeTruthy();
+  expect(screen.UNSAFE_queryByProps({ name: 'expand-outline' })).toBeNull();
 
   expect(screen.queryByTestId(E2E_TEST_IDS.chatBack)).toBeNull();
   expect(screen.queryByRole('button', { name: 'chat.chatInfo' })).toBeNull();

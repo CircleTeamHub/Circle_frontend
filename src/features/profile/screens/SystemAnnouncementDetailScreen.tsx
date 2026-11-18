@@ -1,7 +1,7 @@
 import { useAnnouncementSignalStore } from '../store-announcement-signal';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useSegments, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -14,7 +14,15 @@ import {
 import { reportHandledFailure } from '@/observability/report-failure';
 import type { NotificationItem } from '@/types';
 
+import { getNotificationCenterHref, getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+// 「我」页的公告列表;其余栈没有这个列表,兜底回本栈的通知列表。
+const PROFILE_ANNOUNCEMENTS_HREF: Href = '/(tabs)/profile/system-announcements';
+
 export default function SystemAnnouncementDetailScreen() {
+  const scope = getUserProfileScopeFromSegments(useSegments());
+  // 拆成 if 收敛推断:三元把两种 Href 合起来会触发 TS2590。
+  let fallbackHref = PROFILE_ANNOUNCEMENTS_HREF;
+  if (scope !== 'profile') fallbackHref = getNotificationCenterHref(scope);
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const notificationId = Array.isArray(id) ? id[0] : id;
   const owner = useAuthStore(state => `${state.user?.id ?? ''}:${state.sessionEpoch}`);
@@ -48,7 +56,7 @@ export default function SystemAnnouncementDetailScreen() {
   },[key,notificationId,retry]);
 
   return <View style={{flex:1,backgroundColor:colors.background,paddingTop:insets.top}}>
-    <NavHeader title={t('systemAnnouncements.detailTitle')} fallbackHref="/(tabs)/profile/system-announcements" />
+    <NavHeader title={t('systemAnnouncements.detailTitle')} fallbackHref={fallbackHref} />
     <ScrollView contentContainerStyle={{padding:Spacing.lg,paddingBottom:insets.bottom+Spacing.xl,gap:Spacing.md}}>
       {item ? <>
         <Text selectable style={{color:colors.text,fontSize:24,lineHeight:32,fontWeight:'700'}}>{item.title?.trim() || t('notifications.system')}</Text>

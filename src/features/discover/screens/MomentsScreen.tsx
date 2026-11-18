@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter, useSegments, Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
@@ -39,8 +39,8 @@ export default function MomentsScreen() {
   // 朋友圈铃铛只算朋友圈的未读（动态点赞/评论/回复/@ + 资料点赞）。圈子的通知
   // 归广场页那个铃铛(domain=circle)，两边不互相报红点。
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
-  // 朋友圈的家在探索 tab；圈子 / 联系人栈里的旧路由仍走圈子栈那套子页。
-  const inExplore = getUserProfileScopeFromSegments(useSegments()) === 'explore';
+  // 朋友圈的家在探索 tab；圈子 / 联系人栈里的旧路由也有自己的发动态和通知页,留在本栈。
+  const scope = getUserProfileScopeFromSegments(useSegments());
 
   const d = useMemo(
     () => ({
@@ -59,24 +59,22 @@ export default function MomentsScreen() {
 
   const handleCreateMoment = useCallback(() => {
     router.push(
-      inExplore ? '/(tabs)/explore/create-moment' : '/(tabs)/discover/create-moment',
+      `/(tabs)/${scope}/create-moment` as Href,
     );
-  }, [inExplore, router]);
+  }, [router, scope]);
 
   const handleOpenNotifications = useCallback(() => {
     router.push({
-      pathname: inExplore
-        ? '/(tabs)/explore/notification-center'
-        : '/(tabs)/discover/notification-center',
+      pathname: `/(tabs)/${scope}/notification-center` as never,
       params: { domain: 'moments' },
     });
-  }, [inExplore, router]);
+  }, [router, scope]);
 
   return (
     <View testID={E2E_TEST_IDS.momentsScreen} style={d.container}>
       <NavHeader
         title={t('discover.moments')}
-        fallbackHref={inExplore ? '/(tabs)/explore' : '/(tabs)/discover'}
+        fallbackHref={`/(tabs)/${scope}`}
         rightSlot={
           <Pressable
             style={s.notificationButton}

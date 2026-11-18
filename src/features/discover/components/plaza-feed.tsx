@@ -380,7 +380,8 @@ export const PlazaFeed: React.FC = () => {
       <View style={s.emptyContainer}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/(tabs)/profile/member-center' as never)}
+          // 广场只挂在圈子首页,会员中心在圈子栈里开(不订阅全局 segments:这个列表常驻后台,每次跳转都会重渲)。
+          onPress={() => router.push('/(tabs)/discover/member-center')}
         >
           <Text style={{ color: colors.iconAccent, ...Typography.body }}>
             {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', {

@@ -1,6 +1,6 @@
 import { useId, type RefObject } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { type ThemeColors, withAlpha } from '@/theme';
@@ -16,8 +16,12 @@ export function chatHeaderFloatStyle(colors: ThemeColors, dark: boolean): ViewSt
   };
 }
 
-interface ChatHeaderGlassButtonProps {
-  icon: keyof typeof Ionicons.glyphMap;
+type ChatHeaderGlassIcon =
+  | { icon: keyof typeof Ionicons.glyphMap; mciIcon?: undefined }
+  // Ionicons 没有双箭头的「展开」,这类字形用 MaterialCommunityIcons(与输入栏的展开键同一个)。
+  | { icon?: undefined; mciIcon: keyof typeof MaterialCommunityIcons.glyphMap };
+
+type ChatHeaderGlassButtonProps = ChatHeaderGlassIcon & {
   label: string;
   onPress: () => void;
   colors: ThemeColors;
@@ -26,7 +30,7 @@ interface ChatHeaderGlassButtonProps {
   testID?: string;
   /** 箭头类图标的视觉重心偏一侧,给一点反向位移让它在圆里看起来居中。 */
   iconStyle?: StyleProp<ViewStyle>;
-}
+};
 
 /**
  * 顶栏两端的圆形玻璃按钮(返回 / 关闭 / 更多 / 展开)。
@@ -34,6 +38,7 @@ interface ChatHeaderGlassButtonProps {
  */
 export function ChatHeaderGlassButton({
   icon,
+  mciIcon,
   label,
   onPress,
   colors,
@@ -58,7 +63,11 @@ export function ChatHeaderGlassButton({
         style={[s.circle, floatStyle]}
       >
         <View style={iconStyle}>
-          <Ionicons name={icon} size={22} color={colors.text} />
+          {mciIcon ? (
+            <MaterialCommunityIcons name={mciIcon} size={22} color={colors.text} />
+          ) : icon ? (
+            <Ionicons name={icon} size={22} color={colors.text} />
+          ) : null}
         </View>
       </GlassSurface>
     </Pressable>

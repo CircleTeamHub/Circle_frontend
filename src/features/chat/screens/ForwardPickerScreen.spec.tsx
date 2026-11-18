@@ -18,8 +18,10 @@ const mockPush = jest.fn();
 const mockNavigate = jest.fn();
 const mockShowTopNotice = jest.fn();
 
+// 转发页开在通讯录栈里:「查看」单个聊天留在本栈,发给多个时才回消息列表。
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack }),
+  useSegments: () => ['(tabs)', 'contacts', 'forward-picker'],
   router: { push: (...args: unknown[]) => mockPush(...args), navigate: (...args: unknown[]) => mockNavigate(...args) },
 }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -196,7 +198,7 @@ test('"view" opens the chat it was sent to, including a friend with no chat yet'
   sentButtons()[1].onPress?.();
   expect(mockBack).toHaveBeenCalled();
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith({
-    pathname: '/(tabs)/messages/chat-detail',
+    pathname: '/(tabs)/contacts/chat-detail',
     params: expect.objectContaining({
       conversationID: 'created-u2', sourceID: 'u2', title: '小王', conversationType: 'private',
     }),
@@ -209,7 +211,7 @@ test('"view" after sending to a group opens it as a group chat', async () => {
   pick();
   sentButtons()[1].onPress?.();
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith({
-    pathname: '/(tabs)/messages/chat-detail',
+    pathname: '/(tabs)/contacts/chat-detail',
     params: expect.objectContaining({ conversationID: 'group-1', sourceID: 'group-1', conversationType: 'group' }),
   }));
 });

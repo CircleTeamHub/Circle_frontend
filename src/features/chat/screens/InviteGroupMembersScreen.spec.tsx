@@ -11,6 +11,7 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ conversationID: 'group-1', title: '同事群' }),
   useRouter: () => ({ back: mockBack }),
+  useSegments: () => ['(tabs)', 'messages', 'invite-group-members'],
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),

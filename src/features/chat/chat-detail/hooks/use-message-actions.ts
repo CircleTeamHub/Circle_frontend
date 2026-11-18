@@ -202,8 +202,8 @@ export function useMessageActions({
       dto: dtos?.find((item) => item.id === message.id),
     })));
     setSelectedMessageIds(null);
-    chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
-  }, [chatRouter, canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
+    chatRouter.push({ pathname: `/(tabs)/${scope}/forward-picker` });
+  }, [chatRouter, canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch, scope]);
   const handleDeleteSelectedMessages = useCallback(() => {
     if (selectedMessages.length === 0 || selectionOperationRef.current) return;
     const epoch = useAuthStore.getState().sessionEpoch;
@@ -283,9 +283,9 @@ export function useMessageActions({
           (item) => item.id === message.id,
         );
       setPendingForward({ message, dto });
-      chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
+      chatRouter.push({ pathname: `/(tabs)/${scope}/forward-picker` });
     },
-    [chatRouter, conversationID, setPendingForward],
+    [chatRouter, conversationID, setPendingForward, scope],
   );
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
@@ -322,7 +322,7 @@ export function useMessageActions({
   const handleReportMessage = useCallback(() => {
     if (isGroupChat) {
       chatRouter.push({
-        pathname: '/(tabs)/messages/report-friend',
+        pathname: `/(tabs)/${scope}/report-friend`,
         params: {
           targetType: 'group',
           groupID: sourceID,
@@ -332,14 +332,14 @@ export function useMessageActions({
       return;
     }
     chatRouter.push({
-      pathname: '/(tabs)/messages/report-friend',
+      pathname: `/(tabs)/${scope}/report-friend`,
       params: {
         targetType: 'friend',
         friendUserId: sourceID,
         friendName: conversationTitle,
       },
     });
-  }, [chatRouter, conversationTitle, isGroupChat, sourceID]);
+  }, [chatRouter, conversationTitle, isGroupChat, sourceID, scope]);
 
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {

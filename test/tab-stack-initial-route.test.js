@@ -68,6 +68,6 @@ test('screens mirrored into both stacks route their sub-pages by scope', () => {
 
   const form = read('src/features/discover/components/circle-form-body.tsx');
   assert.match(form, /useSegments/);
-  assert.match(form, /getCircleScopeFromSegments\(segments\)/);
+  assert.match(form, /getUserProfileScopeFromSegments\(segments\)/);
   assert.match(form, /`\/\(tabs\)\/\$\{circleScope\}\/select-city`/);
 });

@@ -9,7 +9,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useSegments } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 
+import { getCircleDetailHref, getUserProfileScopeFromSegments } from "@/features/user/utils/routes";
 const CIRCLE_TAB_KEYS = ["all", "joined", "created", "managed", "applied"] as const;
 
 const s = StyleSheet.create({
@@ -80,6 +81,7 @@ export const MyCirclesPanel: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const [activeTab, setActiveTab] = useState(0);
   const {
     joinedCircles,
@@ -223,7 +225,7 @@ export const MyCirclesPanel: React.FC = () => {
         <Text style={d.title}>{t('discover.circleDetail')}</Text>
         <Pressable
           style={[s.createButton, d.createButton]}
-          onPress={() => router.push('/(tabs)/discover/create-circle')}
+          onPress={() => router.push(`/(tabs)/${scope}/create-circle`)}
         >
           <Text style={d.createButtonText}>{t('discover.createCircle')}</Text>
         </Pressable>
@@ -233,8 +235,9 @@ export const MyCirclesPanel: React.FC = () => {
         tabs={circleFilterTabs}
         activeIndex={activeTab}
         onTabPress={setActiveTab}
-        // 5 个筛选标签在西语/日语下更长，改可横向滚动避免挤压/换行。
+        // 5 个筛选标签：收紧间距让中文一屏放下；西语/日语更长，仍可横向滚动避免挤压/换行。
         scrollable
+        dense
       />
 
       {filterActive ? (
@@ -286,7 +289,7 @@ export const MyCirclesPanel: React.FC = () => {
             <View key={item.id}>
               <Pressable
                 style={s.row}
-                onPress={() => router.push(`/(tabs)/discover/circle/${encodeURIComponent(item.id)}`)}
+                onPress={() => router.push(getCircleDetailHref(scope, item.id))}
               >
                 <CircleAvatar
                   uri={item.avatarUrl}

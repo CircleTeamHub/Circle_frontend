@@ -20,6 +20,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
 import { Typography, useTheme } from '@/theme';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import { useSegments } from 'expo-router';
 /** 要分享的笔记和每条要发的分块(笔记卡片 / 展示 / 地址)。 */
 export interface NoteShareRequest {
   notes: NoteSummary[];
@@ -49,6 +51,7 @@ const s = StyleSheet.create({
  * 点发送立刻提示「已发送」，内容在后台接着发，不用对着选择页等。
  */
 export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const { colors } = useTheme();
   const { t } = useTranslation();
   const visible = request !== null && request.notes.length > 0;
@@ -142,9 +145,9 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
       void sendInBackground(request, lookup, caption).catch((error: unknown) => {
         reportHandledFailure('noteShare', 'send', error);
       });
-      announceSent({ t, targets: chosen, resolution, onDismiss: onClose });
+      announceSent({ scope, t, targets: chosen, resolution, onDismiss: onClose });
     },
-    [onClose, request, sendInBackground, t],
+    [onClose, request, sendInBackground, t, scope],
   );
 
   const notes = request?.notes ?? [];

@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import {
   getCircleInviteFriendsHref,
-  getCircleScopeFromSegments,
+  getUserProfileScopeFromSegments,
   getCircleShareHref,
 } from '@/features/user/utils/routes';
 import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
@@ -49,7 +49,7 @@ export default function InviteCircleMenuScreen() {
   const canInviteContacts = canViewCircleMembers(myRole);
   // 留在当前栈（messages/discover 均有本页镜像），返回链路不跨 tab。
   const segments = useSegments();
-  const circleScope = getCircleScopeFromSegments(segments);
+  const circleScope = getUserProfileScopeFromSegments(segments);
 
   const handleSendCard = useCallback(() => {
     router.push(

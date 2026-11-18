@@ -23,7 +23,7 @@ import {
 } from '@/features/discover/constants/circle-form';
 import type { CircleFormApi } from '@/features/discover/hooks/use-circle-form';
 import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
-import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 
 interface CircleFormBodyProps {
   form: CircleFormApi;
@@ -259,7 +259,7 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
     [t],
   );
 
-  const circleScope = getCircleScopeFromSegments(segments);
+  const circleScope = getUserProfileScopeFromSegments(segments);
 
   const vipLabel =
     VIP_OPTIONS.find((option) => option.value === form.joinVipRestriction)

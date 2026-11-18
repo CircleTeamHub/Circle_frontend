@@ -61,10 +61,12 @@ jest.mock('@/features/chat/screens/ChatDetailScreen', () => {
     sheet: { onClose: () => void; onExpand: () => void; onPanelOpenChange: (open: boolean) => void };
   }) {
       mockChat(props);
-      const { useChatRouter } = jest.requireActual('@/features/chat/chat-detail/hooks/use-chat-router');
+      const { useChatRouter, useChatScope } = jest.requireActual('@/features/chat/chat-detail/hooks/use-chat-router');
       const chatRouter = useChatRouter();
+      const scope = useChatScope();
       return (
         <>
+          <Text>{`chat.scope:${scope}`}</Text>
           <Pressable onPress={props.sheet.onClose}><Text>chat.close</Text></Pressable>
           <Pressable onPress={props.sheet.onExpand}><Text>chat.expand</Text></Pressable>
           <Pressable onPress={() => chatRouter.push('/(tabs)/messages/user/peer-1')}><Text>chat.openProfile</Text></Pressable>
@@ -132,7 +134,25 @@ test('pages that return to the chat open over the sheet without closing or expan
   expect(mockPush).toHaveBeenCalledTimes(1);
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/chat-sheet/share-picker',
-    params: { type: 'note' },
+    // 没带来源 tab(从消息页打开)时按消息栈算。
+    params: { type: 'note', originScope: 'messages' },
+  });
+});
+
+test('opened over another tab, the sheet keeps that tab for expand, leaving the chat and pages over it', () => {
+  mockParams = { ...mockParams, originScope: 'contacts' };
+  render(<QuickChatScreen />);
+  // 聊天里离开聊天的跳转(头像、群信息、笔记…)按这个 scope 进栈,返回回到半屏下面的页面。
+  expect(screen.getByText('chat.scope:contacts')).toBeTruthy();
+  fireEvent.press(screen.getByText('chat.openPicker'));
+  expect(mockPush).toHaveBeenLastCalledWith({
+    pathname: '/chat-sheet/share-picker',
+    params: { type: 'note', originScope: 'contacts' },
+  });
+  fireEvent.press(screen.getByText('chat.expand'));
+  expect(mockPush).toHaveBeenLastCalledWith({
+    pathname: '/(tabs)/contacts/chat-detail',
+    params: expect.objectContaining({ conversationID: 'conv-1' }),
   });
 });
 

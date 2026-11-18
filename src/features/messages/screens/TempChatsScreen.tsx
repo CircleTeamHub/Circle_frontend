@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -32,6 +32,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
 import { readPageSnapshot } from '@/storage/page-snapshots';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const s = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.lg,
@@ -49,6 +50,7 @@ function TempChatsContent() {
   const isCurrentSession = useCallback(() => useAuthStore.getState().sessionEpoch === sessionEpoch, [sessionEpoch]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const { colors } = useTheme();
   const { t } = useTranslation();
   const openingGroupRef = useRef<string | null>(null);
@@ -309,7 +311,7 @@ function TempChatsContent() {
       setOpeningGroupId(room.groupId);
       try {
         router.push({
-          pathname: '/(tabs)/messages/chat-detail',
+          pathname: `/(tabs)/${scope}/chat-detail`,
           params: {
             conversationID: room.conversationId,
             sourceID: room.groupId,
@@ -323,7 +325,7 @@ function TempChatsContent() {
         setOpeningGroupId(null);
       }
     },
-    [isCurrentSession, loadRooms, router, t],
+    [isCurrentSession, loadRooms, router, t, scope],
   );
 
   const renderItem = useCallback(

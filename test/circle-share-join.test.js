@@ -35,8 +35,8 @@ test('MyCirclesScreen: open a circle by a pasted id', () => {
   const src = read(MINE);
   assert.match(src, /handleOpenById/);
   assert.match(src, /joinId\.trim\(\)/);
-  assert.match(
-    src,
-    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(id\)\}`\)/,
-  );
+  // 圈子详情开在「我的圈子」所在的栈里(从哪个 tab 进就回哪个 tab),不写死圈子栈。
+  assert.match(src, /const scope = getUserProfileScopeFromSegments\(segments\);/);
+  assert.match(src, /router\.push\(getCircleDetailHref\(scope, id\)\)/);
+  assert.doesNotMatch(src, /\/\(tabs\)\/discover\/circle\//);
 });

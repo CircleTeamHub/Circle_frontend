@@ -167,7 +167,7 @@ function FloatingChatHeader({
       {sheet ? (
         <ChatHeaderGlassButton
           {...glass}
-          icon="expand-outline"
+          mciIcon="arrow-expand"
           label={t('chat.quickChat.expand', { defaultValue: '展开完整聊天' })}
           onPress={sheet.onExpand}
         />

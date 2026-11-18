@@ -43,6 +43,7 @@ import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import {
   getChatDetailHref,
   getUserProfileHref,
+  getNotificationCenterHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
@@ -143,10 +144,8 @@ export default function PostSignupsScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace({
-        pathname: scope === 'messages' ? '/(tabs)/messages/notifications' : '/(tabs)/discover/notifications',
-        params: { domain: 'circle' },
-      });
+      // 没有上一页(从推送直接进来)时回本栈的通知列表。
+      router.replace(getNotificationCenterHref(scope, 'circle'));
     }
   };
 
@@ -338,7 +337,7 @@ export default function PostSignupsScreen() {
             <View style={s.postDetails}>
               <PlazaPostCard
                 post={post}
-                scope={scope === 'messages' ? 'messages' : 'discover'}
+                scope={scope}
                 onDeleted={handleDeleted}
                 onEdit={() => setEditContent(post.content)}
                 showSignupAction={false}
@@ -379,7 +378,7 @@ export default function PostSignupsScreen() {
                 <Text style={[s.recognitionButtonText, { color: colors.white }]}>
                   {recognitionLocked
                     ? t('notifications.signupMgmt.recognitionFull', { defaultValue: '点赞名额已用完' })
-                    : t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '给合作愉快的朋友点赞' })}
+                    : t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '点赞' })}
                 </Text>
               </Pressable>
             ) : null}

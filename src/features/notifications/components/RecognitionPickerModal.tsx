@@ -89,7 +89,7 @@ export function RecognitionPickerModal({
             <Text style={[s.headerAction, { color: colors.text }]}>{t('common.cancel')}</Text>
           </Pressable>
           <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
-            {t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '给合作愉快的朋友点赞' })}
+            {t('notifications.signupMgmt.recognitionSubmit', { defaultValue: '点赞' })}
           </Text>
           <Pressable
             testID="collaboration-recognition-submit"

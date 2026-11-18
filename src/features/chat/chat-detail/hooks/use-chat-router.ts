@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo } from 'react';
 import { router, useSegments, type Href } from 'expo-router';
+import { getUserProfileScopeFromSegments, type UserProfileScope } from '@/features/user/utils/routes';
 
 /**
  * 半屏聊天(app/quick-chat.tsx)是根栈上的透明 modal。从它里面直接 push `/(tabs)/...`,
@@ -10,7 +11,11 @@ import { router, useSegments, type Href } from 'expo-router';
  *   以模态盖在半屏之上,返回后仍是半屏。只有右上角「展开」才进完整聊天页。
  * QuickChatScreen 提供 Provider,完整聊天页没有 Provider,行为不变。
  */
-export type ChatSheetNavigation = { dismiss: () => void };
+export type ChatSheetNavigation = {
+  dismiss: () => void;
+  /** 半屏下面那个 tab:离开聊天的跳转进这个栈,返回回到点横幅前的页面。 */
+  scope: UserProfileScope;
+};
 
 export const ChatSheetNavigationContext = createContext<ChatSheetNavigation | null>(null);
 
@@ -41,6 +46,13 @@ export type ChatRouter = {
   pushOverChat: (page: OverChatPage, params?: Record<string, string>) => void;
 };
 
+/** 聊天所在的 tab 栈;半屏聊天在根上,取半屏下面那个 tab(segments 里没有 tab,会落成消息栈)。 */
+export function useChatScope(): UserProfileScope {
+  const sheet = useContext(ChatSheetNavigationContext);
+  const segments = useSegments();
+  return sheet?.scope ?? getUserProfileScopeFromSegments(segments);
+}
+
 export function useChatRouter(): ChatRouter {
   const sheet = useContext(ChatSheetNavigationContext);
   const segments = useSegments();
@@ -57,7 +69,12 @@ export function useChatRouter(): ChatRouter {
         router.navigate(href);
       },
       pushOverChat: (page: OverChatPage, params?: Record<string, string>) => {
-        const pathname = sheet ? `/${CHAT_SHEET_SEGMENT}/${page}` : fullChatPath(page, tab);
+        if (sheet) {
+          // 盖在半屏上的页面也要知道半屏下面是哪个 tab,从它里面离开聊天时才落对栈。
+          router.push({ pathname: `/${CHAT_SHEET_SEGMENT}/${page}`, params: { ...params, originScope: sheet.scope } } as Href);
+          return;
+        }
+        const pathname = fullChatPath(page, tab);
         router.push((params ? { pathname, params } : pathname) as Href);
       },
     }),

@@ -390,8 +390,8 @@
       "expandComposer": "メッセージ入力欄を拡大",
       "collapseComposer": "メッセージ入力欄を縮小",
       "expandedComposerTitle": "メッセージを編集",
-      "disappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。他の人のメッセージには影響しません。消えたメッセージは、権限を持つ管理者による監査のため180日間保存されます。",
-      "personalDisappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。他の人のメッセージには影響しません。消えたメッセージは、権限を持つ管理者による監査のため180日間保存されます。",
+      "disappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。",
+      "personalDisappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。",
       "attachmentPanelLabel": "添付パネルを開く",
       "voiceInputLabel": "音声入力",
       "emojiPanelLabel": "絵文字パネルを開く",
@@ -1239,7 +1239,8 @@
       "delete": "削除",
       "restore": "復元",
       "purge": "今すぐ削除",
-      "download": "ダウンロード"
+      "download": "ダウンロード",
+      "select": "選択"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -2273,7 +2274,7 @@
       "recognitionSelectionSummary": "{{count}}/{{max}}選択",
       "recognitionFull": "いいねの枠がいっぱいです",
       "recognizedTag": "いいね済み",
-      "recognitionSubmit": "協力した仲間にいいね",
+      "recognitionSubmit": "いいね",
       "recognitionSubmitting": "送信中",
       "recognitionLimitTitle": "最大3人まで",
       "recognitionLimitMessage": "各アクティビティで最大3人の応募者にいいねできます。",

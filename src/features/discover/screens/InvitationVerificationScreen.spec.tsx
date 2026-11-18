@@ -28,7 +28,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/features/user/utils/routes', () => ({
-  getCircleScopeFromSegments: () => 'discover', getSelectVerifierHref: jest.fn(),
+  getUserProfileScopeFromSegments: () => 'discover', getSelectVerifierHref: jest.fn(),
 }));
 jest.mock('@/stores/authStore', () => {
   // 在途请求回来时按 getState().sessionEpoch 判断还是不是同一次登录。

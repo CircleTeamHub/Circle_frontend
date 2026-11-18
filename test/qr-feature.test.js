@@ -42,7 +42,7 @@ test('native QR surfaces emit the scheme for the installed app variant', () => {
 
 // ─── 扫码器接线 ───────────────────────────────────────────────────────────────
 
-test('in-app scan resolves QR payloads into the messages-stack landing route first', () => {
+test('in-app scan resolves QR payloads into the scanning stack landing route first', () => {
   const source = read('src/features/messages/utils/scan-result.ts');
   assert.match(source, /parseQrLoginToken, parseQrToken/);
   assert.match(source, /parseQrToken/);
@@ -53,9 +53,10 @@ test('in-app scan resolves QR payloads into the messages-stack landing route fir
     routeMapIndex > qrIndex,
     'qr token must take precedence over static route map',
   );
+  // 落地页留在扫码页所在的栈(消息 / 通讯录)里。
   assert.match(
     source,
-    /pathname: '\/\(tabs\)\/messages\/qr', params: \{ t: qrToken \}/,
+    /pathname: `\/\(tabs\)\/\$\{scope\}\/qr`, params: \{ t: qrToken \}/,
   );
 });
 
@@ -178,7 +179,8 @@ test('profile and add-friend screens expose my QR entries', () => {
   const addFriend = read('src/features/social/screens/AddFriendScreen.tsx');
   assert.match(addFriend, /qr\.myQrEntry/);
   assert.match(addFriend, /handleOpenScan/);
-  assert.match(addFriend, /\/\(tabs\)\/messages\/scan/);
+  // 扫码页开在加好友页所在的栈里(消息 / 通讯录各有一份)。
+  assert.match(addFriend, /`\/\(tabs\)\/\$\{scope === 'contacts' \? 'contacts' : 'messages'\}\/scan`/);
 });
 
 // ─── 错误码与权限串 ──────────────────────────────────────────────────────────

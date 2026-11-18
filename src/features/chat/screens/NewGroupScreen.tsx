@@ -11,7 +11,7 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
@@ -91,7 +91,6 @@ const Sep = () => <View style={{ height: Spacing.xs }} />;
 export default function NewGroupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const segments = useSegments();
   const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   const pageBackground =
@@ -183,14 +182,9 @@ export default function NewGroupScreen() {
         createGroupConversation(input, { idempotencyKey }),
       );
       if (!mountedRef.current) return;
-      const inDiscoverStack = (segments as readonly string[]).includes(
-        'discover',
-      );
-      // 建完直接进群聊页;replace 掉建群页,返回时回到消息列表而不是选人页。
+      // 建完直接进群聊页;replace 掉建群页,返回时回到消息列表而不是选人页。建群页只在消息栈。
       router.replace({
-        pathname: inDiscoverStack
-          ? '/(tabs)/discover/chat-detail'
-          : '/(tabs)/messages/chat-detail',
+        pathname: '/(tabs)/messages/chat-detail',
         params: {
           conversationID,
           sourceID: conversationID,
@@ -213,7 +207,7 @@ export default function NewGroupScreen() {
         );
       }
     }
-  }, [intentKeys, trimmedName, router, segments, selected, selectedCount, t]);
+  }, [intentKeys, trimmedName, router, selected, selectedCount, t]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<FriendProfile>) => {

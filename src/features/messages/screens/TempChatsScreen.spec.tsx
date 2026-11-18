@@ -17,6 +17,7 @@ jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => ({ push: jest.fn() }),
+    useSegments: () => ['(tabs)', 'messages', 'temp-chats'],
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => callback(), [callback]);
     },

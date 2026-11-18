@@ -27,8 +27,8 @@ import {
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 import { type PlazaPostCardData } from '@/types';
 
-const COMPOSER_LINE_HEIGHT = 24;
-const COMPOSER_VERTICAL_PADDING = 12;
+const COMPOSER_LINE_HEIGHT = 22;
+const COMPOSER_VERTICAL_PADDING = 8;
 const INLINE_COMPOSER_MAX_LINES = 4;
 
 export interface ChatComposerBarProps {
@@ -261,6 +261,8 @@ export function ChatComposerBar({
               key="voice-hold-bar"
               style={[
                 s.voiceHoldBar,
+                // 与单行输入框同高,语音/文字切换时输入栏不跳。
+                { height: singleLineHeight },
                 isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
               ]}
               {...voicePanResponder.panHandlers}
@@ -370,19 +372,21 @@ export function ChatComposerBar({
                 setExpanded(true);
               }}
             >
-              <Ionicons name="expand-outline" size={20} color={mutedInk} />
+              <MaterialCommunityIcons name="arrow-expand" size={20} color={mutedInk} />
             </Pressable>
           ) : null}
           {voiceInputMode ? null : (
             <Pressable
               testID={E2E_TEST_IDS.chatSend}
               style={[s.composerSendBtn, { backgroundColor: buttonFill, opacity: hasContent ? 1 : 0.4 }]}
+              // 多行时展开键就在正上方:只往左右下放宽,上沿不和展开键的点击区叠在一起(会误发)。
+              hitSlop={{ left: 4, right: 4, bottom: 4 }}
               onPress={handleSend}
               disabled={!hasContent || sending || isPreviewMode || isVoiceRecording || composerLocked}
               accessibilityRole="button"
               accessibilityLabel={t('common.send')}
             >
-              <Ionicons name="arrow-up" size={24} color={colors.text} />
+              <Ionicons name="arrow-up" size={20} color={colors.text} />
             </Pressable>
           )}
         </View>
@@ -408,13 +412,13 @@ export function ChatComposerBar({
               {item.mciIcon ? (
                 <MaterialCommunityIcons
                   name={item.mciIcon}
-                  size={24}
+                  size={22}
                   color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
                 />
               ) : (
                 <Ionicons
                   name={item.icon}
-                  size={24}
+                  size={22}
                   color={item.active ? colors.iconAccent : item.disabled ? withAlpha(colors.text, 0.3) : colors.text}
                 />
               )}
@@ -441,7 +445,7 @@ export function ChatComposerBar({
               accessibilityRole="button"
               accessibilityLabel={t('chat.detail.collapseComposer')}
             >
-              <Ionicons name="contract-outline" size={24} color={colors.text} />
+              <MaterialCommunityIcons name="arrow-collapse" size={24} color={colors.text} />
             </Pressable>
           </View>
           <TextInput

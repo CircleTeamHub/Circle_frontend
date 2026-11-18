@@ -81,6 +81,7 @@ jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => ({ push: jest.fn() }),
+    useSegments: () => ['(tabs)', 'discover'],
     useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
   };
 });

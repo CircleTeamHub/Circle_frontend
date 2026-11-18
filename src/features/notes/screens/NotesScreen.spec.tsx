@@ -149,7 +149,8 @@ describe.each([['notes', NotesScreen], ['group notes', NoteManagementScreen]] as
     jest.mocked(fetchNotes).mockResolvedValue([note({ cardPreview: { contacts: [], groups: [{ id: 'circle', name: 'Circle' }] } })]);
     render(<Screen />);
     fireEvent.press(await screen.findByTestId('note-group'));
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/circle/[id]', params: { id: 'circle' } });
+    // 圈子详情开在笔记所在的栈(这里是「我的」),不再折到消息栈。
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/circle/[id]', params: { id: 'circle' } });
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

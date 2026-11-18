@@ -31,24 +31,17 @@ test('discover locales include myManaged copy for the circle management tab', ()
   }
 });
 
-test('circle management entry points use encoded string hrefs for circle detail navigation', () => {
+test('circle management entry points open circle detail in the current tab stack', () => {
+  // 「我的圈子」在每个 tab 栈都有一份:圈子详情走 getCircleDetailHref(scope, …) 开在本栈,
+  // 不再写死圈子栈(跨栈 push 的话返回会落到圈子 tab 的首页)。
   const panel = read('src/features/discover/components/my-circles-panel.tsx');
-  assert.match(
-    panel,
-    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(item\.id\)\}`\)/,
-  );
-  assert.doesNotMatch(
-    panel,
-    /router\.push\(\{\s*pathname: ['"]\/\(tabs\)\/discover\/circle\/\[id\]['"]/,
-  );
+  assert.match(panel, /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
+  assert.match(panel, /router\.push\(getCircleDetailHref\(scope, item\.id\)\)/);
+  assert.match(panel, /router\.push\(`\/\(tabs\)\/\$\{scope\}\/create-circle`\)/);
+  assert.doesNotMatch(panel, /\/\(tabs\)\/discover\/circle\//);
 
   const screen = read('src/features/discover/screens/MyCirclesScreen.tsx');
-  assert.match(
-    screen,
-    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(id\)\}`\)/,
-  );
-  assert.doesNotMatch(
-    screen,
-    /router\.push\(\{\s*pathname: ['"]\/\(tabs\)\/discover\/circle\/\[id\]['"]/,
-  );
+  assert.match(screen, /const scope = getUserProfileScopeFromSegments\(segments\);/);
+  assert.match(screen, /router\.push\(getCircleDetailHref\(scope, id\)\)/);
+  assert.doesNotMatch(screen, /\/\(tabs\)\/discover\/circle\//);
 });

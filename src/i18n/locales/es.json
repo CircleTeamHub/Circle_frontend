@@ -393,8 +393,8 @@
       "expandComposer": "Ampliar el editor de mensajes",
       "collapseComposer": "Reducir el editor de mensajes",
       "expandedComposerTitle": "Editar mensaje",
-      "disappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
-      "personalDisappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
+      "disappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea.",
+      "personalDisappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "voiceInputLabel": "Entrada de voz",
       "emojiPanelLabel": "Abrir panel de emojis",
@@ -1243,7 +1243,8 @@
       "delete": "Eliminar",
       "restore": "Restaurar",
       "purge": "Eliminar ahora",
-      "download": "Descargar"
+      "download": "Descargar",
+      "select": "Seleccionar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -2279,7 +2280,7 @@
       "recognitionSelectionSummary": "{{count}}/{{max}} elegidos",
       "recognitionFull": "Límite de me gusta alcanzado",
       "recognizedTag": "Me gusta enviado",
-      "recognitionSubmit": "Dar me gusta a colaboradores",
+      "recognitionSubmit": "Me gusta",
       "recognitionSubmitting": "Enviando",
       "recognitionLimitTitle": "Elige hasta 3",
       "recognitionLimitMessage": "En cada actividad puedes dar me gusta a hasta 3 inscritos.",

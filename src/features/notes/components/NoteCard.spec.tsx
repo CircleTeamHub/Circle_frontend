@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
@@ -75,4 +75,38 @@ test('a card without a cover still shows its ratings under the placeholder', () 
 test('old servers without counts show no rating at all', () => {
   render(<NoteCard note={{ ...note, goodCount: undefined, badCount: undefined }} onPress={jest.fn()} />);
   expect(screen.queryByTestId('note-card-rating-note-1')).toBeNull();
+});
+
+test('in selection mode with onSelectPress the circle sits left of the card and only it selects; the card opens the note', () => {
+  const onPress = jest.fn();
+  const onSelectPress = jest.fn();
+  render(<NoteCard note={note} onPress={onPress} onSelectPress={onSelectPress} selectionMode selected={false} />);
+  const circle = screen.getByTestId(`note-card-select-${note.id}`);
+  expect(circle.props.accessibilityRole).toBe('checkbox');
+  // 圆圈在卡片外的最左边:是整行的第一个子节点,不在卡片里面。
+  const row = screen.toJSON() as { props: { style: unknown }; children: { props: { testID?: string } }[] };
+  expect(row.children[0].props.testID).toBe(`note-card-select-${note.id}`);
+  fireEvent.press(circle);
+  expect(onSelectPress).toHaveBeenCalledWith(note);
+  expect(onPress).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText(note.title));
+  expect(onPress).toHaveBeenCalledWith(note);
+  expect(onSelectPress).toHaveBeenCalledTimes(1);
+});
+
+test('selection mode without onSelectPress keeps the whole card as the toggle (other multi-select lists)', () => {
+  const onPress = jest.fn();
+  render(<NoteCard note={note} onPress={onPress} selectionMode selected accessibilityRole="button" />);
+  expect(screen.queryByTestId(`note-card-select-${note.id}`)).toBeNull();
+  const card = screen.getByRole('button');
+  expect(card.props.accessibilityState).toEqual({ selected: true });
+  fireEvent.press(screen.getByText(note.title));
+  expect(onPress).toHaveBeenCalledWith(note);
+});
+
+test('the outside circle names its note for screen readers', () => {
+  render(<NoteCard note={note} onPress={jest.fn()} onSelectPress={jest.fn()} selectionMode selected />);
+  const circle = screen.getByTestId(`note-card-select-${note.id}`);
+  expect(circle.props.accessibilityLabel.endsWith(note.title)).toBe(true);
+  expect(circle.props.accessibilityState).toEqual({ checked: true });
 });

@@ -390,8 +390,8 @@
       "expandComposer": "메시지 입력창 확대",
       "collapseComposer": "메시지 입력창 축소",
       "expandedComposerTitle": "메시지 편집",
-      "disappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다. 다른 사람의 메시지에는 영향을 주지 않습니다. 플랫폼은 권한 있는 관리자의 감사를 위해 사라진 메시지를 180일 동안 보관합니다.",
-      "personalDisappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다. 다른 사람의 메시지에는 영향을 주지 않습니다. 플랫폼은 권한 있는 관리자의 감사를 위해 사라진 메시지를 180일 동안 보관합니다.",
+      "disappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다.",
+      "personalDisappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다.",
       "attachmentPanelLabel": "첨부 패널 열기",
       "voiceInputLabel": "음성 입력",
       "emojiPanelLabel": "이모지 패널 열기",
@@ -1239,7 +1239,8 @@
       "delete": "삭제",
       "restore": "복원",
       "purge": "지금 삭제",
-      "download": "다운로드"
+      "download": "다운로드",
+      "select": "선택"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -2273,7 +2274,7 @@
       "recognitionSelectionSummary": "{{count}}/{{max}} 선택",
       "recognitionFull": "좋아요 한도에 도달했어요",
       "recognizedTag": "좋아요 완료",
-      "recognitionSubmit": "함께한 친구에게 좋아요",
+      "recognitionSubmit": "좋아요",
       "recognitionSubmitting": "제출 중",
       "recognitionLimitTitle": "최대 3명 선택",
       "recognitionLimitMessage": "각 활동마다 최대 3명의 신청자에게 좋아요를 누를 수 있어요.",

@@ -37,7 +37,6 @@ import {
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
 import {
-  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -45,7 +44,6 @@ import { isCurrentRoute } from '@/utils/current-route';
 import {
   getCircleNotificationSettingsHref,
   getNewFriendsHref,
-  getNewFriendsScope,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import {
@@ -143,7 +141,7 @@ export default function NotificationCenterScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorScopeRef = useRef({ domain: listDomain, ownerId, sessionEpoch });
   const [loadError, setLoadError] = useState<string | null>(null);
-  const notificationScope = getNotificationScope(segments);
+  const notificationScope = getUserProfileScopeFromSegments(segments);
   const handleOpenCircleSettings = useCallback(() => {
     router.push(getCircleNotificationSettingsHref(getUserProfileScopeFromSegments(segments)));
   }, [router, segments]);
@@ -460,10 +458,7 @@ export default function NotificationCenterScreen() {
       // server-side, so zero the local badge optimistically.
       store().markPostSignupsSeenLocal(raw.id);
       router.push({
-        pathname:
-          notificationScope === 'discover'
-            ? '/(tabs)/discover/post-signups'
-            : '/(tabs)/messages/post-signups',
+        pathname: `/(tabs)/${notificationScope}/post-signups`,
         params: { postId: raw.id, title: view.title },
       });
     },
@@ -472,7 +467,7 @@ export default function NotificationCenterScreen() {
 
   // 留在当前栈(消息栈也有一份「新的朋友」):跳去通讯录 tab 的话,返回停在通讯录首页。
   const handleOpenNewFriends = useCallback(() => {
-    router.push(getNewFriendsHref(getNewFriendsScope(segments)));
+    router.push(getNewFriendsHref(getUserProfileScopeFromSegments(segments)));
   }, [router, segments]);
   const showNewFriendsShortcut =
     domain === 'notice' && (tab === 'notice' || tab === 'group');

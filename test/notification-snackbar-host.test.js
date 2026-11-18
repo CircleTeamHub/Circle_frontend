@@ -37,7 +37,9 @@ test("notification snackbar host passes current stack scope to the route resolve
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
   );
-  assert.match(host, /const notificationScope = getNotificationScope\(segments\);/);
+  // 开着半屏(根上)时沿用半屏记下的来源 tab,不落成消息栈。
+  assert.match(host, /onChatSheet \? \[typeof params\.originScope === 'string' \? params\.originScope : ''\] : segments/);
+  assert.match(host, /originScope: notificationScope/);
   assert.match(host, /scope: notificationScope/);
 });
 
@@ -151,12 +153,13 @@ test("snackbar route resolver covers all actionable notification targets", () =>
   const route = read(
     "src/features/notifications/utils/snackbar-route.ts",
   );
+  // 各类通知都在点下去的那个 tab 栈里打开(逐类逐栈的检查在 snackbar-route.test.js)。
   assert.match(route, /CIRCLE_POST_SIGNUP_CREATED/);
-  assert.match(route, /\/\(tabs\)\/messages\/post-signups/);
+  assert.match(route, /pathname: `\/\(tabs\)\/\$\{scope\}\/post-signups`/);
   assert.match(route, /FRIEND_REQUEST/);
-  assert.match(route, /\/\(tabs\)\/contacts\/new-friends/);
+  assert.match(route, /return getNewFriendsHref\(scope\);/);
   assert.match(route, /fromTrace\?\.id/);
-  assert.match(route, /\/\(tabs\)\/discover\/moment\/\[id\]/);
+  assert.match(route, /getMomentDetailHref\(scope, item\.fromTrace\.id/);
 });
 
 test('admission banners preserve badges belonging to discover domains', () => {

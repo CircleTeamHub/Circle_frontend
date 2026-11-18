@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -39,9 +39,9 @@ import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import {
   getCircleDetailHref,
+  getNoteDetailHref,
   getUserProfileHref,
   getUserProfileScopeFromSegments,
-  toCircleScope,
 } from '@/features/user/utils/routes';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -89,15 +89,18 @@ export default function SharePickerScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const segments = useSegments();
-  const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
-  const { type, conversationID, sourceID } = useLocalSearchParams<{
+  const { type, conversationID, sourceID, originScope } = useLocalSearchParams<{
     type?: ShareType;
     conversationID?: string;
     /** 打开选择页的那个聊天;选择结果只交给它。 */
     sourceID?: string;
+    /** 盖在半屏聊天上时(app/chat-sheet)半屏下面的 tab,由 useChatRouter.pushOverChat 带过来。 */
+    originScope?: string;
   }>();
+  // 盖在半屏上时 segments 里没有 tab,点名片 / 圈子离开聊天要落回半屏下面那个 tab。
+  const scope = getUserProfileScopeFromSegments(segments[0] === 'chat-sheet' ? [originScope ?? ''] : segments);
   const shareType: ShareType = (type as ShareType) ?? 'note';
   const storePending = useSharePickerStore((s) => s.setPending);
   const setPending = useCallback(
@@ -257,6 +260,38 @@ export default function SharePickerScreen() {
 
   const atSelectionLimit = selectedNotes.length >= MAX_NOTE_BATCH_SELECTION;
 
+  // 点笔记打开详情(发之前看一眼、改几个字),点卡片左边的圆圈才是勾选。盖在半屏聊天上的那份
+  // (app/chat-sheet)没法往 tab 栈压详情页,点卡片也是勾选。
+  const currentUserId = useAuthStore((state) => state.user?.id ?? '');
+  const canOpenNoteDetail = segments[0] !== 'chat-sheet';
+  const openedNoteDetailRef = useRef(false);
+  // 回来后的重拉还没完成时先不让发:卡片内容用客户端摘要拼,这时发出去的是改之前的标题。
+  const [refreshingNotes, setRefreshingNotes] = useState(false);
+  const openNoteDetail = useCallback((note: NoteSummary) => {
+    openedNoteDetailRef.current = true;
+    router.push(getNoteDetailHref(scope, note.id, currentUserId));
+  }, [currentUserId, router, scope]);
+
+  // 从详情 / 编辑回来:重拉一遍,列表和已勾选的都换成改过的内容,删掉的从已选里去掉。
+  useFocusEffect(useCallback(() => {
+    if (shareType !== 'note' || !openedNoteDetailRef.current) return;
+    openedNoteDetailRef.current = false;
+    let cancelled = false;
+    setRefreshingNotes(true);
+    fetchNotes()
+      .then((res) => {
+        if (cancelled) return;
+        const byId = new Map(res.map((note) => [note.id, note]));
+        setNotes(res);
+        setSelectedNotes((prev) => prev.flatMap((note) => byId.get(note.id) ?? []));
+      })
+      .catch((err) => reportHandledFailure('sharePicker', 'refreshNotes', err))
+      .finally(() => setRefreshingNotes(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [shareType]));
+
   const handleSourcePress = useCallback(async (note: NoteSummary, target: NoteSourceTarget) => {
     if (sourceOpeningRef.current) return;
     const { contact, group } = resolveNoteCardButtons(note);
@@ -304,15 +339,16 @@ export default function SharePickerScreen() {
       )));
     } else if (target === 'group' && group) {
       if (group.target === 'circle') {
-        leaveOverChatPage(segments, () => router.push(getCircleDetailHref(toCircleScope(scope), group.id)));
+        leaveOverChatPage(segments, () => router.push(getCircleDetailHref(scope, group.id)));
       } else {
         leaveOverChatPage(segments, () => router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID })));
       }
     }
   }, [navigation, router, scope, segments]);
 
+  const canSendNotes = hasAnyNoteSendOption(sendOptions) && !refreshingNotes;
   const handleConfirmSend = useCallback(() => {
-    if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) {
+    if (selectedNotes.length === 0 || !canSendNotes) {
       return;
     }
     setPending({
@@ -321,14 +357,15 @@ export default function SharePickerScreen() {
       options: sendOptions,
     });
     router.back();
-  }, [router, selectedNotes, sendOptions, setPending]);
+  }, [canSendNotes, router, selectedNotes, sendOptions, setPending]);
 
   // 多选态复用 NoteCard 自带的 selectionMode(勾选指示/无障碍状态都在卡片里),
   // 不再另裹一层手搓 checkbox —— 与笔记列表的多选视觉保持同一来源。
   const renderNote = ({ item }: { item: NoteSummary }) => (
     <NoteCard
       note={item}
-      onPress={toggleNote}
+      onPress={canOpenNoteDetail ? openNoteDetail : toggleNote}
+      onSelectPress={toggleNote}
       onSourcePress={handleSourcePress}
       showActions={false}
       selectionMode
@@ -590,16 +627,16 @@ export default function SharePickerScreen() {
           <Pressable
             style={[
               s.noteSendButton,
-              hasAnyNoteSendOption(sendOptions)
+              canSendNotes
                 ? [s.noteSendButtonOn, { shadowColor: colors.primary }]
                 : null,
               {
-                backgroundColor: hasAnyNoteSendOption(sendOptions)
+                backgroundColor: canSendNotes
                   ? colors.primary
                   : colors.surfaceBorder,
               },
             ]}
-            disabled={!hasAnyNoteSendOption(sendOptions)}
+            disabled={!canSendNotes}
             onPress={handleConfirmSend}
             accessibilityRole="button"
           >

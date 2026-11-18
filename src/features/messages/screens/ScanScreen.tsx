@@ -10,7 +10,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,6 +25,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { reportHandledFailure } from '@/observability/report-failure';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const s = StyleSheet.create({
   container: {
     flex: 1,
@@ -119,6 +120,7 @@ const s = StyleSheet.create({
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scanScope = getUserProfileScopeFromSegments(useSegments()) === 'contacts' ? 'contacts' : 'messages';
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
@@ -193,7 +195,7 @@ export default function ScanScreen() {
       if (isHandlingResult) return;
 
       setIsHandlingResult(true);
-      const action = resolveMessageScanResult(result.data);
+      const action = resolveMessageScanResult(result.data, scanScope);
 
       if (action.type === 'route') {
         router.replace(action.href);
@@ -202,7 +204,7 @@ export default function ScanScreen() {
 
       void handleCopyFallback(action.value);
     },
-    [handleCopyFallback, isHandlingResult, router],
+    [handleCopyFallback, isHandlingResult, router, scanScope],
   );
 
   /**

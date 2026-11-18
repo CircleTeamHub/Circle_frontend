@@ -23,11 +23,17 @@ test('every chat history screen opens the chat with the conversation type', () =
       // 消息 id 传进去(两者都是字符串,tsc 不报)—— 这里按位置钉死。
       assert.match(
         match[1],
-        /^'messages', sourceID, title, undefined, conversationID, (?:clientMsgID|undefined), conversationType$/,
+        /^scope, sourceID, title, undefined, conversationID, (?:clientMsgID|undefined), conversationType$/,
         `${name}: ${match[0]} does not pass the conversation type in the right position`,
       );
     }
     if (/getChatDetailHref\(/.test(source)) {
+      // 回到聊天也留在聊天记录页所在的栈里,不跳回消息 tab。
+      assert.match(
+        source,
+        /const scope = getUserProfileScopeFromSegments\(useSegments\(\)\);/,
+        `${name} does not resolve its tab stack`,
+      );
       assert.match(
         source,
         /const conversationType = useChatHistoryConversationType\(conversationID\);/,

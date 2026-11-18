@@ -111,8 +111,9 @@ test('the back button pops the current stack instead of switching tabs', () => {
   assert.match(navHeader, /const state = navigation\.getState\(\);/);
   assert.match(navHeader, /state\?\.type === 'stack' && \(state\.index \?\? 0\) > 0/);
   assert.match(navHeader, /canPopThisStack[\s\S]{0,120}fallbackHref/);
-  // 消息页「通知」点进来的那份兜底回消息页，通讯录的本家兜底回通讯录。
-  assert.match(screen, /fallbackHref=\{inboxScope === 'messages' \? '\/\(tabs\)\/messages' : '\/\(tabs\)\/contacts'\}/);
+  // 「新的朋友」每个栈都有一份：兜底回本栈的首页（消息页「通知」进来的回消息页，通讯录的本家回通讯录）。
+  assert.match(screen, /const inboxScope = getUserProfileScopeFromSegments\(useSegments\(\)\);/);
+  assert.match(screen, /fallbackHref=\{`\/\(tabs\)\/\$\{inboxScope\}`\}/);
 });
 
 test('every locale defines the new tab, search and group-inbox copy', () => {

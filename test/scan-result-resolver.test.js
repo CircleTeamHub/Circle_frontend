@@ -53,108 +53,151 @@ const { resolveMessageScanResult } = loadTsModule(
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+// 扫码页在消息、通讯录两个栈各有一份:识别出的应用内结果留在扫码页所在的栈里。
+const SCAN_SCOPES = ['messages', 'contacts'];
+
 test('routes a whitelisted custom-scheme deep link', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('windnoteai://messages/temp-chats')), {
-    type: 'route',
-    href: '/(tabs)/messages/temp-chats',
-  });
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('windnoteai://messages/temp-chats', scope)), {
+      type: 'route',
+      href: `/(tabs)/${scope}/temp-chats`,
+    });
+  }
 });
 
 test('keeps routing legacy custom-scheme deep links', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('circleim://messages/temp-chats')), {
-    type: 'route',
-    href: '/(tabs)/messages/temp-chats',
-  });
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('circleim://messages/temp-chats', scope)), {
+      type: 'route',
+      href: `/(tabs)/${scope}/temp-chats`,
+    });
+  }
 });
 
 test('routes a whitelisted https universal link', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('https://windnote.ai/messages/add-friend')),
-    { type: 'route', href: '/(tabs)/messages/add-friend' },
-  );
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('https://windnote.ai/messages/add-friend', scope)),
+      { type: 'route', href: `/(tabs)/${scope}/add-friend` },
+    );
+  }
 });
 
 test('routes versioned login QR payloads separately from join QR payloads', () => {
   const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
-  assert.deepEqual(
-    plain(resolveMessageScanResult(`windnoteai://qr-login?t=${token}`)),
-    {
-      type: 'route',
-      href: {
-        pathname: '/(tabs)/messages/qr-login',
-        params: { t: token },
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult(`windnoteai://qr-login?t=${token}`, scope)),
+      {
+        type: 'route',
+        href: {
+          pathname: `/(tabs)/${scope}/qr-login`,
+          params: { t: token },
+        },
       },
-    },
-  );
+    );
+  }
 });
 
-test('keeps an in-app contact QR result inside the messages stack', () => {
+test('keeps an in-app contact QR result inside the scanning stack', () => {
   const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
-  assert.deepEqual(
-    plain(resolveMessageScanResult(`windnoteai://qr?t=${token}`)),
-    {
-      type: 'route',
-      href: {
-        pathname: '/(tabs)/messages/qr',
-        params: { t: token },
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult(`windnoteai://qr?t=${token}`, scope)),
+      {
+        type: 'route',
+        href: {
+          pathname: `/(tabs)/${scope}/qr`,
+          params: { t: token },
+        },
       },
-    },
-  );
+    );
+  }
 });
 
 test('keeps routing legacy https universal links', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('https://circle.im/messages/add-friend')),
-    { type: 'route', href: '/(tabs)/messages/add-friend' },
-  );
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('https://circle.im/messages/add-friend', scope)),
+      { type: 'route', href: `/(tabs)/${scope}/add-friend` },
+    );
+  }
 });
 
 test('routes retired QR-login links to the in-app compatibility screen', () => {
   const value = 'windnoteai://qr-login?t=ABCDEFGHIJKLMNOP';
-  assert.deepEqual(
-    plain(resolveMessageScanResult(value)),
-    {
-      type: 'route',
-      href: {
-        pathname: '/(tabs)/messages/qr-login',
-        params: { t: 'ABCDEFGHIJKLMNOP' },
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult(value, scope)),
+      {
+        type: 'route',
+        href: {
+          pathname: `/(tabs)/${scope}/qr-login`,
+          params: { t: 'ABCDEFGHIJKLMNOP' },
+        },
       },
-    },
-  );
+    );
+  }
 });
 
 test('does NOT route http universal links', () => {
   const value = 'http://windnote.ai/messages/add-friend';
   assert.deepEqual(
-    plain(resolveMessageScanResult(value)), { type: 'copy', value });
+    plain(resolveMessageScanResult(value, 'messages')), { type: 'copy', value });
 });
 
 test('routes a bare in-app path', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('/(tabs)/messages/groups')), {
-    type: 'route',
-    href: '/(tabs)/messages/groups',
-  });
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('/(tabs)/messages/temp-chats', scope)), {
+      type: 'route',
+      href: `/(tabs)/${scope}/temp-chats`,
+    });
+    // 消息栈的 groups 是分组管理,通讯录栈的 groups 是「我的群聊」:扫到它只能进消息栈那份。
+    assert.deepEqual(
+      plain(resolveMessageScanResult('/(tabs)/messages/groups', scope)), {
+      type: 'route',
+      href: '/(tabs)/messages/groups',
+    });
+  }
+});
+
+test('every scan result routed per stack is the same screen in both scanning stacks', () => {
+  // 同名页在两个栈里必须是同一个页面(re-export 同一个 screen),否则换栈就换了页面。
+  const screenOf = (scope, page) => {
+    const file = path.join(process.cwd(), `app/(tabs)/${scope}/${page}.tsx`);
+    assert.ok(fs.existsSync(file), `${scope} 栈缺 ${page}`);
+    return fs.readFileSync(file, 'utf8').match(/from '([^']+)'/)[1];
+  };
+  for (const scope of SCAN_SCOPES) {
+    assert.ok(fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/scan.tsx`)), `${scope} 栈缺扫码页`);
+  }
+  for (const page of ['qr', 'qr-login', 'add-friend', 'find', 'temp-chats']) {
+    assert.equal(screenOf('contacts', page), screenOf('messages', page), page);
+  }
+  assert.notEqual(screenOf('contacts', 'groups'), screenOf('messages', 'groups'));
 });
 
 test('does NOT route an unknown path under our host (no open redirect)', () => {
-  assert.deepEqual(
-    plain(resolveMessageScanResult('circleim://messages/delete-account')),
-    { type: 'copy', value: 'circleim://messages/delete-account' },
-  );
+  for (const scope of SCAN_SCOPES) {
+    assert.deepEqual(
+      plain(resolveMessageScanResult('circleim://messages/delete-account', scope)),
+      { type: 'copy', value: 'circleim://messages/delete-account' },
+    );
+  }
 });
 
 test('does NOT route a look-alike host', () => {
   const value = 'https://circle.im.evil.com/messages/add-friend';
   assert.deepEqual(
-    plain(resolveMessageScanResult(value)), { type: 'copy', value });
+    plain(resolveMessageScanResult(value, 'contacts')), { type: 'copy', value });
 });
 
 test('falls back to copy for arbitrary text and trims it', () => {
   assert.deepEqual(
-    plain(resolveMessageScanResult('  hello world  ')), {
+    plain(resolveMessageScanResult('  hello world  ', 'messages')), {
     type: 'copy',
     value: 'hello world',
   });
@@ -162,7 +205,7 @@ test('falls back to copy for arbitrary text and trims it', () => {
 
 test('falls back to copy for a foreign url', () => {
   assert.deepEqual(
-    plain(resolveMessageScanResult('https://example.com/x')), {
+    plain(resolveMessageScanResult('https://example.com/x', 'contacts')), {
     type: 'copy',
     value: 'https://example.com/x',
   });

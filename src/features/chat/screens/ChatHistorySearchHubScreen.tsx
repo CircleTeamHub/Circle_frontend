@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
@@ -20,6 +20,7 @@ import {
   getChatHistoryFilesHref,
   getChatHistoryMediaHref,
   getChatHistoryTextHref,
+  getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -55,6 +56,7 @@ export default function ChatHistorySearchHubScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
@@ -86,33 +88,33 @@ export default function ChatHistorySearchHubScreen() {
   );
 
   const openTextSearch = useCallback(() => {
-    router.push(getChatHistoryTextHref(conversationID, sourceID, title));
-  }, [conversationID, sourceID, title]);
+    router.push(getChatHistoryTextHref(scope, conversationID, sourceID, title));
+  }, [conversationID, sourceID, title, scope]);
 
   const openMediaSearch = useCallback(() => {
-    router.push(getChatHistoryMediaHref(conversationID, sourceID, title));
-  }, [conversationID, sourceID, title]);
+    router.push(getChatHistoryMediaHref(scope, conversationID, sourceID, title));
+  }, [conversationID, sourceID, title, scope]);
 
   const openFileSearch = useCallback(() => {
-    router.push(getChatHistoryFilesHref(conversationID, sourceID, title));
-  }, [conversationID, sourceID, title]);
+    router.push(getChatHistoryFilesHref(scope, conversationID, sourceID, title));
+  }, [conversationID, sourceID, title, scope]);
 
   const openDateSearch = useCallback(() => {
-    router.push(getChatHistoryDateHref(conversationID, sourceID, title));
-  }, [conversationID, sourceID, title]);
+    router.push(getChatHistoryDateHref(scope, conversationID, sourceID, title));
+  }, [conversationID, sourceID, title, scope]);
 
   const handleSubmitKeywordSearch = useCallback(() => {
     const nextKeyword = keyword.trim();
     router.push(
-      getChatHistoryTextHref(conversationID, sourceID, title, nextKeyword),
+      getChatHistoryTextHref(scope, conversationID, sourceID, title, nextKeyword),
     );
-  }, [conversationID, keyword, sourceID, title]);
+  }, [conversationID, keyword, sourceID, title, scope]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.findTitle')}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
+        fallbackHref={getChatDetailHref(scope, sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <ScrollView
         style={s.scroll}

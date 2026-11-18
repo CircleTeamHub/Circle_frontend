@@ -263,7 +263,7 @@ function CollectionsContent() {
     if (!canForward || operationRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
     useMessageForwardStore.getState().setPendingBatch(forwardItems.filter(item => item !== null));
     player.pause(); setSelectedIds(null);
-    router.push({ pathname: '/(tabs)/messages/forward-picker' });
+    router.push({ pathname: '/(tabs)/profile/forward-picker' });
   }
   async function openContent({ item, content }: CollectionRow) {
     if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;

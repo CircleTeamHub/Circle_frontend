@@ -321,14 +321,18 @@ test('chat info screen routes the add-member entry by group kind', () => {
   assert.match(infoSource, /handleOpenInviteGroupMembers/);
   // 圈子群:担保邀请进圈。
   assert.match(infoSource, /getCircleInviteFriendsHref\(/);
-  // 独立群聊:好友多选直接进群,路由在两个栈都有镜像。
+  // 独立群聊:好友多选直接进群,邀请页开在群资料页所在的栈里(每个栈都有镜像)。
   assert.match(infoSource, /isStandaloneGroup/);
-  assert.match(infoSource, /\/\(tabs\)\/messages\/invite-group-members/);
-  assert.match(infoSource, /\/\(tabs\)\/discover\/invite-group-members/);
+  assert.match(infoSource, /pathname: `\/\(tabs\)\/\$\{scope\}\/invite-group-members`/);
+  assert.doesNotMatch(infoSource, /'\/\(tabs\)\/messages\/invite-group-members'/);
+  // 圈子群的担保邀请页同样留在本栈,不再把联系人/我的折到消息栈。
+  assert.match(infoSource, /getCircleInviteFriendsHref\(scope, groupID, groupTitle\)/);
+  assert.doesNotMatch(infoSource, /toCircleScope/);
   assert.doesNotMatch(infoSource, /promptForText\(t\('chat\.addGroupMember'\)/);
   for (const rel of [
-    'app/(tabs)/messages/invite-group-members.tsx',
-    'app/(tabs)/discover/invite-group-members.tsx',
+    ...['messages', 'contacts', 'discover', 'explore', 'profile'].map(
+      (scope) => `app/(tabs)/${scope}/invite-group-members.tsx`,
+    ),
     'app/(tabs)/messages/new-group.tsx',
     'src/features/chat/screens/InviteGroupMembersScreen.tsx',
     'src/features/chat/screens/NewGroupScreen.tsx',
@@ -700,7 +704,7 @@ test('chat info screen resolves back navigation from the explicit origin instead
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /originScope\?: string;/);
-  assert.match(source, /const originScope =/);
+  assert.match(source, /const originScope: UserProfileScope =/);
   assert.match(source, /getUserProfileHref/);
   assert.match(source, /const backHref = useMemo/);
   assert.match(source, /originScope === 'messages'/);
@@ -767,7 +771,7 @@ test('chat history search screens exist with dedicated titles and empty states',
   );
 
   assert.match(hubSource, /NavHeader[\s\S]*title=\{t\('chat\.history\.findTitle'\)\}/);
-  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID, undefined, conversationType\)}/);
+  assert.match(hubSource, /fallbackHref={getChatDetailHref\(scope, sourceID, title, undefined, conversationID, undefined, conversationType\)}/);
   assert.match(hubSource, /t\('chat\.history\.textTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.mediaTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.files'\)/);
@@ -802,7 +806,7 @@ test('chat history hub has a top keyword search box', () => {
   assert.match(hubSource, /TextInput/);
   assert.match(hubSource, /placeholder=\{t\('chat\.history\.searchPlaceholder'\)\}/);
   assert.match(hubSource, /handleSubmitKeywordSearch/);
-  assert.match(hubSource, /getChatHistoryTextHref\(conversationID, sourceID, title, nextKeyword\)/);
+  assert.match(hubSource, /getChatHistoryTextHref\(scope, conversationID, sourceID, title, nextKeyword\)/);
 });
 
 test('chat history date screen uses an inline calendar grid instead of typed date search', () => {

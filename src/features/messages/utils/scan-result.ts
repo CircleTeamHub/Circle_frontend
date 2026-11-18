@@ -9,14 +9,12 @@ type MessageScanAction =
   | { type: 'route'; href: Href }
   | { type: 'copy'; value: string };
 
-// as const + satisfies：值类型收窄成 5 个字符串字面量(而不是整个 Href 巨型
-// 联合),索引表达式不再触发 TS2590,同时保留「必须是合法路由」的校验。
-const MESSAGE_ROUTE_MAP = {
-  'add-friend': '/(tabs)/messages/add-friend',
-  find: '/(tabs)/messages/find',
-  groups: '/(tabs)/messages/groups',
-  'temp-chats': '/(tabs)/messages/temp-chats',
-} as const satisfies Record<string, Href>;
+// 扫码页在消息、通讯录两个栈各有一份,结果页也都在两个栈里,扫完留在本栈。
+export type ScanScope = 'messages' | 'contacts';
+
+const SCAN_ROUTE_PAGES = new Set(['add-friend', 'find', 'temp-chats']);
+// 消息栈的 groups 是分组管理,通讯录栈的 groups 是「我的群聊」,不是同一页:只能进消息栈那份。
+const MESSAGE_GROUPS_HREF = '/(tabs)/messages/groups' satisfies Href;
 
 const APP_LINK_PROTOCOL_SET = new Set<string>(APP_LINK_PROTOCOLS);
 const APP_LINK_HOST_SET = new Set<string>(APP_UNIVERSAL_LINK_HOSTS);
@@ -54,10 +52,10 @@ function normalizeMessagePath(rawValue: string): string | null {
   return null;
 }
 
-export function resolveMessageScanResult(data: string): MessageScanAction {
+export function resolveMessageScanResult(data: string, scope: ScanScope): MessageScanAction {
   const value = data.trim();
 
-  // 这里的结果由 ScanScreen 用 router.replace 消费:落地页必须留在 messages 栈内。
+  // 这里的结果由 ScanScreen 用 router.replace 消费:落地页必须留在扫码页所在的栈内。
   // 跳去顶层的 /qr、/qr-login 会把整个 messages 栈换掉,加好友申请走完之后落地页
   // 就没有可返回的目标了。外部系统相机扫出来的深链另走顶层路由,不经过这里。
   const loginToken = parseQrLoginToken(value);
@@ -65,7 +63,7 @@ export function resolveMessageScanResult(data: string): MessageScanAction {
     return {
       type: 'route',
       href: {
-        pathname: '/(tabs)/messages/qr-login',
+        pathname: `/(tabs)/${scope}/qr-login`,
         params: { t: loginToken },
       },
     };
@@ -77,17 +75,16 @@ export function resolveMessageScanResult(data: string): MessageScanAction {
   if (qrToken) {
     return {
       type: 'route',
-      href: { pathname: '/(tabs)/messages/qr', params: { t: qrToken } },
+      href: { pathname: `/(tabs)/${scope}/qr`, params: { t: qrToken } },
     };
   }
 
   const messagePath = normalizeMessagePath(value);
-  const href = messagePath
-    ? MESSAGE_ROUTE_MAP[messagePath as keyof typeof MESSAGE_ROUTE_MAP]
-    : undefined;
-
-  if (href) {
-    return { type: 'route', href };
+  if (messagePath === 'groups') {
+    return { type: 'route', href: MESSAGE_GROUPS_HREF };
+  }
+  if (messagePath && SCAN_ROUTE_PAGES.has(messagePath)) {
+    return { type: 'route', href: `/(tabs)/${scope}/${messagePath}` as Href };
   }
 
   return { type: 'copy', value };

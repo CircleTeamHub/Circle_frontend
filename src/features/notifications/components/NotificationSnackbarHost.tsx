@@ -14,7 +14,6 @@ import { markNotificationRead } from '@/services/api/notifications';
 import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
 import {
-  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -34,6 +33,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { isCurrentRoute } from '@/utils/current-route';
 
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
 const EXIT_MS = 180;
@@ -58,7 +58,12 @@ export function NotificationSnackbarHost() {
   }, [notificationSettings]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const notificationScope = getNotificationScope(segments);
+  // 半屏聊天和盖在它上面的页面都在根上,segments 里没有 tab:沿用半屏记下的来源 tab,
+  // 否则开着半屏再点一条横幅,来源 tab 就丢成消息栈了。
+  const onChatSheet = segments[0] === 'quick-chat' || segments[0] === 'chat-sheet';
+  const notificationScope = getUserProfileScopeFromSegments(
+    onChatSheet ? [typeof params.originScope === 'string' ? params.originScope : ''] : segments,
+  );
 
   const [shown, setShown] = useState(current);
 
@@ -232,7 +237,11 @@ export function NotificationSnackbarHost() {
     // 已经在消息列表时没有要留住的页面,直接进完整聊天。
     const onMessageList = segments.length === 2 && segments[0] === '(tabs)' && segments[1] === 'messages';
     if (notificationSettings.quickChatSheet && !onMessageList && shown.kind === 'chat' && typeof route === 'object' && 'params' in route) {
-      router.push({ pathname: '/quick-chat', params: route.params });
+      // 记下横幅下面是哪个 tab:点「展开」时在那个栈里打开完整聊天,返回回到原页面。
+      router.push({
+        pathname: '/quick-chat',
+        params: { ...route.params, originScope: notificationScope },
+      });
       return;
     }
     // 正看着的就是横幅指向的那一页（如报名列表开着时又来一条报名）：原地换成新的，

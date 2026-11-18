@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
@@ -12,6 +12,7 @@ import { fetchChatMessageDays } from '@/chat-core/api';
 import {
   getChatDetailHref,
   getChatHistoryDateResultsHref,
+  getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -163,6 +164,7 @@ function ChatHistoryDateContent() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const weekdayLabels = getWeekdayLabels(getLocalizedDateTimeLocale(i18n.language));
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
@@ -252,17 +254,17 @@ function ChatHistoryDateContent() {
       // 点当月某天 → 进入「当天聊天记录」结果页（结果页自己做精确的当日搜索，
       // 因此即便圆点索引偶有遗漏，点进去仍能查到当天记录）。
       router.push(
-        getChatHistoryDateResultsHref(conversationID, sourceID, title, day.date),
+        getChatHistoryDateResultsHref(scope, conversationID, sourceID, title, day.date),
       );
     },
-    [conversationID, sourceID, title],
+    [conversationID, scope, sourceID, title],
   );
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.dateTitle')}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
+        fallbackHref={getChatDetailHref(scope, sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <View style={s.content}>
         <View style={[s.calendarCard, d.calendarCard]}>

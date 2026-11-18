@@ -437,7 +437,7 @@
       "recognitionSelectionSummary": "{{count}}/{{max}} selected",
       "recognitionFull": "Like limit reached",
       "recognizedTag": "Liked",
-      "recognitionSubmit": "Like your collaborators",
+      "recognitionSubmit": "Like",
       "recognitionSubmitting": "Submitting",
       "recognitionLimitTitle": "Choose up to 3",
       "recognitionLimitMessage": "You can like up to 3 people who signed up for each activity.",
@@ -502,8 +502,8 @@
       "expandComposer": "Expand message editor",
       "collapseComposer": "Collapse message editor",
       "expandedComposerTitle": "Edit message",
-      "disappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them. Messages sent by others are unaffected. The platform retains disappeared messages for 180 days for authorized administrator review.",
-      "personalDisappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them. Messages sent by others are unaffected. The platform retains disappeared messages for 180 days for authorized administrator review.",
+      "disappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them.",
+      "personalDisappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them.",
       "attachmentPanelLabel": "Open attachment panel",
       "voiceInputLabel": "Voice input",
       "emojiPanelLabel": "Open emoji panel",
@@ -2948,7 +2948,8 @@
       "delete": "Delete",
       "restore": "Restore",
       "purge": "Delete now",
-      "download": "Download"
+      "download": "Download",
+      "select": "Select"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",

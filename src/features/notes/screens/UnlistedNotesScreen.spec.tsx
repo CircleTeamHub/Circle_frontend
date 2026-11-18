@@ -9,7 +9,8 @@ const mockRouter = { push: jest.fn(), back: jest.fn() };
 const mockTranslate = (key: string) => key;
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
-  return { useRouter: () => mockRouter, useFocusEffect: (effect: () => void | (() => void)) => ReactModule.useEffect(effect, [effect]) };
+  return { useRouter: () => mockRouter, useSegments: () => ['(tabs)', 'profile', 'notes', 'unlisted'],
+    useFocusEffect: (effect: () => void | (() => void)) => ReactModule.useEffect(effect, [effect]) };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));

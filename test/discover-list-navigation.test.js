@@ -67,8 +67,12 @@ test('moments screen reuses the feed and keeps its create action', () => {
   const source = read('src/features/discover/screens/MomentsScreen.tsx');
 
   assert.match(source, /<MomentsFeed \/>/);
-  assert.match(source, /\/\(tabs\)\/discover\/create-moment/);
-  assert.match(source, /\/\(tabs\)\/explore\/create-moment/);
+  // 发动态开在朋友圈所在的栈里:渲染朋友圈的每个栈都要有发动态页。
+  assert.match(source, /`\/\(tabs\)\/\$\{scope\}\/create-moment`/);
+  for (const scope of ['contacts', 'discover', 'explore']) {
+    assert.match(read(`app/(tabs)/${scope}/moments.tsx`), /MomentsScreen/);
+    assert.ok(exists(`app/(tabs)/${scope}/create-moment.tsx`), `${scope} 栈缺发动态页`);
+  }
   // 发朋友圈按钮与笔记页同款：带文字的胶囊主操作。
   assert.match(source, /<FloatingActionButton[\s\S]*?onPress=\{handleCreateMoment\}[\s\S]*?label=\{t\('moment\.createTitle'\)\}/);
 });
@@ -113,12 +117,12 @@ test('circle plaza owns the circle notification bell and opens the circle domain
 test('moments bell opens the moments domain of the notification center', () => {
   const source = read('src/features/discover/screens/MomentsScreen.tsx');
 
-  // 探索栈里打开的朋友圈落到探索那份通知中心，圈子 / 联系人栈的旧路由仍落圈子栈。
-  assert.match(
-    source,
-    /pathname: inExplore\s*\?\s*'\/\(tabs\)\/explore\/notification-center'\s*:\s*'\/\(tabs\)\/discover\/notification-center'/,
-  );
+  // 朋友圈从哪个栈打开,铃铛就落到那个栈的通知中心(联系人栈不再跨到圈子栈)。
+  assert.match(source, /pathname: `\/\(tabs\)\/\$\{scope\}\/notification-center`/);
   assert.match(source, /params: \{ domain: 'moments' \}/);
+  for (const scope of ['contacts', 'discover', 'explore']) {
+    assert.ok(exists(`app/(tabs)/${scope}/notification-center.tsx`), `${scope} 栈缺通知中心`);
+  }
 });
 
 test('notification center scopes its list to the requested bell domain', () => {

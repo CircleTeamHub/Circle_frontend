@@ -14,6 +14,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import {
   getCircleNotificationSettingsHref,
   getUserProfileScopeFromSegments,
+  getCircleDetailHref,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { MyCirclesPanel } from '@/features/discover/components/my-circles-panel';
@@ -62,6 +63,7 @@ export default function MyCirclesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const [joinId, setJoinId] = useState('');
 
   // 圈子通知设置此前只有 CircleManagementScreen 一个入口，而 #195 把发现页那行
@@ -79,8 +81,8 @@ export default function MyCirclesScreen() {
     const id = joinId.trim();
     if (!id) return;
     setJoinId('');
-    router.push(`/(tabs)/discover/circle/${encodeURIComponent(id)}`);
-  }, [joinId, router]);
+    router.push(getCircleDetailHref(scope, id));
+  }, [joinId, router, scope]);
 
   const canSubmit = joinId.trim().length > 0;
 

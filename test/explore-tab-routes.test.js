@@ -58,9 +58,11 @@ test('the explore stack resolves its own scope and keeps moments inside it', () 
     pathname: '/(tabs)/explore/moment/[id]',
     params: { id: 'm1', targetCommentId: 'c1' },
   });
-  // 其余栈没有朋友圈详情镜像,仍落到圈子栈那份(改版前的行为)。
+  // 每个栈都在本栈打开朋友圈详情:跨到圈子栈的话,返回会落到圈子动态而不是来时的相册。
   for (const scope of ['discover', 'contacts', 'profile', 'messages']) {
-    assert.equal(routes.getMomentDetailHref(scope, 'm1').pathname, '/(tabs)/discover/moment/[id]');
+    const pathname = `/(tabs)/${scope}/moment/[id]`;
+    assert.equal(routes.getMomentDetailHref(scope, 'm1').pathname, pathname, scope);
+    assert.ok(exists(`app${pathname}.tsx`), `${scope} 栈缺朋友圈详情镜像`);
   }
   assert.equal(routes.getTabHomeHref('explore'), '/(tabs)/explore');
 
@@ -93,22 +95,21 @@ test('group invites opened from explore chat info stay in the explore stack', ()
   const src = read('src/features/chat/screens/ChatInfoScreen.tsx');
   const handler =
     src.match(/const handleOpenInviteGroupMembers = useCallback\([\s\S]*?\n  \}, \[/)?.[0] ?? '';
-  assert.match(handler, /scope === 'explore'\) pathname = '\/\(tabs\)\/explore\/invite-group-members'/);
-  assert.match(handler, /getCircleInviteFriendsHref\(toCircleScope\(scope\), groupID, groupTitle\)/);
+  assert.match(handler, /pathname: `\/\(tabs\)\/\$\{scope\}\/invite-group-members`/);
+  assert.match(handler, /getCircleInviteFriendsHref\(scope, groupID, groupTitle\)/);
 });
 
 test('circle pages opened from explore stay in the explore stack', () => {
   const routes = loadRoutes();
 
-  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'explore', 'notes', '[id]']), 'explore');
-  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'messages', 'circle', '[id]']), 'messages');
-  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'discover', 'circle', '[id]']), 'discover');
-  assert.equal(routes.toCircleScope('explore'), 'explore');
-  assert.equal(routes.toCircleScope('discover'), 'discover');
-  // 联系人/我的没有圈子栈。
-  for (const scope of ['messages', 'contacts', 'profile']) {
-    assert.equal(routes.toCircleScope(scope), 'messages');
-  }
+  assert.equal(routes.getUserProfileScopeFromSegments(['(tabs)', 'explore', 'notes', '[id]']), 'explore');
+  assert.equal(routes.getUserProfileScopeFromSegments(['(tabs)', 'messages', 'circle', '[id]']), 'messages');
+  assert.equal(routes.getUserProfileScopeFromSegments(['(tabs)', 'discover', 'circle', '[id]']), 'discover');
+  // 联系人/我的也有圈子页镜像,不再折到消息栈:圈子 scope 就是页面所在的 tab。
+  assert.equal(routes.getUserProfileScopeFromSegments(['(tabs)', 'contacts', 'circle', '[id]']), 'contacts');
+  assert.equal(routes.getUserProfileScopeFromSegments(['(tabs)', 'profile', 'circle', '[id]']), 'profile');
+  assert.equal(routes.toCircleScope, undefined);
+  assert.equal(routes.getCircleScopeFromSegments, undefined);
 
   // 圈子链接用模板字符串拼栈名,上面那条字面量扫描看不到:逐个栈逐个链接查文件在不在。
   const hrefs = (scope) => [
@@ -127,7 +128,7 @@ test('circle pages opened from explore stay in the explore stack', () => {
     { pathname: `/(tabs)/${scope}/select-city` },
   ];
   const missing = [];
-  for (const scope of ['messages', 'discover', 'explore']) {
+  for (const scope of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     for (const { pathname } of hrefs(scope)) {
       assert.ok(pathname.startsWith(`/(tabs)/${scope}/`), pathname);
       if (!exists(`app${pathname}.tsx`)) missing.push(pathname);
@@ -137,7 +138,7 @@ test('circle pages opened from explore stay in the explore stack', () => {
   assert.match(read('src/features/discover/screens/CircleDetailScreen.tsx'), /`\/\(tabs\)\/\$\{circleScope\}\/chat-detail`/);
   assert.match(read('src/features/discover/components/circle-form-body.tsx'), /`\/\(tabs\)\/\$\{circleScope\}\/select-city`/);
 
-  // 从探索进来的笔记、聊天名片、群入口都要按 toCircleScope 走,不能再把 explore 压成 messages。
+  // 从探索进来的笔记、聊天名片、群入口都要按本栈 scope 走,不能再把 explore 压成 messages。
   const twoWay = /scope === ['"]discover['"] \? ['"](discover|\/\(tabs\)\/discover\/)/;
   assert.deepEqual(walk('src').filter((rel) => twoWay.test(read(rel))), []);
 });
