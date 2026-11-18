@@ -7,6 +7,7 @@ import {
   ChatSheetNavigationContext,
   leaveOverChatPage,
   useChatRouter,
+  useChatScope,
 } from './use-chat-router';
 
 // 用真实的 expo-router / React Navigation 跑一遍半屏聊天的跳转,看导航状态。
@@ -38,7 +39,7 @@ function SheetChat() {
 
 function QuickChat() {
   return (
-    <ChatSheetNavigationContext.Provider value={{ dismiss: () => router.back() }}>
+    <ChatSheetNavigationContext.Provider value={{ dismiss: () => router.back(), scope: 'discover' }}>
       <SheetChat />
     </ChatSheetNavigationContext.Provider>
   );
@@ -153,7 +154,8 @@ describe('半屏聊天里「选完要回到聊天」的页面', () => {
 
     expect(rootRouteNames(app)).toEqual(['(tabs)', 'quick-chat', 'chat-sheet']);
     expect(app.getPathname()).toBe('/chat-sheet/share-picker');
-    expect(app.getSearchParams()).toEqual({ type: 'note' });
+    // 盖在半屏上的页面带着半屏下面的 tab,从它里面离开聊天时才落回那个栈。
+    expect(app.getSearchParams()).toEqual({ type: 'note', originScope: 'discover' });
     expect(tabStack(app, 'messages')).toEqual(['index']);
   });
 
@@ -237,4 +239,30 @@ describe('半屏聊天里「选完要回到聊天」的页面', () => {
     });
     expect(app.getPathname()).toBe('/discover/chat-detail');
   });
+});
+
+function ScopeLabel() {
+  return <Text>{`scope:${useChatScope()}`}</Text>;
+}
+
+test('useChatScope: 半屏聊天取半屏下面的 tab,完整聊天页取所在的 tab', async () => {
+  renderRouter(
+    {
+      _layout: () => <Stack />,
+      'quick-chat': () => (
+        <ChatSheetNavigationContext.Provider value={{ dismiss: () => undefined, scope: 'contacts' }}>
+          <ScopeLabel />
+        </ChatSheetNavigationContext.Provider>
+      ),
+      '(tabs)/_layout': () => <Tabs />,
+      '(tabs)/explore/chat-detail': ScopeLabel,
+    },
+    { initialUrl: '/quick-chat' },
+  );
+  // 根上的半屏 segments 里没有 tab:不读上下文就会落成消息栈。
+  expect(await screen.findByText('scope:contacts')).toBeTruthy();
+  await act(async () => {
+    router.push('/explore/chat-detail' as never);
+  });
+  expect(await screen.findByText('scope:explore')).toBeTruthy();
 });

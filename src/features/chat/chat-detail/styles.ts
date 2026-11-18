@@ -186,7 +186,6 @@ export const chatDetailStyles = StyleSheet.create({
   },
   voiceHoldBar: {
     flex: 1,
-    height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',

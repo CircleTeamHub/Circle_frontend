@@ -90,7 +90,7 @@ export default function QuickChatScreen() {
 
   // 发笔记 / 名片 / 转账等「选完回到聊天」的页面盖在半屏上打开,不再借道展开;
   // 只有右上角展开才进完整聊天页(sheet.onExpand)。
-  const sheetNavigation = useMemo(() => ({ dismiss: close }), [close]);
+  const sheetNavigation = useMemo(() => ({ dismiss: close, scope: originScope }), [close, originScope]);
   const sheetActions = useMemo(
     () => ({ onClose: close, onExpand: expand, onPanelOpenChange: setComposerPanelOpen }),
     [close, expand],

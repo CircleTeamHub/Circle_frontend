@@ -94,7 +94,19 @@ test('in selection mode with onSelectPress the circle sits left of the card and 
   expect(onSelectPress).toHaveBeenCalledTimes(1);
 });
 
-test('selection mode without onSelectPress keeps the whole card as the toggle', () => {
-  render(<NoteCard note={note} onPress={jest.fn()} selectionMode selected />);
+test('selection mode without onSelectPress keeps the whole card as the toggle (other multi-select lists)', () => {
+  const onPress = jest.fn();
+  render(<NoteCard note={note} onPress={onPress} selectionMode selected accessibilityRole="button" />);
   expect(screen.queryByTestId(`note-card-select-${note.id}`)).toBeNull();
+  const card = screen.getByRole('button');
+  expect(card.props.accessibilityState).toEqual({ selected: true });
+  fireEvent.press(screen.getByText(note.title));
+  expect(onPress).toHaveBeenCalledWith(note);
+});
+
+test('the outside circle names its note for screen readers', () => {
+  render(<NoteCard note={note} onPress={jest.fn()} onSelectPress={jest.fn()} selectionMode selected />);
+  const circle = screen.getByTestId(`note-card-select-${note.id}`);
+  expect(circle.props.accessibilityLabel.endsWith(note.title)).toBe(true);
+  expect(circle.props.accessibilityState).toEqual({ checked: true });
 });

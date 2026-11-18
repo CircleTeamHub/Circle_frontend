@@ -61,6 +61,9 @@ function tabsRenderingEachFile() {
 }
 
 // 有意切 tab 的跳转:进到一个 tab 的首页(没有「返回」可言),或者会话已经没了。
+// 按 scope 分派路由的 helper 文件:每个分支只在对应 scope 下走到,由 helper 测试逐 scope 核对。
+const SCOPE_DISPATCH_FILES = new Set(['src/features/user/utils/routes.ts', 'src/features/groups/routes.ts']);
+
 const INTENTIONAL_TAB_SWITCH = new Set([
   // 转发给多个会话后「查看」回消息列表,它们都排在最上面。
   'src/features/chat/components/chat-target-picker/announce-sent.ts /(tabs)/messages',
@@ -70,6 +73,8 @@ const INTENTIONAL_TAB_SWITCH = new Set([
   'src/hooks/use-auth.ts /(tabs)/messages',
   // 解析扫到的应用内链接字符串,不是跳转。
   'src/features/messages/utils/scan-result.ts /(tabs)/messages/',
+  // 扫到「分组管理」的链接:那一页只在消息栈(通讯录的 groups 是「我的群聊」,另一个页面)。
+  'src/features/messages/utils/scan-result.ts /(tabs)/messages/groups',
   // 只有「我的」栈会用到的兜底(scope === 'profile' 分支)。
   'src/features/profile/screens/GroupExpansionScreen.tsx /(tabs)/profile/mall',
   'src/features/profile/screens/SystemAnnouncementDetailScreen.tsx /(tabs)/profile/system-announcements',
@@ -84,20 +89,41 @@ test('pages never hard-code a route into a tab stack they are not rendered in', 
   const offenders = [];
   for (const [file, tabs] of tabsRenderingEachFile()) {
     const rel = path.relative(root, file);
-    if (rel === 'src/features/user/utils/routes.ts') continue; // 按 scope 分派,由下一条测试守
+    if (SCOPE_DISPATCH_FILES.has(rel)) continue; // 按 scope 分派,由下面的 helper 测试守
     const literals = [...fs.readFileSync(file, 'utf8').matchAll(/['"`](\/\(tabs\)\/(messages|contacts|discover|explore|profile)(?:\/[^'"`$]*)?)['"`]/g)];
     const named = new Set(literals.map((m) => m[2]));
     // 文件被渲染进某个栈、却从没写过这个栈的路由:那它写死的路由在这个栈里全是跨栈跳转。
-    if (![...tabs].some((tab) => !named.has(tab))) continue;
-    for (const [, literal] of literals) {
-      if (!INTENTIONAL_TAB_SWITCH.has(`${rel} ${literal}`)) offenders.push(`${rel} [${[...tabs].join(',')}] → ${literal}`);
+    const someTabUnnamed = [...tabs].some((tab) => !named.has(tab));
+    for (const [, literal, tab] of literals) {
+      // 另外,指向一个根本不渲染这个文件的栈,本身就是跨栈(写过本栈的兜底也不能放过它)。
+      const crossesStack = someTabUnnamed || !tabs.has(tab);
+      if (crossesStack && !INTENTIONAL_TAB_SWITCH.has(`${rel} ${literal}`)) {
+        offenders.push(`${rel} [${[...tabs].join(',')}] → ${literal}`);
+      }
     }
   }
   assert.deepEqual(offenders, []);
 });
 
-function loadRoutes() {
-  const file = path.join(root, 'src/features/user/utils/routes.ts');
+test('every `/(tabs)/${scope}/page` built in a page exists in each stack that renders it', () => {
+  const missing = [];
+  for (const [file, tabs] of tabsRenderingEachFile()) {
+    const rel = path.relative(root, file);
+    if (SCOPE_DISPATCH_FILES.has(rel)) continue;
+    for (const [, page] of fs.readFileSync(file, 'utf8').matchAll(/`\/\(tabs\)\/\$\{[^}]+\}\/([^`$?]+)`/g)) {
+      for (const tab of tabs) {
+        const base = path.join(root, 'app/(tabs)', tab, page);
+        if (!fs.existsSync(`${base}.tsx`) && !fs.existsSync(path.join(base, 'index.tsx'))) {
+          missing.push(`${rel} → /(tabs)/${tab}/${page}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, []);
+});
+
+function loadModule(rel) {
+  const file = path.join(root, rel);
   const source = fs.readFileSync(file, 'utf8');
   const output = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -105,17 +131,55 @@ function loadRoutes() {
   const context = { module: { exports: {} }, require };
   context.exports = context.module.exports;
   vm.runInNewContext(output, context, { filename: file });
-  return { source, routes: context.module.exports };
+  return { source, exports: context.module.exports };
+}
+
+/** 导出函数里 `scope: UserProfileScope` 是第几个参数(不一定是第一个)。 */
+function scopeTakingHelpers(source) {
+  const helpers = [];
+  for (const match of source.matchAll(/export function (\w+)\(/g)) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    const start = i;
+    while (depth > 0) {
+      if ('([{<'.includes(source[i])) depth += 1;
+      if (')]}>'.includes(source[i]) && source[i - 1] !== '=') depth -= 1;
+      i += 1;
+    }
+    const params = [];
+    let current = '';
+    let level = 0;
+    for (const ch of source.slice(start, i - 1)) {
+      if ('([{<'.includes(ch)) level += 1;
+      if (')]}>'.includes(ch)) level -= 1;
+      if (ch === ',' && level === 0) {
+        params.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    params.push(current.trim());
+    const index = params.findIndex((param) => /^scope\??: UserProfileScope\b/.test(param));
+    if (index >= 0) helpers.push({ name: match[1], index });
+  }
+  return helpers;
 }
 
 test('every scope-taking route helper resolves inside the caller stack, to a page that exists there', () => {
-  const { source, routes } = loadRoutes();
-  const helpers = [...source.matchAll(/export function (\w+)\(\s*scope: UserProfileScope\b/g)].map((m) => m[1]);
+  const modules = ['src/features/user/utils/routes.ts', 'src/features/groups/routes.ts'].map(loadModule);
+  const helpers = modules.flatMap(({ source, exports }) =>
+    scopeTakingHelpers(source).map((helper) => ({ ...helper, fn: exports[helper.name] })));
   assert.ok(helpers.length > 30, `only found ${helpers.length} helpers`);
+  for (const name of ['getFriendActivityDetailHref', 'getGroupEntryHref']) {
+    assert.ok(helpers.some((helper) => helper.name === name), `${name} not checked`);
+  }
   const wrong = [];
-  for (const name of helpers) {
+  for (const { name, index, fn } of helpers) {
     for (const scope of TABS) {
-      const href = routes[name](scope, 'id-1', 'id-2', 'id-3', 'id-4');
+      const args = ['id-1', 'id-2', 'id-3', 'id-4'];
+      args.splice(index, 0, scope);
+      const href = fn(...args);
       const pathname = typeof href === 'string' ? href.split('?')[0] : href.pathname;
       const home = `/(tabs)/${scope}`;
       if (pathname !== home && !pathname.startsWith(`${home}/`)) {

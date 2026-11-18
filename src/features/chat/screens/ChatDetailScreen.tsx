@@ -5,7 +5,7 @@ import {
   type TextInput,
   useWindowDimensions,
 } from 'react-native';
-import { useLocalSearchParams, useSegments } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
@@ -22,7 +22,7 @@ import { clearDirectChatHistory, confirmClearChatHistory } from '@/features/chat
 import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
 import { MediaGalleryPicker } from '@/features/chat/components/media-gallery-picker';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import { useChatScope } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { type PendingMediaUpload } from '@/chat-core/client';
 import { ReactionPickerSheet } from '@/features/chat/components/reaction-picker-sheet';
 import { useComposerDraftPersistence } from '@/features/chat/hooks/use-composer-draft';
@@ -113,9 +113,9 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     initialReadHeight?: string;
   }>();
   const params = embedded ?? routeParams;
-  // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
-  const segments = useSegments();
-  const scope = getUserProfileScopeFromSegments(segments);
+  // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope；
+  // 半屏聊天取半屏下面那个 tab。
+  const scope = useChatScope();
   const currentUserID = useChatStore((state) => state.currentUserId);
   const setActiveConversationId = useChatStore(
     (state) => state.setActiveConversationId,

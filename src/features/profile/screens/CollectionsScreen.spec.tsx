@@ -184,7 +184,8 @@ test('forwards media using real source DTOs through the existing batch picker', 
   fireEvent.press(screen.getByRole('button', { name: '转发' }));
   expect(useMessageForwardStore.getState().pendingBatch).toHaveLength(2);
   expect(useMessageForwardStore.getState().pendingBatch?.find(item => item.message.type === 'image')?.dto).toMatchObject({ id: 'm-image', height: 12 });
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/forward-picker' });
+  // 收藏只在「我」栈:转发选择页也在这个栈打开,返回回到收藏。
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/forward-picker' });
 });
 test('a mixed selection containing an unsupported card disables forwarding', async () => {
   const card = mediaItem('image', 'card');

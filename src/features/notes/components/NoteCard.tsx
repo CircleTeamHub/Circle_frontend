@@ -351,11 +351,10 @@ function NoteCardInner({
     <View style={s.selectRow}>
       <Pressable
         onPress={handleSelectPress}
-        hitSlop={8}
         style={s.selectCircle}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: selected }}
-        accessibilityLabel={t('notes.actions.select', { defaultValue: '选择' })}
+        accessibilityLabel={`${t('notes.actions.select', { defaultValue: '选择' })} ${note.title}`.trim()}
         testID={`note-card-select-${note.id}`}
       >
         <Ionicons
@@ -466,9 +465,9 @@ const s = StyleSheet.create({
   sourceDetailsChip: {
     height: 44,
   },
-  // 选择圈在卡片外的最左边单独一列，卡片让出位置。
-  selectRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  selectCircle: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  // 选择圈在卡片外的最左边单独一列，卡片让出位置。整列和卡片同高都能点(hitSlop 出不了父视图)。
+  selectRow: { flexDirection: 'row' },
+  selectCircle: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   selectCard: { flex: 1, minWidth: 0 },
   moreBtn: {
     width: 32,

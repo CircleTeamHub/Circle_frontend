@@ -261,6 +261,8 @@ export function ChatComposerBar({
               key="voice-hold-bar"
               style={[
                 s.voiceHoldBar,
+                // 与单行输入框同高,语音/文字切换时输入栏不跳。
+                { height: singleLineHeight },
                 isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
               ]}
               {...voicePanResponder.panHandlers}
@@ -377,7 +379,8 @@ export function ChatComposerBar({
             <Pressable
               testID={E2E_TEST_IDS.chatSend}
               style={[s.composerSendBtn, { backgroundColor: buttonFill, opacity: hasContent ? 1 : 0.4 }]}
-              hitSlop={4}
+              // 多行时展开键就在正上方:只往左右下放宽,上沿不和展开键的点击区叠在一起(会误发)。
+              hitSlop={{ left: 4, right: 4, bottom: 4 }}
               onPress={handleSend}
               disabled={!hasContent || sending || isPreviewMode || isVoiceRecording || composerLocked}
               accessibilityRole="button"

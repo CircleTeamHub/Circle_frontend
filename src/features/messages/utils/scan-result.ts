@@ -12,7 +12,9 @@ type MessageScanAction =
 // 扫码页在消息、通讯录两个栈各有一份,结果页也都在两个栈里,扫完留在本栈。
 export type ScanScope = 'messages' | 'contacts';
 
-const SCAN_ROUTE_PAGES = new Set(['add-friend', 'find', 'groups', 'temp-chats']);
+const SCAN_ROUTE_PAGES = new Set(['add-friend', 'find', 'temp-chats']);
+// 消息栈的 groups 是分组管理,通讯录栈的 groups 是「我的群聊」,不是同一页:只能进消息栈那份。
+const MESSAGE_GROUPS_HREF = '/(tabs)/messages/groups' satisfies Href;
 
 const APP_LINK_PROTOCOL_SET = new Set<string>(APP_LINK_PROTOCOLS);
 const APP_LINK_HOST_SET = new Set<string>(APP_UNIVERSAL_LINK_HOSTS);
@@ -78,6 +80,9 @@ export function resolveMessageScanResult(data: string, scope: ScanScope): Messag
   }
 
   const messagePath = normalizeMessagePath(value);
+  if (messagePath === 'groups') {
+    return { type: 'route', href: MESSAGE_GROUPS_HREF };
+  }
   if (messagePath && SCAN_ROUTE_PAGES.has(messagePath)) {
     return { type: 'route', href: `/(tabs)/${scope}/${messagePath}` as Href };
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -29,7 +29,6 @@ import { CircleFilterBar } from './circle-filter-bar';
 import { CircleShortcutOrderSheet } from './circle-shortcut-order-sheet';
 import type { CirclePlazaPost } from '@/types';
 
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 /** 会员计划开关没有本地写请求能改它:只按 30 秒窗口和账号判断要不要重拉。 */
 const NO_TRACKED_WRITES = () => false;
 const NO_POSTS: CirclePlazaPost[] = [];
@@ -77,7 +76,6 @@ export const PlazaFeed: React.FC = () => {
   const plazaLoaded = useDiscoverStore((state) => state.plazaLoaded);
   const { t } = useTranslation();
   const router = useRouter();
-  const scope = getUserProfileScopeFromSegments(useSegments());
   const { colors } = useTheme();
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
@@ -382,7 +380,8 @@ export const PlazaFeed: React.FC = () => {
       <View style={s.emptyContainer}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/(tabs)/${scope}/member-center`)}
+          // 广场只挂在圈子首页,会员中心在圈子栈里开(不订阅全局 segments:这个列表常驻后台,每次跳转都会重渲)。
+          onPress={() => router.push('/(tabs)/discover/member-center')}
         >
           <Text style={{ color: colors.iconAccent, ...Typography.body }}>
             {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', {

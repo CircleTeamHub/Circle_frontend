@@ -13,7 +13,7 @@ import {
   type AddNoteToNotesSelection,
 } from '@/features/notes/components/AddNoteToNotesSheet';
 import { Alert, Keyboard } from 'react-native';
-import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
+import { useChatRouter, useChatScope } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -29,8 +29,6 @@ import {
   useNoteCollectPreferencesStore,
 } from '@/features/notes/store/use-note-collect-preferences-store';
 
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
-import { useSegments } from 'expo-router';
 /**
  * React Native Modal measures its iOS host window when it is presented. If the
  * chat composer still has an active IME inset at that exact moment, the new
@@ -121,7 +119,7 @@ export function useCollectMessage({
   const [noteCollectOpening, setNoteCollectOpening] = useState(false);
   const [noteCollectSaving, setNoteCollectSaving] = useState(false);
   const chatRouter = useChatRouter();
-  const scope = getUserProfileScopeFromSegments(useSegments());
+  const scope = useChatScope();
   const sessionEpoch = useAuthStore.getState().sessionEpoch;
   const mountedRef = useRef(false);
   const contextRef = useRef({ conversationID, currentUserID });

@@ -151,24 +151,33 @@ test('does NOT route http universal links', () => {
 test('routes a bare in-app path', () => {
   for (const scope of SCAN_SCOPES) {
     assert.deepEqual(
+      plain(resolveMessageScanResult('/(tabs)/messages/temp-chats', scope)), {
+      type: 'route',
+      href: `/(tabs)/${scope}/temp-chats`,
+    });
+    // 消息栈的 groups 是分组管理,通讯录栈的 groups 是「我的群聊」:扫到它只能进消息栈那份。
+    assert.deepEqual(
       plain(resolveMessageScanResult('/(tabs)/messages/groups', scope)), {
       type: 'route',
-      href: `/(tabs)/${scope}/groups`,
+      href: '/(tabs)/messages/groups',
     });
   }
 });
 
-test('every routed scan result exists in both scanning stacks', () => {
+test('every scan result routed per stack is the same screen in both scanning stacks', () => {
+  // 同名页在两个栈里必须是同一个页面(re-export 同一个 screen),否则换栈就换了页面。
+  const screenOf = (scope, page) => {
+    const file = path.join(process.cwd(), `app/(tabs)/${scope}/${page}.tsx`);
+    assert.ok(fs.existsSync(file), `${scope} 栈缺 ${page}`);
+    return fs.readFileSync(file, 'utf8').match(/from '([^']+)'/)[1];
+  };
   for (const scope of SCAN_SCOPES) {
     assert.ok(fs.existsSync(path.join(process.cwd(), `app/(tabs)/${scope}/scan.tsx`)), `${scope} 栈缺扫码页`);
-    for (const page of ['qr', 'qr-login', 'add-friend', 'find', 'groups', 'temp-chats']) {
-      const base = path.join(process.cwd(), `app/(tabs)/${scope}/${page}`);
-      assert.ok(
-        fs.existsSync(`${base}.tsx`) || fs.existsSync(path.join(base, 'index.tsx')),
-        `${scope} 栈缺 ${page}`,
-      );
-    }
   }
+  for (const page of ['qr', 'qr-login', 'add-friend', 'find', 'temp-chats']) {
+    assert.equal(screenOf('contacts', page), screenOf('messages', page), page);
+  }
+  assert.notEqual(screenOf('contacts', 'groups'), screenOf('messages', 'groups'));
 });
 
 test('does NOT route an unknown path under our host (no open redirect)', () => {
