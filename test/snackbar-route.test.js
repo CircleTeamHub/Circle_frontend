@@ -337,15 +337,6 @@ test("getSnackbarRoute's explore fallback only owns the moments bell", () => {
   );
 });
 
-test("getNotificationScope maps the current tab stack to a notification scope", () => {
-  const { getNotificationScope } = load("src/features/notifications/utils/snackbar-route.ts");
-  assert.equal(getNotificationScope(["(tabs)", "discover", "circle", "[id]"]), "discover");
-  assert.equal(getNotificationScope(["(tabs)", "explore", "moment", "[id]"]), "explore");
-  assert.equal(getNotificationScope(["(tabs)", "contacts"]), "contacts");
-  assert.equal(getNotificationScope(["(tabs)", "profile", "settings"]), "profile");
-  // 根上的页面(半屏聊天、搜索)不在任何 tab 里,算消息栈。
-  assert.equal(getNotificationScope(["quick-chat"]), "messages");
-});
 
 // 消息页的「通知」和飞机都在消息栈里:点进去的落点也要在消息栈,返回才回到通知列表,
 // 而不是被甩到「我」/探索/圈子 tab 的首页。

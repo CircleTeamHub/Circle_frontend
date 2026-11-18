@@ -14,7 +14,6 @@ import { markNotificationRead } from '@/services/api/notifications';
 import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
 import {
-  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -59,7 +58,12 @@ export function NotificationSnackbarHost() {
   }, [notificationSettings]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const notificationScope = getNotificationScope(segments);
+  // 半屏聊天和盖在它上面的页面都在根上,segments 里没有 tab:沿用半屏记下的来源 tab,
+  // 否则开着半屏再点一条横幅,来源 tab 就丢成消息栈了。
+  const onChatSheet = segments[0] === 'quick-chat' || segments[0] === 'chat-sheet';
+  const notificationScope = getUserProfileScopeFromSegments(
+    onChatSheet ? [typeof params.originScope === 'string' ? params.originScope : ''] : segments,
+  );
 
   const [shown, setShown] = useState(current);
 
@@ -236,7 +240,7 @@ export function NotificationSnackbarHost() {
       // 记下横幅下面是哪个 tab:点「展开」时在那个栈里打开完整聊天,返回回到原页面。
       router.push({
         pathname: '/quick-chat',
-        params: { ...route.params, originScope: getUserProfileScopeFromSegments(segments) },
+        params: { ...route.params, originScope: notificationScope },
       });
       return;
     }

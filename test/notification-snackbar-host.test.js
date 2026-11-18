@@ -37,7 +37,9 @@ test("notification snackbar host passes current stack scope to the route resolve
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
   );
-  assert.match(host, /const notificationScope = getNotificationScope\(segments\);/);
+  // 开着半屏(根上)时沿用半屏记下的来源 tab,不落成消息栈。
+  assert.match(host, /onChatSheet \? \[typeof params\.originScope === 'string' \? params\.originScope : ''\] : segments/);
+  assert.match(host, /originScope: notificationScope/);
   assert.match(host, /scope: notificationScope/);
 });
 

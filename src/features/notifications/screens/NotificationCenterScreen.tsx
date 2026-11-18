@@ -37,7 +37,6 @@ import {
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
 import {
-  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -142,7 +141,7 @@ export default function NotificationCenterScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorScopeRef = useRef({ domain: listDomain, ownerId, sessionEpoch });
   const [loadError, setLoadError] = useState<string | null>(null);
-  const notificationScope = getNotificationScope(segments);
+  const notificationScope = getUserProfileScopeFromSegments(segments);
   const handleOpenCircleSettings = useCallback(() => {
     router.push(getCircleNotificationSettingsHref(getUserProfileScopeFromSegments(segments)));
   }, [router, segments]);

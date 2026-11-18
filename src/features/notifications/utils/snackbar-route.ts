@@ -11,7 +11,6 @@ import {
   getMomentDetailHref,
   getNewFriendsHref,
   getNotificationCenterHref,
-  getUserProfileScopeFromSegments,
   type UserProfileScope,
 } from '@/features/user/utils/routes';
 
@@ -31,11 +30,6 @@ function getNotificationCenterFallback(scope: UserProfileScope, type: string): H
   const domain = notificationDomain(type);
   const bell = scope !== 'messages' && (domain === 'moments' || domain === 'circle') ? domain : undefined;
   return getNotificationCenterHref(scope, bell);
-}
-
-/** 当前所在 tab 栈:通知详情就在这个栈里打开。不在 tab 里(根上的页面)时算消息栈。 */
-export function getNotificationScope(segments: readonly string[]): UserProfileScope {
-  return getUserProfileScopeFromSegments(segments);
 }
 
 export function getSnackbarRoute(
