@@ -619,6 +619,7 @@
     },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
+    "snackbarMentionedMe": "[Mentioned you]",
     "history": {
       "title": "Chat History",
       "unknownSender": "Member",
@@ -3169,7 +3170,7 @@
       "selectTitle": "Select notes",
       "copy": "Choose notes to add to \"{{name}}\"."
     },
-    "searchPlaceholder": "Type what you want to search",
+    "searchPlaceholder": "Search titles, text, cards or groups",
     "share": {
       "copiedMessage": "Note link copied to clipboard.",
       "copiedTitle": "Copied",

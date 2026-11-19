@@ -14,7 +14,8 @@ test('NotesScreen renders 我的笔记 title', () => {
 
 test('NotesScreen has search input placeholder', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(src, /输入你想搜索的内容/);
+  // 提示里写上名片和群名:不知道能按名片搜,这个入口就等于没有。
+  assert.match(src, /搜索标题、内容、名片或群名/);
 });
 
 test('NotesScreen has 新建 button', () => {

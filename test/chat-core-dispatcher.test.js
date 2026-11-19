@@ -811,6 +811,51 @@ test('a muted group still banners the message that @-mentions me or everyone', (
   assert.equal(someoneElse.state.banners.length, 0);
 });
 
+// 横幅要能一眼分出群聊和私聊:群聊单独带发送者(横幅上加粗)、@我 标记和临时群标记,
+// 标题 / 头像和会话列表同一口径。
+test('group banners carry the sender, the @-me flag and the list title and avatar', () => {
+  const GROUP_ID = '8c4d2e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f';
+  const group = directConversation({
+    id: GROUP_ID, type: 'GROUP', peer: null, name: '羽毛球群', myRemark: '周六打球',
+    avatarUrl: 'https://cdn.trusted/g.png',
+  });
+  const { socket, state } = loadDispatcher({ conversations: [group] });
+  socket.emit('chat:msg', dto({
+    id: 'm-me', conversationId: GROUP_ID, sender: { id: 'li', nickname: '李四', avatarUrl: null },
+    content: { text: '晚上来吗', mentions: [{ userId: 'me', nickname: '我' }] },
+  }));
+
+  const banner = state.banners[0];
+  assert.equal(banner.title, '周六打球');
+  assert.equal(banner.avatarUrl, 'https://cdn.trusted/g.png');
+  assert.equal(banner.summary, '晚上来吗');
+  assert.equal(banner.senderName, '李四');
+  assert.equal(banner.mentioned, true);
+  assert.equal(banner.temporary, undefined);
+});
+
+test('direct banners have no sender line or @-me flag; temporary rooms are marked', () => {
+  const direct = loadDispatcher({ conversations: [directConversation()] });
+  direct.socket.emit('chat:msg', dto({
+    conversationId: DIRECT_ID, content: { text: '在吗', mentions: [{ userId: 'me', nickname: '我' }] },
+  }));
+  const banner = direct.state.banners[0];
+  assert.equal(banner.summary, '在吗');
+  assert.equal(banner.senderName, undefined);
+  assert.equal(banner.mentioned, undefined);
+
+  // 临时房跟会话列表一样只认房名、没有头像:会话上即使带了备注 / 名字 / 头像也不用。
+  const temp = loadDispatcher({ conversations: [directConversation({
+    type: 'TEMP', peer: null, circle: null, circleId: null, tempChat: { id: 'temp', title: 'Temporary room' },
+    myRemark: 'not for temp rooms', name: 'ignored', avatarUrl: 'https://cdn.trusted/t.png',
+  })] });
+  temp.socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(temp.state.banners[0].temporary, true);
+  assert.equal(temp.state.banners[0].senderName, '对方');
+  assert.equal(temp.state.banners[0].title, 'Temporary room');
+  assert.equal(temp.state.banners[0].avatarUrl, null);
+});
+
 test('background messages do not leave an in-app banner queued for foreground', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],

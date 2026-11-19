@@ -16,7 +16,14 @@ export type ChatSnackbarItem = {
    */
   mergedIds?: readonly string[];
   title: string;
+  /** 消息预览;群聊的发送者单独放在 senderName,横幅上要加粗。 */
   summary: string;
+  /** 群聊里发这条消息的人;私聊没有。 */
+  senderName?: string;
+  /** 群里点名了我或 @所有人。同一会话后来的消息替换横幅时保留,不让一条普通消息把它冲掉。 */
+  mentioned?: boolean;
+  /** 临时群:群头像的角标换成金色时钟。 */
+  temporary?: boolean;
   avatarUrl: string | null;
   conversationID: string;
   sourceID: string;
@@ -94,6 +101,7 @@ function enqueue(
       const merged: ChatSnackbarItem = {
         ...item,
         mergedIds: [...(replaced.mergedIds ?? []), replaced.id].slice(-MAX_MERGED_IDS),
+        ...(item.mentioned || replaced.mentioned ? { mentioned: true } : {}),
       };
       const replacement: NotificationSnackbarItem =
         index === 0 ? { ...merged, bannerId: snackbarBannerKey(replaced) } : merged;

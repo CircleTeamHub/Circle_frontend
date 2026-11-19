@@ -934,18 +934,25 @@ function enqueueForegroundBanner(
 
   const isAssistant = conversation.type === 'SUPPORT';
   const isGroup = conversation.type === 'GROUP' || conversation.type === 'TEMP';
-  // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
+  // 标题 / 头像跟会话列表同一口径(mapChatConversationToUI):群是我起的群备注优先,再是圈子名 /
+  // 独立群名(空名兜底「群聊」);临时房只认房名,没有头像。
   const title = isAssistant
     ? conversation.name?.trim() ||
       i18n.t('assistant.name', { defaultValue: 'AI小助手' })
+    : conversation.type === 'TEMP'
+      ? conversation.tempChat?.title?.trim() ||
+        i18n.t('tempChats.titlePlaceholder', { defaultValue: '临时聊天' })
+      : isGroup
+        ? (conversation.myRemark?.trim() || conversation.circle?.name ||
+          conversation.name?.trim() ||
+            i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' }))
+        : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
+  // 独立群聊自设的头像在会话上(avatarUrl),圈子群在 circle 上;都没有就交给群头像兜底图。
+  const avatarRaw = conversation.type === 'TEMP'
+    ? null
     : isGroup
-      ? (conversation.circle?.name ?? conversation.tempChat?.title ??
-        (conversation.name?.trim() ||
-          i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
-      : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
-  const avatarRaw = isGroup
-    ? (conversation.circle?.avatarUrl ?? null)
-    : (conversation.peer?.avatarUrl ?? null);
+      ? (conversation.circle?.avatarUrl ?? conversation.avatarUrl ?? null)
+      : (conversation.peer?.avatarUrl ?? null);
   const sourceID = isAssistant
     ? conversation.id
     : isGroup
@@ -953,14 +960,15 @@ function enqueueForegroundBanner(
       : (conversation.peer?.id ?? '');
 
   if (!title || !sourceID) return 'suppressed';
-  const summary = isGroup
-    ? `${message.sender?.nickname ?? ''}: ${getChatMessagePreview(message)}`.trim()
-    : getChatMessagePreview(message);
+  const senderName = isGroup ? message.sender?.nickname?.trim() : undefined;
 
   useNotificationSnackbarStore.getState().enqueueChatMessage({
     id: message.id,
     title,
-    summary,
+    summary: getChatMessagePreview(message),
+    ...(senderName ? { senderName } : {}),
+    ...(isGroup && mentionsCurrentUser(message, selfId) ? { mentioned: true } : {}),
+    ...(conversation.type === 'TEMP' ? { temporary: true } : {}),
     // 头像地址仍要过媒体白名单:横幅一出现就会自动发起这次图片请求。
     avatarUrl: allowPeerMediaUrl(avatarRaw),
     conversationID: message.conversationId,
