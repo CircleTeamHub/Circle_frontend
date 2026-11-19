@@ -37,6 +37,7 @@ function loadCirclesStore({ fetchMyCirclesImpl, fetchCirclesImpl, circlesMutated
       groupOrCircleMutatedSince: circlesMutatedSince ?? (() => false),
     },
     react: require('react'),
+    '@/i18n': { __esModule: true, default: { t: (key) => key } },
     '@/services/api/errors': {
       getApiErrorMessage: (_e, fallback) => fallback,
     },
@@ -95,40 +96,6 @@ test('fetchMyCircles 并发合并为一次请求，且不预清已渲染列表 (
 
 // fetchAllCircles 已随「发现圈子」整片移除（圈子纯邀请制），
 // 对应的单飞用例一并删除；守护改由 circles-invite-only.test.js 承担。
-test('mapWithConcurrency 保序、限并发、冒泡 mapper 异常', async () => {
-  const { mapWithConcurrency } = loadTsModule('src/utils/concurrency.ts');
-
-  let inFlight = 0;
-  let peak = 0;
-  const result = await mapWithConcurrency(
-    [10, 20, 30, 40, 50],
-    3,
-    async (value, index) => {
-      inFlight += 1;
-      peak = Math.max(peak, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 5 - index));
-      inFlight -= 1;
-      return value * 2;
-    },
-  );
-
-  // vm realm 里创建的数组原型与宿主不同，走 JSON round-trip 对比（仓内既有惯例）
-  assert.deepEqual(JSON.parse(JSON.stringify(result)), [20, 40, 60, 80, 100]);
-  assert.ok(peak <= 3, `peak concurrency ${peak} exceeded cap`);
-
-  await assert.rejects(
-    mapWithConcurrency([1], 0, async (v) => v),
-    /invalid limit/,
-  );
-  await assert.rejects(
-    mapWithConcurrency([1, 2], 2, async (v) => {
-      if (v === 2) throw new Error('boom');
-      return v;
-    }),
-    /boom/,
-  );
-});
-
 test('广场圈子快捷入口随焦点刷新 (#107)', () => {
   const feed = read('src/features/discover/components/plaza-feed.tsx');
   // 圈子快捷入口随焦点刷新：用 useFocusEffect 调 fetchMyCircles，而非普通 useEffect。

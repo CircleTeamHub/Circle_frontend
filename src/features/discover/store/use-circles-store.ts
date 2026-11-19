@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import i18n from '@/i18n';
 import { fetchMyCircles } from '@/services/api/circles';
 import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -152,7 +153,7 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
         guardedSet({
           myCirclesError: getApiErrorMessage(
             error,
-            '加载圈子列表失败，请稍后重试',
+            i18n.t('circle.myCirclesLoadFailed'),
           ),
         });
         return { ok: false, joined: [], created: [] };

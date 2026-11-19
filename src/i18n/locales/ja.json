@@ -1873,7 +1873,8 @@
     "leaveMessage": "このサークルを退会しますか？",
     "leaveTitle": "サークルを退会",
     "viewPosts": "サークルの投稿を見る",
-    "postsTitle": "サークルの投稿"
+    "postsTitle": "サークルの投稿",
+    "myCirclesLoadFailed": "サークル一覧の読み込みに失敗しました。しばらくしてからもう一度お試しください。"
   },
   "myIcons": {
     "title": "マイバッジ",
@@ -2546,6 +2547,7 @@
     "startChat": "チャットを開始",
     "openingChat": "チャットを開いています...",
     "avCall": "音声・ビデオ通話",
+    "callStarting": "発信中…",
     "addFriendRequest": "友だち申請を送る",
     "relationshipStatus": {
       "notAdded": "友だちではありません",
@@ -2584,7 +2586,6 @@
       "creating": "作成中",
       "empty": "タグがありません。保存する前に作成してください。"
     },
-    "avCallComingSoon": "音声・ビデオ通話機能は近日公開予定です。お楽しみに。",
     "unknownUser": "名前未設定のユーザー"
   },
   "profile": {
@@ -3354,7 +3355,10 @@
       "sessionChangedDuringRefresh": "セッション更新中にアカウントが切り替わりました。もう一度お試しください。",
       "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
       "uploadFailed": "アップロードに失敗しました。しばらくしてから再試行してください。",
-      "uploadFailedWithStatus": "アップロードに失敗しました。もう一度お試しください。"
+      "uploadFailedWithStatus": "アップロードに失敗しました。もう一度お試しください。",
+      "authResponseInvalid": "認証の応答が正しくありません。もう一度お試しください。",
+      "userProfileResponseInvalid": "プロフィールの応答が正しくありません。もう一度お試しください。",
+      "profileSavedRefreshFailed": "プロフィールは保存されましたが、最新情報の取得に失敗しました。"
     }
   },
   "credit": {

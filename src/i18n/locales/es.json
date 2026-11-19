@@ -1879,7 +1879,8 @@
     "leaveMessage": "¿Salir de este círculo?",
     "leaveTitle": "Salir del círculo",
     "viewPosts": "Ver publicaciones del círculo",
-    "postsTitle": "Publicaciones del círculo"
+    "postsTitle": "Publicaciones del círculo",
+    "myCirclesLoadFailed": "No se pudo cargar la lista de círculos. Inténtalo de nuevo más tarde."
   },
   "myIcons": {
     "title": "Mis insignias",
@@ -2552,6 +2553,7 @@
     "startChat": "Iniciar chat",
     "openingChat": "Abriendo chat...",
     "avCall": "Llamada de voz o video",
+    "callStarting": "Llamando…",
     "addFriendRequest": "Enviar solicitud de amistad",
     "relationshipStatus": {
       "notAdded": "No sois amigos",
@@ -2590,7 +2592,6 @@
       "creating": "Creando",
       "empty": "Aún no hay etiquetas. Crea una antes de guardar."
     },
-    "avCallComingSoon": "Las llamadas de voz y video llegarán pronto. No te lo pierdas.",
     "unknownUser": "Usuario sin nombre"
   },
   "profile": {
@@ -3360,7 +3361,10 @@
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",
-      "uploadFailedWithStatus": "La subida falló. Inténtalo de nuevo."
+      "uploadFailedWithStatus": "La subida falló. Inténtalo de nuevo.",
+      "authResponseInvalid": "Respuesta de autenticación inesperada. Inténtalo de nuevo.",
+      "userProfileResponseInvalid": "Respuesta de perfil inesperada. Inténtalo de nuevo.",
+      "profileSavedRefreshFailed": "Tu perfil se guardó, pero no se pudo actualizar la información."
     }
   },
   "credit": {

@@ -75,13 +75,13 @@ export default function PendingVerificationsScreen() {
       setItems(data);
     } catch (e) {
       if (!mountedRef.current || requestId !== requestRef.current) return;
-      setError(getApiErrorMessage(e, '加载失败，请稍后重试'));
+      setError(getApiErrorMessage(e, t('invitation.loadFailed')));
     } finally {
       if (mountedRef.current && requestId === requestRef.current) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {

@@ -126,7 +126,10 @@
       "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
       "uploadFailed": "Upload failed. Please try again later.",
-      "uploadFailedWithStatus": "Upload failed. Please try again."
+      "uploadFailedWithStatus": "Upload failed. Please try again.",
+      "authResponseInvalid": "Unexpected sign-in response. Please try again.",
+      "userProfileResponseInvalid": "Unexpected profile response. Please try again.",
+      "profileSavedRefreshFailed": "Your profile was saved, but refreshing it failed."
     }
   },
   "auth": {
@@ -1574,7 +1577,8 @@
     "leaveMessage": "Leave this circle?",
     "leaveTitle": "Leave circle",
     "viewPosts": "View circle posts",
-    "postsTitle": "Circle posts"
+    "postsTitle": "Circle posts",
+    "myCirclesLoadFailed": "Couldn't load your circles. Please try again later."
   },
   "plaza": {
     "manageSignups": "{{count}} signed up",
@@ -2319,6 +2323,7 @@
     "startChat": "Start Chat",
     "openingChat": "Opening chat...",
     "avCall": "Voice / Video Call",
+    "callStarting": "Calling…",
     "addFriendRequest": "Send Friend Request",
     "relationshipStatus": {
       "notAdded": "Not friends",
@@ -2357,7 +2362,6 @@
       "creating": "Creating",
       "empty": "No tags yet. Create one before saving."
     },
-    "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
     "unknownUser": "Unnamed user"
   },
   "profileFields": {
