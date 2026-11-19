@@ -2002,7 +2002,7 @@
     "settledCancelled": "この申請はキャンセルされました",
     "youApproved": "この人を認証しました",
     "youRejected": "この申請を拒否しました",
-    "noEligibleVerifiers": "選べる人がいません：検証者はあなたの友だちで、かつこのサークルのアクティブメンバーである必要があります",
+    "noEligibleVerifiers": "選べる人がいません：検証者はこのサークルのアクティブメンバーで、かつあなたの友だちか、あなたと個別チャットでやり取りした（お互いにメッセージを送った）人である必要があります",
     "loadVerifiersFailed": "候補の読み込みに失敗しました。後でもう一度お試しください"
   },
   "discover": {
@@ -3896,7 +3896,7 @@
     "INVITATION_APPLICANT_ONLY": "申請者のみが検証者を追加できます",
     "INVITATION_NOT_PENDING": "この招待は保留中ではなくなりました",
     "INVITATION_VERIFIER_NOT_MEMBER": "検証者はこのサークルのアクティブメンバーである必要があります",
-    "INVITATION_VERIFIER_NOT_FRIEND": "検証者はあなたの友だちである必要があります",
+    "INVITATION_VERIFIER_NOT_FRIEND": "検証者はあなたの友だちか、あなたと個別チャットでやり取りした人である必要があります",
     "INVITATION_MEMBER_INVITE_DISABLED": "このサークルではメンバーによる招待が無効です。オーナーと管理者のみ招待できます",
     "INVITATION_ALREADY_VERIFIER": "このユーザーは既に検証者です",
     "INVITATION_SLOTS_FILLED": "検証者の枠が埋まっています",

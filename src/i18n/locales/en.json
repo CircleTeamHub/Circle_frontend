@@ -1792,7 +1792,7 @@
     "settledCancelled": "This request was cancelled",
     "youApproved": "You verified for them",
     "youRejected": "You rejected this request",
-    "noEligibleVerifiers": "No one to pick: a verifier must be your friend and already an active member of this circle",
+    "noEligibleVerifiers": "No one to pick: a verifier must already be an active member of this circle, and be your friend or someone you've chatted with (both of you sent messages)",
     "loadVerifiersFailed": "Failed to load candidates, please try again"
   },
   "city": {
@@ -3902,7 +3902,7 @@
     "INVITATION_APPLICANT_ONLY": "Only the applicant can add verifiers",
     "INVITATION_NOT_PENDING": "This invitation is no longer pending",
     "INVITATION_VERIFIER_NOT_MEMBER": "The verifier must be an active member of this circle",
-    "INVITATION_VERIFIER_NOT_FRIEND": "The verifier must be your friend",
+    "INVITATION_VERIFIER_NOT_FRIEND": "The verifier must be your friend or someone you've chatted with",
     "INVITATION_MEMBER_INVITE_DISABLED": "Member invites are turned off in this circle; only the owner and admins can invite",
     "INVITATION_ALREADY_VERIFIER": "This user is already a verifier",
     "INVITATION_SLOTS_FILLED": "All verifier slots are filled",
