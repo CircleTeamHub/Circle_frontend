@@ -837,11 +837,12 @@ export async function backfillConversationSince(
   const deadline = Date.now() + BACKFILL_DEADLINE_MS;
   while (pagesFetched < BACKFILL_TOTAL_PAGE_BUDGET) {
     if (Date.now() >= deadline) {
-      reportHandledFailure('chatSync', 'backfillBudgetExceeded', {
-        conversationId,
-        afterHeight,
-        pagesFetched,
-      });
+      reportHandledFailure(
+        'chatSync',
+        'backfillBudgetExceeded',
+        new Error('chat backfill budget exceeded'),
+        { pagesFetched },
+      );
       return;
     }
     let batchPages = 0;
@@ -863,11 +864,12 @@ export async function backfillConversationSince(
       if (pagesFetched >= BACKFILL_TOTAL_PAGE_BUDGET) break;
     }
     if (pagesFetched >= BACKFILL_TOTAL_PAGE_BUDGET) {
-      reportHandledFailure('chatSync', 'backfillBudgetExceeded', {
-        conversationId,
-        afterHeight,
-        pagesFetched,
-      });
+      reportHandledFailure(
+        'chatSync',
+        'backfillBudgetExceeded',
+        new Error('chat backfill budget exceeded'),
+        { pagesFetched },
+      );
       return;
     }
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1077,7 +1079,6 @@ function mergeSearchHits(
     .slice(0, limit);
 }
 
-/** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
 /** G-07 逐条已读回执:读者=已读水位覆盖该消息的成员(排除发送者,上限 200)。 */
 export function fetchMessageReaders(
   conversationId: string,
@@ -1202,6 +1203,7 @@ export async function setChatPinnedMessage(
   if (sameSession()) await refreshChatConversation(conversationId, { shouldApply: sameSession });
 }
 
+/** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
 export async function updateChatConversationPreferences(
   conversationId: string,
   prefs: { pinned?: boolean; muted?: boolean; hidden?: boolean },
