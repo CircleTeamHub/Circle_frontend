@@ -120,11 +120,6 @@ export async function readRecentLocalMessages(
   return [];
 }
 
-export async function getLocalSyncState(
-  _conversationId: string,
-): Promise<{ minHeight: number; maxHeight: number } | null> {
-  return null;
-}
 
 export async function searchLocalChatMessages(
   _keyword: string,

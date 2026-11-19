@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
-/** 同时在传的条目数:九个全并发会同时打满 presign + PUT,串行又太慢(同 mapWithConcurrency 的取值)。 */
+/** 同时在传的条目数:九个全并发会同时打满 presign + PUT,串行又太慢。 */
 const UPLOAD_CONCURRENCY = 3;
 
 // 模块级计数:进度环按 progressKey 在全局上传表里找任务,两个页面实例不能撞号。

@@ -38,17 +38,6 @@ export interface CustomConversationGroup {
   updatedAt: string;
 }
 
-export interface Contact {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-}
-
-export interface ContactSection {
-  letter: string;
-  data: Contact[];
-}
-
 export interface NoteCardData {
   noteId: string;
   /** 根来源笔记 id，用于实时状态事件定位收录副本；不展示在卡片 UI。 */
@@ -390,26 +379,6 @@ export interface Circle {
   memberCount: number;
   postCount: number;
   createdAt: string;
-}
-
-export interface ApiPost {
-  id: string;
-  circleId: string;
-  authorId: string;
-  content: string;
-  media: MediaItem[];
-  city: string | null;
-  likeCount: number;
-  commentCount: number;
-  isPinned: boolean;
-  createdAt: string;
-}
-
-export interface MediaItem {
-  type: 'image' | 'video' | 'file';
-  url: string;
-  thumbUrl: string | null;
-  size: number;
 }
 
 // ---------------------------------------------------------------------------

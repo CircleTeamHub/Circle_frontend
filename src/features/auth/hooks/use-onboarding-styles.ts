@@ -106,5 +106,3 @@ export function useOnboardingStyles() {
     [colors],
   );
 }
-
-export type OnboardingStyles = ReturnType<typeof useOnboardingStyles>;
