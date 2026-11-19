@@ -132,3 +132,18 @@ test('profile edit config resolves labels through i18n helpers instead of hardco
   assert.match(source, /i18n\.t\(/);
   assert.doesNotMatch(source, /label: '头像'|title: '修改头像'|placeholder: '请输入昵称'/);
 });
+
+// 性别面板回传的是当前语言的文案;只认中英文的话,日/韩/西语下选「男性/남성/Hombre」
+// 会被悄悄存成 unset。
+test('gender labels of every locale map to the backend value', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const messages = require(`../src/i18n/locales/${locale}.json`);
+    const t = (key) => key.split('.').reduce((node, part) => node?.[part], messages) ?? key;
+    const { toProfileUpdatePayload } = loadProfileEditConfig({
+      '@/i18n': { default: { t } },
+    });
+    assert.equal(toProfileUpdatePayload('gender', t('profileFields.male')).gender, 'male', locale);
+    assert.equal(toProfileUpdatePayload('gender', t('profileFields.female')).gender, 'female', locale);
+    assert.equal(toProfileUpdatePayload('gender', t('profileFields.genderNotSet')).gender, 'unset', locale);
+  }
+});

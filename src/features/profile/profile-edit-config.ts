@@ -217,16 +217,19 @@ export function getProfileEditField(fieldId: string) {
 
 function normalizeGenderValue(value: string) {
   const normalized = value.trim().toLowerCase();
+  // 性别面板回传的是当前语言的文案(日语「男性」、韩语「남성」…),不只是中英文。
+  const isLabel = (key: string) =>
+    normalized === i18n.t(key).trim().toLowerCase();
 
-  if (normalized === '男' || normalized === 'male') {
+  if (normalized === '男' || normalized === 'male' || isLabel('profileFields.male')) {
     return 'male';
   }
 
-  if (normalized === '女' || normalized === 'female') {
+  if (normalized === '女' || normalized === 'female' || isLabel('profileFields.female')) {
     return 'female';
   }
 
-  if (normalized === '其他' || normalized === 'other') {
+  if (normalized === '其他' || normalized === 'other' || isLabel('profileFields.other')) {
     return 'other';
   }
 
