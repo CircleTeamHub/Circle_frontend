@@ -1786,7 +1786,7 @@
     "settledCancelled": "该申请已取消",
     "youApproved": "你已帮 TA 验证",
     "youRejected": "你已拒绝该申请",
-    "noEligibleVerifiers": "没有可选的验证人：验证人得既是你的好友，又已经在这个圈子里",
+    "noEligibleVerifiers": "没有可选的验证人：验证人得已经在这个圈子里，并且是你的好友或和你私聊过（双方都发过消息）",
     "loadVerifiersFailed": "加载候选人失败，请稍后重试"
   },
   "city": {
@@ -3896,7 +3896,7 @@
     "INVITATION_APPLICANT_ONLY": "只有申请人可以添加验证人",
     "INVITATION_NOT_PENDING": "该邀请已处理，无法再操作",
     "INVITATION_VERIFIER_NOT_MEMBER": "验证人必须是本圈子的活跃成员",
-    "INVITATION_VERIFIER_NOT_FRIEND": "验证人必须是你的好友",
+    "INVITATION_VERIFIER_NOT_FRIEND": "验证人必须是你的好友，或和你私聊过",
     "INVITATION_MEMBER_INVITE_DISABLED": "该圈子已关闭成员邀请，只有圈主和管理员可以拉人",
     "INVITATION_ALREADY_VERIFIER": "该用户已是验证人",
     "INVITATION_SLOTS_FILLED": "验证名额已满",

@@ -7,7 +7,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
 const LOCALES = ['zh', 'en', 'ja', 'ko', 'es'];
 
-// 验证人资格 = 好友 ∩ 本圈 ACTIVE 成员。选人页以前拉的是**全部好友**,不在圈里
+// 验证人资格 = (好友 ∪ 私聊过的人) ∩ 本圈 ACTIVE 成员。选人页以前拉的是**全部好友**,不在圈里
 // 的也照列,点下去才被服务端 VerifierNotMember 打回。规则归服务端所有,列表就得
 // 由服务端算好再给 —— 前端一旦自己做集合运算,同一条规则会在两个仓里各自漂移。
 test('SelectVerifierScreen 拉的是服务端算好的候选人，不是全部好友', () => {

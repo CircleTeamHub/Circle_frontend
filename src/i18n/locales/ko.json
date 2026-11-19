@@ -2002,7 +2002,7 @@
     "settledCancelled": "이 신청은 취소되었습니다",
     "youApproved": "이 사람을 인증했습니다",
     "youRejected": "이 신청을 거절했습니다",
-    "noEligibleVerifiers": "선택할 수 있는 사람이 없습니다: 인증인은 내 친구이면서 이 서클의 활성 멤버여야 합니다",
+    "noEligibleVerifiers": "선택할 수 있는 사람이 없습니다: 인증인은 이 서클의 활성 멤버이면서 내 친구이거나 나와 1:1 채팅을 주고받은(서로 메시지를 보낸) 사람이어야 합니다",
     "loadVerifiersFailed": "후보를 불러오지 못했습니다, 다시 시도하세요"
   },
   "discover": {
@@ -3896,7 +3896,7 @@
     "INVITATION_APPLICANT_ONLY": "신청자만 인증인을 추가할 수 있습니다",
     "INVITATION_NOT_PENDING": "이 초대는 더 이상 대기 중이 아닙니다",
     "INVITATION_VERIFIER_NOT_MEMBER": "인증인은 이 서클의 활성 멤버여야 합니다",
-    "INVITATION_VERIFIER_NOT_FRIEND": "인증인은 회원님의 친구여야 합니다",
+    "INVITATION_VERIFIER_NOT_FRIEND": "인증인은 회원님의 친구이거나 회원님과 1:1 채팅을 주고받은 사람이어야 합니다",
     "INVITATION_MEMBER_INVITE_DISABLED": "이 서클은 멤버 초대가 꺼져 있습니다. 서클장과 관리자만 초대할 수 있습니다",
     "INVITATION_ALREADY_VERIFIER": "이 사용자는 이미 인증인입니다",
     "INVITATION_SLOTS_FILLED": "인증인 슬롯이 모두 찼습니다",

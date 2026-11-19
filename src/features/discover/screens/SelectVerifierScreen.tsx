@@ -59,7 +59,7 @@ export default function SelectVerifierScreen() {
     circleName: string;
   }>();
 
-  // 候选人 = 好友 ∩ 本圈 ACTIVE 成员,交集由服务端算好(见 fetchEligibleVerifiers)。
+  // 候选人 = (好友 ∪ 私聊过的人) ∩ 本圈 ACTIVE 成员,由服务端算好(见 fetchEligibleVerifiers)。
   // 以前这里拉的是全部好友,圈外好友照列、点了才被服务端打回。
   const [candidates, setCandidates] = useState<CircleInvitationUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,7 +210,8 @@ export default function SelectVerifierScreen() {
             <View style={s.centerLoader}>
               <Text style={{ color: colors.textSecondary, ...Typography.body }}>
                 {t('invitation.noEligibleVerifiers', {
-                  defaultValue: '没有可选的验证人：验证人得既是你的好友，又已经在这个圈子里',
+                  defaultValue:
+                    '没有可选的验证人：验证人得已经在这个圈子里，并且是你的好友或和你私聊过（双方都发过消息）',
                 })}
               </Text>
             </View>

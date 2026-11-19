@@ -2008,7 +2008,7 @@
     "settledCancelled": "Esta solicitud fue cancelada",
     "youApproved": "Verificaste por ellos",
     "youRejected": "Rechazaste esta solicitud",
-    "noEligibleVerifiers": "No hay nadie para elegir: el verificador debe ser tu amigo y ya un miembro activo de este círculo",
+    "noEligibleVerifiers": "No hay nadie para elegir: el verificador debe ser ya un miembro activo de este círculo y ser tu amigo o alguien con quien hayas chateado en privado (ambos enviaron mensajes)",
     "loadVerifiersFailed": "Error al cargar candidatos, inténtalo de nuevo"
   },
   "discover": {
@@ -3902,7 +3902,7 @@
     "INVITATION_APPLICANT_ONLY": "Solo el solicitante puede añadir verificadores",
     "INVITATION_NOT_PENDING": "Esta invitación ya no está pendiente",
     "INVITATION_VERIFIER_NOT_MEMBER": "El verificador debe ser un miembro activo de este círculo",
-    "INVITATION_VERIFIER_NOT_FRIEND": "El verificador debe ser tu amigo",
+    "INVITATION_VERIFIER_NOT_FRIEND": "El verificador debe ser tu amigo o alguien con quien hayas chateado en privado",
     "INVITATION_MEMBER_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este círculo; solo el dueño y los administradores pueden invitar",
     "INVITATION_ALREADY_VERIFIER": "Este usuario ya es un verificador",
     "INVITATION_SLOTS_FILLED": "Todos los espacios de verificación están llenos",
