@@ -20,8 +20,12 @@ function chatDetailParams(target: ChatTarget, conversationId: string) {
   const isGroup = target.kind !== 'direct';
   return {
     conversationID: conversationId,
-    // 私聊的 sourceID 是对方用户 id,群聊和临时群是会话 id。
-    sourceID: isGroup ? conversationId : (target.userId ?? conversationId),
+    // 私聊的 sourceID 是对方用户 id,独立群聊和临时群是会话 id;圈子群是圈子 id
+    // (成员目录/圈子详情都按它取,见 mapChatConversationToUI)—— 拿会话 id 顶替会让
+    // 聊天页的成员权限全部按「查不到」处理。
+    sourceID: isGroup
+      ? (target.circleId ?? conversationId)
+      : (target.userId ?? conversationId),
     title: target.name,
     conversationType: isGroup ? 'group' : 'private',
     ...(target.kind === 'temp' ? { conversationKind: 'temp' } : {}),

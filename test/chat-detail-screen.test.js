@@ -686,6 +686,23 @@ test('message forward picker only offers media forwarding for confirmed sources'
   );
 });
 
+// 这三种卡片在 sendForwardedMessage 里既没有分支也没有兜底文案,必走到最后的 throw:
+// 用户先看到「已发送」,再看到一个永远重试不成功的「转发失败」。
+test('cards the forwarder cannot send are not offered for forwarding', () => {
+  const canForwardMessage = loadCanForwardMessage();
+  for (const type of ['plaza-post-card', 'group-invitation', 'qr-card']) {
+    assert.equal(
+      canForwardMessage({ id: 'm-1', type, sendStatus: 2 }, { id: 'm-1', height: 3 }),
+      false,
+      type,
+    );
+  }
+  assert.equal(
+    canForwardMessage({ id: 'm-2', type: 'note-card', sendStatus: 2 }, { id: 'm-2', height: 4 }),
+    true,
+  );
+});
+
 // 过了保留期的媒体对象已删,服务端会回 CHAT_MEDIA_EXPIRED:端上直接不给转发入口。
 test('expired media cannot be forwarded', () => {
   const canForwardMessage = loadCanForwardMessage();

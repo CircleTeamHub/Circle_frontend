@@ -11,6 +11,8 @@ export interface ChatTarget {
   key: string;
   conversationId: string | null;
   userId: string | null;
+  /** 圈子群才有:打开聊天页时 sourceID 要用圈子 id。 */
+  circleId?: string | null;
   name: string;
   avatarUrl?: string;
   kind: 'direct' | 'group' | 'temp';
@@ -22,6 +24,7 @@ export function targetFromConversation(dto: ChatConversationDto): ChatTarget {
     key: dto.id,
     conversationId: dto.id,
     userId: dto.type === 'DIRECT' ? dto.peer?.id ?? null : null,
+    circleId: dto.type === 'GROUP' ? dto.circleId : null,
     name: ui.name,
     avatarUrl: ui.avatarUrl,
     kind: dto.type === 'GROUP' ? 'group' : dto.type === 'TEMP' ? 'temp' : 'direct',
