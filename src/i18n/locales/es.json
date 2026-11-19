@@ -1086,10 +1086,7 @@
       "failed": "No se pudo completar",
       "fallbackPreview": "[Mensaje]",
       "bannerA11y": "Mensaje fijado: {{preview}}",
-      "count": "{{count}} fijados",
-      "listTitle": "Fijados · {{count}}",
-      "expand": "Ver todos los mensajes fijados",
-      "collapse": "Contraer mensajes fijados"
+      "listTitle": "Fijados · {{count}}"
     },
     "clearRequest": {
       "accept": "Aceptar",

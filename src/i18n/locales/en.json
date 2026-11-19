@@ -1195,10 +1195,7 @@
       "failed": "Something went wrong",
       "fallbackPreview": "[Message]",
       "bannerA11y": "Pinned message: {{preview}}",
-      "count": "{{count}} pinned",
-      "listTitle": "Pinned · {{count}}",
-      "expand": "Show all pinned messages",
-      "collapse": "Collapse pinned messages"
+      "listTitle": "Pinned · {{count}}"
     },
     "clearRequest": {
       "accept": "Agree",

@@ -1191,10 +1191,7 @@
       "failed": "操作失败",
       "fallbackPreview": "[消息]",
       "bannerA11y": "置顶消息：{{preview}}",
-      "count": "{{count}} 条",
-      "listTitle": "置顶 · {{count}} 条",
-      "expand": "展开全部置顶",
-      "collapse": "收起置顶"
+      "listTitle": "置顶 · {{count}} 条"
     },
     "clearRequest": {
       "accept": "确定授权",

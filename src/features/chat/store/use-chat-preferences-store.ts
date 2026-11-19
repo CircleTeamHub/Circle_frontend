@@ -38,10 +38,7 @@ type ChatPreferencesState = {
     preference: ChatBackgroundPreference,
   ) => void;
   clearChatBackgroundPreference: (conversationID: string) => void;
-  /** 聊天顶部的置顶栏展开着的会话(默认收起成一行);只记展开的。 */
-  pinsExpandedByConversationID: Record<string, true>;
-  setPinsExpanded: (conversationID: string, expanded: boolean) => void;
-  // 登出 teardown 用（#97）：背景偏好、置顶栏展开都按 conversationID 归属账号，不得跨号残留。
+  // 登出 teardown 用（#97）：背景偏好按 conversationID 归属账号，不得跨号残留。
   resetForLogout: () => void;
 };
 
@@ -180,24 +177,10 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
           };
         }),
 
-      pinsExpandedByConversationID: {},
-
-      setPinsExpanded: (conversationID, expanded) =>
-        set((state) => {
-          if (expanded === (conversationID in state.pinsExpandedByConversationID)) {
-            return state;
-          }
-          const next = { ...state.pinsExpandedByConversationID };
-          if (expanded) next[conversationID] = true;
-          else delete next[conversationID];
-          return { pinsExpandedByConversationID: next };
-        }),
-
       resetForLogout: () => {
         set({
           globalBackgroundPreference: null,
           backgroundsByConversationID: {},
-          pinsExpandedByConversationID: {},
         });
         // 偏好清了，磁盘上的背景图也不能留给下一个登录的账号。
         void clearUnreferencedChatBackgroundImages();
@@ -232,7 +215,6 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
       partialize: (state) => ({
         globalBackgroundPreference: state.globalBackgroundPreference,
         backgroundsByConversationID: state.backgroundsByConversationID,
-        pinsExpandedByConversationID: state.pinsExpandedByConversationID,
       }),
     },
   ),

@@ -1082,10 +1082,7 @@
       "failed": "작업에 실패했습니다",
       "fallbackPreview": "[메시지]",
       "bannerA11y": "고정 메시지: {{preview}}",
-      "count": "{{count}}개",
-      "listTitle": "고정 · {{count}}개",
-      "expand": "고정 메시지 모두 보기",
-      "collapse": "고정 메시지 접기"
+      "listTitle": "고정 · {{count}}개"
     },
     "clearRequest": {
       "accept": "동의",
