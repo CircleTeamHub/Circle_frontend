@@ -507,6 +507,7 @@
     },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
+    "snackbarMentionedMe": "[メンションされました]",
     "history": {
       "title": "チャット履歴",
       "unknownSender": "メンバー",
@@ -1460,7 +1461,7 @@
       "selectTitle": "ノートを選択",
       "copy": "「{{name}}」に追加するノートを選択してください。"
     },
-    "searchPlaceholder": "検索したい内容を入力",
+    "searchPlaceholder": "タイトル・本文・名刺・グループで検索",
     "share": {
       "copiedMessage": "ノートのリンクをクリップボードにコピーしました。",
       "copiedTitle": "コピーしました",

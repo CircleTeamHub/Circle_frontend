@@ -34,7 +34,15 @@ jest.mock('@/chat-core/store', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({ activeConversationId: mockActiveConversationId }),
 }));
-jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/ui/avatar', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { Avatar: () => <Text testID="person-avatar" /> };
+});
+const mockGroupAvatar = jest.fn();
+jest.mock('@/components/ui/group-chat-avatar', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { GroupChatAvatar: (props: unknown) => { mockGroupAvatar(props); return <Text testID="group-avatar" />; } };
+});
 jest.mock('@/components/ui/top-banner-card', () => ({
   TopBannerCard: ({ children }: { children: React.ReactNode }) => children,
   topBannerHiddenOffset: () => -120,
@@ -258,6 +266,37 @@ it('tapping a chat banner opens the half-screen quick chat on top of the current
     pathname: '/quick-chat',
     params: expect.objectContaining({ conversationID: 'group-a', sourceID: 'group-a', searchedMsgID: 'm1' }),
   });
+});
+
+// 群聊和私聊横幅要一眼分得开:群聊是会话列表同款群头像,正文带加粗的发送者和 @我 标记。
+it('a group banner shows the group avatar, the sender and the @-me mark', () => {
+  mockGroupAvatar.mockClear();
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage({
+      ...chat('g1', '晚上来吗'), title: '羽毛球群', senderName: '李四', mentioned: true, temporary: true,
+    });
+  });
+
+  expect(screen.getByTestId('group-avatar')).toBeTruthy();
+  expect(screen.queryByTestId('person-avatar')).toBeNull();
+  expect(mockGroupAvatar).toHaveBeenLastCalledWith(expect.objectContaining({ showGroupBadge: true, temporary: true }));
+  expect(screen.getByText('李四: ')).toBeTruthy();
+  expect(screen.getByText('chat.snackbarMentionedMe ')).toBeTruthy();
+  expect(screen.getByLabelText('羽毛球群. chat.snackbarMentionedMe 李四: 晚上来吗')).toBeTruthy();
+});
+
+it('a direct banner keeps the person avatar and the plain preview', () => {
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage({
+      ...chat('p1', '在吗', 'direct-a'), title: '张三', conversationType: 'private',
+    });
+  });
+
+  expect(screen.getByTestId('person-avatar')).toBeTruthy();
+  expect(screen.queryByTestId('group-avatar')).toBeNull();
+  expect(screen.getByLabelText('张三. 在吗')).toBeTruthy();
 });
 
 // 报名列表开着时又来一条同一帖子的报名横幅:点进去不能再压一层报名列表,

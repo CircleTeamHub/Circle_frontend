@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/chat-core/store';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import {
   TopBannerCard,
   topBannerHiddenOffset,
@@ -37,6 +38,7 @@ import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
 const EXIT_MS = 180;
+const s = StyleSheet.create({ emphasis: { fontWeight: '600' } });
 export function NotificationSnackbarHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -197,14 +199,26 @@ export function NotificationSnackbarHost() {
     () => {
       if (!shown) return null;
       if (shown.kind === 'chat') {
+        const mention = shown.mentioned
+          ? t('chat.snackbarMentionedMe', { defaultValue: '[有人@我]' })
+          : '';
+        const sender = shown.senderName ? `${shown.senderName}: ` : '';
         return {
           avatarName: shown.title,
           avatarUrl: shown.avatarUrl,
           title: shown.title,
-          summary: shown.summary,
+          // 读屏念整句;界面上分段着色(见下面的正文)。
+          summary: `${mention ? `${mention} ` : ''}${sender}${shown.summary}`,
+          chat: {
+            group: shown.conversationType === 'group',
+            temporary: shown.temporary === true,
+            mention,
+            sender,
+            body: shown.summary,
+          },
         };
       }
-      return mapNotificationToRow(shown, t);
+      return { ...mapNotificationToRow(shown, t), chat: null };
     },
     [shown, t],
   );
@@ -290,7 +304,19 @@ export function NotificationSnackbarHost() {
         onPress={handlePress}
       >
         <TopBannerCard>
-          <Avatar size={36} name={row.avatarName} uri={row.avatarUrl ?? undefined} />
+          {/* 群聊用会话列表同款群头像(「多人」角标 / 临时群金色时钟),一眼和私聊分开。 */}
+          {row.chat?.group ? (
+            <GroupChatAvatar
+              size={36}
+              name={row.avatarName}
+              uri={row.avatarUrl}
+              temporary={row.chat.temporary}
+              showGroupBadge
+              badgeBorderColor={colors.surface}
+            />
+          ) : (
+            <Avatar size={36} name={row.avatarName} uri={row.avatarUrl ?? undefined} />
+          )}
           <View style={topBannerSurface.textBlock}>
             <Text style={[topBannerSurface.title, { color: colors.text }]} numberOfLines={1}>
               {row.title}
@@ -299,7 +325,19 @@ export function NotificationSnackbarHost() {
               style={[topBannerSurface.summary, { color: colors.textSecondary }]}
               numberOfLines={2}
             >
-              {row.summary}
+              {row.chat ? (
+                <>
+                  {row.chat.mention ? (
+                    <Text style={[s.emphasis, { color: colors.danger }]}>{`${row.chat.mention} `}</Text>
+                  ) : null}
+                  {row.chat.sender ? (
+                    <Text style={[s.emphasis, { color: colors.text }]}>{row.chat.sender}</Text>
+                  ) : null}
+                  {row.chat.body}
+                </>
+              ) : (
+                row.summary
+              )}
             </Text>
           </View>
         </TopBannerCard>

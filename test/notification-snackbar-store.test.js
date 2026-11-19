@@ -204,6 +204,26 @@ test("a newer chat message updates the banner on screen without becoming a new b
   assert.equal(snackbarBannerKey(useNotificationSnackbarStore.getState().current), "a3");
 });
 
+test("an @-me banner keeps its mark when a plain message from the same group replaces it", () => {
+  // 活跃的群里 @我 那条刚弹出来就被下一条普通消息替换:标记不能跟着丢。
+  const { useNotificationSnackbarStore } = load(
+    "src/features/notifications/store/use-notification-snackbar-store.ts",
+  );
+  const store = useNotificationSnackbarStore.getState();
+  store.reset();
+  store.enqueueChatMessage({ ...chat("a1", "group-a", "@你 看一下"), mentioned: true });
+  store.enqueueChatMessage(chat("a2", "group-a", "随便聊聊"));
+
+  const { current } = useNotificationSnackbarStore.getState();
+  assert.equal(current.summary, "随便聊聊");
+  assert.equal(current.mentioned, true);
+
+  // 收起之后再来的普通消息是新横幅,不带旧标记。
+  useNotificationSnackbarStore.getState().dismissCurrent();
+  useNotificationSnackbarStore.getState().enqueueChatMessage(chat("a3", "group-a"));
+  assert.equal(useNotificationSnackbarStore.getState().current.mentioned, undefined);
+});
+
 test("system notifications are never merged with each other", () => {
   const { useNotificationSnackbarStore } = load(
     "src/features/notifications/store/use-notification-snackbar-store.ts",

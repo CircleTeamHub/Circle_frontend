@@ -40,6 +40,7 @@ jest.mock('@/features/notes/components/NoteCard', () => {
   const { Pressable, Text, View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { NoteCard: ({ note, onSourcePress, onMorePress }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void; onMorePress?: (note: NoteSummary) => void }) => (
     <View>
+      <Text testID="note-title">{note.title}</Text>
       <Pressable testID="note-contact" onPress={() => onSourcePress?.(note, 'sender')}><Text>Contact</Text></Pressable>
       <Pressable testID="note-group" onPress={() => onSourcePress?.(note, 'group')}><Text>Group</Text></Pressable>
       <Pressable testID="note-more" onPress={() => onMorePress?.(note)}><Text>More</Text></Pressable>
@@ -68,7 +69,10 @@ jest.mock('@/features/notes/components/NoteRemarkSheet', () => ({ NoteRemarkShee
 jest.mock('@/features/notes/components/NoteGroupPickerSheet', () => ({ NoteGroupPickerSheet: () => null }));
 jest.mock('@/features/notes/components/ShareNoteSheet', () => ({ ShareNoteSheet: () => null }));
 jest.mock('@/features/notes/components/GroupManagerSheet', () => ({ GroupManagerSheet: () => null }));
-jest.mock('@/chat-core/store', () => ({ useChatStore: (select: (state: unknown) => unknown) => select({ currentUserId: 'owner', conversations: [{ id: 'managed-room', ownerId: 'owner' }] }) }));
+jest.mock('@/chat-core/store', () => {
+  const state = { currentUserId: 'owner', conversations: [{ id: 'managed-room', ownerId: 'owner', name: 'Badminton Club', myRemark: 'Saturday games', circle: null }] };
+  return { useChatStore: Object.assign((select: (value: typeof state) => unknown) => select(state), { getState: () => state }) };
+});
 jest.mock('@/chat-core/api', () => ({ fetchChatMembers: jest.fn(async () => [{ userId: 'owner', role: 'OWNER' }]), refreshConversationOrList: jest.fn(async () => undefined) }));
 jest.mock('@/services/api/circles', () => ({ fetchCircleDetail: jest.fn() }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
@@ -200,6 +204,46 @@ describe('好评 / 差评 from the ⋯ sheet', () => {
     act(() => mockSheetProps?.onViewBadRatings?.(mockSheetProps.note!));
 
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/bad-ratings', params: { id: 'mine' } });
+  });
+});
+
+describe('搜索也能按名片名字找笔记', () => {
+  const base = {
+    ownerId: 'owner', contentPreview: '', status: 'ACTIVE', available: true, pinned: false, groups: [], cover: null,
+    imageCount: 0, videoCount: 0, mediaCount: 0, sourceConversationID: null, cardPreview: null,
+    createdAt: '2026-11-03T00:00:00Z', updatedAt: '2026-11-03T00:00:00Z',
+  };
+  const notes = [
+    { ...base, id: 'a', title: 'Alpha', cardPreview: { contacts: [{ id: 'p1', name: 'Zhang San' }], groups: [] } },
+    { ...base, id: 'b', title: 'Beta', cardPreview: { contacts: [], groups: [{ id: 'c1', name: 'Weekend Hikers' }] } },
+    { ...base, id: 'c', title: 'Gamma', collectedFrom: {
+      conversationType: 'group', conversationID: 'g', clientMsgID: 'm', sender: { id: 'boss', name: 'Boss Li' }, group: { id: 'g', name: 'Chess Club' },
+    } },
+    { ...base, id: 'd', title: 'Delta', sourceConversationID: 'managed-room' },
+    { ...base, id: 'e', title: 'Epsilon' },
+  ] as unknown as NoteSummary[];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(fetchNoteGroups).mockResolvedValue([]);
+    jest.mocked(fetchNotes).mockResolvedValue(notes);
+  });
+
+  test.each([
+    ['a contact card', 'zhang', ['Alpha']],
+    ['a group card', 'HIKERS', ['Beta']],
+    ['the collected-from sender', 'boss li', ['Gamma']],
+    ['the collected-from group', 'chess', ['Gamma']],
+    ['the bound source group name', 'badminton', ['Delta']],
+    ['my remark for the bound source group', 'saturday', ['Delta']],
+    ['the title, as before', 'epsilon', ['Epsilon']],
+  ])('matches %s', async (_what, query, expected) => {
+    render(<NotesScreen />);
+    expect(await screen.findAllByTestId('note-title')).toHaveLength(notes.length);
+
+    fireEvent.changeText(screen.getByPlaceholderText('notes.searchPlaceholder'), query);
+
+    expect(screen.getAllByTestId('note-title').map((node) => node.props.children)).toEqual(expected);
   });
 });
 

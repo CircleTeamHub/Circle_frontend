@@ -510,6 +510,7 @@
     },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
+    "snackbarMentionedMe": "[Te mencionaron]",
     "history": {
       "title": "Historial de chat",
       "unknownSender": "Miembro",
@@ -1464,7 +1465,7 @@
       "selectTitle": "Seleccionar notas",
       "copy": "Elige las notas para añadir a \"{{name}}\"."
     },
-    "searchPlaceholder": "Escribe lo que quieres buscar",
+    "searchPlaceholder": "Busca por título, texto, tarjetas o grupos",
     "share": {
       "copiedMessage": "Enlace de la nota copiado al portapapeles.",
       "copiedTitle": "Copiado",

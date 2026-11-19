@@ -87,6 +87,7 @@ import {
   unlistNote,
 } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
+import { useChatStore } from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -327,11 +328,27 @@ function NotesContent() {
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = result.filter(
-        (note) =>
-          note.title.toLowerCase().includes(q) ||
-          (note.contentPreview ?? '').toLowerCase().includes(q),
+      // 名片名字也能搜：不记得是哪篇笔记，或者想把挂着同一个群的笔记一次看全时，搜人名 / 群名就行。
+      // 摘要里每类名片只带前 3 张（后端 NOTE_CARD_PREVIEW_LIMIT），更多的搜不到。
+      // 群管理里绑定的来源群只给了会话 id：群名和我起的群备注从会话列表里取，只在搜的时候读一次，
+      // 不订阅会话列表（每来一条消息都会让整页笔记重渲染）。
+      const conversations = new Map(
+        useChatStore.getState().conversations.map((conversation) => [conversation.id, conversation]),
       );
+      result = result.filter((note) => {
+        const bound = note.sourceConversationID ? conversations.get(note.sourceConversationID) : undefined;
+        return [
+          note.title,
+          note.contentPreview,
+          ...(note.cardPreview?.contacts ?? []).map((card) => card.name),
+          ...(note.cardPreview?.groups ?? []).map((card) => card.name),
+          note.collectedFrom?.sender?.name,
+          note.collectedFrom?.group?.name,
+          bound?.myRemark,
+          bound?.circle?.name,
+          bound?.name,
+        ].some((text) => text?.toLowerCase().includes(q));
+      });
     }
     return [...result].sort((a, b) => Number(b.pinned) - Number(a.pinned));
   }, [notes, activeTab, search]);
@@ -1055,7 +1072,7 @@ function NotesContent() {
           <TextInput
             style={[s.searchInput, d.searchInput]}
             placeholder={t('notes.searchPlaceholder', {
-              defaultValue: '输入你想搜索的内容',
+              defaultValue: '搜索标题、内容、名片或群名',
             })}
             placeholderTextColor={d.searchPlaceholder}
             value={search}
