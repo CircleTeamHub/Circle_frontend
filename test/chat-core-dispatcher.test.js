@@ -1672,8 +1672,15 @@ test('logging out drops pending single refreshes', async () => {
 test('editing the pinned message refreshes the conversation for the new banner preview', async () => {
   const { socket, state, dispatcher } = loadDispatcher({
     conversations: [
-      { id: 'c1', type: 'GROUP', pinnedMessage: { messageId: 'm9', height: 9, preview: 'old', pinnedAt: 'x' } },
-      { id: 'c2', type: 'GROUP', pinnedMessage: null },
+      {
+        id: 'c1',
+        type: 'GROUP',
+        pinnedMessages: [
+          { messageId: 'm8', height: 8, preview: 'other', pinnedAt: 'x' },
+          { messageId: 'm9', height: 9, preview: 'old', pinnedAt: 'x' },
+        ],
+      },
+      { id: 'c2', type: 'GROUP', pinnedMessages: [] },
     ],
   });
   const edit = (conversationId, messageId) =>

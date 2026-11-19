@@ -25,6 +25,7 @@ export const HTTP_ROUTE_TEMPLATES: readonly string[] = [
   "/chat/conversations/:id/members/:id/silence",
   "/chat/conversations/:id/messages/:id/readers",
   "/chat/conversations/:id/pinned-message",
+  "/chat/conversations/:id/pinned-message/:id",
   "/chat/conversations/:id/clear-requests",
   "/chat/clear-requests/:id/respond",
   "/circle-plaza/me/posts/:id/collaboration-recognitions",

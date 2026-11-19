@@ -2863,7 +2863,10 @@ test('accepting an old two-way clear keeps the messages sent after the request',
       id: 'conv-1',
       lastMessage: later,
       unreadCount: 2,
-      pinnedMessage: { messageId: 'm4', height: 4, preview: 'old', pinnedAt: '2026-11-01T00:00:00Z' },
+      pinnedMessages: [
+        { messageId: 'm7', height: 7, preview: 'new', pinnedAt: '2026-11-02T00:00:00Z' },
+        { messageId: 'm4', height: 4, preview: 'old', pinnedAt: '2026-11-01T00:00:00Z' },
+      ],
     }),
   ]);
   store.ingestMessages('conv-1', [
@@ -2884,48 +2887,54 @@ test('accepting an old two-way clear keeps the messages sent after the request',
   const row = state.conversations.find((c) => c.id === 'conv-1');
   assert.equal(row.lastMessage.id, 'm8');
   assert.equal(row.unreadCount, 2);
-  // 置顶的那条在水位之下,横幅一起收掉。
-  assert.equal(row.pinnedMessage, null);
+  // 水位之下的那条置顶一起收掉,水位之上的留着。
+  assert.deepEqual(row.pinnedMessages.map((pin) => pin.messageId), ['m7']);
 
   // 水位之上的消息照常入库。
   useChatStore.getState().ingestMessages('conv-1', [msg({ id: 'm9', height: 9 })]);
   assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 3);
 });
 
-test('a full clear also drops the pinned banner', () => {
+test('a full clear also drops the pinned messages', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
   store.setConversations([
     conversation({
       id: 'conv-1',
-      pinnedMessage: { messageId: 'm2', height: 2, preview: 'hi', pinnedAt: '2026-11-01T00:00:00Z' },
+      pinnedMessages: [
+        { messageId: 'm2', height: 2, preview: 'hi', pinnedAt: '2026-11-01T00:00:00Z' },
+        { messageId: 'm1', height: 1, preview: 'yo', pinnedAt: '2026-11-01T00:00:00Z' },
+      ],
     }),
   ]);
   store.ingestMessages('conv-1', [msg({ id: 'm1', height: 1 }), msg({ id: 'm2', height: 2 })]);
   useChatStore.getState().clearConversationLocal('conv-1', 2);
   const row = useChatStore.getState().conversations.find((c) => c.id === 'conv-1');
-  assert.equal(row.pinnedMessage, null);
+  assert.deepEqual(row.pinnedMessages, []);
   assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
 });
 
-test('revoking the pinned message removes the banner', async () => {
+test('revoking a pinned message removes only that pin', async () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
   store.setCurrentUserId('me');
   store.setConversations([
     conversation({
       id: 'conv-1',
-      pinnedMessage: { messageId: 'm1', height: 1, preview: 'secret', pinnedAt: '2026-11-01T00:00:00Z' },
+      pinnedMessages: [
+        { messageId: 'm1', height: 1, preview: 'secret', pinnedAt: '2026-11-01T00:00:00Z' },
+        { messageId: 'm0', height: 1, preview: 'stays', pinnedAt: '2026-11-01T00:00:00Z' },
+      ],
     }),
     conversation({
       id: 'conv-2',
-      pinnedMessage: { messageId: 'other', height: 1, preview: 'keep', pinnedAt: '2026-11-01T00:00:00Z' },
+      pinnedMessages: [{ messageId: 'other', height: 1, preview: 'keep', pinnedAt: '2026-11-01T00:00:00Z' }],
     }),
   ]);
-  // 会话没打开过、内存里没有这条消息,横幅也要收掉。
+  // 会话没打开过、内存里没有这条消息,置顶栏里也要去掉它。
   await useChatStore.getState().applyRevoke('conv-1', 'm1', 'peer', { height: 1, senderId: 'peer' });
   await useChatStore.getState().applyRevoke('conv-2', 'm1', 'peer', { height: 1, senderId: 'peer' });
   const rows = useChatStore.getState().conversations;
-  assert.equal(rows.find((c) => c.id === 'conv-1').pinnedMessage, null);
-  assert.equal(rows.find((c) => c.id === 'conv-2').pinnedMessage.messageId, 'other');
+  assert.deepEqual(rows.find((c) => c.id === 'conv-1').pinnedMessages.map((pin) => pin.messageId), ['m0']);
+  assert.deepEqual(rows.find((c) => c.id === 'conv-2').pinnedMessages.map((pin) => pin.messageId), ['other']);
 });

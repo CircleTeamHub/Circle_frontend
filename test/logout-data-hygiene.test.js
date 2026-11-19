@@ -46,6 +46,12 @@ test('chat-preferences / discover-filter 的 resetForLogout 清空账号级状�
   useChatPreferencesStore
     .getState()
     .setChatBackgroundPreference('conv-a', { mode: 'preset', presetId: 'p1' });
+  // 置顶栏展开记的也是会话 id,同样不能留给下一个账号。
+  useChatPreferencesStore.getState().setPinsExpanded('conv-a', true);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useChatPreferencesStore.getState().pinsExpandedByConversationID)),
+    { 'conv-a': true },
+  );
   useChatPreferencesStore.getState().resetForLogout();
   assert.deepEqual(
     JSON.parse(
@@ -53,6 +59,10 @@ test('chat-preferences / discover-filter 的 resetForLogout 清空账号级状�
         useChatPreferencesStore.getState().backgroundsByConversationID,
       ),
     ),
+    {},
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useChatPreferencesStore.getState().pinsExpandedByConversationID)),
     {},
   );
 

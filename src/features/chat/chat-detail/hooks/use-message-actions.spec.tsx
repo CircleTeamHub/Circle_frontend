@@ -14,7 +14,7 @@ jest.mock('@/features/chat/utils/sticker-error', () => ({ getStickerErrorMessage
 const mockChat: {
   activeConversationId: string;
   messagesByConversation: Record<string, Record<string, unknown>[]>;
-  conversations: { id: string; type?: string; myRole?: string | null; pinnedMessage?: { messageId: string } | null }[];
+  conversations: { id: string; type?: string; myRole?: string | null; pinnedMessages?: { messageId: string }[] }[];
   removeMessage: jest.Mock;
 } = {
   activeConversationId: 'c1',
@@ -398,31 +398,39 @@ describe('pinning from the long-press menu', () => {
   beforeEach(() => mockSetPinned.mockClear());
 
   test('either side of a private chat can pin any message, including images', async () => {
-    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: null }];
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessages: [] }];
     const { result } = renderHook(() => useMessageActions(params));
     act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
     const pin = result.current.messageActions.find((action) => action.key === 'pin');
     expect(pin).toBeDefined();
     await act(async () => { pin?.onPress(); });
-    expect(mockSetPinned).toHaveBeenCalledWith('c1', 'm1');
+    expect(mockSetPinned).toHaveBeenCalledWith('c1', 'm1', true);
   });
 
-  test('the pinned message offers unpin instead', async () => {
-    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: { messageId: 'm1' } }];
+  // 置顶可以有多条:别的消息已经置顶着,这条照样能再置顶;已在置顶栏里的这条给「取消置顶」。
+  test('another message can be pinned next to existing pins', () => {
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessages: [{ messageId: 'm7' }] }];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+    expect(menuKeys(result.current)).toContain('pin');
+  });
+
+  test('a pinned message offers unpin instead', async () => {
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessages: [{ messageId: 'm7' }, { messageId: 'm1' }] }];
     const { result } = renderHook(() => useMessageActions(params));
     act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
     expect(menuKeys(result.current)).not.toContain('pin');
     await act(async () => { result.current.messageActions.find((action) => action.key === 'unpin')?.onPress(); });
-    expect(mockSetPinned).toHaveBeenCalledWith('c1', null);
+    expect(mockSetPinned).toHaveBeenCalledWith('c1', 'm1', false);
   });
 
   test('ordinary group members get no pin entry; admins do', () => {
-    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'MEMBER', pinnedMessage: null }];
+    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'MEMBER', pinnedMessages: [] }];
     const member = renderHook(() => useMessageActions({ ...params, isGroupChat: true }));
     act(() => member.result.current.setActionMenu({ message, x: 0, y: 0 }));
     expect(menuKeys(member.result.current)).not.toContain('pin');
 
-    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'ADMIN', pinnedMessage: null }];
+    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'ADMIN', pinnedMessages: [] }];
     const admin = renderHook(() => useMessageActions({ ...params, isGroupChat: true }));
     act(() => admin.result.current.setActionMenu({ message, x: 0, y: 0 }));
     expect(menuKeys(admin.result.current)).toContain('pin');
@@ -434,7 +442,7 @@ describe('pinning from the long-press menu', () => {
     { id: 'm3', type: 'system-notice' },
     { id: 'm4', type: 'sent', sendStatus: 2, burnDurationSec: 30 },
   ])('cannot pin %o', (fields) => {
-    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: null }];
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessages: [] }];
     const { result } = renderHook(() => useMessageActions(params));
     act(() => result.current.setActionMenu({ message: fields as ChatMessage, x: 0, y: 0 }));
     expect(menuKeys(result.current)).not.toContain('pin');
