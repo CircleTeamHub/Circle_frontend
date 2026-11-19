@@ -1189,7 +1189,11 @@
       "tag": "置顶",
       "failed": "操作失败",
       "fallbackPreview": "[消息]",
-      "bannerA11y": "置顶消息：{{preview}}"
+      "bannerA11y": "置顶消息：{{preview}}",
+      "count": "{{count}} 条",
+      "listTitle": "置顶 · {{count}} 条",
+      "expand": "展开全部置顶",
+      "collapse": "收起置顶"
     },
     "clearRequest": {
       "accept": "确定授权",
@@ -4080,6 +4084,7 @@
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "未设置密保问题，请在受信任设备上确认登录",
     "AUTH_SECURITY_ANSWERS_INVALID": "密保答案不正确",
     "CHAT_CLEAR_REQUEST_HANDLED": "这条申请已经处理过了",
+    "CHAT_PIN_LIMIT_REACHED": "最多置顶 5 条消息，请先取消一条再置顶",
     "NOTE_MEDIA_TYPE_LIMIT": "每条笔记最多 9 张照片、5 个视频、5 个验证视频"
   },
   "qr": {

@@ -1193,7 +1193,11 @@
       "tag": "Pinned",
       "failed": "Something went wrong",
       "fallbackPreview": "[Message]",
-      "bannerA11y": "Pinned message: {{preview}}"
+      "bannerA11y": "Pinned message: {{preview}}",
+      "count": "{{count}} pinned",
+      "listTitle": "Pinned · {{count}}",
+      "expand": "Show all pinned messages",
+      "collapse": "Collapse pinned messages"
     },
     "clearRequest": {
       "accept": "Agree",
@@ -4086,6 +4090,7 @@
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "No security questions are set. Please confirm the login on a trusted device.",
     "AUTH_SECURITY_ANSWERS_INVALID": "The security answers are incorrect",
     "CHAT_CLEAR_REQUEST_HANDLED": "This request has already been handled",
+    "CHAT_PIN_LIMIT_REACHED": "You can pin up to 5 messages. Unpin one first.",
     "NOTE_MEDIA_TYPE_LIMIT": "A note can have up to 9 photos, 5 videos and 5 verification videos"
   },
   "qr": {

@@ -465,11 +465,11 @@ export function useMessageActions({
     [conversationID, setDraft, setEditingMessageId, setQuoteTarget],
   );
 
-  /** 置顶 / 取消置顶:会话里所有人顶部都会出现横幅。 */
+  /** 置顶 / 取消置顶:会话里所有人顶部的置顶栏都会跟着变。满 5 条时服务端拒绝,提示先取消一条。 */
   const handleTogglePin = useCallback(
     async (message: ChatMessage, pinned: boolean) => {
       try {
-        await setChatPinnedMessage(conversationID, pinned ? null : message.id);
+        await setChatPinnedMessage(conversationID, message.id, !pinned);
       } catch (error) {
         reportHandledFailure('chatDetail', 'togglePinMessage', error);
         if (!mountedRef.current) return;
@@ -654,7 +654,8 @@ export function useMessageActions({
       message.type !== 'date' &&
       (message.sendStatus === undefined || message.sendStatus === 2)
     ) {
-      const pinned = pinConversation.pinnedMessage?.messageId === message.id;
+      const pinned =
+        pinConversation.pinnedMessages?.some((pin) => pin.messageId === message.id) === true;
       actions.push({
         key: pinned ? 'unpin' : 'pin',
         icon: pinned ? 'pin' : 'pin-outline',

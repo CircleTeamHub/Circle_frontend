@@ -323,6 +323,16 @@ function collectRaisedClearFloors(
   return raised;
 }
 
+/** 清空到 floor 之后,置顶栏里落在水位以下的那几条(本人已经看不到)一起去掉;都还在就不改。 */
+function pinsAboveFloor(
+  conversation: ChatConversationDto,
+  floor: number,
+): Pick<ChatConversationDto, 'pinnedMessages'> | null {
+  const pins = conversation.pinnedMessages;
+  if (!pins?.some((pin) => pin.height <= floor)) return null;
+  return { pinnedMessages: pins.filter((pin) => pin.height > floor) };
+}
+
 /** 水位之下的已确认消息移出内存时间线(乐观/失败气泡不在服务端,留着)。 */
 function dropTimelineThrough(
   timelines: Record<string, ChatMessageDto[]>,
@@ -2801,9 +2811,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ? {
             ...current,
             ...(lastCleared ? { lastMessage: null, unreadCount: 0 } : {}),
-            ...((current.pinnedMessage?.height ?? Infinity) <= floor
-              ? { pinnedMessage: null }
-              : {}),
+            ...pinsAboveFloor(current, floor),
           }
         : null;
       set({
@@ -2849,9 +2857,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ...conversations[index],
             lastMessage: null,
             unreadCount: 0,
-            ...((conversations[index].pinnedMessage?.height ?? Infinity) <= floor
-              ? { pinnedMessage: null }
-              : {}),
+            ...pinsAboveFloor(conversations[index], floor),
           }
         : null;
     set({
@@ -2971,8 +2977,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     );
     const unreadNeedsUpdate =
       countedAsUnread && target !== null && target.unreadCount > 0;
-    // 撤回了被置顶的那条:横幅跟着收掉。服务端撤回时只清库里的置顶列,不另发取消置顶的通知。
-    const pinNeedsUpdate = target?.pinnedMessage?.messageId === messageId;
+    // 撤回了被置顶的那条:置顶栏里跟着去掉。服务端撤回时只删库里的置顶,不另发取消置顶的通知。
+    const pinNeedsUpdate =
+      target?.pinnedMessages?.some((pin) => pin.messageId === messageId) === true;
     if (
       !timelineChanged &&
       !previewNeedsUpdate &&
@@ -2992,7 +2999,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         pinNeedsUpdate)
         ? {
             ...target,
-            ...(pinNeedsUpdate ? { pinnedMessage: null } : {}),
+            ...(pinNeedsUpdate
+              ? {
+                  pinnedMessages: target.pinnedMessages?.filter(
+                    (pin) => pin.messageId !== messageId,
+                  ),
+                }
+              : {}),
             ...(previewNeedsUpdate
               ? {
                   lastMessage: {

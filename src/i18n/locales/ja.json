@@ -1080,7 +1080,11 @@
       "tag": "固定",
       "failed": "操作に失敗しました",
       "fallbackPreview": "[メッセージ]",
-      "bannerA11y": "固定メッセージ：{{preview}}"
+      "bannerA11y": "固定メッセージ：{{preview}}",
+      "count": "{{count}}件",
+      "listTitle": "固定 · {{count}}件",
+      "expand": "固定メッセージをすべて表示",
+      "collapse": "固定メッセージを折りたたむ"
     },
     "clearRequest": {
       "accept": "承認する",
@@ -4080,6 +4084,7 @@
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "秘密の質問が設定されていません。信頼済みデバイスでログインを確認してください",
     "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません",
     "CHAT_CLEAR_REQUEST_HANDLED": "この申請はすでに処理されています",
+    "CHAT_PIN_LIMIT_REACHED": "固定できるメッセージは5件までです。先に1件解除してください",
     "NOTE_MEDIA_TYPE_LIMIT": "1つのノートには写真9枚、動画5本、認証動画5本まで追加できます"
   },
   "qr": {

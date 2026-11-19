@@ -1179,18 +1179,26 @@ export async function respondChatHistoryClear(
 }
 
 /**
- * 置顶 / 取消置顶一条消息(群里群主管理员,私聊双方)。成功后重拉这个会话,
- * 横幅立刻跟着变;其他成员靠服务端那条系统提示触发各自的刷新。
+ * 置顶 / 取消置顶一条消息(群里群主管理员,私聊双方)。一个会话最多置顶
+ * 5 条,满了服务端回 CHAT_PIN_LIMIT_REACHED。成功后重拉这个会话,
+ * 置顶栏立刻跟着变;其他成员靠服务端那条系统提示触发各自的刷新。
  */
 export async function setChatPinnedMessage(
   conversationId: string,
-  messageId: string | null,
+  messageId: string,
+  pinned: boolean,
 ): Promise<void> {
   const sameSession = sessionGate();
-  await apiClient(
-    `/chat/conversations/${conversationId}/pinned-message`,
-    messageId ? { method: 'PUT', body: { messageId } } : { method: 'DELETE' },
-  );
+  if (pinned) {
+    await apiClient(`/chat/conversations/${conversationId}/pinned-message`, {
+      method: 'PUT',
+      body: { messageId },
+    });
+  } else {
+    await apiClient(`/chat/conversations/${conversationId}/pinned-message/${messageId}`, {
+      method: 'DELETE',
+    });
+  }
   if (sameSession()) await refreshChatConversation(conversationId, { shouldApply: sameSession });
 }
 

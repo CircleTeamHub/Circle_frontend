@@ -1080,7 +1080,11 @@
       "tag": "고정",
       "failed": "작업에 실패했습니다",
       "fallbackPreview": "[메시지]",
-      "bannerA11y": "고정 메시지: {{preview}}"
+      "bannerA11y": "고정 메시지: {{preview}}",
+      "count": "{{count}}개",
+      "listTitle": "고정 · {{count}}개",
+      "expand": "고정 메시지 모두 보기",
+      "collapse": "고정 메시지 접기"
     },
     "clearRequest": {
       "accept": "동의",
@@ -4080,6 +4084,7 @@
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "설정된 보안 질문이 없습니다. 신뢰할 수 있는 기기에서 로그인을 확인하세요",
     "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다",
     "CHAT_CLEAR_REQUEST_HANDLED": "이미 처리된 요청입니다",
+    "CHAT_PIN_LIMIT_REACHED": "메시지는 최대 5개까지 고정할 수 있어요. 먼저 하나를 해제해 주세요",
     "NOTE_MEDIA_TYPE_LIMIT": "노트 하나에 사진 9장, 동영상 5개, 인증 동영상 5개까지 추가할 수 있어요"
   },
   "qr": {

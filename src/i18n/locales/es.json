@@ -1084,7 +1084,11 @@
       "tag": "Fijado",
       "failed": "No se pudo completar",
       "fallbackPreview": "[Mensaje]",
-      "bannerA11y": "Mensaje fijado: {{preview}}"
+      "bannerA11y": "Mensaje fijado: {{preview}}",
+      "count": "{{count}} fijados",
+      "listTitle": "Fijados · {{count}}",
+      "expand": "Ver todos los mensajes fijados",
+      "collapse": "Contraer mensajes fijados"
     },
     "clearRequest": {
       "accept": "Aceptar",
@@ -4086,6 +4090,7 @@
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "No hay preguntas de seguridad configuradas. Confirma el inicio de sesión en un dispositivo de confianza",
     "AUTH_SECURITY_ANSWERS_INVALID": "Las respuestas de seguridad no son correctas",
     "CHAT_CLEAR_REQUEST_HANDLED": "Esta solicitud ya se gestionó",
+    "CHAT_PIN_LIMIT_REACHED": "Puedes fijar hasta 5 mensajes. Quita uno primero.",
     "NOTE_MEDIA_TYPE_LIMIT": "Una nota puede tener hasta 9 fotos, 5 vídeos y 5 vídeos de verificación"
   },
   "qr": {
