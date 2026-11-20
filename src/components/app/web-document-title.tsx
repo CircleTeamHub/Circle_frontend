@@ -33,6 +33,8 @@ export function WebDocumentTitle() {
   return (
     <Head>
       <title>{title}</title>
+      <link rel="manifest" href="/manifest.webmanifest" />
+      <link rel="apple-touch-icon" href="/icons/windnote-192.png" />
     </Head>
   );
 }

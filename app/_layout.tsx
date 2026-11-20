@@ -63,6 +63,7 @@ import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { NoteRatingFlowHost } from '@/features/notes/rating/NoteRatingFlowHost';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
+import { WebPushSession } from '@/features/notifications/components/WebPushSession';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
@@ -481,6 +482,7 @@ function RootLayout() {
           <AppDialogHost />
           {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
           {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
+          {Platform.OS === 'web' ? <WebPushSession /> : null}
         </AuthRouteGuard>
       </MemberNameAnimationProvider>
     </ThemeProvider>

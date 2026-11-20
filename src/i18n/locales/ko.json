@@ -101,6 +101,16 @@
       "securityQuestionsNotSet": "설정 안 됨"
     },
     "notifications": {
+      "webPush": {
+        "label": "잠금 화면 메시지 알림",
+        "loading": "브라우저 알림 설정을 확인하는 중…",
+        "install": "Safari 공유 메뉴에서 ‘홈 화면에 추가’를 선택한 뒤 홈 화면의 WindNote 아이콘으로 열어 알림을 켜세요.",
+        "unsupported": "이 브라우저는 푸시 알림을 지원하지 않습니다. 지원 브라우저에서 HTTPS로 WindNote를 여세요.",
+        "unavailable": "현재 웹 푸시 알림을 사용할 수 없습니다.",
+        "ready": "휴대전화가 잠겨 있을 때도 새 채팅 알림을 받습니다.",
+        "error": "알림을 업데이트하지 못했습니다. 다시 시도하거나 이 페이지를 다시 여세요.",
+        "blocked": "알림이 차단되었습니다. 브라우저 또는 시스템 설정에서 WindNote 알림을 허용하세요."
+      },
       "title": "알림",
       "baseSection": "알림",
       "push": "푸시 알림 허용",

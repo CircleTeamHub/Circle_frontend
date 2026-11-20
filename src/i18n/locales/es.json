@@ -101,6 +101,16 @@
       "securityQuestionsNotSet": "Sin configurar"
     },
     "notifications": {
+      "webPush": {
+        "label": "Notificaciones en la pantalla de bloqueo",
+        "loading": "Comprobando los ajustes de notificaciones…",
+        "install": "En Safari, usa Compartir → Añadir a pantalla de inicio. Abre WindNote desde su icono para activar las notificaciones.",
+        "unsupported": "Este navegador no admite notificaciones push. Abre WindNote mediante HTTPS en un navegador compatible.",
+        "unavailable": "Las notificaciones web no están disponibles en este momento.",
+        "ready": "Recibe avisos de chat aunque el teléfono esté bloqueado.",
+        "error": "No se pudieron actualizar las notificaciones. Toca para reintentar o vuelve a abrir esta página.",
+        "blocked": "Las notificaciones están bloqueadas. Permítelas para WindNote en los ajustes del navegador o del sistema."
+      },
       "title": "Notificaciones",
       "baseSection": "Notificaciones",
       "push": "Permitir notificaciones push",
