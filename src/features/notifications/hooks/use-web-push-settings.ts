@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { fetchWebPushPublicKey } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/authStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 import {
   currentWebPushSubscription,
   disableWebPush,
@@ -38,10 +39,12 @@ export function useWebPushSettings() {
       navigator.serviceWorker.register('/sw.js').then(() => navigator.serviceWorker.ready),
     ]).then(async ([publicKey, registration]) => {
       const subscription = await registration.pushManager.getSubscription();
-      const subscribed = Boolean(subscription && await isWebPushOwner(subscription, userId));
+      const subscribed = Boolean(subscription && Notification.permission === 'granted' &&
+        await isWebPushOwner(subscription, userId));
       if (!mounted) return;
       setState(publicKey ? { status: 'ready', registration, publicKey, subscribed } : { status: 'unavailable' });
-    }).catch(() => {
+    }).catch(error => {
+      reportHandledFailure('webPush', 'loadSettings', error);
       if (mounted) setState({ status: 'error' });
     });
     return () => { mounted = false; };
@@ -53,6 +56,7 @@ export function useWebPushSettings() {
     if (!isCurrent()) return;
     setBusy(true);
     setHint('');
+    let stage: 'subscribe' | 'register' | 'disable' = value ? 'subscribe' : 'disable';
     try {
       if (value) {
         // Safari needs subscribe to be initiated by the user's tap.
@@ -60,10 +64,12 @@ export function useWebPushSettings() {
           applicationServerKey: state.publicKey, userVisibleOnly: true,
         });
         if (!isCurrent()) return;
+        stage = 'register';
         try {
           await saveWebPush(subscription, userId, isCurrent);
         } catch (error) {
-          await disableWebPush(subscription, isCurrent).catch(() => undefined);
+          await disableWebPush(subscription, isCurrent).catch(rollbackError =>
+            reportHandledFailure('webPush', 'enableRollback', rollbackError));
           throw error;
         }
       } else {
@@ -73,7 +79,11 @@ export function useWebPushSettings() {
         }
       }
       if (isCurrent()) setState({ ...state, subscribed: value });
-    } catch {
+    } catch (error) {
+      // Declining the permission prompt is the user's choice, not a failure.
+      if (stage !== 'subscribe' || Notification.permission === 'granted') {
+        reportHandledFailure('webPush', 'toggle', error, { stage });
+      }
       if (isCurrent()) setHint(Notification.permission === 'denied' ? `${prefix}.blocked` : `${prefix}.error`);
     } finally {
       setBusy(false);

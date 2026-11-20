@@ -57,5 +57,9 @@ export async function disableWebPush(subscription: PushSubscription, isCurrent: 
   const revoked = revokePushToken(JSON.stringify(values), secret).then(() => true, () => false);
   const unsubscribed = await subscription.unsubscribe().catch(() => false);
   if (!unsubscribed && !await revoked) throw new Error('Could not disable Web Push');
-  if (isCurrent()) localStorage.removeItem(OWNER_KEY);
+  if (isCurrent()) clearWebPushOwner();
+}
+
+export function clearWebPushOwner() {
+  localStorage.removeItem(OWNER_KEY);
 }

@@ -2,7 +2,13 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { currentWebPushSubscription, disableWebPush, isWebPushOwner } from '../services/web-push';
+import {
+  clearWebPushOwner,
+  currentWebPushSubscription,
+  disableWebPush,
+  isWebPushOwner,
+  saveWebPush,
+} from '../services/web-push';
 
 export function WebPushSession() {
   const userId = useAuthStore(state => state.user?.id);
@@ -18,12 +24,23 @@ export function WebPushSession() {
         await disableWebPush(subscription, isCurrent);
       }
     });
-    // A web reload can leave the previous push subscription active after its JS session is gone.
-    void currentWebPushSubscription().then(async subscription => {
-      if (subscription && !await isWebPushOwner(subscription, userId)) {
-        await disableWebPush(subscription, isCurrent);
+    void (async () => {
+      const subscription = await currentWebPushSubscription();
+      if (!subscription) {
+        // The browser dropped the subscription (site data or permission reset): show the toggle as off.
+        clearWebPushOwner();
+        return;
       }
-    }).catch(error => reportHandledFailure('webPush', 'validateOwner', error));
+      // A web reload can leave the previous account's subscription behind, and a
+      // permission blocked in browser settings must not keep the toggle on.
+      if (!await isWebPushOwner(subscription, userId) || Notification.permission !== 'granted') {
+        await disableWebPush(subscription, isCurrent);
+        return;
+      }
+      // Native re-registers on every launch; doing the same here revives a row the
+      // server disabled after a transient push-service error.
+      await saveWebPush(subscription, userId, isCurrent);
+    })().catch(error => reportHandledFailure('webPush', 'sessionSync', error));
     return removeIfOwned;
   }, [sessionEpoch, userId]);
 
