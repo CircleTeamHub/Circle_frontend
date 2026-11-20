@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useTheme } from '@/theme';
 import { openSystemSettings } from '@/utils/open-system-settings';
+import { useWebPushSettings } from '@/features/notifications/hooks/use-web-push-settings';
 
 // A remounted screen can start a newer save while the previous screen's response is pending.
 let latestGroupPreferenceMutation = 0;
@@ -24,6 +25,7 @@ export default function NotificationSettingsScreen() {
   const sessionEpoch = useAuthStore(s => s.sessionEpoch);
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
+  const webPushRow = useWebPushSettings();
   // 三档的读写走与圈子弹层同一个 hook。此前这三行直接 set 本地 store，
   // 「离线提醒」关了不通知服务端 —— 推送照来，下次打开弹层还会被 GET 翻回去。
   const circle = useCircleNotificationTiers();
@@ -107,7 +109,7 @@ export default function NotificationSettingsScreen() {
         {
           titleKey: 'settingsDetails.notifications.baseSection',
           rows: [
-            {
+            Platform.OS === 'web' ? webPushRow : {
               id: 'push',
               labelKey: 'settingsDetails.notifications.push',
               type: 'toggle',

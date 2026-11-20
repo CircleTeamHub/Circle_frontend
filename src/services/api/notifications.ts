@@ -26,7 +26,7 @@ export type NotificationUnreadSummary = {
 export type PushTokenPlatform = 'ios' | 'android' | 'web';
 
 /** apns_voip：iOS PushKit 的 VoIP token，只用于推送来电。 */
-export type PushTokenProvider = 'expo' | 'jpush' | 'apns_voip';
+export type PushTokenProvider = 'expo' | 'jpush' | 'apns_voip' | 'web_push';
 
 export type NotificationCursorPage = {
   items: NotificationItem[];
@@ -237,6 +237,11 @@ export async function registerPushToken(input: RegisterPushTokenInput): Promise<
   });
   // Older servers return no acknowledgement; keep the registration eligible for upgrade.
   return { deviceBound: isPlainObject(result) && result.deviceBound === true };
+}
+
+export async function fetchWebPushPublicKey(): Promise<string | null> {
+  const result = await apiClient<unknown>('/notification/web-push-key');
+  return isPlainObject(result) && typeof result.publicKey === 'string' ? result.publicKey : null;
 }
 
 export async function revokePushToken(

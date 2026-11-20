@@ -2570,6 +2570,16 @@
       "securityQuestionsNotSet": "Not set"
     },
     "notifications": {
+      "webPush": {
+        "label": "Lock screen message notifications",
+        "loading": "Checking browser notification settings…",
+        "install": "In Safari, use Share → Add to Home Screen. Open WindNote from its icon to enable notifications.",
+        "unsupported": "This browser cannot receive push notifications. Open WindNote over HTTPS in a supported browser.",
+        "unavailable": "Web push notifications are currently unavailable.",
+        "ready": "Get new chat alerts while your phone is locked.",
+        "error": "Could not update notifications. Tap to retry or reopen this page.",
+        "blocked": "Notifications are blocked. Allow them for WindNote in your browser or system settings."
+      },
       "title": "Notifications",
       "baseSection": "Notifications",
       "push": "Allow Push Notifications",

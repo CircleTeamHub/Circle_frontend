@@ -2564,6 +2564,16 @@
       "securityQuestionsNotSet": "未设置"
     },
     "notifications": {
+      "webPush": {
+        "label": "锁屏消息通知",
+        "loading": "正在检查浏览器通知设置…",
+        "install": "请在 Safari 的分享菜单选「添加到主屏幕」，再通过桌面图标打开风信并开启通知。",
+        "unsupported": "当前浏览器不支持消息推送，请使用支持 Web Push 的 HTTPS 浏览器。",
+        "unavailable": "网页版消息推送暂不可用。",
+        "ready": "允许后，手机锁屏时也能收到新聊天提醒。",
+        "error": "无法更新通知。点击重试或重新打开此页。",
+        "blocked": "浏览器已禁止通知。请在系统或浏览器的通知设置中允许风信通知。"
+      },
       "title": "消息通知",
       "baseSection": "消息通知",
       "push": "允许推送通知",
