@@ -992,27 +992,6 @@ export async function readRecentLocalMessages(
   }
 }
 
-export async function getLocalSyncState(
-  conversationId: string,
-): Promise<{ minHeight: number; maxHeight: number } | null> {
-  const current = requireDb();
-  if (!current) return null;
-  try {
-    const row = await current.db.getFirstAsync<{
-      min_height: number;
-      max_height: number;
-    }>(
-      'SELECT min_height, max_height FROM sync_state WHERE conversation_id = ?;',
-      conversationId,
-    );
-    return row
-      ? { minHeight: row.min_height, maxHeight: row.max_height }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 /** FTS5 的查询串转义:整体按短语匹配,避免用户输入撞上 FTS 语法。 */
 function ftsPhrase(keyword: string): string {
   return `"${keyword.replaceAll('"', '""')}"`;

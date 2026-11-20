@@ -126,7 +126,10 @@
       "sessionChangedDuringRefresh": "账号已切换，请重新操作",
       "uploadTimeout": "上传超时，请检查网络后重试",
       "uploadFailed": "上传失败，请稍后重试",
-      "uploadFailedWithStatus": "上传失败，请稍后重试"
+      "uploadFailedWithStatus": "上传失败，请稍后重试",
+      "authResponseInvalid": "认证返回数据格式异常，请重试",
+      "userProfileResponseInvalid": "用户资料返回数据格式异常，请重试",
+      "profileSavedRefreshFailed": "资料已提交，但刷新用户信息失败"
     }
   },
   "auth": {
@@ -1570,7 +1573,8 @@
     "leaveMessage": "确定退出该圈子吗？",
     "leaveTitle": "退出圈子",
     "viewPosts": "查看圈子帖子",
-    "postsTitle": "圈子帖子"
+    "postsTitle": "圈子帖子",
+    "myCirclesLoadFailed": "加载圈子列表失败，请稍后重试"
   },
   "plaza": {
     "manageSignups": "{{count}} 人报名",
@@ -2313,6 +2317,7 @@
     "startChat": "发起聊天",
     "openingChat": "正在打开聊天...",
     "avCall": "音视频通话",
+    "callStarting": "呼叫中…",
     "addFriendRequest": "发好友申请",
     "relationshipStatus": {
       "notAdded": "未添加好友",
@@ -2351,7 +2356,6 @@
       "creating": "创建中",
       "empty": "还没有标签，先创建一个再保存。"
     },
-    "avCallComingSoon": "音视频通话功能即将上线，敬请期待。",
     "unknownUser": "未命名用户"
   },
   "profileFields": {

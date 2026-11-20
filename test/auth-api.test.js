@@ -69,6 +69,12 @@ function loadAuthApi(apiClientMock) {
         };
       }
 
+      if (request === "@/i18n") {
+        const zh = require("../src/i18n/locales/zh.json");
+        const t = (key) => key.split(".").reduce((node, part) => node?.[part], zh) ?? key;
+        return { __esModule: true, default: { t } };
+      }
+
       if (request === "@/features/auth/security-questions") {
         return loadTsModule("src/features/auth/security-questions.ts");
       }

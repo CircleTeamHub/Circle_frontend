@@ -1300,7 +1300,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
     const isBurned = (message: { id: string }): boolean => ids.has(message.id);
-    const deleteOptions = undefined;
     // 引用了被焚消息的气泡:快照与 quotedText 都带着原文,一并脱敏(本地库那半尽力而为)。
     void redactLocalQuotesOf(conversationId, [...ids], 'gone');
     const rawTimeline = messagesByConversation[conversationId] ?? [];
@@ -1315,7 +1314,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       timeline === rawTimeline
     ) {
       // 仍然执行数据库删除：消息可能尚未被当前内存窗口加载。
-      void deleteLocalMessages(conversationId, [...ids], deleteOptions);
+      void deleteLocalMessages(conversationId, [...ids]);
       return;
     }
     const replacement = nextTimeline[nextTimeline.length - 1] ?? null;
@@ -1346,7 +1345,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : {}),
     });
-    void deleteLocalMessages(conversationId, [...ids], deleteOptions);
+    void deleteLocalMessages(conversationId, [...ids]);
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
   setConversations: (snapshot, requestPreviewRevision) => {

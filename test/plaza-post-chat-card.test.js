@@ -88,7 +88,11 @@ test('card has no general share entry — only the signup list creates it', () =
   assert.doesNotMatch(detail, /forward-picker/);
   // 转发选择器也不再把 plaza-post-card 当可转发卡片。
   const picker = read('src/features/chat/screens/ForwardPickerScreen.tsx');
-  assert.doesNotMatch(picker, /plaza-post-card/);
+  const forwardable = picker.match(/const FORWARDABLE_CARD_TYPES[^=]*=\s*\[([\s\S]*?)\];/);
+  assert.ok(forwardable, 'FORWARDABLE_CARD_TYPES missing');
+  assert.doesNotMatch(forwardable[1], /plaza-post-card/);
+  // 长按菜单也不给它「转发」(见 chat-detail-screen.test.js 的 canForwardMessage 用例)。
+  assert.match(picker, /message\.type === 'plaza-post-card' \|\|/);
 });
 
 test('signing up from a post card goes straight to the poster chat', () => {

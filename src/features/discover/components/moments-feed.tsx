@@ -126,9 +126,12 @@ export const MomentsFeed: React.FC = () => {
       const now = Date.now();
       if (now - lastFocusFetchRef.current < 30_000) return;
       lastFocusFetchRef.current = now;
-      void fetchMoments(true).catch(() => {
-        // store 已记录失败状态；焦点回调不能留下 unhandled rejection。
-      });
+      void fetchMoments(true)
+        // 列表已是最新:横幅里数的那几条已经在列表里了。
+        .then(() => setNewCount(0))
+        .catch(() => {
+          // store 已记录失败状态；焦点回调不能留下 unhandled rejection。
+        });
     }, [fetchMoments]),
   );
 

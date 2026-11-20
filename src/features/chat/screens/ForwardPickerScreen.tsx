@@ -80,6 +80,15 @@ export function canForwardMessage(
 ): boolean {
   if (message.type === 'call-record') return false;
   if (message.type === 'system-notice') return false;
+  // 转发页发不出去的卡片(下面既没有分支也没有兜底文案):广场报名卡只定向创建、
+  // 不提供二次扩散;入群邀请与二维码卡片同样没有转发通路。
+  if (
+    message.type === 'plaza-post-card' ||
+    message.type === 'group-invitation' ||
+    message.type === 'qr-card'
+  ) {
+    return false;
+  }
   // 阅后即焚会话里别人发的东西，服务端已经按 CHAT_FORWARD_FORBIDDEN 拒了。
   // 端上不挡，用户就得挑完目标会话才在最后一步吃到那个错误。
   if (isEphemeralPeerMessage(message, conversationBurnEnabled)) return false;

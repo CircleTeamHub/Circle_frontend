@@ -7,6 +7,7 @@
 import { apiClient } from '@/services/api/client';
 import { fetchCurrentUser, type BackendAuthUser } from '@/services/api/auth';
 import { normalizeUser } from '@/services/api/utils';
+import i18n from '@/i18n';
 import { UserFacingError } from '@/utils/user-facing-error';
 import type { AuthUser } from '@/stores/authStore';
 
@@ -89,6 +90,6 @@ export async function updateUserProfile(
       };
     }
 
-    throw new UserFacingError('资料已提交，但刷新用户信息失败');
+    throw new UserFacingError(i18n.t('common.errors.profileSavedRefreshFailed'));
   }
 }

@@ -58,10 +58,10 @@ test('deliberate user-facing throws are marked as UserFacingError', () => {
   assert.match(cls, /class UserFacingError extends Error/);
 
   const auth = read('src/services/api/auth.ts');
-  assert.match(auth, /new UserFacingError\("认证返回数据格式异常/);
+  assert.match(auth, /new UserFacingError\(i18n\.t\("common\.errors\.authResponseInvalid"\)\)/);
 
   const profile = read('src/services/api/profile.ts');
-  assert.match(profile, /new UserFacingError\('资料已提交/);
+  assert.match(profile, /new UserFacingError\(i18n\.t\('common\.errors\.profileSavedRefreshFailed'\)\)/);
 });
 
 // 全仓 UI 层扫描:src/features 下不许再出现「三元取裸 error.message」的形态,

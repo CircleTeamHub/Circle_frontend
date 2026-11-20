@@ -510,7 +510,9 @@ function CircleDetailContent() {
       void useCirclesStore.getState().fetchMyCircles({ force: true });
       // 成员关系变了:缓存里还是入圈前的样子,先作废;下面重拉成功会写回新的。
       evictCircleDetailCache(sessionEpoch, id);
-      await loadCircle();
+      // 入圈接口同时建了担保申请:一并拉回来,否则页面停在不可点的「审核中」,
+      // 要退出重进才出现「邀请好友为我验证」。
+      await Promise.all([loadCircle(), loadMyInvitation()]);
     } catch (error) {
       Alert.alert(
         t('circle.joinFailedTitle', { defaultValue: '加入失败' }),
@@ -522,7 +524,7 @@ function CircleDetailContent() {
     } finally {
       setJoining(false);
     }
-  }, [circleValidated, id, joining, loadCircle, sessionEpoch, t]);
+  }, [circleValidated, id, joining, loadCircle, loadMyInvitation, sessionEpoch, t]);
 
   const handleLeaveCircle = useCallback(() => {
     if (!id) return;

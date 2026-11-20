@@ -12,6 +12,7 @@ import { apiClient, refreshSessionAccessToken } from "@/services/api/client";
 import { isDisplayIconShape } from "@/services/api/response-shapes";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
+import i18n from "@/i18n";
 import { UserFacingError } from "@/utils/user-facing-error";
 import {
   isSecurityQuestionKey,
@@ -37,7 +38,7 @@ function isAuthTokens(value: unknown): value is AuthTokens {
 function ensureAuthTokens(value: unknown): AuthTokens {
   if (!isAuthTokens(value)) {
     // 字段缺失 / 类型异常 — 视作认证响应损坏，直接抛错而不是带着残缺数据写入 store。
-    throw new UserFacingError("认证返回数据格式异常，请重试");
+    throw new UserFacingError(i18n.t("common.errors.authResponseInvalid"));
   }
   return {
     accessToken: value.accessToken,
@@ -138,7 +139,7 @@ function isBackendAuthUser(value: unknown): value is BackendAuthUser {
 
 function ensureBackendAuthUser(value: unknown): BackendAuthUser {
   if (!isBackendAuthUser(value)) {
-    throw new UserFacingError("用户资料返回数据格式异常，请重试");
+    throw new UserFacingError(i18n.t("common.errors.userProfileResponseInvalid"));
   }
   // Older backends omitted this field; keep the mixed-version fallback while
   // still rejecting a malformed value when the field is present.
@@ -176,7 +177,7 @@ function parseLoginChallenge(value: unknown): LoginChallenge | null {
     typeof challenge.expiresAt !== "string" ||
     (challenge.recoveryAvailableAt != null && (typeof challenge.recoveryAvailableAt !== "string" || !Number.isFinite(Date.parse(challenge.recoveryAvailableAt))))
   ) {
-    throw new UserFacingError("认证返回数据格式异常，请重试");
+    throw new UserFacingError(i18n.t("common.errors.authResponseInvalid"));
   }
   return {
     id: challenge.id,
@@ -203,7 +204,7 @@ export async function login(
       identifier,
       password: payload.password,
       // 不再上报 platform:它是旧 IM 时代的平台码,服务端从未写进登录会话(设备名走
-      // x-device-name 头)。已装机旧版本仍会发,后端继续接受。
+      // x-device-name 头)。后端已删除该字段,带上会被 forbidNonWhitelisted 判 400。
     },
   });
   const challenge = parseLoginChallenge(raw);
@@ -308,7 +309,7 @@ export async function resendLoginChallenge(challengeId: string) {
     { method: "POST", auth: false },
   );
   const challenge = parseLoginChallenge(raw);
-  if (!challenge) throw new UserFacingError("认证返回数据格式异常，请重试");
+  if (!challenge) throw new UserFacingError(i18n.t("common.errors.authResponseInvalid"));
   return challenge;
 }
 
@@ -322,7 +323,7 @@ export async function requestLoginRecovery(challengeId: string) {
     { method: "POST", auth: false },
   );
   const challenge = parseLoginChallenge(raw);
-  if (!challenge || !challenge.recoveryAvailableAt || !Number.isFinite(Date.parse(challenge.recoveryAvailableAt))) throw new UserFacingError("认证返回数据格式异常，请重试");
+  if (!challenge || !challenge.recoveryAvailableAt || !Number.isFinite(Date.parse(challenge.recoveryAvailableAt))) throw new UserFacingError(i18n.t("common.errors.authResponseInvalid"));
   return challenge;
 }
 

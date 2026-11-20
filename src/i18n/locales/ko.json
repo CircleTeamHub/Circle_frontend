@@ -1873,7 +1873,8 @@
     "leaveMessage": "이 서클을 나갈까요?",
     "leaveTitle": "서클 나가기",
     "viewPosts": "서클 게시물 보기",
-    "postsTitle": "서클 게시물"
+    "postsTitle": "서클 게시물",
+    "myCirclesLoadFailed": "서클 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
   },
   "myIcons": {
     "title": "내 배지",
@@ -2546,6 +2547,7 @@
     "startChat": "채팅 시작",
     "openingChat": "채팅을 여는 중...",
     "avCall": "음성・영상 통화",
+    "callStarting": "연결 중…",
     "addFriendRequest": "친구 요청 보내기",
     "relationshipStatus": {
       "notAdded": "아직 친구가 아닙니다",
@@ -2584,7 +2586,6 @@
       "creating": "생성 중",
       "empty": "아직 태그가 없습니다. 저장하기 전에 하나 만드세요."
     },
-    "avCallComingSoon": "음성・영상 통화 기능이 곧 출시됩니다. 기대해 주세요.",
     "unknownUser": "이름 없는 사용자"
   },
   "profile": {
@@ -3354,7 +3355,10 @@
       "sessionChangedDuringRefresh": "세션을 갱신하는 동안 계정이 변경되었습니다. 다시 시도해 주세요.",
       "uploadTimeout": "업로드 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
       "uploadFailed": "업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-      "uploadFailedWithStatus": "업로드에 실패했습니다. 다시 시도해 주세요."
+      "uploadFailedWithStatus": "업로드에 실패했습니다. 다시 시도해 주세요.",
+      "authResponseInvalid": "인증 응답이 올바르지 않습니다. 다시 시도해 주세요.",
+      "userProfileResponseInvalid": "프로필 응답이 올바르지 않습니다. 다시 시도해 주세요.",
+      "profileSavedRefreshFailed": "프로필은 저장되었지만 최신 정보를 불러오지 못했습니다."
     }
   },
   "credit": {

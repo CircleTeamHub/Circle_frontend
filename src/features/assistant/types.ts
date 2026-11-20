@@ -1,7 +1,5 @@
 import type { ChatConversationDto } from '@/chat-core/protocol';
 
-export const ASSISTANT_KEY = 'windnote-assistant';
-
 export type AssistantCircleContext = {
   id: string;
   name: string;

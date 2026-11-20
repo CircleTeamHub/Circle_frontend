@@ -90,8 +90,14 @@ export default function AssistantChatScreen() {
   const entryIdRef = useRef(0);
   const spinResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 页面已被返回键弹掉后,晚到的引导/保存结果不能再 router.replace ——
+  // 那会把用户刚退回去的那一页换成小助手聊天,返回键也回不去了。
+  const mountedRef = useRef(true);
+
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (spinResetTimerRef.current) clearTimeout(spinResetTimerRef.current);
     };
   }, []);
@@ -148,6 +154,7 @@ export default function AssistantChatScreen() {
 
   const navigateToChat = useCallback(
     (data: AssistantBootstrapResponse) => {
+      if (!mountedRef.current) return;
       useChatStore
         .getState()
         .mergeConversationSnapshot(data.conversation);

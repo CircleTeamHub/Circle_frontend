@@ -55,7 +55,7 @@ export interface SessionDiagnosticRecord {
 }
 
 const FAILURE_KINDS = new Set([
-  'http', 'api-code', 'invalid-json', 'network', 'timeout', 'body-read',
+  'http', 'api-code', 'invalid-json', 'network', 'timeout', 'stalled', 'body-read',
   'unexpected', 'session-changed', 'auth-retry-failed', 'refresh-response-invalid', 'auth-retry-response-replayed',
   'refresh-outcome-unknown',
 ]);

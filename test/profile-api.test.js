@@ -47,6 +47,10 @@ function loadProfileApi(deps) {
         };
       }
 
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: (key) => key } };
+      }
+
       throw new Error(`Unexpected import: ${request}`);
     },
   };

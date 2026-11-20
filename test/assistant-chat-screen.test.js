@@ -25,3 +25,16 @@ test('the assistant takes circle context only from an explicit route param', () 
   assert.match(src, /useLocalSearchParams<\{\s*contextCircleId\?: string;\s*\}>\(\)/);
   assert.match(src, /fetchAssistantBootstrap\(contextCircleId\)/);
 });
+
+test('a bootstrap that lands after the screen was left does not navigate', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/assistant/screens/AssistantChatScreen.tsx'),
+    'utf8',
+  );
+  // 返回键弹掉页面后晚到的结果不能再 replace 当前栈顶。
+  assert.match(source, /mountedRef\.current = false;/);
+  assert.match(
+    source,
+    /\(data: AssistantBootstrapResponse\) => \{\s*if \(!mountedRef\.current\) return;[\s\S]*?router\.replace\(getAssistantChatHref/,
+  );
+});
