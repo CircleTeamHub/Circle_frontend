@@ -76,6 +76,26 @@ test('several pins: the banner shows the newest and the count', () => {
   expect(screen.getByText('chat.pin.listTitle:3')).toBeTruthy();
   expect(screen.getByText('[笔记] 周末羽毛球场地')).toBeTruthy();
   expect(screen.queryByText('下周六 9 点集合')).toBeNull();
+  // 读屏也要听到一共几条,而不只是最新那条。
+  expect(screen.getByLabelText('chat.pin.listTitle:3 [笔记] 周末羽毛球场地')).toBeTruthy();
+});
+
+test('once the last pin is gone, a later pin shows the banner with the list closed', () => {
+  mockConversation = { ...mockConversation, myRole: 'ADMIN' };
+  const view = render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
+  openList();
+  expect(screen.getByTestId('pinned-messages-sheet')).toBeTruthy();
+
+  // 开着列表时最后一条没了(自己 ×、别人取消、被撤回都一样)。
+  mockConversation = { ...mockConversation, pinnedMessages: [] };
+  view.rerender(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
+  expect(screen.queryByTestId('pinned-message-banner')).toBeNull();
+
+  // 之后又有人置顶:横幅回来,但列表不能自己弹出来。
+  mockConversation = { ...mockConversation, pinnedMessages: [imagePin] };
+  view.rerender(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
+  expect(screen.getByText('[图片]')).toBeTruthy();
+  expect(screen.queryByTestId('pinned-messages-sheet')).toBeNull();
 });
 
 test('tapping the banner lists every pin; tapping one closes the list and jumps there', () => {

@@ -22,7 +22,6 @@ const NO_PINS: ChatPinnedMessageDto[] = [];
  * 跟点公告进详情一样,点它弹出全部置顶,在那里点哪条跳哪条,有权限的人逐条取消。
  */
 export function PinnedMessageBanner({ conversationID, onJump }: PinnedMessageBannerProps) {
-  const { t } = useTranslation();
   // 分开取:整个会话行每来一条消息都会换,横幅只关心置顶和权限。
   const pins = useChatStore(
     (state) => state.conversations.find((item) => item.id === conversationID)?.pinnedMessages ?? NO_PINS,
@@ -31,11 +30,20 @@ export function PinnedMessageBanner({ conversationID, onJump }: PinnedMessageBan
     const conversation = state.conversations.find((item) => item.id === conversationID);
     return conversation ? canManageChatPins(conversation) : false;
   });
-  const [listOpen, setListOpen] = useState(false);
+  // 置顶清空时整块卸掉,列表开着的状态跟着丢:之后再有人置顶,列表不会自己弹出来。
   if (pins.length === 0) return null;
+  return <PinnedBannerWithList conversationID={conversationID} pins={pins} canManage={canManage} onJump={onJump} />;
+}
 
+function PinnedBannerWithList({ conversationID, pins, canManage, onJump }: PinnedMessageBannerProps & {
+  pins: readonly ChatPinnedMessageDto[];
+  canManage: boolean;
+}) {
+  const { t } = useTranslation();
+  const [listOpen, setListOpen] = useState(false);
   const preview = pins[0].preview || t('chat.pin.fallbackPreview', { defaultValue: '[消息]' });
-  const tag = pins.length > 1
+  const multiple = pins.length > 1;
+  const tag = multiple
     ? t('chat.pin.listTitle', { count: pins.length, defaultValue: '置顶 · {{count}} 条' })
     : t('chat.pin.tag', { defaultValue: '置顶' });
 
@@ -46,7 +54,10 @@ export function PinnedMessageBanner({ conversationID, onJump }: PinnedMessageBan
         title=""
         body={preview}
         tag={tag}
-        accessibilityLabel={t('chat.pin.bannerA11y', { preview, defaultValue: '置顶消息:{{preview}}' })}
+        // 多条时读出「置顶 · 3 条」再读最新那条,跟看到的一致。
+        accessibilityLabel={multiple
+          ? `${tag} ${preview}`
+          : t('chat.pin.bannerA11y', { preview, defaultValue: '置顶消息:{{preview}}' })}
         onPress={() => setListOpen(true)}
       />
       <PinnedMessagesSheet
