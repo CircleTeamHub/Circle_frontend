@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { PlazaPostCard } from './plaza-post-card';
 import { cancelSignup, fetchPlazaPost, signupForPost } from '@/services/api/plaza';
 import { ApiError } from '@/services/api/api-error';
@@ -354,4 +354,40 @@ test("the author's own post shows the signup count in that same row", () => {
   const footer = within(screen.getByTestId('plaza-card-footer'));
   expect(footer.getByText('报名条件：')).toBeTruthy();
   expect(footer.getByText('0 人报名')).toBeTruthy();
+});
+
+// jest 跑的是原生平台：网页的 44pt 触控框不能带进 iOS/Android，第二行也不能换行
+// （换行会让城市不再省略、时间掉到下一行）。
+describe('native layout of the card header', () => {
+  type Node = ReturnType<typeof screen.getByText>;
+  const style = (node: Node) => StyleSheet.flatten<ViewStyle & TextStyle>(node.props.style);
+  const hostView = (node: Node) => {
+    let current = node.parent;
+    while (current && current.type !== 'View') current = current.parent;
+    if (!current) throw new Error('no host View above node');
+    return current;
+  };
+
+  test('line 2 stays on one line: the city shrinks first, the time never does', () => {
+    render(<PlazaPostCard post={{ ...post, cities: ['成都', '重庆', '西安', '昆明'] }} />);
+    const time = screen.getByText(/^· /);
+    const city = screen.getByText('成都 · 重庆 · 西安 · 昆明');
+    const label = screen.getByText('奢侈品交流');
+    expect(style(time).flexShrink).toBe(0);
+    expect(style(city).flexShrink).toBe(1);
+    // 标签只在城市缩没之后才截断：自身不参与收缩，宽度跟着整组走。
+    expect(style(hostView(label))).toMatchObject({ flexShrink: 0, maxWidth: '100%' });
+    expect(style(label).maxWidth).toBe(116);
+    const labels = hostView(city);
+    expect(style(labels).flexShrink).toBe(1);
+    expect(style(hostView(labels)).flexWrap).toBeUndefined();
+  });
+
+  test('the more and signup buttons keep their native size', () => {
+    render(<PlazaPostCard post={post} />);
+    const more = style(screen.getByRole('button', { name: '更多' }));
+    expect(more.width).toBeUndefined();
+    expect(more.height).toBeUndefined();
+    expect(style(screen.getByTestId('plaza-card-signup')).minHeight).toBeUndefined();
+  });
 });

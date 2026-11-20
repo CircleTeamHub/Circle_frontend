@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -207,6 +208,7 @@ export default function TransferComposerScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
             style={s.backButton}
+            hitSlop={8}
             onPress={() => router.back()}
           >
             <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -334,8 +336,12 @@ const s = StyleSheet.create({
     height: 48,
   },
   headerTitle: { ...Typography.h3, fontWeight: '700' },
-  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerSpacer: { width: 44 },
+  // 网页没有 hitSlop，返回键自身放大到 44；原生保持图标大小 + hitSlop，箭头位置不动。
+  backButton: Platform.select({
+    web: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    default: {},
+  }),
+  headerSpacer: { width: Platform.OS === 'web' ? 44 : 24 },
   recipient: {
     flexDirection: 'row',
     alignItems: 'center',

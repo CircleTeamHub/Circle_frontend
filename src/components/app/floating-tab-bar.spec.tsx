@@ -1,8 +1,10 @@
 import React from 'react';
+import { Platform, StyleSheet } from 'react-native';
 import { act, render, screen } from '@testing-library/react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { FloatingTabBar, TAB_KEYS } from './floating-tab-bar';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import { useSplitPaneStore } from '@/stores/splitPaneStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 jest.mock('react-native-reanimated', () => {
@@ -41,8 +43,10 @@ jest.mock('@/stores/membershipProgramStore', () => ({
     selector: (state: { status: { enabled: boolean } | null; fetchStatus: () => void }) => unknown,
   ) => selector({ status: mockProgramStatus, fetchStatus: mockFetchProgramStatus }),
 }));
+let mockSplitLayout = false;
 jest.mock('@/hooks/use-desktop-split-layout', () => ({
-  useDesktopSplitLayout: () => false,
+  ...jest.requireActual('@/hooks/use-desktop-split-layout'),
+  useDesktopSplitLayout: () => mockSplitLayout,
 }));
 jest.mock('@/storage', () => ({
   mmkvJsonStorage: {
@@ -62,10 +66,10 @@ jest.mock('react-i18next', () => ({
 
 const DOT = 'circle-plaza-update-dot';
 
-function tabProps(): BottomTabBarProps {
+function tabProps(index = 0): BottomTabBarProps {
   const routes = TAB_KEYS.map((tab) => ({ key: `${tab.name}-key`, name: tab.name }));
   return {
-    state: { index: 0, key: 'tabs', routes },
+    state: { index, key: 'tabs', routes },
     descriptors: Object.fromEntries(routes.map((route) => [route.key, { options: {} }])),
     navigation: { emit: jest.fn(() => ({ defaultPrevented: false })), dispatch: jest.fn() },
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -78,6 +82,7 @@ function renderBar() {
 
 beforeEach(() => {
   mockMembershipRequired = false;
+  mockSplitLayout = false;
   mockVipLevel = 1;
   mockProgramStatus = null;
   mockFetchProgramStatus.mockClear();
@@ -178,4 +183,51 @@ it('an inactive bar ignores badge changes until it is active again', () => {
 
   view.rerender(<FloatingTabBar tabProps={tabProps()} hidden={false} active />);
   expect(screen.getByText('3')).toBeTruthy();
+});
+
+// 桌面分栏下右栏不再给浮动条留底（MessagesScreen splitDetailPane）：消息页的 bar 必须
+// 只落在左侧会话列表栏里，否则会盖住内嵌聊天的输入框。
+describe('where the web bar docks', () => {
+  const originalOS = Platform.OS;
+  const contactsIndex = TAB_KEYS.findIndex((tab) => tab.name === 'contacts');
+  const wrapperStyle = () => {
+    const tree = screen.toJSON();
+    if (!tree || Array.isArray(tree)) throw new Error('expected a single tab bar wrapper');
+    return StyleSheet.flatten(tree.props.style);
+  };
+
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    mockSplitLayout = true;
+    useSplitPaneStore.getState().setListPaneWidth(300);
+  });
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+    useSplitPaneStore.getState().resetListPaneWidth();
+  });
+
+  it('pins the messages bar to the conversation list pane and follows its width', () => {
+    render(<FloatingTabBar tabProps={tabProps(0)} hidden={false} />);
+    expect(wrapperStyle()).toMatchObject({ maxWidth: 300, marginHorizontal: 0 });
+    act(() => useSplitPaneStore.getState().setListPaneWidth(420));
+    expect(wrapperStyle()).toMatchObject({ maxWidth: 420, marginHorizontal: 0 });
+  });
+
+  it('centers the bar on the other tabs', () => {
+    render(<FloatingTabBar tabProps={tabProps(contactsIndex)} hidden={false} />);
+    expect(wrapperStyle()).toMatchObject({ maxWidth: 460, marginHorizontal: 'auto' });
+  });
+
+  it('centers the messages bar too when the window is too narrow to split', () => {
+    mockSplitLayout = false;
+    render(<FloatingTabBar tabProps={tabProps(0)} hidden={false} />);
+    expect(wrapperStyle()).toMatchObject({ maxWidth: 460, marginHorizontal: 'auto' });
+  });
+
+  it('leaves the native bar full width', () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+    render(<FloatingTabBar tabProps={tabProps(0)} hidden={false} />);
+    expect(wrapperStyle().maxWidth).toBeUndefined();
+    expect(wrapperStyle().marginHorizontal).toBeUndefined();
+  });
 });

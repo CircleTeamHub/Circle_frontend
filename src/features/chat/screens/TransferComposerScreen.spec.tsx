@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import TransferComposerScreen from './TransferComposerScreen';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
@@ -176,4 +176,14 @@ test('a transfer that succeeds after the user already went back does not go back
   });
 
   expect(mockRouter.back).not.toHaveBeenCalled();
+});
+
+// jest 跑的是原生平台：网页的 44pt 返回键（补 hitSlop）不能带进 iOS/Android，否则箭头右移。
+test('the native back button stays icon-sized and still goes back', async () => {
+  render(<TransferComposerScreen />);
+  await waitFor(() => expect(screen.getByText(/chat\.transfer\.currentBalancePrefix/)).toBeTruthy());
+  const back = screen.getByRole('button', { name: 'common.back' });
+  expect(StyleSheet.flatten(back.props.style)?.width).toBeUndefined();
+  fireEvent.press(back);
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
 });

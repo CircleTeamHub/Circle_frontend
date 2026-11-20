@@ -160,6 +160,8 @@ const s = StyleSheet.create({
   },
   phoneTitleRow: { marginHorizontal: -Spacing.sm },
   phoneActionRow: { gap: 0 },
+  // 桌面分栏把左栏拖到很窄时，头部按钮收紧间距，仍放得下一行。
+  compactActionRow: { gap: Spacing.sm },
   circleBellDot: {
     position: "absolute",
     top: '50%',
@@ -1603,7 +1605,7 @@ export default function MessagesScreen() {
         </Pressable>
       </View> : <View style={[s.titleRow, phoneHeader && s.phoneTitleRow]} onLayout={menuVisible ? measureMenuAnchor : undefined}>
         <Text style={d.title}>{t('messages.title')}</Text>
-        <View style={[s.actionRow, phoneHeader && s.phoneActionRow, isSplitLayout && listPaneWidth < 360 && { gap: Spacing.sm }]}>
+        <View style={[s.actionRow, phoneHeader && s.phoneActionRow, isSplitLayout && listPaneWidth < 360 && s.compactActionRow]}>
           <Pressable style={headerButtonStyle} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
             {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），空心。
                 这排里唯一带颜色的入口，一眼对上「圈子」。浅色用深一档的紫；暗色的深紫压在纯黑上
