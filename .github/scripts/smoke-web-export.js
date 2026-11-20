@@ -229,6 +229,48 @@ function removeUserDataDir(userDataDir) {
   }
 }
 
+async function checkMobileRegistration(cdp, origin) {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: 320, height: 568, deviceScaleFactor: 2, mobile: true,
+  });
+  const loaded = cdp.once('Page.loadEventFired');
+  await cdp.send('Page.navigate', { url: origin + '/register' });
+  await loaded;
+  const check = await cdp.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const deadline = Date.now() + 10000;
+      while (!document.querySelector('input[type=password]') && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      const inputs = Array.from(document.querySelectorAll('input'));
+      const password = document.querySelector('input[type=password]');
+      const toggle = password?.parentElement?.querySelector('[role=button],button');
+      if (!password || !toggle || inputs.length < 3) return 'Registration form missing';
+      if (innerWidth !== 320 || document.documentElement.scrollWidth > innerWidth) {
+        return 'Registration page exceeds the phone viewport';
+      }
+      for (const el of [...inputs, toggle]) {
+        el.scrollIntoView({block: 'center', behavior: 'instant'});
+        const rect = el.getBoundingClientRect();
+        if (rect.left < 0 || rect.right > innerWidth || rect.width < 44 || rect.height < 44) {
+          return 'Registration control outside its usable bounds: ' + el.tagName;
+        }
+        if (!el.contains(document.elementFromPoint(rect.left + 3, rect.top + 3))) {
+          return 'Registration control cannot be tapped near its edge: ' + el.tagName;
+        }
+      }
+      toggle.click();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      return password.type === 'text' ? null : 'Password visibility toggle did not respond';
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (check.exceptionDetails || check.result.value !== null) {
+    throw new Error(check.exceptionDetails?.exception?.description || check.result.value || 'Mobile registration check failed');
+  }
+}
+
 async function main() {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) {
     throw new Error('dist/index.html missing; run expo export first');
@@ -309,10 +351,14 @@ async function main() {
         throw new Error(`Web runtime exception on ${route}: ${exceptions.join('; ')}`);
       }
     }
+    await checkMobileRegistration(cdp, web.origin);
+    if (exceptions.length) {
+      throw new Error(`Mobile registration runtime exception: ${exceptions.join('; ')}`);
+    }
     if (web.missing.length) {
       throw new Error(`Web export referenced missing local assets: ${web.missing.join(', ')}`);
     }
-    process.stdout.write('Web export browser smoke passed for / and /qr deep link.\n');
+    process.stdout.write('Web export browser smoke passed for /, the /qr deep link and mobile registration.\n');
   } finally {
     await closeBrowser(cdp);
     await stopProcess(chrome);

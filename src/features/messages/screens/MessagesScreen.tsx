@@ -74,9 +74,6 @@ const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
 const ROW_AVATAR_SIZE = 48;
 const ROW_GAP = 12;
 const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
-// 桌面分栏时 tabbar 统一居中到整个视口底部；右侧聊天区要留出这段空间，
-// 否则 tabbar 会盖住 ChatComposerBar 的输入框。
-const DESKTOP_TAB_BAR_RESERVED_HEIGHT = 64;
 const selectFriendRemarks = (state: ReturnType<typeof useFriendRemarkStore.getState>) => state.remarks;
 
 const BASE_FILTER_KEYS = [
@@ -116,7 +113,7 @@ const s = StyleSheet.create({
   },
   splitDetailPane: {
     flex: 1,
-    paddingBottom: DESKTOP_TAB_BAR_RESERVED_HEIGHT,
+    minWidth: 0,
   },
   splitEmptyPane: {
     flex: 1,
@@ -142,12 +139,14 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    ...Platform.select({ web: { flexWrap: 'wrap', rowGap: Spacing.sm } }),
   },
   // 右侧操作按钮组（多选、搜索、+）
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    ...Platform.select({ web: { marginLeft: 'auto' } }),
   },
   actionButton: {
     position: "relative",
@@ -156,10 +155,19 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  phoneActionButton: {
+    width: 44, height: 44, justifyContent: 'center', alignItems: 'center',
+  },
+  phoneTitleRow: { marginHorizontal: -Spacing.sm },
+  phoneActionRow: { gap: 0 },
+  // 桌面分栏把左栏拖到很窄时，头部按钮收紧间距，仍放得下一行。
+  compactActionRow: { gap: Spacing.sm },
   circleBellDot: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: '50%',
+    right: '50%',
+    marginTop: -16,
+    marginRight: -16,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -322,8 +330,12 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
   // 弹出菜单容器（定位在右上角 + 按钮下方）
-  menu: {
+  menuAnchor: {
     position: "absolute",
+    left: 0,
+    alignItems: 'flex-end',
+  },
+  menu: {
     borderRadius: Radius.md,
     paddingVertical: Spacing.sm,
     minWidth: 160,
@@ -768,6 +780,14 @@ export default function MessagesScreen() {
   const [selectedFilterId, setActiveFilterId] = useState("all"); // 用户点选的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [quickAddExpanded, setQuickAddExpanded] = useState(false);
+  const quickAddRef = useRef<View>(null);
+  const [webMenuAnchor, setWebMenuAnchor] = useState<{ top: number; width: number } | null>(null);
+  const measureMenuAnchor = useCallback(() => {
+    if (Platform.OS !== 'web') return;
+    quickAddRef.current?.measureInWindow((x, y, width, height) => {
+      setWebMenuAnchor({ width: x + width, top: y + height + Spacing.sm });
+    });
+  }, []);
   const quickAddProgress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const animation = Animated.timing(quickAddProgress, {
@@ -780,9 +800,10 @@ export default function MessagesScreen() {
     return () => animation.stop();
   }, [quickAddExpanded, quickAddProgress]);
   const handleOpenMenu = useCallback(() => {
+    measureMenuAnchor();
     setQuickAddExpanded(true);
     setMenuVisible(true);
-  }, []);
+  }, [measureMenuAnchor]);
   const handleCloseMenu = useCallback(() => {
     setMenuVisible(false);
     setQuickAddExpanded(false);
@@ -1553,6 +1574,8 @@ export default function MessagesScreen() {
     ],
   );
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
+  const phoneHeader = Platform.OS === 'web' && !isSplitLayout;
+  const headerButtonStyle = phoneHeader ? s.phoneActionButton : s.actionButton;
 
   // 列表 Header：标题行（含操作按钮）+ 筛选 Tab 栏
   const ListHeader = useMemo(() => (
@@ -1580,10 +1603,10 @@ export default function MessagesScreen() {
         >
           <Text style={[s.selectionHeaderLabel, { color: colors.link }]}>{t(allSelected ? 'messages.deselectAll' : 'messages.selectAll')}</Text>
         </Pressable>
-      </View> : <View style={s.titleRow}>
+      </View> : <View style={[s.titleRow, phoneHeader && s.phoneTitleRow]} onLayout={menuVisible ? measureMenuAnchor : undefined}>
         <Text style={d.title}>{t('messages.title')}</Text>
-        <View style={s.actionRow}>
-          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
+        <View style={[s.actionRow, phoneHeader && s.phoneActionRow, isSplitLayout && listPaneWidth < 360 && s.compactActionRow]}>
+          <Pressable style={headerButtonStyle} accessibilityRole="button" accessibilityLabel={t('notifications.circleTitle')} hitSlop={10} onPress={handleOpenCircleNotifications}>
             {/* 就是底部圈子 tab 那架 App 自己的纸飞机标（与 App 图标、启动页同源），空心。
                 这排里唯一带颜色的入口，一眼对上「圈子」。浅色用深一档的紫；暗色的深紫压在纯黑上
                 只有 ~3.3:1、发闷，仍用 primary。 */}
@@ -1597,17 +1620,18 @@ export default function MessagesScreen() {
               />
             ) : null}
           </Pressable>
-          <NoticeHeaderButton style={s.actionButton} onPress={handleOpenNotices} />
-          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
+          <NoticeHeaderButton style={headerButtonStyle} onPress={handleOpenNotices} />
+          <Pressable style={headerButtonStyle} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
             <SelectChatsIcon color={colors.text} background={colors.background} />
           </Pressable>
           {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
-          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('common.search')} hitSlop={10} onPress={handleOpenFind}>
+          <Pressable style={headerButtonStyle} accessibilityRole="button" accessibilityLabel={t('common.search')} hitSlop={10} onPress={handleOpenFind}>
             <HeaderSearchIcon color={colors.text} />
           </Pressable>
           {/* 「+」按钮：展开快捷操作菜单 */}
           <Pressable
-            style={s.actionButton}
+            ref={quickAddRef}
+            style={headerButtonStyle}
             accessibilityRole="button"
             accessibilityLabel={t('common.add')}
             accessibilityState={{ expanded: quickAddExpanded }}
@@ -1656,6 +1680,12 @@ export default function MessagesScreen() {
     handleOpenFind,
     handleOpenGroups,
     handleOpenMenu,
+    headerButtonStyle,
+    phoneHeader,
+    isSplitLayout,
+    listPaneWidth,
+    measureMenuAnchor,
+    menuVisible,
     handleStartSelection,
     handleExitSelection,
     handleToggleAll,
@@ -1736,26 +1766,27 @@ export default function MessagesScreen() {
         animationType="fade"
         onRequestClose={handleCloseMenu}
       >
-        <Pressable style={s.overlay} onPress={handleCloseMenu}>
-          <View
-            style={[
-              s.menu,
-              d.menuBg,
-              { top: insets.top + 56, right: Spacing.lg }, // 状态栏高度 + header 高度下方
-            ]}
-          >
-            {MENU_ACTIONS.map((action) => (
-              <Pressable
-                key={action.id}
-                style={s.menuItem}
-                onPress={() => handleMenuAction(action.id)}
-              >
-                <Ionicons name={action.icon} size={20} color={colors.text} />
-                <Text style={d.menuLabel}>{action.label}</Text>
-              </Pressable>
-            ))}
+        <View style={s.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} accessible={false} onPress={handleCloseMenu} />
+          <View pointerEvents="box-none" style={[
+            s.menuAnchor,
+            webMenuAnchor ?? { top: insets.top + 56, right: Spacing.lg },
+          ]}>
+            <View style={[s.menu, d.menuBg]}>
+              {MENU_ACTIONS.map((action) => (
+                <Pressable
+                  key={action.id}
+                  style={s.menuItem}
+                  accessibilityRole="button"
+                  onPress={() => handleMenuAction(action.id)}
+                >
+                  <Ionicons name={action.icon} size={20} color={colors.text} />
+                  <Text style={d.menuLabel}>{action.label}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );

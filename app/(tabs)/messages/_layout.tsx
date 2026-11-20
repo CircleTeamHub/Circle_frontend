@@ -1,7 +1,12 @@
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
 import { useTheme } from '@/theme';
 import { probeScreenLayout } from '@/observability/screen-probe';
+
+const centeredPages = new Set([
+  'groups', 'group-edit', 'new-group', 'temp-chats', 'notifications', 'circle-notifications',
+]);
 
 // 跨 tab 压栈（横幅/通知从其它 tab push 到本栈的 chat-detail 等）时，
 // 给栈底垫上首页，保证返回有处可去、tab 不会卡死在被压入的页面。
@@ -15,7 +20,9 @@ export default function MessagesLayout() {
 
   return (
     <Stack
-      screenLayout={probeScreenLayout}
+      screenLayout={(props) => centeredPages.has(props.route.name)
+        ? <DesktopCenteredColumn>{probeScreenLayout(props)}</DesktopCenteredColumn>
+        : probeScreenLayout(props)}
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',

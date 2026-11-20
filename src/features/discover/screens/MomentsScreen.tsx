@@ -15,14 +15,15 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   notificationButton: {
-    position: 'relative',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationBadge: {
     position: 'absolute',
-    top: -8,
-    right: -12,
+    top: 2,
+    right: 0,
   },
   content: {
     flex: 1,

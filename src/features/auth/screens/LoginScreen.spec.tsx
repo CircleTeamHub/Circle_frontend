@@ -1,6 +1,6 @@
 import { usePreventRemove } from '@react-navigation/native';
 import React from 'react';
-import { AccessibilityInfo, Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, Platform, ScrollView, StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import LoginScreen from './LoginScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -202,9 +202,48 @@ test('web keyboard focus marks the whole auth field and clears on blur', () => {
   }
 });
 
+test('Enter in the web password field submits the form only while login is available', () => {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  try {
+    const view = render(<LoginScreen />);
+    const password = () => screen.getByTestId(E2E_TEST_IDS.authPasswordInput);
+    fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authEmailInput), 'tester');
+    fireEvent.changeText(password(), 'example');
+    fireEvent(password(), 'submitEditing');
+    expect(mockLogin).toHaveBeenCalledWith('tester', 'example');
+    mockAuthState.submitting = true;
+    view.rerender(<LoginScreen />);
+    fireEvent(password(), 'submitEditing');
+    expect(mockLogin).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
+  }
+});
+
 test('the auth route cannot be dismissed during old-session teardown', () => {
   render(<LoginScreen />);
   expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+});
+
+test('short phone browsers give space back to the login form', () => {
+  const original = Platform.OS;
+  const viewport = { width: 320, height: 844, scale: 2, fontScale: 1 };
+  const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(() => viewport);
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  try {
+    const tall = render(<LoginScreen />);
+    const tallTop = StyleSheet.flatten(tall.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingTop;
+    tall.unmount();
+    viewport.height = 568;
+    const short = render(<LoginScreen />);
+    const shortTop = StyleSheet.flatten(short.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingTop;
+    expect(shortTop).toBeLessThan(tallTop);
+    expect(shortTop).toBeGreaterThanOrEqual(47);
+  } finally {
+    dimensions.mockRestore();
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
+  }
 });
 
 

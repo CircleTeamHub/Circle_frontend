@@ -89,10 +89,14 @@ test('PlazaPostCard keeps the name readable and moves the circle tag to line 2',
     src,
     /<View style=\{s\.metaRow\}>[\s\S]*?<View style=\{\[s\.tag, d\.tag\]\}>[\s\S]*?timeLabel/,
   );
-  // 圈子标签在第二行只设 maxWidth 宽度上限（不再参与第一行的收缩竞争）。
-  assert.match(src, /tag:\s*\{[^}]*maxWidth:\s*\d+[^}]*\}/);
-  // 城市文本可收缩省略，避免把时间挤没。
+  // 圈子名有宽度上限（不再参与第一行的收缩竞争），过长时省略。
+  assert.match(src, /tagLabel:\s*\{[^}]*maxWidth:\s*132\b[^}]*\}/);
+  // 第二行固定一行：城市先收缩省略，时间不收缩，不能换行把时间挤到下一行。
   assert.match(src, /metaCity:\s*\{[^}]*flexShrink:\s*1[^}]*\}/);
+  assert.match(src, /metaTime:\s*\{[^}]*flexShrink:\s*0[^}]*\}/);
+  const metaRow = src.match(/metaRow:\s*\{[^}]*\}/)?.[0];
+  assert.ok(metaRow, 'metaRow style missing');
+  assert.doesNotMatch(metaRow, /flexWrap/);
   // 身份徽章固定展示 3 枚。
   assert.match(src, /<UserIconRow[\s\S]*?maxVisible=\{3\}/);
 });

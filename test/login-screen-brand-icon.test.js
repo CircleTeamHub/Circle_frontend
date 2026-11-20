@@ -60,9 +60,8 @@ test('login screen follows the night-flight layout: sky hero, no slogan, reserve
   // 夜航定稿去掉了 slogan，登录页只保留标题 + 表单。
   assert.doesNotMatch(source, /让聊天/);
   assert.doesNotMatch(source, /splash-tagline/);
-  // hero 是绝对定位的天空，表单从设计稿的 contentTop 开始，跟着屏宽缩放。
+  // 普通高度沿用设计稿的天空布局，短屏登录由行为测试检查。
   assert.match(source, /getSkyLayout\(/);
-  assert.match(source, /paddingTop:\s*sky\.contentTop/);
   assert.match(source, /paddingBottom:\s*insets\.bottom \+ 24/);
   assert.match(source, /<LoginPrimaryButton/);
   // 错误 / 离线提示占位始终保留，按钮不会因提示出现而跳动。槽里只放一条按优先级

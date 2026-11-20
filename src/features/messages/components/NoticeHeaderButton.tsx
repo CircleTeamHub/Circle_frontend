@@ -7,7 +7,7 @@ import { useTheme } from '@/theme';
 import { selectNoticeUnread, useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 interface Props {
-  /** 页头按钮的统一尺寸(24×24),由消息页传入。 */
+  /** The messages header sets the touch target for its active layout. */
   style: StyleProp<ViewStyle>;
   onPress: () => void;
 }
@@ -16,8 +16,10 @@ const s = StyleSheet.create({
   // 角标压在铃铛右上角,外圈一道页面底色,像从图标上挖出来的(和飞机的红点同一手法)。
   badge: {
     position: 'absolute',
-    top: -8,
-    left: 14,
+    top: '50%',
+    left: '50%',
+    marginTop: -20,
+    marginLeft: 2,
     borderWidth: 2,
     borderRadius: 999,
   },

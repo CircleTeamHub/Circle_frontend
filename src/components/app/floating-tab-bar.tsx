@@ -430,7 +430,9 @@ const FeaturedTabButton = memo(function FeaturedTabButton({
             <Circle cx="50%" cy="50%" r="50%" fill={`url(#${gradientId})`} />
           </Svg>
           {/* 选中与否都保持紫色;选中时纸飞机填实,提示当前在圈子。 */}
-          <PlaneLogoIcon size={TAB_FEATURED_LOGO_SIZE} color={colors.white} filled={focused} />
+          <View pointerEvents="none">
+            <PlaneLogoIcon size={TAB_FEATURED_LOGO_SIZE} color={colors.white} filled={focused} />
+          </View>
           <View pointerEvents="none" style={styles.featuredRim} />
         </TabBarSurface>
         {badgeCount > 0 ? (
@@ -728,11 +730,10 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
   const activeRoute = tabProps.state.routes[tabProps.state.index];
   const tabBarStyle = StyleSheet.flatten(tabProps.descriptors[activeRoute.key].options.tabBarStyle);
   const hiddenByScreen = !!tabBarStyle && 'display' in tabBarStyle && tabBarStyle.display === 'none';
-  // 桌面网页版分栏：所有 tab 共用同一个视口居中位置，避免消息页的导航
-  // 因为左侧列表栏而和联系人、动态、我的页面错位。
   const isSplitLayout = useDesktopSplitLayout();
-  // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
+  const inMessagePane = isSplitLayout && activeRoute.name === 'messages';
   const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
+  const compactDock = inMessagePane && listPaneWidth < 360;
   const badgeMap = useTabBadgeMap(active);
   const plazaDotVisible = useCirclePlazaDotVisible();
   // 探索 tab 的小点：好友发了新动态。探索 tab 不再计数，只亮这个点。
@@ -749,7 +750,10 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
       left: 0,
       right: 0,
       bottom: 0,
-      ...(isSplitLayout ? { alignItems: 'center' } : null),
+      ...(Platform.OS === 'web' && {
+        maxWidth: inMessagePane ? listPaneWidth : 460,
+        marginHorizontal: inMessagePane ? 0 : 'auto',
+      }),
     },
     // 隐藏只做瞬时位移、绝不改 opacity：GlassView / BlurView 的祖先 opacity
     // 归零会让系统停掉材质层，恢复成 1 时要重新生成材质，回到 tab 根页就会
@@ -761,12 +765,8 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
     tabBarRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      // 分栏时保持和左栏导航相同的宽度，只做水平居中，不随视口拉伸变形。
-      ...(isSplitLayout
-        ? { width: listPaneWidth - TAB_BAR_MARGIN_LEFT - TAB_BAR_MARGIN_RIGHT }
-        : null),
-      marginLeft: TAB_BAR_MARGIN_LEFT,
-      marginRight: TAB_BAR_MARGIN_RIGHT,
+      marginLeft: compactDock ? 8 : TAB_BAR_MARGIN_LEFT,
+      marginRight: compactDock ? 8 : TAB_BAR_MARGIN_RIGHT,
       // 下沿压在 home indicator 安全区上沿;没有安全区的机型离屏幕底留一点。
       marginBottom: Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM),
     },
@@ -849,7 +849,7 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
       justifyContent: 'center',
     },
     featuredButton: {
-      marginLeft: TAB_FEATURED_GAP,
+      marginLeft: compactDock ? 8 : TAB_FEATURED_GAP,
     },
     // 没选中时品牌紫的淡光晕,让它从玻璃上浮起来;只在 iOS 画(安卓 bar 是不透明 surface,
     // elevation 投影是灰的,叠上去反而脏)。
@@ -868,6 +868,8 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
       borderWidth: 0,
       width: TAB_FEATURED_SIZE,
       height: TAB_FEATURED_SIZE,
+      // CSS flex: 0 uses a zero basis and can collapse this surface to the glyph height.
+      ...(Platform.OS === 'web' && { minHeight: TAB_FEATURED_SIZE }),
       borderRadius: TAB_FEATURED_SIZE / 2,
       paddingHorizontal: 0,
       paddingVertical: 0,
@@ -942,7 +944,7 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
     labelActive: {
       fontWeight: '700',
     },
-  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, resolvedMode]);
+  }), [colors, compactDock, inMessagePane, insets.bottom, listPaneWidth, resolvedMode]);
 
   return (
     <CustomTabBar

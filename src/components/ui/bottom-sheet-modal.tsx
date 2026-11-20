@@ -6,6 +6,7 @@ import {
   FlatList,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,7 @@ import {
 } from 'react-native';
 
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { WEB_COLUMN_MAX_WIDTH } from '@/components/app/desktop-centered-column';
 import { useTheme } from '@/theme';
 
 interface BottomSheetModalProps {
@@ -150,6 +152,7 @@ const s = StyleSheet.create({
   },
   content: {
     width: '100%',
+    ...Platform.select({ web: { maxWidth: WEB_COLUMN_MAX_WIDTH, alignSelf: 'center' } }),
     // 键盘占掉下半屏时，定高/百分比高度的面板要能缩进剩下的空间，而不是顶出屏幕上沿。
     flexShrink: 1,
   },

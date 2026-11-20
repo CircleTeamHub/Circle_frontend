@@ -73,7 +73,7 @@ const s = StyleSheet.create({
   registerHint: { ...Typography.bodyRegular },
   registerLink: { fontSize: 14, fontWeight: '600' },
   desktopShell: {
-    flex: 1,
+    flexGrow: 1,
     width: '100%',
     flexDirection: 'row',
   },
@@ -140,6 +140,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const { isOffline } = useNetworkStatus();
   const sky = getSkyLayout(width);
+  // On short web viewports leave room for the form, including the login button.
+  const formTop = Platform.OS === 'web'
+    ? Math.min(sky.contentTop, Math.max(insets.top + Spacing.lg, height - insets.bottom - 432))
+    : sky.contentTop;
   const isDesktopWeb = Platform.OS === 'web' && width >= DESKTOP_LOGIN_MIN_WIDTH;
   const desktopHeroWidth = Math.min(
     SKY_MAX_WIDTH,
@@ -208,6 +212,7 @@ export default function LoginScreen() {
           secureTextEntry
           textContentType="password"
           autoComplete="current-password"
+          onSubmitEditing={Platform.OS === 'web' && !submitting ? onSubmit : undefined}
         />
         <View style={s.forgotRow}>
           <Pressable disabled={submitting} accessibilityState={{ disabled: submitting }} onPress={onForgotPassword} hitSlop={8} accessibilityRole="link">
@@ -280,10 +285,9 @@ export default function LoginScreen() {
           isDesktopWeb
             ? {
                 flexGrow: 1,
-                minHeight: Math.max(height, 720),
-                paddingBottom: insets.bottom + 24,
+                paddingBottom: insets.bottom,
               }
-            : { paddingTop: sky.contentTop, paddingBottom: insets.bottom + 24 }
+            : { paddingTop: formTop, paddingBottom: insets.bottom + 24 }
         }
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
@@ -323,7 +327,9 @@ export default function LoginScreen() {
         ) : (
           <>
             {/* 夜空 hero：绝对定位在滚动内容顶部，随内容一起滚走 */}
-            <LoginSky width={width} reduceMotion={reduceMotion} />
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: formTop - sky.contentTop }]}>
+              <LoginSky width={width} reduceMotion={reduceMotion} />
+            </View>
             {form}
           </>
         )}

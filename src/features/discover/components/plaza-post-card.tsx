@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -95,6 +95,7 @@ const s = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
@@ -107,16 +108,29 @@ const s = StyleSheet.create({
     flexShrink: 1,
     minWidth: 32,
   },
+  // 第二行固定一行：时间永不收缩；放不下时先缩城市，城市缩到 0 才轮到圈子标签。
+  // 不用 flexWrap —— 换行会让城市不再省略、时间掉到下一行，卡片高度忽高忽低。
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     marginTop: 4,
   },
-  // 第二行的城市文本：可收缩省略，过长时先让位给圈子标签/时间，而不是把时间挤没。
+  // 圈子标签 + 城市：整组让出时间的位置。组内只有城市收缩，
+  // 标签靠 maxWidth: '100%' 在城市缩没之后才被截断（两者同时收缩会把短标签也截成「成都摄…」）。
+  metaLabels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   metaCity: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  metaTime: {
+    flexShrink: 0,
   },
   authorBadgeRow: {
     flexShrink: 0,
@@ -125,8 +139,12 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 1,
     borderRadius: Radius.sm,
-    // 圈子标签在第二行：仅设宽度上限（圈子名过长时省略），不参与收缩，让城市文本先让位。
-    maxWidth: 132,
+    flexShrink: 0,
+    maxWidth: '100%',
+  },
+  // 圈子名过长时省略：标签总宽上限 132（含左右内边距）。
+  tagLabel: {
+    maxWidth: 132 - Spacing.sm * 2,
   },
   // 报名条件在左、可换行收缩;按钮靠右不收缩。两样各占一行时右边全空着,合成一行。
   conditionRow: {
@@ -158,7 +176,18 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  // 网页没有 hitSlop，触控框直接放大到 44；原生仍是图标大小 + hitSlop，图标位置不动。
+  moreButton: Platform.select({
+    web: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    default: {},
+  }),
   signupBtn: {
+    ...Platform.select({ web: { minHeight: 44 } }),
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
@@ -548,23 +577,25 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
             ) : null}
           </View>
           <View style={s.metaRow}>
-            {/* 圈子标签下移到第二行，作为「归属」锚点，与城市 · 时间同排。 */}
-            <View style={[s.tag, d.tag]}>
-              <Text style={d.tagText} numberOfLines={1}>
-                {post.circles?.length
-                  ? post.circles[0].name +
-                    (post.circles.length > 1
-                      ? ` +${post.circles.length - 1}`
-                      : '')
-                  : post.circle.name}
-              </Text>
+            <View style={s.metaLabels}>
+              {/* 圈子标签下移到第二行，作为「归属」锚点，与城市 · 时间同排。 */}
+              <View style={[s.tag, d.tag]}>
+                <Text style={[s.tagLabel, d.tagText]} numberOfLines={1}>
+                  {post.circles?.length
+                    ? post.circles[0].name +
+                      (post.circles.length > 1
+                        ? ` +${post.circles.length - 1}`
+                        : '')
+                    : post.circle.name}
+                </Text>
+              </View>
+              {post.cities?.length || post.city ? (
+                <Text style={[d.metaText, s.metaCity]} numberOfLines={1}>
+                  {post.cities?.length ? post.cities.join(' · ') : post.city}
+                </Text>
+              ) : null}
             </View>
-            {post.cities?.length || post.city ? (
-              <Text style={[d.metaText, s.metaCity]} numberOfLines={1}>
-                {post.cities?.length ? post.cities.join(' · ') : post.city}
-              </Text>
-            ) : null}
-            <Text style={d.metaText}>· {timeLabel}</Text>
+            <Text style={[d.metaText, s.metaTime]} numberOfLines={1}>· {timeLabel}</Text>
           </View>
         </View>
         {post.isHorn ? (
@@ -573,6 +604,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         {/* 右上角「更多」：分享 / 举报 / 删除（删除已从独立按钮移入此菜单）。 */}
         {!showInlineActions ? <Pressable
           onPress={() => setMenuVisible(true)}
+          style={s.moreButton}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t('plaza.actions.more', { defaultValue: '更多' })}

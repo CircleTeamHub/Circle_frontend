@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,7 +42,12 @@ const s = StyleSheet.create({
   },
   body: {
     flex: 1,
+    minWidth: 0,
     gap: Spacing.sm,
+  },
+  authorLink: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   headerRow: {
     flexDirection: 'row',
@@ -78,19 +83,23 @@ const s = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingTop: 2,
   },
+  // 原生保持设计稿间距（按钮靠 hitSlop 扩触控区）；网页没有 hitSlop，
+  // 按钮自身放大到 44×44，间距相应收窄，窄屏才放得下时间 + 三个按钮。
   actionsRow: {
     flexDirection: 'row',
-    gap: Spacing.lg,
+    gap: Platform.OS === 'web' ? Spacing.xs : Spacing.lg,
     paddingTop: Spacing.xs,
     alignItems: 'center',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    ...Platform.select({ web: { justifyContent: 'center', minWidth: 44, minHeight: 44 } }),
     gap: 6,
     paddingVertical: Spacing.xs,
   },
   timeText: {
+    flexShrink: 1,
     ...Typography.small,
   },
 });
@@ -176,17 +185,20 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
       {/* Body */}
       <View style={s.body}>
-        {/* Author + Time */}
-        <View style={s.headerRow}>
-          <Pressable onPress={handleAvatarPress}>
-            <MemberName
-              name={post.author.nickname}
-              userId={post.author.id}
-              vipLevel={post.author.vipLevel}
-              style={d.authorName}
-            />
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={post.author.nickname}
+          style={s.authorLink}
+          onPress={handleAvatarPress}
+        >
+          <MemberName
+            name={post.author.nickname}
+            userId={post.author.id}
+            vipLevel={post.author.vipLevel}
+            style={d.authorName}
+            numberOfLines={2}
+          />
+        </Pressable>
 
         {/* Content (tappable for detail) */}
         <Pressable onPress={() => onPress(post.id)}>
@@ -200,7 +212,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
         {/* Time + Actions */}
         <View style={s.headerRow}>
           <Text style={[s.timeText, d.timeText]}>{timeLabel}</Text>
-          <View style={s.actionsRow}>
+          <View testID="moment-card-actions" style={s.actionsRow}>
             <Pressable
               style={s.actionBtn}
               hitSlop={8}

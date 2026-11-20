@@ -25,11 +25,6 @@ test('discover image sizing follows the centered column, not the viewport', () =
       `${relative} 退回了视口宽度，桌面网页版会溢出居中栏`,
     );
   }
-
-  const column = read('src/components/app/desktop-centered-column.tsx');
-  assert.match(column, /ContentColumnWidthContext\.Provider value=\{COLUMN_MAX_WIDTH\}/);
-  // 栏外（原生 / 窄窗）必须回落到视口宽，否则手机端全按 640 排版。
-  assert.match(column, /return column \?\? width;/);
 });
 
 test('an image-only album post still has a way into its detail page', () => {

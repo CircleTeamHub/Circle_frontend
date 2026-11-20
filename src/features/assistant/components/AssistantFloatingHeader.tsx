@@ -5,6 +5,7 @@ import { AssistantSprite } from '@/features/assistant/components/AssistantSprite
 import { Spacing, Typography, useTheme } from '@/theme';
 
 type AssistantFloatingHeaderProps = {
+  inline?: boolean;
   title: string;
   spinning?: boolean;
   onBack?: () => void;
@@ -18,6 +19,7 @@ type AssistantFloatingHeaderProps = {
 export function AssistantFloatingHeader({
   title,
   spinning = false,
+  inline = false,
   onBack,
 }: AssistantFloatingHeaderProps) {
   const { colors } = useTheme();
@@ -27,7 +29,7 @@ export function AssistantFloatingHeader({
     <View
       testID="assistant-floating-header"
       pointerEvents="box-none"
-      style={styles.container}
+      style={inline ? undefined : styles.container}
     >
       {onBack ? (
         <Pressable
@@ -47,7 +49,7 @@ export function AssistantFloatingHeader({
           <Ionicons name="chevron-back" size={21} color={colors.text} />
         </Pressable>
       ) : null}
-      <View style={[styles.stage, { paddingTop: insets.top + Spacing.sm }]}>
+      <View pointerEvents="none" style={[styles.stage, { paddingTop: insets.top + Spacing.sm }]}>
         <AssistantSprite reacting={spinning} />
         <View
           style={[

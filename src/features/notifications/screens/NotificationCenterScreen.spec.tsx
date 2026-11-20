@@ -119,6 +119,14 @@ test('the circle notifications page carries the settings gear and opens settings
   expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/discover/notifications');
 });
 
+test('the labeled back button returns to the preceding screen', async () => {
+  jest.mocked(fetchNotificationsPage).mockResolvedValue({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByRole('button', { name: 'common.back' }));
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+
 const traceLike = (id: string, userId: string): NotificationItem => ({
   id, type: 'TRACE_LIKE', content: '', read: false, createdAt: '2026-11-16T00:00:00.000Z',
   fromUser: { id: userId, nickname: userId, avatarUrl: null },

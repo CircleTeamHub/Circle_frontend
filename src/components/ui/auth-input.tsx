@@ -29,6 +29,7 @@ interface AuthInputProps {
   // Cross-platform autofill hint (Android + iOS 11+). Use together with
   // textContentType — they target different OS APIs.
   autoComplete?: TextInputProps['autoComplete'];
+  onSubmitEditing?: TextInputProps['onSubmitEditing'];
 }
 
 const s = StyleSheet.create({
@@ -55,9 +56,25 @@ const s = StyleSheet.create({
     // inside the rounded field. The container already supplies the field
     // boundary, so the native outline only adds visual noise on web.
     ...(Platform.OS === 'web'
-      ? { outlineStyle: 'solid' as const, outlineWidth: 0, outlineColor: 'transparent' }
+      ? {
+          alignSelf: 'stretch',
+          minWidth: 0,
+          outlineStyle: 'solid' as const,
+          outlineWidth: 0,
+          outlineColor: 'transparent',
+        }
       : null),
   },
+  passwordToggle: Platform.select({
+    web: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: -8,
+    },
+    default: {},
+  }),
 });
 
 export const AuthInput: React.FC<AuthInputProps> = ({
@@ -73,6 +90,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
   rightElement,
   textContentType,
   autoComplete,
+  onSubmitEditing,
 }) => {
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -101,6 +119,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
       input: {
         color: colors.text,
         ...Typography.body,
+        ...(Platform.OS === 'web' && { fontSize: 16 }),
       },
     }),
     [colors],
@@ -135,10 +154,12 @@ export const AuthInput: React.FC<AuthInputProps> = ({
           spellCheck={false}
           textContentType={textContentType}
           autoComplete={autoComplete}
+          onSubmitEditing={onSubmitEditing}
         />
         {secureTextEntry ? (
           <Pressable
             onPress={togglePassword}
+            style={s.passwordToggle}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={
