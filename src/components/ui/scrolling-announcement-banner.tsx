@@ -3,7 +3,7 @@ import { Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Text, Vi
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Volume2 } from 'lucide-react-native';
+import { Volume2, type LucideIcon } from 'lucide-react-native';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 
@@ -28,13 +28,19 @@ function EdgeFade({ side, color }: { side: 'left' | 'right'; color: string }) {
   );
 }
 
-/** Shared scrolling presentation for system and group announcements. */
-export function ScrollingAnnouncementBanner({ title, body: content, tag, onPress, testID }: {
+/** Shared scrolling presentation for system/group announcements and the chat's pinned messages. */
+export function ScrollingAnnouncementBanner({
+  title, body: content, tag, onPress, testID, icon: TagIcon = Volume2, accessibilityLabel,
+}: {
   title: string;
   body: string;
   tag: string;
   onPress: () => void;
   testID?: string;
+  /** 标签里的小图标;公告用喇叭,置顶消息用图钉。 */
+  icon?: LucideIcon;
+  /** 缺省读「标题 正文」。 */
+  accessibilityLabel?: string;
 }) {
   const { colors } = useTheme();
   const body = content.replace(/\s+/g, ' ').trim();
@@ -75,7 +81,7 @@ export function ScrollingAnnouncementBanner({ title, body: content, tag, onPress
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={text}
+      accessibilityLabel={accessibilityLabel ?? text}
       onPress={onPress}
       style={({ pressed }) => [
         styles.bar,
@@ -84,7 +90,7 @@ export function ScrollingAnnouncementBanner({ title, body: content, tag, onPress
       ]}
     >
       <View style={[styles.tag, { backgroundColor: colors.primary }]}>
-        <Volume2 size={14} strokeWidth={2} color={colors.white} />
+        <TagIcon size={14} strokeWidth={2} color={colors.white} />
         <Text style={[styles.tagText, { color: colors.white }]} maxFontSizeMultiplier={1.2}>
           {tag}
         </Text>
