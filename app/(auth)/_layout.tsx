@@ -1,4 +1,6 @@
 import { Stack } from 'expo-router';
+import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
+import { SKY_MAX_WIDTH } from '@/features/auth/components/login-sky-geometry';
 import { useAddingAccountScope } from '@/features/auth/hooks/use-adding-account-scope';
 import { useTheme } from '@/theme';
 import { probeScreenLayout } from '@/observability/screen-probe';
@@ -10,7 +12,9 @@ export default function AuthLayout() {
 
   return (
     <Stack
-      screenLayout={probeScreenLayout}
+      screenLayout={(props) => props.route.name === 'login'
+        ? probeScreenLayout(props)
+        : <DesktopCenteredColumn maxWidth={SKY_MAX_WIDTH}>{probeScreenLayout(props)}</DesktopCenteredColumn>}
       screenOptions={{
         // 这个项目用的是自定义 NavHeader 组件，不用系统自带的导航栏。
         // Expo Router 的 Stack 默认会渲染一个系统原生的顶部 header（有返回按钮、标题等）。

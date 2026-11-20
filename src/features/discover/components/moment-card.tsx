@@ -42,7 +42,12 @@ const s = StyleSheet.create({
   },
   body: {
     flex: 1,
+    minWidth: 0,
     gap: Spacing.sm,
+  },
+  authorLink: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   headerRow: {
     flexDirection: 'row',
@@ -80,17 +85,21 @@ const s = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: Spacing.lg,
+    gap: Spacing.xs,
     paddingTop: Spacing.xs,
     alignItems: 'center',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
     gap: 6,
     paddingVertical: Spacing.xs,
   },
   timeText: {
+    flexShrink: 1,
     ...Typography.small,
   },
 });
@@ -176,17 +185,20 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
       {/* Body */}
       <View style={s.body}>
-        {/* Author + Time */}
-        <View style={s.headerRow}>
-          <Pressable onPress={handleAvatarPress}>
-            <MemberName
-              name={post.author.nickname}
-              userId={post.author.id}
-              vipLevel={post.author.vipLevel}
-              style={d.authorName}
-            />
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={post.author.nickname}
+          style={s.authorLink}
+          onPress={handleAvatarPress}
+        >
+          <MemberName
+            name={post.author.nickname}
+            userId={post.author.id}
+            vipLevel={post.author.vipLevel}
+            style={d.authorName}
+            numberOfLines={2}
+          />
+        </Pressable>
 
         {/* Content (tappable for detail) */}
         <Pressable onPress={() => onPress(post.id)}>

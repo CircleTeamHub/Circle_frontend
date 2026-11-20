@@ -480,7 +480,12 @@ export default function NotificationCenterScreen() {
       ]}
     >
       <View style={[s.header, { borderBottomColor: colors.surfaceBorder }]}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
         <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>

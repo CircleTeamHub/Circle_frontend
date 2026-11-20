@@ -203,13 +203,18 @@ export default function TransferComposerScreen() {
         {...keyboardDismissOnDragProps}
       >
         <View style={s.header}>
-          <Pressable hitSlop={8} onPress={() => router.back()}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            style={s.backButton}
+            onPress={() => router.back()}
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
           <Text style={[s.headerTitle, { color: colors.text }]}>
             {t('chat.transfer.title', { defaultValue: '积分转账' })}
           </Text>
-          <View style={{ width: 24 }} />
+          <View style={s.headerSpacer} />
         </View>
 
         <View style={[s.recipient, { backgroundColor: colors.surface }]}>
@@ -329,6 +334,8 @@ const s = StyleSheet.create({
     height: 48,
   },
   headerTitle: { ...Typography.h3, fontWeight: '700' },
+  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerSpacer: { width: 44 },
   recipient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -348,6 +355,7 @@ const s = StyleSheet.create({
   },
   amountInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 36,
     lineHeight: 48,
     fontWeight: '700',

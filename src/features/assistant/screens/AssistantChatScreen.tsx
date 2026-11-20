@@ -333,13 +333,9 @@ export default function AssistantChatScreen() {
 
   if (error && !bootstrap) {
     return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.background, paddingTop: insets.top },
-        ]}
-      >
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <AssistantFloatingHeader
+          inline
           onBack={() => router.back()}
           spinning={assistantSpinning}
           title={t('assistant.name', { defaultValue: 'AI小助手' })}
@@ -362,13 +358,9 @@ export default function AssistantChatScreen() {
 
   if (!bootstrap) {
     return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.background, paddingTop: insets.top },
-        ]}
-      >
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <AssistantFloatingHeader
+          inline
           onBack={() => router.back()}
           spinning={assistantSpinning}
           title={t('assistant.name', { defaultValue: 'AI小助手' })}
@@ -651,9 +643,12 @@ const styles = StyleSheet.create({
   error: { ...Typography.bodyRegular, marginTop: Spacing.lg, textAlign: 'center' },
   inlineError: { ...Typography.caption },
   retry: {
+    alignSelf: 'center',
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
     marginTop: Spacing.md,
+    minHeight: 44,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
   },

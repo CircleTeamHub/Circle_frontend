@@ -1,5 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -34,15 +34,25 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 48,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Platform.OS === 'web' ? Spacing.lg - 10 : Spacing.lg,
   },
   spacer: {
-    width: 24,
+    width: Platform.OS === 'web' ? 44 : 24,
   },
+  iconButton: Platform.select({
+    web: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    default: {},
+  }),
   rightActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Platform.OS === 'web' ? Spacing.xs : Spacing.md,
   },
 });
 
@@ -107,6 +117,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   return (
     <View style={s.container}>
       <Pressable
+        style={s.iconButton}
         onPress={handleBackPress}
         hitSlop={8}
         accessibilityRole="button"
@@ -124,6 +135,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           {actions.map((action) => (
             <Pressable
               key={action.icon}
+              style={s.iconButton}
               testID={action.testID}
               onPress={action.onPress}
               disabled={action.disabled}

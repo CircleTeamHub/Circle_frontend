@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
@@ -25,6 +26,7 @@ import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mapp
 import { useChatStore } from '@/chat-core/store';
 import { selectConversations } from '@/chat-core/conversation-selectors';
 import { useScreenLive } from '@/hooks/use-screen-live';
+import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
 import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
@@ -101,6 +103,7 @@ const s = StyleSheet.create({
 });
 
 export default function SearchScreen() {
+  const isDesktopWeb = useDesktopSplitLayout();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
@@ -456,7 +459,7 @@ export default function SearchScreen() {
 
   const showLoading = trimmedQuery.length === 0 && friendsLoading;
 
-  return (
+  const content = (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('search.title', { defaultValue: '搜索' })} />
       <SectionList
@@ -472,6 +475,7 @@ export default function SearchScreen() {
             <View style={[s.searchBox, d.searchBox]}>
               <Ionicons name="search" size={18} color={colors.textSecondary} />
               <TextInput
+                autoFocus={isDesktopWeb}
                 style={d.input}
                 value={query}
                 onChangeText={setQuery}
@@ -542,4 +546,5 @@ export default function SearchScreen() {
       />
     </View>
   );
+  return <DesktopCenteredColumn>{content}</DesktopCenteredColumn>;
 }

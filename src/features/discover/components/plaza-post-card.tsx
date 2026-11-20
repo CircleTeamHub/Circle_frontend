@@ -95,6 +95,7 @@ const s = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
@@ -109,6 +110,7 @@ const s = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: Spacing.xs,
     marginTop: 4,
@@ -158,7 +160,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  moreButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   signupBtn: {
+    minHeight: 44,
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
@@ -564,7 +573,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
                 {post.cities?.length ? post.cities.join(' · ') : post.city}
               </Text>
             ) : null}
-            <Text style={d.metaText}>· {timeLabel}</Text>
+            <Text style={d.metaText} numberOfLines={1}>· {timeLabel}</Text>
           </View>
         </View>
         {post.isHorn ? (
@@ -573,6 +582,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
         {/* 右上角「更多」：分享 / 举报 / 删除（删除已从独立按钮移入此菜单）。 */}
         {!showInlineActions ? <Pressable
           onPress={() => setMenuVisible(true)}
+          style={s.moreButton}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t('plaza.actions.more', { defaultValue: '更多' })}

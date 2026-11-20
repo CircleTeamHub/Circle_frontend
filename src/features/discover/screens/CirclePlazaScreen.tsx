@@ -25,22 +25,23 @@ const s = StyleSheet.create({
   // 标题是 32 号大字：长语言（如西语）下让标题收缩，别把右侧图标挤出屏幕。
   headerTitle: {
     flexShrink: 1,
-    marginRight: Spacing.md,
+    marginRight: Spacing.xs,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    marginRight: -Spacing.sm,
   },
-  notificationButton: {
-    position: 'relative',
+  headerButton: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationBadge: {
     position: 'absolute',
-    top: -8,
-    right: -12,
+    top: 2,
+    right: 0,
   },
   content: {
     flex: 1,
@@ -105,6 +106,7 @@ export default function CirclePlazaScreen() {
         </Text>
         <View style={s.headerActions}>
           <Pressable
+            style={s.headerButton}
             onPress={handleOpenCircleManagement}
             hitSlop={8}
             accessibilityRole="button"
@@ -117,6 +119,7 @@ export default function CirclePlazaScreen() {
             />
           </Pressable>
           <Pressable
+            style={s.headerButton}
             onPress={handleFilter}
             hitSlop={8}
             accessibilityRole="button"
@@ -129,7 +132,7 @@ export default function CirclePlazaScreen() {
             />
           </Pressable>
           <Pressable
-            style={s.notificationButton}
+            style={s.headerButton}
             onPress={handleOpenNotifications}
             hitSlop={8}
             accessibilityRole="button"

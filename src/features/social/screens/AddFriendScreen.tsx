@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -27,6 +28,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
 
 type SearchState = 'idle' | 'loading' | 'result' | 'not-found' | 'error';
 
@@ -100,6 +102,7 @@ function getDisplayName(user: PublicUser) {
 }
 
 export default function AddFriendScreen() {
+  const isDesktopWeb = useDesktopSplitLayout();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
@@ -203,7 +206,7 @@ export default function AddFriendScreen() {
     router.push(`/(tabs)/${scope === 'contacts' ? 'contacts' : 'messages'}/scan`);
   }, [router, scope]);
 
-  return (
+  const content = (
     <View
       testID={E2E_TEST_IDS.addFriendScreen}
       style={[d.container, { paddingTop: insets.top }]}
@@ -222,6 +225,7 @@ export default function AddFriendScreen() {
             <Ionicons name="search" size={18} color={colors.textSecondary} />
             <TextInput
               testID={E2E_TEST_IDS.addFriendInput}
+              autoFocus={isDesktopWeb}
               value={keyword}
               onChangeText={setKeyword}
               onSubmitEditing={handleSearch}
@@ -320,4 +324,5 @@ export default function AddFriendScreen() {
       </ScrollView>
     </View>
   );
+  return <DesktopCenteredColumn>{content}</DesktopCenteredColumn>;
 }
