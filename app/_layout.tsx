@@ -64,6 +64,7 @@ import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { NoteRatingFlowHost } from '@/features/notes/rating/NoteRatingFlowHost';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { WebPushSession } from '@/features/notifications/components/WebPushSession';
+import { listenForInstallPrompt } from '@/features/notifications/services/home-screen-install';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
@@ -109,6 +110,11 @@ registerDeviceIdProvider(getDeviceId);
 registerStableDeviceIdProvider(getStableDeviceId);
 // 安卓：卡住的 GET 的备份请求走独立连接池（一定是新连接）；其余平台和旧原生包为 null，照常 fetch。
 registerFreshConnectionTransport(createFreshConnectionTransport());
+
+// Chrome / Edge 在页面加载后很快就发「可以安装」事件，进消息页再听就错过了。
+if (Platform.OS === 'web') {
+  listenForInstallPrompt();
+}
 
 // 请求卡住时记下「卡在哪一步」，随超时上报带走（见 observability/request-trace）。
 // 只在原生端：web 的 fetch 不经过 RN 的 XMLHttpRequest。

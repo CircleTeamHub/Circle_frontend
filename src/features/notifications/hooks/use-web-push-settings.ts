@@ -16,7 +16,8 @@ type WebPushState =
   | { status: 'loading' | 'install' | 'unsupported' | 'unavailable' | 'error' }
   | { status: 'ready'; registration: ServiceWorkerRegistration; publicKey: string; subscribed: boolean };
 
-export function useWebPushSettings() {
+/** `onInstall`：iOS 要先添加到主屏幕才能开推送，点这一行打开添加步骤。 */
+export function useWebPushSettings(onInstall: () => void) {
   const userId = useAuthStore(state => state.user?.id);
   const epoch = useAuthStore(state => state.sessionEpoch);
   const [state, setState] = useState<WebPushState>({ status: 'loading' });
@@ -97,6 +98,9 @@ export function useWebPushSettings() {
       subtitleKey: hint || `${prefix}.ready`, disabled: busy,
       onValueChange: (value: boolean) => void toggle(value),
     };
+  }
+  if (state.status === 'install') {
+    return { id: 'push', labelKey, subtitleKey: `${prefix}.install`, onPress: onInstall };
   }
   return {
     id: 'push', labelKey, subtitleKey: `${prefix}.${state.status}`,

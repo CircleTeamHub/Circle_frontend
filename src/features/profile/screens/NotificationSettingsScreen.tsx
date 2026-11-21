@@ -14,6 +14,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useTheme } from '@/theme';
 import { openSystemSettings } from '@/utils/open-system-settings';
 import { useWebPushSettings } from '@/features/notifications/hooks/use-web-push-settings';
+import { useAddToHomeScreen } from '@/features/notifications/hooks/use-add-to-home-screen';
+import { AddToHomeScreenGuide } from '@/features/notifications/components/AddToHomeScreenGuide';
 
 // A remounted screen can start a newer save while the previous screen's response is pending.
 let latestGroupPreferenceMutation = 0;
@@ -25,7 +27,8 @@ export default function NotificationSettingsScreen() {
   const sessionEpoch = useAuthStore(s => s.sessionEpoch);
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
-  const webPushRow = useWebPushSettings();
+  const homeScreen = useAddToHomeScreen();
+  const webPushRow = useWebPushSettings(homeScreen.start);
   // 三档的读写走与圈子弹层同一个 hook。此前这三行直接 set 本地 store，
   // 「离线提醒」关了不通知服务端 —— 推送照来，下次打开弹层还会被 GET 翻回去。
   const circle = useCircleNotificationTiers();
@@ -263,6 +266,7 @@ export default function NotificationSettingsScreen() {
       }}
       onClose={() => setRingtoneSheet(null)}
     />
+    <AddToHomeScreenGuide visible={homeScreen.guideVisible} onClose={homeScreen.closeGuide} />
     </>
   );
 }

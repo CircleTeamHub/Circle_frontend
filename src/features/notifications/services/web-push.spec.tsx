@@ -186,7 +186,7 @@ describe('useWebPushSettings', () => {
     browser.subscription = null;
     const failure = new Error('register failed');
     jest.mocked(registerPushToken).mockRejectedValueOnce(failure);
-    const { result } = renderHook(() => useWebPushSettings() as SettingsDetailRow);
+    const { result } = renderHook(() => useWebPushSettings(jest.fn()) as SettingsDetailRow);
     await waitFor(() => expect(result.current.type).toBe('toggle'));
     expect(result.current.value).toBe(false);
 
@@ -200,5 +200,21 @@ describe('useWebPushSettings', () => {
     expect(browser.subscription).toBeNull();
     expect(browser.storage.has(OWNER_KEY)).toBe(false);
     expect(reportHandledFailure).toHaveBeenCalledWith('webPush', 'toggle', failure, { stage: 'register' });
+  });
+
+  it('on iPhone Safari the row opens the add-to-home-screen steps instead of a dead hint', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    const userAgent = navigator.userAgent;
+    Object.assign(navigator, { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) Safari/604.1' });
+    const onInstall = jest.fn();
+    try {
+      const { result } = renderHook(() => useWebPushSettings(onInstall) as SettingsDetailRow);
+      expect(result.current.subtitleKey).toBe('settingsDetails.notifications.webPush.install');
+      expect(result.current.type).toBeUndefined();
+      act(() => result.current.onPress?.());
+      expect(onInstall).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.assign(navigator, { userAgent });
+    }
   });
 });

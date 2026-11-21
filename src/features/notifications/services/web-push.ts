@@ -1,13 +1,11 @@
 import { registerPushToken, revokePushToken } from '@/services/api/notifications';
+import { isAppleMobileBrowser, isStandaloneDisplay } from './home-screen-install';
 
 const OWNER_KEY = 'windnote.web-push-owner';
 
 export function webPushSupport(): 'install' | 'unsupported' | 'available' {
   if (typeof window === 'undefined') return 'unsupported';
-  const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (appleMobile && !window.matchMedia('(display-mode: standalone)').matches &&
-      !(navigator as Navigator & { standalone?: boolean }).standalone) return 'install';
+  if (isAppleMobileBrowser() && !isStandaloneDisplay()) return 'install';
   return window.isSecureContext && 'serviceWorker' in navigator &&
     'PushManager' in window && 'Notification' in window ? 'available' : 'unsupported';
 }
