@@ -14,7 +14,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { MAX_SCROLL_TO_INDEX_RETRIES } from '@/features/chat/chat-detail/constants';
 import { Spacing, type ThemeColors, Typography } from '@/theme';
 import { type TFunction } from 'i18next';
-import { useCallback, type ReactElement, type RefObject } from 'react';
+import { useCallback, useRef, type ReactElement, type RefObject } from 'react';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -86,17 +86,22 @@ export function ChatMessageArea({
   keyExtractor,
   closeInputPanels,
 }: ChatMessageAreaProps) {
+  // react-native-web's FlatList asserts in componentDidUpdate that
+  // onViewableItemsChanged keeps the same identity (native only checks
+  // nullability). The unread anchor is computed after history loads, so a
+  // callback that closed over it crashed the whole web app on open. Keep one
+  // callback for the component's lifetime and read the latest values from a ref.
+  const viewabilityRef = useRef({ unreadStartMessageID, handleUnreadStartVisibilityChange });
+  viewabilityRef.current = { unreadStartMessageID, handleUnreadStartVisibilityChange };
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (!unreadStartMessageID) {
-        handleUnreadStartVisibilityChange(false);
-        return;
-      }
-      handleUnreadStartVisibilityChange(
-        viewableItems.some((token) => token.item?.id === unreadStartMessageID),
+      const { unreadStartMessageID: anchorID, handleUnreadStartVisibilityChange: report } =
+        viewabilityRef.current;
+      report(
+        anchorID !== null && viewableItems.some((token) => token.item?.id === anchorID),
       );
     },
-    [handleUnreadStartVisibilityChange, unreadStartMessageID],
+    [],
   );
 
   return (
