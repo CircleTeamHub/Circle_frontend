@@ -56,9 +56,10 @@ function viewableCallback() {
   }) => void;
 }
 
-// react-native-web 的 FlatList 在 componentDidUpdate 里断言这个回调引用不变,
-// 变了就抛 invariant(原生只查是否为空)。消息拉回来、未读起点算出来时
-// 回调若跟着换引用,Web 端整页崩到错误边界。
+// react-native-web's FlatList asserts in componentDidUpdate that this callback
+// keeps its identity (native only checks nullability). If it changes when the
+// unread anchor is computed after history loads, the web app crashes into the
+// root error boundary.
 test('keeps onViewableItemsChanged identity when the unread anchor changes', () => {
   const props = buildProps();
   const view = render(<ChatMessageArea {...props} />);
@@ -69,15 +70,24 @@ test('keeps onViewableItemsChanged identity when the unread anchor changes', () 
   expect(viewableCallback()).toBe(first);
 });
 
-test('the stable callback still checks the latest unread anchor', () => {
-  const handleUnreadStartVisibilityChange = jest.fn();
-  const props = buildProps({ handleUnreadStartVisibilityChange });
+test('the stable callback uses the latest unread anchor and handler', () => {
+  const firstHandler = jest.fn();
+  const latestHandler = jest.fn();
+  const props = buildProps({ handleUnreadStartVisibilityChange: firstHandler });
   const view = render(<ChatMessageArea {...props} />);
+  const callback = viewableCallback();
 
-  view.rerender(<ChatMessageArea {...props} unreadStartMessageID="m-1" />);
-  viewableCallback()({
+  view.rerender(
+    <ChatMessageArea
+      {...props}
+      unreadStartMessageID="m-1"
+      handleUnreadStartVisibilityChange={latestHandler}
+    />,
+  );
+  callback({
     viewableItems: [{ item: messages[1], key: 'm-1', index: 1, isViewable: true }],
   });
 
-  expect(handleUnreadStartVisibilityChange).toHaveBeenLastCalledWith(true);
+  expect(latestHandler).toHaveBeenLastCalledWith(true);
+  expect(firstHandler).not.toHaveBeenCalled();
 });
