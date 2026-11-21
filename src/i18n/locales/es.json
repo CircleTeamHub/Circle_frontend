@@ -3168,7 +3168,10 @@
     "title": "Cambiar de cuenta",
     "current": "Actual",
     "addAccount": "Añadir cuenta",
-    "empty": "No hay otras cuentas"
+    "empty": "No hay otras cuentas",
+    "webSignOutTitle": "Cambiar de cuenta",
+    "webSignOutMessage": "La versión web solo puede mantener una sesión abierta a la vez. Para cambiar de cuenta primero debes cerrar sesión, lo que borra los borradores sin enviar y otros datos locales de este dispositivo.",
+    "webSignOutConfirm": "Cerrar sesión y cambiar"
   },
   "tabs": {
     "messages": "Mensajes",

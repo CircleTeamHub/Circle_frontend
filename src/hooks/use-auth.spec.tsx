@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Alert, Platform, View, type AlertButton } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, createNavigatorFactory, useNavigationBuilder, StackRouter, StackActions, usePreventRemove } from '@react-navigation/native';
 import { act, render, renderHook, waitFor } from '@testing-library/react-native';
 import { useAuth } from './use-auth';
@@ -548,4 +548,41 @@ test('adding an account dismisses the auth route after the real removal guard un
   await waitFor(() => expect(navigation.getCurrentRoute()?.name).toBe('Tabs'));
   screen.unmount();
   mockRouter.dismissTo.mockReset();
+});
+
+describe('web (one session cookie per browser)', () => {
+  beforeEach(() => jest.replaceProperty(Platform, 'OS', 'web'));
+  afterEach(() => jest.restoreAllMocks());
+
+  test('re-signing in as the same account does not revoke the cookie session it just received', async () => {
+    signInPreviousAccount();
+    jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens });
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(previousUser as never);
+    const { result } = renderHook(() => useAuth());
+
+    await act(async () => {
+      await result.current.login('user_0', 'password1');
+    });
+
+    expect(mockSetSession).toHaveBeenCalledWith(tokens, previousUser, { onboardingRequired: undefined });
+    // On the web the stored refresh token is only a placeholder; "logging it out" would
+    // revoke the brand-new session in the cookie.
+    expect(logoutRequest).not.toHaveBeenCalled();
+  });
+
+  test('switch account explains that it signs out and only does so once confirmed', async () => {
+    signInPreviousAccount();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { result } = renderHook(() => useAuth());
+
+    act(() => result.current.switchAccount());
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(clearLocalSession).not.toHaveBeenCalled();
+    const buttons = alert.mock.calls[0][2] as AlertButton[];
+    await act(async () => {
+      buttons.find(button => button.style === 'destructive')?.onPress?.();
+    });
+    await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(undefined, { reason: 'user-logout', userInitiated: true }));
+  });
 });

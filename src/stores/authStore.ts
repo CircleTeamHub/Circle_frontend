@@ -21,6 +21,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { reportError } from '@/observability/sentry';
 import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { safeHttpRequestId } from '@/observability/http-diagnostics';
+import { usesWebSessionCookie } from '@/services/auth/web-session';
 
 export interface AuthUser {
   id: string;
@@ -250,7 +251,8 @@ export const useAuthStore = create<AuthState>()(
         if (!hasValidTokens) {
           // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
           // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
-          if (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken) {
+          // 网页版的凭证本来就只在内存里，重新加载必然走到这里（随后靠 Cookie 恢复），不算异常。
+          if (!usesWebSessionCookie() && (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken)) {
             const context = {
               authenticated: nextState.isAuthenticated,
               hasAccessToken: Boolean(nextState.accessToken),

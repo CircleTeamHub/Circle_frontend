@@ -3162,7 +3162,10 @@
     "title": "계정 전환",
     "current": "현재",
     "addAccount": "계정 추가",
-    "empty": "다른 계정이 없습니다"
+    "empty": "다른 계정이 없습니다",
+    "webSignOutTitle": "계정 전환",
+    "webSignOutMessage": "웹 버전은 한 번에 한 계정만 로그인할 수 있어요. 계정을 전환하려면 먼저 로그아웃해야 하며, 이 기기의 보내지 않은 임시 저장 등 데이터가 삭제돼요.",
+    "webSignOutConfirm": "로그아웃 후 전환"
   },
   "tabs": {
     "messages": "메시지",

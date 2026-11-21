@@ -6,8 +6,9 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { loadWebSession } = require('./helpers/web-session-module');
 
-function loadAuthStore({ realPersist = false } = {}) {
+function loadAuthStore({ realPersist = false, web = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/stores/authStore.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -89,6 +90,7 @@ function loadAuthStore({ realPersist = false } = {}) {
       if (request === './persisted-user') {
         return { sanitizeUserForPersist: (user) => user };
       }
+      if (request === '@/services/auth/web-session') return loadWebSession({ web });
       if (request === '@/types') return {};
       throw new Error(`Unexpected import: ${request}`);
     }),
@@ -198,6 +200,15 @@ test('partial credentials with authenticated metadata report before hydration cl
   assert.equal(reports[0].diagnosticId, '12345678-1234-4234-8234-123456789def');
   assert.equal(useAuthStore.getState().accessToken, null);
   assert.doesNotMatch(JSON.stringify(reports), /access-only/);
+});
+
+test('a web reload drops the in-memory tokens without reporting a forced logout', () => {
+  // 网页版的凭证本来就只在内存里；重新加载后由 SessionBootstrap 拿 Cookie 恢复。
+  const { useAuthStore, persistOptions, reports } = loadAuthStore({ web: true });
+  useAuthStore.setState({ isAuthenticated: true, accessToken: null, refreshToken: null });
+  persistOptions.onRehydrateStorage()(useAuthStore.getState(), undefined);
+  assert.equal(reports.length, 0);
+  assert.equal(useAuthStore.getState().isAuthenticated, false);
 });
 
 test('empty native startup does not report a forced logout', () => {

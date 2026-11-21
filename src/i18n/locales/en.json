@@ -25,7 +25,10 @@
     "title": "Switch Account",
     "current": "Current",
     "addAccount": "Add Account",
-    "empty": "No other accounts"
+    "empty": "No other accounts",
+    "webSignOutTitle": "Switch account",
+    "webSignOutMessage": "The web version can stay signed in to one account at a time. To switch, you need to sign out first, which clears unsent drafts and other local data on this device.",
+    "webSignOutConfirm": "Sign out and switch"
   },
   "assistant": {
     "name": "WindNote Assistant",

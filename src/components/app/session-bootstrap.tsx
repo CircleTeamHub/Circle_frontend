@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
-import { fetchCurrentUser } from '@/services/api/auth';
-import { isDefinitiveAuthFailure, type ApiError } from '@/services/api/client';
+import { fetchCurrentUser, fetchCurrentUserWithToken } from '@/services/api/auth';
+import { isDefinitiveAuthFailure, restoreWebSessionAccessToken, type ApiError } from '@/services/api/client';
+import { WEB_COOKIE_REFRESH_TOKEN, usesWebSessionCookie } from '@/services/auth/web-session';
 import {
   connectChat,
   disconnectChat,
@@ -23,6 +24,7 @@ import { reportError } from '@/observability/sentry';
 import { retry } from '@/utils/retry';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { createHttpRequestId } from '@/observability/http-diagnostics';
 import { createBackgroundDisconnect } from '@/components/app/background-disconnect';
 
 /**
@@ -36,6 +38,28 @@ import { createBackgroundDisconnect } from '@/components/app/background-disconne
  *
  * 该组件始终返回 null，不渲染任何 UI。
  */
+/**
+ * 网页版重新加载后恢复登录：刷新凭证在 HttpOnly Cookie 里（见 web-session.ts），续签拿到
+ * access token 再拉用户。没有 Cookie、Cookie 已失效或够不到服务器都返回 false，照常进登录页。
+ */
+async function restoreWebSession(isCancelled: () => boolean): Promise<boolean> {
+  try {
+    // 重试沿用同一个尝试 ID，见 restoreWebSessionAccessToken。
+    const attemptId = createHttpRequestId();
+    const accessToken = await retry(() => restoreWebSessionAccessToken(attemptId));
+    if (!accessToken || isCancelled()) return false;
+    const user = await retry(() => fetchCurrentUserWithToken(accessToken));
+    if (isCancelled()) return false;
+    useAuthStore.getState().setSession({ accessToken, refreshToken: WEB_COOKIE_REFRESH_TOKEN }, user);
+    // 与冷启动拉完 /auth/me 后同一步：消息页顶部的自定义分组靠它；资料引导没走完的不拉。
+    if (hasCompletedOnboardingProfile(user)) void useMessageGroupsStore.getState().load();
+    return true;
+  } catch (error) {
+    reportHandledFailure('session', 'restoreWebSession', error);
+    return false;
+  }
+}
+
 export function SessionBootstrap() {
   // selector 化：避免订阅整个 authStore —— SessionBootstrap 返回 null，但任意 auth
   // 字段变化都会让组件重新执行（重跑 useEffect 依赖比较），尤其是 token 刷新场景。
@@ -167,6 +191,13 @@ export function SessionBootstrap() {
     const bootstrapSession = async () => {
       // 没有 token，清完账号级本地数据后结束 loading。
       if (!accessToken || !refreshToken) {
+        // 网页版的凭证只在内存里，重新加载就没了：先拿 HttpOnly Cookie 续签恢复登录。
+        if (usesWebSessionCookie()) {
+          if (await restoreWebSession(() => cancelled)) return;
+          // 这一轮已被新一轮取代（如开发环境严格模式重跑 effect）：清理交给新的那一轮，
+          // 否则可能把新一轮刚恢复的会话清掉。
+          if (cancelled) return;
+        }
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。
         try {

@@ -25,7 +25,10 @@
     "title": "切换账号",
     "current": "当前",
     "addAccount": "添加账号",
-    "empty": "暂无其他账号"
+    "empty": "暂无其他账号",
+    "webSignOutTitle": "切换账号",
+    "webSignOutMessage": "网页版一次只能登录一个账号。切换账号需要先退出当前账号，本机未发送的草稿等数据会被清除。",
+    "webSignOutConfirm": "退出并切换"
   },
   "assistant": {
     "name": "AI小助手",

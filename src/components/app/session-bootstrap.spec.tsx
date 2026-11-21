@@ -1,7 +1,7 @@
 import { AppState, Platform } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { SessionBootstrap } from './session-bootstrap';
-import { fetchCurrentUser } from '@/services/api/auth';
+import { fetchCurrentUser, fetchCurrentUserWithToken } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import {
   connectChat,
@@ -9,6 +9,7 @@ import {
 } from '@/chat-core/socket-manager';
 import { disconnectRealtime } from '@/realtime/client';
 import { reportError } from '@/observability/sentry';
+import * as apiClient from '@/services/api/client';
 import { ApiError } from '@/services/api/client';
 import type { AuthUser } from '@/stores/authStore';
 
@@ -24,7 +25,7 @@ jest.mock('@/stores/authStore', () => ({
     { getState: () => mockAuth.state },
   ),
 }));
-jest.mock('@/services/api/auth', () => ({ fetchCurrentUser: jest.fn() }));
+jest.mock('@/services/api/auth', () => ({ fetchCurrentUser: jest.fn(), fetchCurrentUserWithToken: jest.fn() }));
 jest.mock('@/observability/sentry', () => ({ reportError: jest.fn() }));
 jest.mock('@/observability/session-diagnostics', () => ({ recordSessionDiagnostic: jest.fn() }));
 // 真实 api/client 要进来（isDefinitiveAuthFailure / ApiError 是被测逻辑的一部分），
@@ -57,9 +58,10 @@ jest.mock('@/realtime/client', () => ({
   disconnectRealtime: jest.fn(),
   recoverTabBadgeSnapshot: jest.fn(async () => undefined),
 }));
+const mockLoadGroups = jest.fn(async () => undefined);
 jest.mock('@/features/messages/store/use-message-groups-store', () => ({
   useMessageGroupsStore: {
-    getState: () => ({ load: jest.fn(async () => undefined) }),
+    getState: () => ({ load: mockLoadGroups }),
   },
 }));
 jest.mock('@/features/auth/onboarding-completion', () => ({
@@ -92,6 +94,7 @@ beforeEach(() => {
     onboardingRequired: false,
     sessionEpoch: 1,
     setUser: jest.fn(),
+    setSession: jest.fn(),
     setLoading: jest.fn(),
     setOnboardingRequired: jest.fn(),
   };
@@ -415,4 +418,90 @@ describe('android background disconnect', () => {
     });
     expect(mockSuspendForBackground).not.toHaveBeenCalled();
   });
+});
+
+describe('web reload', () => {
+  const tokenless = () => {
+    mockAuth.state = { ...mockAuth.state, accessToken: null, refreshToken: null, user: null, isAuthenticated: false };
+  };
+
+  beforeEach(() => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    tokenless();
+  });
+
+  // Platform.OS and the restore spy must not leak into the native tests below.
+  afterEach(() => jest.restoreAllMocks());
+
+  test('restores the session from the refresh cookie instead of logging out', async () => {
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue('restored-access');
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(storedUser);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setSession).toHaveBeenCalledWith(
+      { accessToken: 'restored-access', refreshToken: 'web-cookie-session' },
+      storedUser,
+    ));
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(fetchCurrentUserWithToken).toHaveBeenCalledWith('restored-access');
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+    // Same follow-up as an ordinary cold start: the Messages screen's custom group tabs.
+    expect(mockLoadGroups).toHaveBeenCalledTimes(1);
+  });
+
+  test('a retried restore reuses its attempt id so a lost response is not treated as token theft', async () => {
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken')
+      .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+      .mockResolvedValueOnce('restored-access');
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(storedUser);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setSession).toHaveBeenCalled(), { timeout: 3_000 });
+    expect(restore).toHaveBeenCalledTimes(2);
+    expect(restore.mock.calls[0][0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(restore.mock.calls[1][0]).toBe(restore.mock.calls[0][0]);
+  });
+
+  test('without a usable cookie it falls back to the login page', async () => {
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue(null);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
+    expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, { preserveLoading: true, reason: 'bootstrap-tokens-missing' });
+    expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+  });
+
+  test('a superseded run that finds no cookie leaves the cleanup to the newer run', async () => {
+    let finish: (value: string | null) => void = () => {};
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockReturnValue(new Promise(resolve => { finish = resolve; }));
+
+    const { unmount } = render(<SessionBootstrap />);
+    await waitFor(() => expect(apiClient.restoreWebSessionAccessToken).toHaveBeenCalled());
+    unmount();
+    await act(async () => { finish(null); });
+
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+  });
+
+  test('when the server cannot be reached it still unlocks the login page', async () => {
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(new ApiError('offline', { status: 0, failureKind: 'network' }));
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false), { timeout: 5_000 });
+    expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+  });
+});
+
+test('native cold start without tokens never tries the web cookie', async () => {
+  const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken');
+  mockAuth.state = { ...mockAuth.state, accessToken: null, refreshToken: null, user: null, isAuthenticated: false };
+
+  render(<SessionBootstrap />);
+
+  await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
+  expect(restore).not.toHaveBeenCalled();
 });

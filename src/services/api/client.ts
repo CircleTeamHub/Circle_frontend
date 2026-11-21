@@ -10,6 +10,7 @@
 import { API_URL } from '@/constants/config';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import { WEB_SESSION_HEADER, usesWebSessionCookie, withWebRefreshLock, withWebRefreshToken } from '@/services/auth/web-session';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
@@ -448,6 +449,8 @@ async function executeRequest<T>(
           : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
+        // 网页版：刷新凭证和设备标识在 HttpOnly Cookie 里，见 web-session.ts。
+        ...(usesWebSessionCookie() ? { [WEB_SESSION_HEADER]: '1' } : {}),
         ...Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'x-request-id')),
         'X-Request-Id': requestId,
       };
@@ -460,6 +463,7 @@ async function executeRequest<T>(
               method,
               headers: requestHeaders,
               ...(serializedBody ? { body: serializedBody.body } : {}),
+              ...(usesWebSessionCookie() ? { credentials: 'include' as const } : {}),
               signal: controller.signal,
             }),
         controller.signal,
@@ -657,14 +661,15 @@ async function refreshAccessToken(sessionEpoch: number) {
     const stableDeviceId = await readStableDeviceId();
     assertSessionEpoch(sessionEpoch);
     stage = 'request';
-    const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{
+    const { res, payload, requestId, clientRequestId, durationMs } = await withWebRefreshLock(() => executeRequest<{
       accessToken: string;
       refreshToken: string;
     }>(
       '/auth/refresh',
       {
         method: 'POST',
-        body: { refreshToken },
+        // 网页版的刷新凭证在 Cookie 里，store 里只是占位值。
+        body: usesWebSessionCookie() ? {} : { refreshToken },
         auth: false,
         headers: {
           'Idempotency-Key': refreshRequestId,
@@ -673,16 +678,16 @@ async function refreshAccessToken(sessionEpoch: number) {
       },
       undefined,
       { preparedRequestId: refreshRequestId },
-    );
+    ));
     refreshResponseStatus = res.status;
     assertSessionEpoch(sessionEpoch);
-    const tokens = unwrapResponse(res, payload, {
+    const tokens = withWebRefreshToken(unwrapResponse(res, payload, {
       endpoint: '/auth/refresh',
       method: 'POST',
       requestId,
       clientRequestId,
       durationMs,
-    });
+    }));
 
     if (!isTokenPair(tokens)) {
       const invalid: unknown = tokens;
@@ -777,6 +782,36 @@ async function refreshAccessToken(sessionEpoch: number) {
   refreshPromise = activeRefreshPromise;
   refreshPromiseSessionEpoch = sessionEpoch;
   return activeRefreshPromise;
+}
+
+/**
+ * 网页版重新加载后内存里没有凭证：拿 Cookie 续签一次，返回新的 access token。
+ * 服务端明确拒绝（没有 Cookie 或已失效，401/403）返回 null；网络错误、5xx 照常抛出。
+ *
+ * 调用方重试时必须传同一个 attemptId：超时的那次可能已在服务端换了凭证、只是回包（和
+ * 新 Cookie）没到，换个 ID 重放旧 Cookie 会被当成盗用而吊销整组会话；同一个 ID 服务端
+ * 会认出是重试、作废没送到的那枚再发一枚。
+ */
+export async function restoreWebSessionAccessToken(attemptId: string): Promise<string | null> {
+  const { res, payload, requestId, clientRequestId, durationMs } = await withWebRefreshLock(() =>
+    executeRequest<{ accessToken: string }>(
+      '/auth/refresh',
+      { method: 'POST', body: {}, auth: false, headers: { 'Idempotency-Key': attemptId } },
+      undefined,
+      { preparedRequestId: attemptId },
+    ),
+  );
+  if (res.status === 401 || res.status === 403) return null;
+  const tokens = withWebRefreshToken(unwrapResponse(res, payload, {
+    endpoint: '/auth/refresh', method: 'POST', requestId, clientRequestId, durationMs,
+  }));
+  if (!isTokenPair(tokens)) {
+    throw new ApiError(
+      i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请稍后重试' }),
+      { status: res.status, failureKind: 'refresh-response-invalid', reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId, clientRequestId, durationMs },
+    );
+  }
+  return tokens.accessToken;
 }
 
 /**

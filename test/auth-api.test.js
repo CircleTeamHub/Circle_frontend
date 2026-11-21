@@ -5,8 +5,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
 const { loadTsModule } = require("./helpers/load-ts-module");
+const { loadWebSession } = require("./helpers/web-session-module");
 
-function loadAuthApi(apiClientMock) {
+function loadAuthApi(apiClientMock, { web = false } = {}) {
   const filePath = path.join(process.cwd(), "src/services/api/auth.ts");
   const source = fs.readFileSync(filePath, "utf8");
   const transpiled = ts.transpileModule(source, {
@@ -78,6 +79,8 @@ function loadAuthApi(apiClientMock) {
       if (request === "@/features/auth/security-questions") {
         return loadTsModule("src/features/auth/security-questions.ts");
       }
+
+      if (request === "@/services/auth/web-session") return loadWebSession({ web });
 
       throw new Error(`Unexpected import: ${request}`);
     },
@@ -435,4 +438,31 @@ test("register omits a whitespace-only invite code", async () => {
   });
 
   assert.equal(Object.hasOwn(calls[0], "inviteCode"), false);
+});
+
+test("web login keeps the refresh token in its HttpOnly cookie and stores only a placeholder", async () => {
+  const { login } = loadAuthApi(async () => ({ accessToken: "a-token" }), { web: true });
+  const result = await login({ identifier: "a@b.com", password: "p" });
+  assert.equal(result.tokens.accessToken, "a-token");
+  assert.equal(result.tokens.refreshToken, "web-cookie-session");
+});
+
+test("native login still requires the refresh token in the response", async () => {
+  const { login } = loadAuthApi(async () => ({ accessToken: "a-token" }));
+  await assert.rejects(() => login({ identifier: "a@b.com", password: "p" }), /认证返回数据格式异常/);
+});
+
+test("web logout lets the server read and clear the refresh cookie", async () => {
+  const calls = [];
+  const { logout } = loadAuthApi(async (endpoint, options) => { calls.push({ endpoint, options }); }, { web: true });
+  await logout("web-cookie-session");
+  assert.equal(calls[0].endpoint, "/auth/logout");
+  assert.equal(JSON.stringify(calls[0].options.body), "{}");
+});
+
+test("native logout sends the refresh token", async () => {
+  const calls = [];
+  const { logout } = loadAuthApi(async (endpoint, options) => { calls.push({ endpoint, options }); });
+  await logout("r-token");
+  assert.equal(calls[0].options.body.refreshToken, "r-token");
 });
