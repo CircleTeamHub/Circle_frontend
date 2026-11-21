@@ -1265,25 +1265,28 @@ test('web: refresh sends no token in the body and keeps the cookie placeholder i
   assert.equal(harness.getClearCalls(), 0);
 });
 
+const ATTEMPT_ID = '0b9c6a52-4f3e-4c1d-9a7b-2e5f8d1c3a46';
+
 test('web: a page reload restores the access token from the refresh cookie', async () => {
   const harness = loadApiClientHarness({ web: true });
   harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'restored-access' } })) });
-  assert.equal(await harness.restoreWebSessionAccessToken(), 'restored-access');
+  assert.equal(await harness.restoreWebSessionAccessToken(ATTEMPT_ID), 'restored-access');
   const [, init] = harness.fetchCalls[0];
   assert.equal(init.body, '{}');
   assert.equal(init.credentials, 'include');
-  assert.match(init.headers['Idempotency-Key'], /.+/);
+  // Retries pass the same id, so the server can tell a retry from a replayed old cookie.
+  assert.equal(init.headers['Idempotency-Key'], ATTEMPT_ID);
 });
 
 test('web: no or expired refresh cookie means there is nothing to restore, not an error', async () => {
   const harness = loadApiClientHarness({ web: true });
   harness.refreshResponses.push({ promise: Promise.resolve(response(false, 401, { code: 401, message: 'Invalid or expired refresh token', data: null })) });
-  assert.equal(await harness.restoreWebSessionAccessToken(), null);
+  assert.equal(await harness.restoreWebSessionAccessToken(ATTEMPT_ID), null);
   assert.equal(harness.getClearCalls(), 0);
 });
 
 test('web: a server error while restoring is thrown so the caller can tell it from a logged-out browser', async () => {
   const harness = loadApiClientHarness({ web: true });
   harness.refreshResponses.push({ promise: Promise.resolve(response(false, 503, { code: 503, message: 'busy', data: null })) });
-  await assert.rejects(harness.restoreWebSessionAccessToken(), error => error.status === 503);
+  await assert.rejects(harness.restoreWebSessionAccessToken(ATTEMPT_ID), error => error.status === 503);
 });

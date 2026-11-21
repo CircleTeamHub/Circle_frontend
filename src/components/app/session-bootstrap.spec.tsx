@@ -58,9 +58,10 @@ jest.mock('@/realtime/client', () => ({
   disconnectRealtime: jest.fn(),
   recoverTabBadgeSnapshot: jest.fn(async () => undefined),
 }));
+const mockLoadGroups = jest.fn(async () => undefined);
 jest.mock('@/features/messages/store/use-message-groups-store', () => ({
   useMessageGroupsStore: {
-    getState: () => ({ load: jest.fn(async () => undefined) }),
+    getState: () => ({ load: mockLoadGroups }),
   },
 }));
 jest.mock('@/features/auth/onboarding-completion', () => ({
@@ -445,6 +446,22 @@ describe('web reload', () => {
     expect(restore).toHaveBeenCalledTimes(1);
     expect(fetchCurrentUserWithToken).toHaveBeenCalledWith('restored-access');
     expect(mockClearLocalSession).not.toHaveBeenCalled();
+    // Same follow-up as an ordinary cold start: the Messages screen's custom group tabs.
+    expect(mockLoadGroups).toHaveBeenCalledTimes(1);
+  });
+
+  test('a retried restore reuses its attempt id so a lost response is not treated as token theft', async () => {
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken')
+      .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+      .mockResolvedValueOnce('restored-access');
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(storedUser);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setSession).toHaveBeenCalled(), { timeout: 3_000 });
+    expect(restore).toHaveBeenCalledTimes(2);
+    expect(restore.mock.calls[0][0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(restore.mock.calls[1][0]).toBe(restore.mock.calls[0][0]);
   });
 
   test('without a usable cookie it falls back to the login page', async () => {

@@ -24,6 +24,7 @@ import { reportError } from '@/observability/sentry';
 import { retry } from '@/utils/retry';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { createHttpRequestId } from '@/observability/http-diagnostics';
 import { createBackgroundDisconnect } from '@/components/app/background-disconnect';
 
 /**
@@ -43,11 +44,15 @@ import { createBackgroundDisconnect } from '@/components/app/background-disconne
  */
 async function restoreWebSession(isCancelled: () => boolean): Promise<boolean> {
   try {
-    const accessToken = await retry(() => restoreWebSessionAccessToken());
+    // 重试沿用同一个尝试 ID，见 restoreWebSessionAccessToken。
+    const attemptId = createHttpRequestId();
+    const accessToken = await retry(() => restoreWebSessionAccessToken(attemptId));
     if (!accessToken || isCancelled()) return false;
     const user = await retry(() => fetchCurrentUserWithToken(accessToken));
     if (isCancelled()) return false;
     useAuthStore.getState().setSession({ accessToken, refreshToken: WEB_COOKIE_REFRESH_TOKEN }, user);
+    // 与冷启动拉完 /auth/me 后同一步：消息页顶部的自定义分组靠它；资料引导没走完的不拉。
+    if (hasCompletedOnboardingProfile(user)) void useMessageGroupsStore.getState().load();
     return true;
   } catch (error) {
     reportHandledFailure('session', 'restoreWebSession', error);

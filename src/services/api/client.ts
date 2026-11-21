@@ -787,9 +787,12 @@ async function refreshAccessToken(sessionEpoch: number) {
 /**
  * 网页版重新加载后内存里没有凭证：拿 Cookie 续签一次，返回新的 access token。
  * 服务端明确拒绝（没有 Cookie 或已失效，401/403）返回 null；网络错误、5xx 照常抛出。
+ *
+ * 调用方重试时必须传同一个 attemptId：超时的那次可能已在服务端换了凭证、只是回包（和
+ * 新 Cookie）没到，换个 ID 重放旧 Cookie 会被当成盗用而吊销整组会话；同一个 ID 服务端
+ * 会认出是重试、作废没送到的那枚再发一枚。
  */
-export async function restoreWebSessionAccessToken(): Promise<string | null> {
-  const attemptId = createHttpRequestId();
+export async function restoreWebSessionAccessToken(attemptId: string): Promise<string | null> {
   const { res, payload, requestId, clientRequestId, durationMs } = await withWebRefreshLock(() =>
     executeRequest<{ accessToken: string }>(
       '/auth/refresh',
