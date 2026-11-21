@@ -104,7 +104,7 @@
       "webPush": {
         "label": "Notificaciones en la pantalla de bloqueo",
         "loading": "Comprobando los ajustes de notificaciones…",
-        "install": "En Safari, usa Compartir → Añadir a pantalla de inicio. Abre WindNote desde su icono para activar las notificaciones.",
+        "install": "Primero añade WindNote a la pantalla de inicio. Toca para ver cómo.",
         "unsupported": "Este navegador no admite notificaciones push. Abre WindNote mediante HTTPS en un navegador compatible.",
         "unavailable": "Las notificaciones web no están disponibles en este momento.",
         "ready": "Recibe avisos de chat aunque el teléfono esté bloqueado.",
@@ -4341,5 +4341,34 @@
       "motherName": "¿Cómo se llama tu madre?",
       "fatherName": "¿Cómo se llama tu padre?"
     }
+  },
+  "homeScreenInstall": {
+    "banner": "Añádelo a la pantalla de inicio para recibir avisos al momento",
+    "add": "Añadir",
+    "dismiss": "Cerrar",
+    "title": "Añadir a la pantalla de inicio",
+    "intro": "Abre WindNote desde la pantalla de inicio para usarlo como una app y recibir avisos de mensajes nuevos en la pantalla bloqueada.",
+    "inAppBrowser": "Esta página está abierta dentro de otra app y no se puede añadir a la pantalla de inicio. Toca ··· arriba a la derecha, elige Abrir en Safari y sigue los pasos de abajo.",
+    "copyLink": "Copiar enlace",
+    "linkCopied": "Enlace copiado. Pégalo en Safari para abrirlo.",
+    "steps": {
+      "share": {
+        "title": "Toca el botón Compartir",
+        "detail": "En Safari está abajo (arriba en el iPad). Si solo ves ···, tócalo primero y luego elige Compartir."
+      },
+      "add": {
+        "title": "Elige Añadir a pantalla de inicio",
+        "detail": "Si no lo ves, desliza el menú hacia arriba."
+      },
+      "confirm": {
+        "title": "Toca Añadir arriba a la derecha",
+        "detail": "Si aparece el interruptor Abrir como app web, déjalo activado."
+      },
+      "open": {
+        "title": "Abre WindNote desde la pantalla de inicio",
+        "detail": "La primera vez tendrás que volver a iniciar sesión; después podrás activar las notificaciones de la pantalla bloqueada en los ajustes de notificaciones."
+      }
+    },
+    "done": "Entendido"
   }
 }

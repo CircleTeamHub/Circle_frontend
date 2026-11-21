@@ -2570,7 +2570,7 @@
       "webPush": {
         "label": "Lock screen message notifications",
         "loading": "Checking browser notification settings…",
-        "install": "In Safari, use Share → Add to Home Screen. Open WindNote from its icon to enable notifications.",
+        "install": "Add WindNote to your Home Screen first. Tap to see how.",
         "unsupported": "This browser cannot receive push notifications. Open WindNote over HTTPS in a supported browser.",
         "unavailable": "Web push notifications are currently unavailable.",
         "ready": "Get new chat alerts while your phone is locked.",
@@ -4341,5 +4341,34 @@
       "motherName": "What is your mother's name?",
       "fatherName": "What is your father's name?"
     }
+  },
+  "homeScreenInstall": {
+    "banner": "Add to Home Screen for timely message alerts",
+    "add": "Add",
+    "dismiss": "Dismiss",
+    "title": "Add to Home Screen",
+    "intro": "Open WindNote from your Home Screen to use it like an app and get new-message alerts on your lock screen.",
+    "inAppBrowser": "This page is open inside another app, which can't add it to your Home Screen. Tap ··· in the top-right corner, choose Open in Safari, then follow the steps below.",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied. Paste it into Safari to open it.",
+    "steps": {
+      "share": {
+        "title": "Tap the Share button",
+        "detail": "In Safari it's at the bottom (at the top on iPad). If you only see ···, tap it first, then choose Share."
+      },
+      "add": {
+        "title": "Choose Add to Home Screen",
+        "detail": "Swipe up on the menu if you don't see it."
+      },
+      "confirm": {
+        "title": "Tap Add in the top-right corner",
+        "detail": "If there is an Open as Web App switch, leave it on."
+      },
+      "open": {
+        "title": "Open WindNote from your Home Screen",
+        "detail": "Sign in again the first time, then turn on lock screen notifications in Notification settings."
+      }
+    },
+    "done": "Got it"
   }
 }

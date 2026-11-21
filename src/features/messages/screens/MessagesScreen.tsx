@@ -18,6 +18,7 @@ import ChatDetailScreen, {
 } from "@/features/chat/screens/ChatDetailScreen";
 import { selectFailedConversationKey } from "@/features/messages/utils/failed-preview";
 import { ChatConnectionBanner } from "@/features/chat/components/ChatConnectionBanner";
+import { AddToHomeScreenBanner } from '@/features/notifications/components/AddToHomeScreenBanner';
 import {
   dividerlessRowsKeyOf,
   parseDividerlessRowsKey,
@@ -1665,6 +1666,7 @@ export default function MessagesScreen() {
         </Pressable> : null}
       </View>
       <ChatConnectionBanner />
+      <AddToHomeScreenBanner />
     </View>
   ), [
     activeTab,

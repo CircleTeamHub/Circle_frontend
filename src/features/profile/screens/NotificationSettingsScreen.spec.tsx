@@ -21,6 +21,19 @@ jest.mock('@/features/profile/components/settings-detail', () => {
   const { Pressable, Text, View } = jest.requireActual('react-native');
   return { SettingsDetailScreen: ({ sections, header }: { sections: { rows: { id: string; value?: boolean; valueText?: string; disabled?: boolean; onPress?: () => void; onValueChange?: (v: boolean) => void }[] }[]; header?: React.ReactNode }) => <View>{header}{sections.flatMap(s => s.rows).map(row => <Pressable key={row.id} testID={row.id} disabled={row.disabled} onPress={() => row.onPress ? row.onPress() : row.onValueChange?.(!row.value)}><Text>{String(row.value ?? row.valueText ?? '')}</Text></Pressable>)}</View> };
 });
+// The web push row's own states are covered in web-push.spec; here only its install action matters.
+jest.mock('@/features/notifications/hooks/use-web-push-settings', () => ({
+  useWebPushSettings: (onInstall: () => void) => ({ id: 'push', labelKey: 'settingsDetails.notifications.webPush.label', onPress: onInstall }),
+}));
+jest.mock('@/features/notifications/services/home-screen-install', () => ({
+  homeScreenInstallMode: () => 'guide',
+  subscribeHomeScreenInstall: () => () => {},
+  showInstallPrompt: jest.fn(),
+}));
+jest.mock('@/features/notifications/components/AddToHomeScreenGuide', () => {
+  const { Pressable, Text } = jest.requireActual('react-native');
+  return { AddToHomeScreenGuide: ({ visible, onClose }: { visible: boolean; onClose: () => void }) => visible ? <Pressable onPress={onClose}><Text>add-to-home-screen-guide</Text></Pressable> : null };
+});
 jest.mock('@/components/ui/option-picker-sheet', () => {
   const { Pressable, Text } = jest.requireActual('react-native');
   return { OptionPickerSheet: ({ visible, options, onSelect, onClose }: { visible: boolean; options: { value: string; label: string }[]; onSelect: (v: string) => void; onClose: () => void }) => visible ? options.map(o => <Pressable key={o.value} onPress={() => { onSelect(o.value); onClose(); }}><Text>{o.label}</Text></Pressable>) : null };
@@ -169,3 +182,14 @@ test.each(['zh', 'en', 'ja', 'ko', 'es'])('the half-screen chat switch is transl
   expect(notifications.quickChatSheetHint).toBeTruthy();
 });
 
+
+test('on the web the lock screen notification row opens the add-to-home-screen steps', async () => {
+  jest.replaceProperty(Platform, 'OS', 'web');
+  render(<NotificationSettingsScreen />);
+  expect(screen.queryByText('add-to-home-screen-guide')).toBeNull();
+  fireEvent.press(screen.getByTestId('push'));
+  expect(screen.getByText('add-to-home-screen-guide')).toBeTruthy();
+  fireEvent.press(screen.getByText('add-to-home-screen-guide'));
+  expect(screen.queryByText('add-to-home-screen-guide')).toBeNull();
+  await act(async () => {});
+});
