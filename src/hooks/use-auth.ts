@@ -37,6 +37,7 @@ import {
 import i18n from '@/i18n';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { usesWebSessionCookie } from '@/services/auth/web-session';
 
@@ -152,7 +153,9 @@ export function useAuth() {
         // 持有的活会话挂在登录设备列表里。
         const supersededRefreshToken = current.refreshToken;
         setSession(tokens, user, { onboardingRequired: current.onboardingRequired });
-        if (supersededRefreshToken) {
+        // 网页版的旧会话已被服务端用新 Cookie 顶掉；store 里只是占位值，拿它去「登出」
+        // 撤销的是 Cookie 里刚发的新会话。
+        if (supersededRefreshToken && !usesWebSessionCookie()) {
           void logoutRequest(supersededRefreshToken).catch((err) => {
             reportHandledFailure('auth', 'revokeSupersededSession', err);
           });
@@ -370,10 +373,17 @@ export function useAuth() {
 
   // 「切换账号」打开账号选择 sheet，而不是直接登出。
   // 网页版例外：同一浏览器只有一份登录 Cookie（见 web-session.ts），存不下多个账号，
-  // 换账号就是退出后重新登录。
+  // 换账号就是退出后重新登录。退出会清掉本机的草稿等数据，先说清楚、确认了再退。
   const switchAccount = useCallback(() => {
     if (usesWebSessionCookie()) {
-      void logout();
+      Alert.alert(
+        i18n.t('accountSwitcher.webSignOutTitle'),
+        i18n.t('accountSwitcher.webSignOutMessage'),
+        [
+          { text: i18n.t('common.cancel'), style: 'cancel' },
+          { text: i18n.t('accountSwitcher.webSignOutConfirm'), style: 'destructive', onPress: () => void logout() },
+        ],
+      );
       return;
     }
     useAccountSwitcherStore.getState().open();

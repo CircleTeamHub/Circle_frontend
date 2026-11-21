@@ -192,8 +192,11 @@ export function SessionBootstrap() {
       // 没有 token，清完账号级本地数据后结束 loading。
       if (!accessToken || !refreshToken) {
         // 网页版的凭证只在内存里，重新加载就没了：先拿 HttpOnly Cookie 续签恢复登录。
-        if (usesWebSessionCookie() && await restoreWebSession(() => cancelled)) {
-          return;
+        if (usesWebSessionCookie()) {
+          if (await restoreWebSession(() => cancelled)) return;
+          // 这一轮已被新一轮取代（如开发环境严格模式重跑 effect）：清理交给新的那一轮，
+          // 否则可能把新一轮刚恢复的会话清掉。
+          if (cancelled) return;
         }
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。

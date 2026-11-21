@@ -474,6 +474,18 @@ describe('web reload', () => {
     expect(mockAuth.state.setSession).not.toHaveBeenCalled();
   });
 
+  test('a superseded run that finds no cookie leaves the cleanup to the newer run', async () => {
+    let finish: (value: string | null) => void = () => {};
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockReturnValue(new Promise(resolve => { finish = resolve; }));
+
+    const { unmount } = render(<SessionBootstrap />);
+    await waitFor(() => expect(apiClient.restoreWebSessionAccessToken).toHaveBeenCalled());
+    unmount();
+    await act(async () => { finish(null); });
+
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+  });
+
   test('when the server cannot be reached it still unlocks the login page', async () => {
     jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(new ApiError('offline', { status: 0, failureKind: 'network' }));
 
