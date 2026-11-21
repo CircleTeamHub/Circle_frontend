@@ -10,8 +10,8 @@ type SecureStoreApi = SecureKvApi;
 type SecureStoreOptions = SecureStoreModule.SecureStoreOptions;
 
 // 平台间接层（secure-kv）：原生仍是懒加载的 expo-secure-store，Web 换成
-// localStorage 档 —— 本文件其余逻辑（降级读、互斥队列、多账号 token）
-// 两端共用，不随平台分叉。
+// 只驻内存的档（刷新凭证在 HttpOnly Cookie 里，见 web-session.ts）—— 本文件
+// 其余逻辑（降级读、互斥队列、多账号 token）两端共用，不随平台分叉。
 const getSecureStore = getSecureKv;
 
 function secureStoreOptions(secureStore: SecureStoreApi): SecureStoreOptions {

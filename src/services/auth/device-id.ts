@@ -1,7 +1,7 @@
 /**
  * device-id.ts — 本机设备标识
  *
- * 首次使用时确定一个设备 ID，存进安全存储（原生 Keychain/Keystore，网页端只在内存里），
+ * 首次使用时确定一个设备 ID，存进安全存储（原生 Keychain/Keystore；网页端由服务端放在 HttpOnly Cookie 里），
  * 之后每个请求都以 X-Device-Id 头带上。服务端只存它的哈希，用来判断「这台设备是否
  * 受信任」：陌生设备登录要先经受信任设备批准。
  *
@@ -23,6 +23,7 @@ import {
   randomUUID,
 } from 'expo-crypto';
 import { getSecureKv } from '@/storage/secure-kv';
+import { usesWebSessionCookie } from '@/services/auth/web-session';
 
 const DEVICE_ID_KEY = 'circle.device-id.v1';
 // 与服务端 hashDeviceId 的白名单一致：不合规的值服务端当没带。
@@ -63,6 +64,8 @@ async function loadOrCreateDeviceId(): Promise<string> {
 }
 
 export function getDeviceId(): Promise<string | null> {
+  // 网页版的设备标识由服务端写进 HttpOnly Cookie（见 web-session.ts），这里不带 X-Device-Id。
+  if (usesWebSessionCookie()) return Promise.resolve(null);
   deviceIdPromise ??= loadOrCreateDeviceId().catch(() => {
     // 不缓存失败：安全存储暂时不可读（如锁屏冷启动）时，下一个请求再试。
     deviceIdPromise = null;

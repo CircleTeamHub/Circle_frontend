@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { loadWebSession } = require('./helpers/web-session-module');
 
 // 装真模块，不手抄判别逻辑 —— 否则分类器一改，这里的断言还停在旧语义上。
 const { ApiError } = loadTsModule('src/services/api/api-error.ts');
@@ -136,6 +137,7 @@ function loadUseAuth(fixtures = {}) {
     exports: {},
     require: withObservabilityStubs((request) => {
       if (request === '@/features/auth/store/device-verification-store') return { useDeviceVerificationStore: { getState: () => ({ setChallenge: () => {} }) } };
+      if (request === '@/services/auth/web-session') return loadWebSession();
       if (request in modules) {
         return modules[request];
       }

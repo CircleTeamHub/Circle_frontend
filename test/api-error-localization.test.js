@@ -5,6 +5,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadWebSession } = require('./helpers/web-session-module');
 
 // getApiErrorMessage turns a backend stable errorCode into a localized string
 // (serverErrors.<code>), falling back to the caller's fallback. Backend attaches
@@ -104,6 +105,7 @@ function loadErrors() {
   }).outputText;
   const moduleObj = { exports: {} };
   const shimRequire = (spec) => {
+    if (spec === '@/services/auth/web-session') return loadWebSession();
     if (spec === '@/i18n') return I18N;
     if (spec === '@/services/api/client') return { ApiError: FakeApiError };
     if (spec === '@/services/api/server-error-codes') return loadServerErrorCodes();
@@ -311,6 +313,7 @@ test('client.ts threads errorCode onto ApiError', () => {
   }).outputText;
   const moduleObj = { exports: {} };
   const shimRequire = (spec) => {
+    if (spec === '@/services/auth/web-session') return loadWebSession();
     if (spec === '@/constants/config') return { API_URL: 'http://example.test' };
     if (spec === '@/services/auth/session') {
       return {
@@ -387,6 +390,7 @@ test('ApiError accepts an options object for optional fields', () => {
   }).outputText;
   const moduleObj = { exports: {} };
   const shimRequire = (spec) => {
+    if (spec === '@/services/auth/web-session') return loadWebSession();
     if (spec === '@/constants/config') return { API_URL: 'http://example.test' };
     if (spec === '@/services/auth/session') {
       return {

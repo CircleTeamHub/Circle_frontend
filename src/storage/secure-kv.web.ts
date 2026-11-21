@@ -4,8 +4,9 @@ import type * as SecureStoreModule from 'expo-secure-store';
  * SecureStore 平台间接层的 Web 档（导出面与 secure-kv.ts 保持一致）。
  *
  * 浏览器没有系统钥匙串，任何写进 localStorage / IndexedDB 的登录凭证都能被
- * 同源脚本读取。这个平台档因此只保存在当前 JS 会话的内存里；刷新页面会要求
- * 重新登录，但不会把 access / refresh / IM token 留给后续 XSS 或受损依赖。
+ * 同源脚本读取。这个平台档因此只保存在当前 JS 会话的内存里，不把 token 留给
+ * 后续 XSS 或受损依赖。刷新页面后的恢复靠服务端写的 HttpOnly Cookie（脚本读不到），
+ * 见 services/auth/web-session.ts；store 里的 refreshToken 在网页版只是占位值。
  *
  * SSG（expo export 静态渲染）在 Node 里求值：无 window 时读写落进程内
  * Map，导出产物不含任何 token。读取时顺手清理旧版本曾落进 localStorage 的值。

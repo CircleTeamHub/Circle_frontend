@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadWebSession } = require('./helpers/web-session-module');
 
 function loadApiClient({
   responseText,
@@ -62,6 +63,7 @@ function loadApiClient({
       log: (...args) => logs.push(args),
     },
     require: withObservabilityStubs((request) => {
+      if (request === '@/services/auth/web-session') return loadWebSession();
       if (request === '@/constants/config') {
         return { API_URL: 'http://192.168.1.65:3000/api/v1' };
       }

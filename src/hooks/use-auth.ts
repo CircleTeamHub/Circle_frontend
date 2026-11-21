@@ -38,6 +38,7 @@ import i18n from '@/i18n';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { usesWebSessionCookie } from '@/services/auth/web-session';
 
 type AuthSuccessOptions = {
   onboardingRequired?: boolean;
@@ -368,9 +369,15 @@ export function useAuth() {
   }, [endSession]);
 
   // 「切换账号」打开账号选择 sheet，而不是直接登出。
+  // 网页版例外：同一浏览器只有一份登录 Cookie（见 web-session.ts），存不下多个账号，
+  // 换账号就是退出后重新登录。
   const switchAccount = useCallback(() => {
+    if (usesWebSessionCookie()) {
+      void logout();
+      return;
+    }
     useAccountSwitcherStore.getState().open();
-  }, []);
+  }, [logout]);
 
   // 切到一个已登录过的账号：拆掉当前会话 → 用存的 token 激活 → 校验 session。
   // session 仍有效（含 401 自动续期）则直接进入；已过期则移除并跳登录页预填账号。

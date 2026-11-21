@@ -14,6 +14,7 @@ import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import i18n from "@/i18n";
 import { UserFacingError } from "@/utils/user-facing-error";
+import { usesWebSessionCookie, withWebRefreshToken } from "@/services/auth/web-session";
 import {
   isSecurityQuestionKey,
   SECURITY_QUESTION_COUNT,
@@ -35,7 +36,9 @@ function isAuthTokens(value: unknown): value is AuthTokens {
   return true;
 }
 
-function ensureAuthTokens(value: unknown): AuthTokens {
+function ensureAuthTokens(response: unknown): AuthTokens {
+  // 网页版回包没有 refreshToken（在 HttpOnly Cookie 里），补上占位值。
+  const value = withWebRefreshToken(response);
   if (!isAuthTokens(value)) {
     // 字段缺失 / 类型异常 — 视作认证响应损坏，直接抛错而不是带着残缺数据写入 store。
     throw new UserFacingError(i18n.t("common.errors.authResponseInvalid"));
@@ -429,7 +432,8 @@ export async function logout(refreshToken: string) {
   return apiClient<void>("/auth/logout", {
     method: "POST",
     auth: false,
-    body: { refreshToken },
+    // 网页版由服务端从 Cookie 里取凭证并清掉 Cookie；store 里的只是占位值。
+    body: usesWebSessionCookie() ? {} : { refreshToken },
   });
 }
 

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
-import { fetchCurrentUser } from '@/services/api/auth';
-import { isDefinitiveAuthFailure, type ApiError } from '@/services/api/client';
+import { fetchCurrentUser, fetchCurrentUserWithToken } from '@/services/api/auth';
+import { isDefinitiveAuthFailure, restoreWebSessionAccessToken, type ApiError } from '@/services/api/client';
+import { WEB_COOKIE_REFRESH_TOKEN, usesWebSessionCookie } from '@/services/auth/web-session';
 import {
   connectChat,
   disconnectChat,
@@ -36,6 +37,24 @@ import { createBackgroundDisconnect } from '@/components/app/background-disconne
  *
  * 该组件始终返回 null，不渲染任何 UI。
  */
+/**
+ * 网页版重新加载后恢复登录：刷新凭证在 HttpOnly Cookie 里（见 web-session.ts），续签拿到
+ * access token 再拉用户。没有 Cookie、Cookie 已失效或够不到服务器都返回 false，照常进登录页。
+ */
+async function restoreWebSession(isCancelled: () => boolean): Promise<boolean> {
+  try {
+    const accessToken = await retry(() => restoreWebSessionAccessToken());
+    if (!accessToken || isCancelled()) return false;
+    const user = await retry(() => fetchCurrentUserWithToken(accessToken));
+    if (isCancelled()) return false;
+    useAuthStore.getState().setSession({ accessToken, refreshToken: WEB_COOKIE_REFRESH_TOKEN }, user);
+    return true;
+  } catch (error) {
+    reportHandledFailure('session', 'restoreWebSession', error);
+    return false;
+  }
+}
+
 export function SessionBootstrap() {
   // selector 化：避免订阅整个 authStore —— SessionBootstrap 返回 null，但任意 auth
   // 字段变化都会让组件重新执行（重跑 useEffect 依赖比较），尤其是 token 刷新场景。
@@ -167,6 +186,10 @@ export function SessionBootstrap() {
     const bootstrapSession = async () => {
       // 没有 token，清完账号级本地数据后结束 loading。
       if (!accessToken || !refreshToken) {
+        // 网页版的凭证只在内存里，重新加载就没了：先拿 HttpOnly Cookie 续签恢复登录。
+        if (usesWebSessionCookie() && await restoreWebSession(() => cancelled)) {
+          return;
+        }
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。
         try {

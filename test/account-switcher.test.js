@@ -43,8 +43,10 @@ test("switch account opens the sheet instead of logging out", () => {
   // 「切换账号」= 打开 sheet，不再走 endSession 登出
   assert.match(
     useAuth,
-    /const switchAccount = useCallback\(\(\) => \{\s*useAccountSwitcherStore\.getState\(\)\.open\(\);/,
+    /const switchAccount = useCallback\(\(\) => \{[\s\S]{0,200}?useAccountSwitcherStore\.getState\(\)\.open\(\);/,
   );
+  // 网页版一个浏览器只有一份登录 Cookie：切换账号 = 退出后重新登录
+  assert.match(useAuth, /if \(usesWebSessionCookie\(\)\) \{\s*void logout\(\);\s*return;\s*\}\s*useAccountSwitcherStore\.getState\(\)\.open\(\);/);
   // 登录成功记入本设备账号列表
   assert.match(useAuth, /upsertAccount\(\{[\s\S]*accessToken: tokens\.accessToken/);
   // 退出 = 从列表移除当前账号

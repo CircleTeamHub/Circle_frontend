@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { loadWebSession } = require('./helpers/web-session-module');
 
 function deferred() {
   let resolve;
@@ -31,7 +32,7 @@ async function waitFor(condition) {
   throw new Error('timed out waiting for condition');
 }
 
-function loadApiClientHarness({ persistError = false, commitError = false, pausePrepare, pauseCommit } = {}) {
+function loadApiClientHarness({ persistError = false, commitError = false, pausePrepare, pauseCommit, web = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -122,6 +123,7 @@ function loadApiClientHarness({ persistError = false, commitError = false, pause
         : response(false, 401, { code: 1, message: 'expired', data: null });
     },
     require: (request) => {
+      if (request === '@/services/auth/web-session') return loadWebSession({ web });
       if (request === '@/observability/metrics') return { recordMetric() {} };
       if (request === '@/observability/http-diagnostics') {
         return loadTsModule('src/observability/http-diagnostics.ts');
@@ -1223,4 +1225,65 @@ test('a socket rejected with the current token still rotates', async () => {
 
   assert.equal(await harness.refreshSessionAccessToken('access-a'), 'access-a-next');
   assert.equal(refreshCallCount(harness), 1);
+});
+
+test('web: every request rides the HttpOnly cookies and marks itself as a web session', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.requestResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) });
+  await harness.apiClient('/users/me/settings');
+  const [, init] = harness.fetchCalls[0];
+  assert.equal(init.credentials, 'include');
+  assert.equal(init.headers['X-Web-Session'], '1');
+});
+
+test('native requests send neither the web session header nor cookies', async () => {
+  const harness = loadApiClientHarness();
+  harness.requestResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) });
+  await harness.apiClient('/users/me/settings');
+  const [, init] = harness.fetchCalls[0];
+  assert.equal(init.credentials, undefined);
+  assert.equal(init.headers['X-Web-Session'], undefined);
+});
+
+test('web: refresh sends no token in the body and keeps the cookie placeholder in the store', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.authState.refreshToken = 'web-cookie-session';
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+  // The server keeps the rotated refresh token in its cookie and only returns the access token.
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'next-access' } })) });
+  await harness.apiClient('/users/me/settings');
+
+  const [, refreshInit] = harness.fetchCalls.find(([url]) => String(url).endsWith('/auth/refresh'));
+  assert.equal(refreshInit.body, '{}');
+  assert.equal(refreshInit.credentials, 'include');
+  assert.equal(harness.setTokenCalls.length, 1);
+  assert.equal(harness.setTokenCalls[0].accessToken, 'next-access');
+  assert.equal(harness.setTokenCalls[0].refreshToken, 'web-cookie-session');
+  assert.equal(harness.getClearCalls(), 0);
+});
+
+test('web: a page reload restores the access token from the refresh cookie', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'restored-access' } })) });
+  assert.equal(await harness.restoreWebSessionAccessToken(), 'restored-access');
+  const [, init] = harness.fetchCalls[0];
+  assert.equal(init.body, '{}');
+  assert.equal(init.credentials, 'include');
+  assert.match(init.headers['Idempotency-Key'], /.+/);
+});
+
+test('web: no or expired refresh cookie means there is nothing to restore, not an error', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.refreshResponses.push({ promise: Promise.resolve(response(false, 401, { code: 401, message: 'Invalid or expired refresh token', data: null })) });
+  assert.equal(await harness.restoreWebSessionAccessToken(), null);
+  assert.equal(harness.getClearCalls(), 0);
+});
+
+test('web: a server error while restoring is thrown so the caller can tell it from a logged-out browser', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.refreshResponses.push({ promise: Promise.resolve(response(false, 503, { code: 503, message: 'busy', data: null })) });
+  await assert.rejects(harness.restoreWebSessionAccessToken(), error => error.status === 503);
 });

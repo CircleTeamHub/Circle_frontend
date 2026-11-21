@@ -119,3 +119,9 @@ test('ios has no stable android id to report', async () => {
   await expect(loadFresh().getStableDeviceId()).resolves.toBeNull();
   expect(mockGetAndroidId).not.toHaveBeenCalled();
 });
+
+test('web: no X-Device-Id is sent; the server keeps the browser id in an HttpOnly cookie', async () => {
+  jest.replaceProperty(Platform, 'OS', 'web');
+  expect(await loadFresh().getDeviceId()).toBeNull();
+  expect(mockKv.setItemAsync).not.toHaveBeenCalled();
+});
