@@ -150,6 +150,7 @@ function loadUseAuth(fixtures = {}) {
     require: withObservabilityStubs((request) => {
       if (request === '@/features/auth/store/device-verification-store') return { useDeviceVerificationStore: { getState: () => ({ setChallenge: () => {} }) } };
       if (request === '@/services/auth/web-session') return loadWebSession();
+      if (request === 'react-native') return { Alert: { alert: () => {} }, Platform: { OS: 'ios' } };
       if (request in modules) return modules[request];
       throw new Error(`Unexpected import: ${request}`);
     }),
