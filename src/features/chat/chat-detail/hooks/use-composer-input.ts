@@ -20,6 +20,15 @@ import { MENTION_CANDIDATE_LIMIT } from '@/features/chat/chat-detail/constants';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { sendChatTyping } from '@/chat-core/socket-manager';
+import { Platform } from 'react-native';
+
+/** 网页端：打字时焦点就在输入框上，直接读它的选区。拿不到（非 DOM 环境）返回 null。 */
+function readWebCaret(): { start: number; end: number } | null {
+  if (typeof document === 'undefined') return null;
+  const el = document.activeElement as { selectionStart?: number | null; selectionEnd?: number | null } | null;
+  if (typeof el?.selectionStart !== 'number' || typeof el.selectionEnd !== 'number') return null;
+  return { start: el.selectionStart, end: el.selectionEnd };
+}
 
 export interface ComposerInputParams {
   currentUserID: string | null;
@@ -39,6 +48,8 @@ export interface ComposerInputParams {
   conversationID: string;
   isGroupChat: boolean;
   canViewGroupMemberProfiles: boolean;
+  /** 网页端选完 @ 的人要把焦点还给输入框（点列表会让它失焦）。 */
+  inputRef?: RefObject<{ focus: () => void } | null>;
 }
 
 /**
@@ -63,6 +74,7 @@ export function useComposerInput({
   conversationID,
   isGroupChat,
   canViewGroupMemberProfiles,
+  inputRef,
 }: ComposerInputParams) {
   // 记录输入框光标位置：表情面板按光标处插入，而不是一律拼到末尾。
   // 用 ref 持续跟踪、用 state 只在插入后短暂受控，避免长期受控干扰中文输入法。
@@ -202,6 +214,11 @@ export function useComposerInput({
         : next.length - suffix;
       draftRef.current = next;
       setDraft(next);
+      // 网页端打字不发选区事件（react-native-web 只在选中一段文字时才发 onSelectionChange），
+      // 光标会一直记成 0：@ 选人和插表情都插到开头。在这里跟上光标，优先读输入框的真实选区。
+      if (Platform.OS === 'web') {
+        selectionRef.current = readWebCaret() ?? { start: inferredCursor, end: inferredCursor };
+      }
       // 「正在输入」上报:只在有内容时发(清空不算输入)。隐私页的单聊/群聊
       // 开关与节流(2s)都收在 socket-manager 的 sendChatTyping 里。
       if (next.length > 0) {
@@ -264,7 +281,10 @@ export function useComposerInput({
 
   const handlePickMention = useCallback((target: MentionTarget) => {
     insertMention(target, true);
-  }, [insertMention]);
+    // 网页上点选人列表会让输入框失焦，手机网页键盘直接收起、接着打的字也进不去。
+    // 要在这次点击里同步拿回焦点，iOS Safari 才肯继续弹着键盘；光标由受控 selection 放到名字后面。
+    if (Platform.OS === 'web') inputRef?.current?.focus();
+  }, [inputRef, insertMention]);
   const handleInsertMention = useCallback((target: MentionTarget) => {
     insertMention(target, false);
   }, [insertMention]);

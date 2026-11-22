@@ -479,6 +479,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     conversationID,
     isGroupChat,
     canViewGroupMemberProfiles,
+    inputRef: composerInputRef,
   });
 
   const {
