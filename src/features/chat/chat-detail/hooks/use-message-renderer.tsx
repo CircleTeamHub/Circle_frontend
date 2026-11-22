@@ -244,6 +244,9 @@ export function useMessageRenderer({
         Platform.OS === 'web'
           ? {
               onContextMenu: (event: GestureResponderEvent & { preventDefault: () => void }) => {
+                // 手机网页触摸长按后浏览器还会补发 contextmenu:Pressable 已按长按开过菜单并
+                // preventDefault 了,这里跳过,只处理电脑上的鼠标右键。
+                if ((event.nativeEvent as { defaultPrevented?: boolean }).defaultPrevented) return;
                 event.preventDefault();
                 openActions(event);
               },

@@ -265,6 +265,22 @@ describe('right-click on a message', () => {
     }
   });
 
+  it('leaves a touch long-press on mobile web to the long-press handler', () => {
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      const openMenu = jest.fn();
+      jest.mocked(params.getMessageLongPressHandler).mockReturnValue(openMenu);
+      render(<Row />);
+      // 安卓 Chrome 长按后还会补发 contextmenu;Pressable 自己已按长按处理并 preventDefault,
+      // 这里再开一次菜单就是重复打开。
+      const event = { preventDefault: jest.fn(), nativeEvent: { pageX: 120, pageY: 340, defaultPrevented: true } };
+      contextHandlers()[0].props.onContextMenu(event);
+      expect(openMenu).not.toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
+  });
+
   it('adds nothing on native, where there is no right click', () => {
     render(<Row />);
     expect(contextHandlers()).toHaveLength(0);
