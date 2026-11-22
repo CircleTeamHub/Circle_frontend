@@ -24,7 +24,11 @@ jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/features/assistant/components/AssistantFloatingHeader', () => {
   const { Text } = jest.requireActual('react-native');
-  return { AssistantFloatingHeader: () => <Text>assistant-header</Text> };
+  return {
+    AssistantFloatingHeader: ({ inline }: { inline?: boolean }) => (
+      <Text>{inline ? 'assistant-header:inline' : 'assistant-header:overlay'}</Text>
+    ),
+  };
 });
 
 function renderHeader(overrides: Partial<ChatDetailHeaderProps> = {}) {
@@ -123,6 +127,7 @@ test('no status line when there is nothing to show', () => {
 
 test('the assistant keeps its own character header', () => {
   renderHeader({ isAssistant: true });
-  expect(screen.getByText('assistant-header')).toBeTruthy();
+  // 占位而不是盖在消息上:列表没给它留顶距,翻到最早的消息时会被约 140pt 高的头像整个挡住。
+  expect(screen.getByText('assistant-header:inline')).toBeTruthy();
   expect(screen.queryByTestId('chat-detail-header')).toBeNull();
 });

@@ -51,7 +51,9 @@ export interface ChatDetailHeaderProps {
 export function ChatDetailHeader({ isAssistant, assistantSpinning = false, ...props }: ChatDetailHeaderProps) {
   if (isAssistant) {
     return (
+      // 占位排在消息列表上面:列表不给它留顶距,悬浮的话翻到最早的消息会被头像挡住。
       <AssistantFloatingHeader
+        inline
         onBack={props.sheet ? props.sheet.onClose : props.embedded ? undefined : props.handleBack}
         spinning={assistantSpinning}
         title={props.conversationTitle}

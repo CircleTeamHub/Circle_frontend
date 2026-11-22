@@ -27,6 +27,8 @@ export function useLoginApproval() {
   const actionPending = useRef(false);
   useEffect(() => () => { mountedRef.current = false; }, []);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  // 网页刷新后 isAuthenticated 先从本地快照恢复,令牌要等 Cookie 续签回来;没令牌就去拉只会 401。
+  const hasAccessToken = useAuthStore((state) => Boolean(state.accessToken));
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const pending = useLoginApprovalStore((state) => state.pending);
   const appLocked = useLoginApprovalStore((state) => state.appLocked);
@@ -38,7 +40,7 @@ export function useLoginApproval() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [now, setNow] = useState(() => Date.now());
-  const enabled = isAuthenticated && !onboardingRequired;
+  const enabled = isAuthenticated && hasAccessToken && !onboardingRequired;
 
   useEffect(() => {
     const store = useLoginApprovalStore.getState();

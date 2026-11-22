@@ -52,7 +52,9 @@
     "keywordPlaceholder": "例：コンサート、求人、展示会",
     "allKeywordsButton": "すべてフォロー",
     "noteStatusYesButton": "通知する",
-    "noteStatusNoButton": "今は不要"
+    "noteStatusNoButton": "今は不要",
+    "setupDoneTitle": "通知をオンにしました",
+    "setupDoneMessage": "「{{circle}}」に条件に合う新着があれば、ここでお知らせします。"
   },
   "settingsDetails": {
     "accountSecurity": {
@@ -595,6 +597,9 @@
     "ownerOnlyAction": "この操作はグループのオーナーまたは管理者のみ実行できます。",
     "recommendFriend": "友だちに紹介",
     "addBlacklist": "ブロック",
+    "addBlacklistConfirmTitle": "ブラックリストに追加しますか？",
+    "addBlacklistConfirmMessage": "追加すると友達関係も削除されます（解除しても元に戻りません）。相手はあなたにメッセージや通話ができなくなります。",
+    "addBlacklistConfirm": "追加",
     "report": {
       "paramErrorTitle": "パラメータが不正です",
       "missingTarget": "報告対象がありません",
@@ -3297,7 +3302,10 @@
       "useSecurityQuestions": "信頼済みデバイスが手元にない場合は秘密の質問で認証",
       "securityQuestionsIntro": "設定した 2 つの秘密の質問に答えて認証を完了してください。",
       "securityQuestionsRetry": "秘密の質問を読み込めませんでした。タップして再試行してください。"
-    }
+    },
+    "webSessionUnreachableTitle": "ログイン状態をまだ復元できません",
+    "webSessionUnreachableMessage": "ネットワークが不安定か、サーバーが混み合っています。ログアウトはされていません。少し待ってからページを再読み込みしてください。",
+    "webSessionUnreachableReload": "再読み込み"
   },
   "media": {
     "saveImage": "画像を保存",

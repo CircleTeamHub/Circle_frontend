@@ -174,7 +174,7 @@ export default function BlacklistSettingsScreen() {
     Alert.alert(
       t('settingsDetails.privacy.blacklistRemoveTitle'),
       t('settingsDetails.privacy.blacklistRemoveMessage', {
-        name: user.nickname,
+        name: user.remark ?? user.nickname,
       }),
       [
         { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
@@ -241,12 +241,12 @@ export default function BlacklistSettingsScreen() {
             <View style={s.row}>
               <Avatar
                 uri={user.avatarUrl ?? undefined}
-                name={user.nickname}
+                name={user.remark ?? user.nickname}
                 size={AVATAR_SIZE}
               />
               <View style={s.textBlock}>
                 <Text style={d.title} numberOfLines={1}>
-                  {user.nickname}
+                  {user.remark ?? user.nickname}
                 </Text>
                 <Text style={d.caption}>
                   {formatBlockedAt(user.blockedAt, t)}

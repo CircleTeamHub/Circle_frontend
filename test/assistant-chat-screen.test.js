@@ -38,3 +38,22 @@ test('a bootstrap that lands after the screen was left does not navigate', () =>
     /\(data: AssistantBootstrapResponse\) => \{\s*if \(!mountedRef\.current\) return;[\s\S]*?router\.replace\(getAssistantChatHref/,
   );
 });
+
+test('the assistant header takes its own space instead of covering the first message', () => {
+  const src = read('src/features/assistant/screens/AssistantChatScreen.tsx');
+  // 悬浮头部约 140pt 高、绝对定位在列表上面,而列表只留 16pt 顶距:第一条消息被头像整个盖住。
+  const headers = src.match(/<AssistantFloatingHeader[\s\S]*?\/>/g) ?? [];
+  assert.equal(headers.length, 3);
+  for (const header of headers) assert.match(header, /\binline\b/);
+});
+
+test('finishing setup confirms it before landing on the still-empty assistant chat', () => {
+  const src = read('src/features/assistant/screens/AssistantChatScreen.tsx');
+  const finishSetup =
+    src.match(/const finishSetup = useCallback\([\s\S]*?\n  \);\n/)?.[0] ?? '';
+  assert.match(finishSetup, /showTopNotice\(\{\s*type: 'success',\s*title: t\('assistant\.setupDoneTitle'/);
+  assert.ok(
+    finishSetup.indexOf('showTopNotice(') < finishSetup.indexOf('navigateToChat(bootstrap)'),
+    'the confirmation is shown before navigating away',
+  );
+});

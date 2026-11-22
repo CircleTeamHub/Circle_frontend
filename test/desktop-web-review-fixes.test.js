@@ -289,3 +289,13 @@ test('Chrome 启动失败必须带着浏览器自己的输出立刻报错，而�
   assert.match(smoke, /child\.exitCode !== null/);
   assert.match(smoke, /CHROME_STARTUP_TIMEOUT_MS/);
 });
+
+test('the favorite send sheet uses the app primary color, not a stray green', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src/features/chat/components/FavoriteSendSheet.tsx'),
+    'utf8',
+  );
+  // 发送按钮写死了微信绿 #079B50,全 App 其它发送按钮都是主题主色。
+  assert.doesNotMatch(source, /#[0-9a-f]{6}/i);
+  assert.match(source, /backgroundColor: recipient \? colors\.primary : colors\.surfaceBorder/);
+});

@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -127,7 +127,8 @@ export default function QuickChatScreen() {
     });
   }, [close, slide]);
 
-  if (!conversationID) return null;
+  // 只有网页会走到这里(直接打开 /quick-chat、书签):没有会话可开,回消息页而不是一整页空白。
+  if (!conversationID) return <Redirect href="/(tabs)/messages" />;
 
   return (
     <KeyboardAvoidingContainer enabled={!composerPanelOpen} style={[s.root, { backgroundColor: colors.overlay }]}>

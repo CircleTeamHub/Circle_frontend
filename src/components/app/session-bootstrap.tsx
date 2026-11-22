@@ -26,6 +26,8 @@ import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { createHttpRequestId } from '@/observability/http-diagnostics';
 import { createBackgroundDisconnect } from '@/components/app/background-disconnect';
+import { showTopNotice } from '@/components/app/top-notice-store';
+import i18n from '@/i18n';
 
 /**
  * SessionBootstrap — 无 UI 的启动引导组件，挂载在 app 根节点。
@@ -42,22 +44,44 @@ import { createBackgroundDisconnect } from '@/components/app/background-disconne
  * 网页版重新加载后恢复登录：刷新凭证在 HttpOnly Cookie 里（见 web-session.ts），续签拿到
  * access token 再拉用户。没有 Cookie、Cookie 已失效或够不到服务器都返回 false，照常进登录页。
  */
-async function restoreWebSession(isCancelled: () => boolean): Promise<boolean> {
+/** restored：已恢复；no-session：没有可用的 Cookie 会话；unreachable：限流 / 网络 / 5xx，会话多半还在。 */
+type WebRestoreOutcome = 'restored' | 'no-session' | 'unreachable';
+
+async function restoreWebSession(isCancelled: () => boolean): Promise<WebRestoreOutcome> {
   try {
     // 重试沿用同一个尝试 ID，见 restoreWebSessionAccessToken。
     const attemptId = createHttpRequestId();
     const accessToken = await retry(() => restoreWebSessionAccessToken(attemptId));
-    if (!accessToken || isCancelled()) return false;
+    if (!accessToken || isCancelled()) return 'no-session';
     const user = await retry(() => fetchCurrentUserWithToken(accessToken));
-    if (isCancelled()) return false;
+    if (isCancelled()) return 'no-session';
     useAuthStore.getState().setSession({ accessToken, refreshToken: WEB_COOKIE_REFRESH_TOKEN }, user);
     // 与冷启动拉完 /auth/me 后同一步：消息页顶部的自定义分组靠它；资料引导没走完的不拉。
     if (hasCompletedOnboardingProfile(user)) void useMessageGroupsStore.getState().load();
-    return true;
+    return 'restored';
   } catch (error) {
     reportHandledFailure('session', 'restoreWebSession', error);
-    return false;
+    return isDefinitiveAuthFailure(error) ? 'no-session' : 'unreachable';
   }
+}
+
+/**
+ * 续签被限流或够不到服务器：没有凭证进不了 App，只能落在登录页，但 Cookie 会话多半还有效
+ * （本地清理不碰 Cookie）。说清楚没有被退出登录、刷新就能回来，免得用户以为掉线去重输密码。
+ */
+function notifyWebSessionUnreachable() {
+  showTopNotice({
+    type: 'warning',
+    title: i18n.t('auth.webSessionUnreachableTitle', { defaultValue: '登录状态暂时没能恢复' }),
+    message: i18n.t('auth.webSessionUnreachableMessage', {
+      defaultValue: '网络不稳或服务器繁忙，你并没有退出登录。稍后刷新页面即可回到原来的账号。',
+    }),
+    durationMs: 30_000,
+    action: {
+      label: i18n.t('auth.webSessionUnreachableReload', { defaultValue: '刷新' }),
+      onPress: () => window.location.reload(),
+    },
+  });
 }
 
 export function SessionBootstrap() {
@@ -193,10 +217,12 @@ export function SessionBootstrap() {
       if (!accessToken || !refreshToken) {
         // 网页版的凭证只在内存里，重新加载就没了：先拿 HttpOnly Cookie 续签恢复登录。
         if (usesWebSessionCookie()) {
-          if (await restoreWebSession(() => cancelled)) return;
+          const outcome = await restoreWebSession(() => cancelled);
+          if (outcome === 'restored') return;
           // 这一轮已被新一轮取代（如开发环境严格模式重跑 effect）：清理交给新的那一轮，
           // 否则可能把新一轮刚恢复的会话清掉。
           if (cancelled) return;
+          if (outcome === 'unreachable') notifyWebSessionUnreachable();
         }
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。

@@ -646,14 +646,13 @@ export function useMediaSend({
   );
 
   /**
-   * 没有相册权限(或 Web)时的退路:系统相册不需要权限。选择器盖在应用内相册上面,
-   * 选完按当前模式发送或进编辑器,带上在相册里已经填好的描述。
+   * 系统相册不需要权限:原生上是没有相册权限时的退路(盖在应用内相册上面),网页上点「相册」直接走这里。
+   * 选完按模式发送或进编辑器,带上在相册里已经填好的描述。
    */
-  const handlePickFromSystem = useCallback(
-    async (caption: string) => {
-      const mode = galleryMode;
+  const pickFromSystem = useCallback(
+    async (mode: MediaGalleryMode, caption: string) => {
       // 连点两下会再唤起一次选择器,第二次直接报「已在进行中」。
-      if (mode === null || systemPickerBusyRef.current) return;
+      if (systemPickerBusyRef.current) return;
       systemPickerBusyRef.current = true;
       // iOS 选视频时让系统导出成 720p H.264:旧安装包没有压缩模块,这是唯一的压缩。
       // 导出发生在选择器关掉之后、结果回来之前,长视频要十几秒,期间在顶部提示一下。
@@ -706,16 +705,27 @@ export function useMediaSend({
       if (result.canceled || result.assets.length === 0) return;
       handleGalleryConfirm(result.assets, caption);
     },
-    [galleryMode, handleGalleryConfirm, mountedRef, setSendError, t],
+    [handleGalleryConfirm, mountedRef, setSendError, t],
+  );
+
+  const handlePickFromSystem = useCallback(
+    async (caption: string) => {
+      if (galleryMode !== null) await pickFromSystem(galleryMode, caption);
+    },
+    [galleryMode, pickFromSystem],
   );
 
   const handleTakePhoto = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.camera'));
-      return;
+    // 网页的摄像头权限由浏览器自己问;先 await 一次权限请求会让 Safari 认为已不在
+    // 点击里,把拍照选择框静默拦掉。
+    if (Platform.OS !== 'web') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.camera'));
+        return;
+      }
     }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
@@ -759,6 +769,17 @@ export function useMediaSend({
   const handleMediaSourceSelect = useCallback(
     (action: MediaSourceAction) => {
       setMediaSourceSheetVisible(false);
+      if (Platform.OS === 'web') {
+        // 浏览器只在点击的同一调用栈里放行文件选择框(Safari 最严),所以这里不等面板
+        // 收起、不隔帧,直接唤起系统选择。网页也没有相册权限可言,应用内相册那一页
+        // 只会显示「需要相册权限」,直接跳过。
+        if (action === 'camera') {
+          void handleTakePhoto();
+        } else if (sourceID && !isPreviewMode && !inFlightRef.current) {
+          void pickFromSystem(action === 'edit' ? 'edit' : 'send', '');
+        }
+        return;
+      }
       if (Platform.OS === 'ios') {
         // 面板还在收起时弹不出下一个全屏层:等它的 onDismiss(handleMediaSourceSheetDismiss)。
         pendingSourceActionRef.current = action;
@@ -766,7 +787,7 @@ export function useMediaSend({
       }
       requestAnimationFrame(() => runMediaSourceAction(action));
     },
-    [runMediaSourceAction],
+    [handleTakePhoto, inFlightRef, isPreviewMode, pickFromSystem, runMediaSourceAction, sourceID],
   );
 
   const handleMediaSourceSheetDismiss = useCallback(() => {

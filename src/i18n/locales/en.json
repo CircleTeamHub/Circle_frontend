@@ -61,7 +61,9 @@
     "keywordPlaceholder": "For example: concerts, jobs, exhibitions",
     "allKeywordsButton": "Follow everything",
     "noteStatusYesButton": "Remind me",
-    "noteStatusNoButton": "Not now"
+    "noteStatusNoButton": "Not now",
+    "setupDoneTitle": "Alerts are on",
+    "setupDoneMessage": "When “{{circle}}” has a matching update, I’ll let you know here."
   },
   "media": {
     "saveImage": "Save image",
@@ -233,7 +235,10 @@
       "useSecurityQuestions": "Trusted device not nearby? Verify with security questions",
       "securityQuestionsIntro": "Answer the two security questions you set to finish verification.",
       "securityQuestionsRetry": "Couldn't load security questions. Tap to retry."
-    }
+    },
+    "webSessionUnreachableTitle": "Couldn’t restore your sign-in yet",
+    "webSessionUnreachableMessage": "The network or server is busy, but you haven’t been signed out. Reload the page in a moment to get back to your account.",
+    "webSessionUnreachableReload": "Reload"
   },
   "onboarding": {
     "profileTitle": "Complete your profile",
@@ -704,6 +709,9 @@
     "ownerOnlyAction": "Only the group owner or admins can do that.",
     "recommendFriend": "Recommend to Friend",
     "addBlacklist": "Block",
+    "addBlacklistConfirmTitle": "Add to blocklist?",
+    "addBlacklistConfirmMessage": "Blocking also removes this friend (unblocking won’t restore it). They won’t be able to message or call you.",
+    "addBlacklistConfirm": "Block",
     "report": {
       "paramErrorTitle": "Invalid parameters",
       "missingTarget": "Missing report target",

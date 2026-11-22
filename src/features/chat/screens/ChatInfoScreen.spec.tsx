@@ -13,6 +13,7 @@ import { fetchCircleDetail } from '@/services/api/circles';
 import { readGroupInfoCache, writeGroupInfoCache } from '@/features/chat/group-info-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ApiError } from '@/services/api/client';
+import { addFriendToBlacklist } from '@/services/api/friends';
 
 const mockParams: Record<string, string> = {};
 const mockAuth = { sessionEpoch: 0 };
@@ -53,14 +54,18 @@ jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/components/ui/menu-row', () => {
   const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    MenuRow: ({ label, subtitle, rightText, rightElement, onPress }: {
+    MenuRow: ({ label, subtitle, rightText, rightElement, onPress, hasToggle, toggleValue, onToggle }: {
       label: string; subtitle?: string; rightText?: string; rightElement?: React.ReactNode; onPress?: () => void;
+      hasToggle?: boolean; toggleValue?: boolean; onToggle?: (value: boolean) => void;
     }) => (
       <Pressable onPress={onPress} disabled={!onPress}>
         <Text>{label}</Text>
         {subtitle ? <Text>{subtitle}</Text> : null}
         {rightText ? <Text>{rightText}</Text> : null}
         {rightElement}
+        {hasToggle && onToggle ? (
+          <Pressable testID={`toggle:${label}`} onPress={() => onToggle(!toggleValue)} />
+        ) : null}
       </Pressable>
     ),
   };
@@ -116,7 +121,12 @@ jest.mock('@/features/chat/utils/group-reload-key', () => ({
   groupConversationReloadKey: () => '', groupOrCircleMutatedSince: () => false,
 }));
 jest.mock('@/services/api/circles', () => ({ fetchCircleDetail: jest.fn() }));
-jest.mock('@/services/api/friends', () => ({ friendsMutatedSince: () => false }));
+jest.mock('@/services/api/friends', () => ({
+  friendsMutatedSince: () => false,
+  addFriendToBlacklist: jest.fn(async () => undefined),
+  removeFriendFromBlacklist: jest.fn(async () => undefined),
+  fetchFriendStatus: jest.fn(() => new Promise(() => {})),
+}));
 jest.mock('@/services/api/groups', () => ({}));
 jest.mock('@/services/api/temp-chat', () => ({}));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: () => '' }));
@@ -373,4 +383,30 @@ test('member avatars fit inside their cells on a narrow folding-phone cover scre
   expect(sizes.length).toBeGreaterThan(0);
   // A fixed 56pt avatar used to be wider than its ~53pt cell there, so neighbours overlapped.
   for (const size of sizes) expect(size).toBeLessThan(cellWidth);
+});
+
+test('reporting a standalone group targets its conversation ID (it has no circle)', async () => {
+  useChatStore.setState({ conversations: [standaloneConversation] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  fireEvent.press(await screen.findByText('chat.report.title'));
+  // The menu row used to return early because a standalone group has no circle-backed groupID.
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/report-friend',
+    params: { targetType: 'group', groupID: 'group-conversation', groupName: 'Current group' },
+  });
+});
+
+test('adding a friend to the blacklist asks first, because it also deletes the friendship', async () => {
+  Object.keys(mockParams).forEach((key) => delete mockParams[key]);
+  Object.assign(mockParams, { sourceID: 'peer', conversationType: 'single', title: 'Peer' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  render(<ChatInfoScreen />);
+  fireEvent.press(await screen.findByTestId('toggle:chat.addBlacklist'));
+  expect(addFriendToBlacklist).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('chat.addBlacklistConfirmTitle', 'chat.addBlacklistConfirmMessage', expect.any(Array));
+  const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
+  const confirm = buttons.find((button) => button.style === 'destructive');
+  await act(async () => confirm?.onPress?.());
+  expect(addFriendToBlacklist).toHaveBeenCalledWith('peer');
 });

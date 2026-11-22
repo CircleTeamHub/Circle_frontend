@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, assets, os = 'web', compressedSize } = {}) {
+function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, assets, os = 'android', compressedSize } = {}) {
   // compressedSize 有值 = 安装包带压缩模块,视频压缩成这个体积的 compressed-<原名>.mp4。
   const compressionAvailable = compressedSize !== undefined;
   const sent = [], failed = [], uploading = [], pickerOptions = [], sendErrors = [], alerts = [];

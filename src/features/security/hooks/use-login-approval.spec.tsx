@@ -18,7 +18,7 @@ jest.mock('@/realtime/client', () => ({ setLoginChallengeListener: jest.fn() }))
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
-  return { useAuthStore: create(() => ({ isAuthenticated: true, onboardingRequired: false, sessionEpoch: 1 })) };
+  return { useAuthStore: create(() => ({ isAuthenticated: true, accessToken: 'access', onboardingRequired: false, sessionEpoch: 1 })) };
 });
 
 const challenge = {
@@ -35,7 +35,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
   AppState.currentState = 'active';
-  useAuthStore.setState({ sessionEpoch: 1 });
+  useAuthStore.setState({ sessionEpoch: 1, accessToken: 'access' });
   useLoginApprovalStore.setState({
     pending: [],
     appLocked: false,
@@ -272,4 +272,16 @@ test('approve and reject in the same render issue just one non-idempotent action
   act(() => { result.current.approve(); result.current.approve(); void result.current.reject(); });
   expect(approveLoginChallenge).toHaveBeenCalledTimes(1);
   expect(rejectLoginChallenge).not.toHaveBeenCalled();
+});
+
+test('a reloaded web page waits for the restored token before asking for pending logins', async () => {
+  // 网页刷新后 isAuthenticated 先从本地快照恢复,令牌要等 Cookie 续签回来:提前发就是一条 401。
+  useAuthStore.setState({ accessToken: null });
+  const { result } = renderHook(() => useLoginApproval());
+  expect(fetchPendingLoginChallenges).not.toHaveBeenCalled();
+
+  act(() => useAuthStore.setState({ accessToken: 'restored' }));
+
+  await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+  expect(fetchPendingLoginChallenges).toHaveBeenCalledTimes(1);
 });
