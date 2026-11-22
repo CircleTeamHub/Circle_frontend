@@ -968,7 +968,12 @@ function NotesContent() {
     >
       <View style={[s.header, d.header, { paddingTop: insets.top + 8 }]}>
         <View style={s.headerRow}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
           <View style={s.headerRight}>

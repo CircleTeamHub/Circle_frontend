@@ -107,12 +107,17 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingVertical: Spacing.xs,
   },
+  // 昵称一长就把右边的「分享 / 主题 / 设置」挤出屏幕（窄屏上设置直接点不到）：
+  // 左侧占剩余空间并允许收缩，昵称单行截断；右侧按钮不收缩。
   profileLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md - 4,
+    marginRight: Spacing.sm,
   },
-  profileInfo: { gap: Spacing.xs },
+  profileInfo: { flex: 1, minWidth: 0, gap: Spacing.xs },
   accountRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -120,6 +125,7 @@ const s = StyleSheet.create({
   },
   profileRight: {
     flexDirection: "row",
+    flexShrink: 0,
     gap: Spacing.md,
     alignItems: "center",
   },
@@ -451,6 +457,7 @@ export default function ProfileScreen() {
               name={displayName}
               vipLevel={vipLevel}
               style={d.profileName}
+              numberOfLines={1}
               animated
             />
             <Pressable

@@ -81,6 +81,15 @@ test('focusing a text input does not leave the page zoomed in on iOS', () => {
   assert.doesNotMatch(viewport[1], /user-scalable\s*=\s*no/);
 });
 
+test('a long nickname cannot push the profile header actions off a narrow screen', () => {
+  const source = read('src/features/profile/screens/ProfileScreen.tsx');
+  // 375 宽、昵称 19 个字符时，「设置」被挤到 397px 处，完全点不到。
+  assert.match(source, /profileLeft: \{\s*\n\s*flex: 1,\s*\n\s*minWidth: 0,/);
+  assert.match(source, /profileInfo: \{ flex: 1, minWidth: 0,/);
+  assert.match(source, /profileRight: \{[^}]*flexShrink: 0/);
+  assert.match(source, /style=\{d\.profileName\}\s*\n\s*numberOfLines=\{1\}/);
+});
+
 test('zoom panning is bounded by the rendered image, not the container', () => {
   const source = read('src/components/ui/zoomable-image.tsx');
   // contentFit="contain"：竖图放进横屏容器时两侧都是空白，按容器宽算的

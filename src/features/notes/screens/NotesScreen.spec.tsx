@@ -271,3 +271,9 @@ describe('进页不卡:首帧只出页面壳', () => {
     expect(await screen.findByTestId('note-more')).toBeTruthy();
   });
 });
+
+test('the header back button is announced to screen readers and goes back', async () => {
+  render(<NotesScreen />);
+  fireEvent.press(await screen.findByRole('button', { name: 'common.back' }));
+  expect(mockRouter.back).toHaveBeenCalled();
+});

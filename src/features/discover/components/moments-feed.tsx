@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -138,17 +138,25 @@ export const MomentsFeed: React.FC = () => {
   // 新帖检测改为广播驱动（#89）：后端在好友发/删朋友圈时推 moments.feed.updated，
   // realtime client bump 信号，这里收到后查一次新帖数 —— 不再 30s 轮询。
   // 返回是否成功：信号处理只有在查询成功后才推进（review P2）。
+  // 刷新之后才插进列表的帖子只可能是自己刚发的（prependMoment）。服务端的新帖数
+  // 也会把它们算进去，但它们已经在列表里了，不能再提示「有 N 条新动态」。
+  // 起点仍用 lastRefreshTime：改成列表最新一条的时间会漏掉好友在这之间发的帖子。
+  const loadedSinceRefresh = useMemo(() => {
+    if (!lastRefreshTime) return 0;
+    const refreshedAt = Date.parse(lastRefreshTime);
+    return moments.filter((post) => Date.parse(post.createdAt) > refreshedAt).length;
+  }, [moments, lastRefreshTime]);
   const checkNewMoments = useCallback(async (): Promise<boolean> => {
     if (!lastRefreshTime) return true;
     try {
       const count = await fetchNewMomentsCount(lastRefreshTime);
-      setNewCount(count);
+      setNewCount(Math.max(0, count - loadedSinceRefresh));
       return true;
     } catch (error) {
       reportHandledFailure('moments', 'fetchNewCount', error);
       return false;
     }
-  }, [lastRefreshTime]);
+  }, [lastRefreshTime, loadedSinceRefresh]);
 
   const feedSignalVersion = useMomentsFeedSignalStore((s) => s.version);
   const handledSignalRef = useRef(0);

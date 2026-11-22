@@ -27,6 +27,7 @@ function loadBurnDurations(translate = (key) => key) {
       if (request === '@/i18n') {
         return { __esModule: true, default: { t: translate, language: 'zh' } };
       }
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     },
   };
@@ -135,6 +136,7 @@ function loadStore() {
       }
       if (request === './local-db') return __localDbStub;
     if (request === './burn-durations') return loadBurnDurations();
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     }),
   };
@@ -165,6 +167,7 @@ function loadMappers() {
       }
       if (request === '@/types' || request === './protocol') return {};
       if (request === './burn-durations') return loadBurnDurations();
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     },
   };

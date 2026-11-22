@@ -21,10 +21,11 @@ jest.mock('react-native', () => {
   } });
 });
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
+let mockSearchParams: { postId?: string; title?: string } = { postId: 'post-1', title: 'Hike' };
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn(), navigate: jest.fn() }),
   useSegments: () => ['(tabs)', 'discover', 'post-signups'],
-  useLocalSearchParams: () => ({ postId: 'post-1', title: 'Hike' }),
+  useLocalSearchParams: () => mockSearchParams,
   // The screen never regains focus in these tests, so a navigation lock stays held.
   useFocusEffect: jest.fn(),
 }));
@@ -252,3 +253,17 @@ function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
+
+test('a link without a post id renders the screen instead of crashing', async () => {
+  // 以前 post?.id === postId 在两边都是 undefined 时成立，拿空帖子去渲染卡片，
+  // 读 post.expiresAt 直接崩到错误页。
+  mockSearchParams = {};
+  try {
+    jest.mocked(fetchMyPostSignups).mockResolvedValueOnce({ items: [], recognitionOpen: false });
+    expect(() => render(<PostSignupsScreen />)).not.toThrow();
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByTestId('router_error_retry')).toBeNull();
+  } finally {
+    mockSearchParams = { postId: 'post-1', title: 'Hike' };
+  }
+});
