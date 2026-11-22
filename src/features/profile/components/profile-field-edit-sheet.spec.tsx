@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { ProfileFieldEditSheet } from './profile-field-edit-sheet';
 import { updateUserProfile } from '@/services/api/profile';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const mockSetUser = jest.fn();
 let mockSessionEpoch = 1;
@@ -15,7 +16,10 @@ jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => ke
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@/hooks/use-modal-input-auto-focus', () => ({ useModalInputAutoFocus: jest.fn(), MODAL_INPUT_NATIVE_AUTO_FOCUS: false }));
-jest.mock('@/components/ui/bottom-sheet-modal', () => ({ BottomSheetModal: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
+jest.mock('@/components/ui/bottom-sheet-modal', () => ({
+  BottomSheetModal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  BottomSheetTextInput: jest.requireActual('react-native').TextInput,
+}));
 jest.mock('@/features/profile/components/profile-picker-columns', () => ({ BirthdayColumns: () => null, CityColumns: () => null }));
 
 test('two gender taps in one render submit only one update', () => {
@@ -40,4 +44,15 @@ test.each([false, true])('a save cannot update the next session (editor unmounte
   await act(async () => { resolve({ id: 'u', gender: '男' } as never); });
   expect(mockSetUser).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
+});
+
+test('the text editor exposes the e2e locators the profile flow drives', async () => {
+  jest.mocked(updateUserProfile).mockResolvedValue({ id: 'u', nickname: 'Neo' } as never);
+  const ui = render(<ProfileFieldEditSheet fieldId="nickname" onClose={jest.fn()} />);
+  expect(ui.getByTestId(E2E_TEST_IDS.profileFieldSheet)).toBeTruthy();
+  fireEvent.changeText(ui.getByTestId(E2E_TEST_IDS.profileFieldInput), 'Neo');
+  await act(async () => {
+    fireEvent.press(ui.getByTestId(E2E_TEST_IDS.profileFieldSave));
+  });
+  expect(updateUserProfile).toHaveBeenLastCalledWith('u', expect.objectContaining({ nickname: 'Neo' }), expect.anything());
 });

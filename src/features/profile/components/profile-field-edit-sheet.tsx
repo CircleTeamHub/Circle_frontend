@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetModal, BottomSheetTextInput } from '@/components/ui/bottom-sheet-modal';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
@@ -207,6 +208,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
 
   return (
     <View
+      testID={E2E_TEST_IDS.profileFieldSheet}
       style={[
         s.sheet,
         // 面板用 surface、里面的选项/输入框降一级用 surfaceMuted:面板底若和页面一样是
@@ -227,7 +229,12 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
             saving ? (
               <ActivityIndicator color={colors.primary} />
             ) : (
-              <Pressable onPress={handleConfirm} hitSlop={8} accessibilityRole="button">
+              <Pressable
+                testID={E2E_TEST_IDS.profileFieldSave}
+                onPress={handleConfirm}
+                hitSlop={8}
+                accessibilityRole="button"
+              >
                 <Text style={[actionText, { color: colors.primary }]}>{t('common.save')}</Text>
               </Pressable>
             )
@@ -270,6 +277,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
         <CityColumns draft={city} onChange={setCity} />
       ) : (
         <BottomSheetTextInput
+          testID={E2E_TEST_IDS.profileFieldInput}
           ref={inputRef}
           value={value}
           onChangeText={setValue}

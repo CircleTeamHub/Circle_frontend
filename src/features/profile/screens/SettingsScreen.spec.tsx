@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import SettingsScreen from './SettingsScreen';
 import { updateUserProfile } from '@/services/api/profile';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const mockChangeAvatar = jest.fn();
 const mockSetUser = jest.fn();
@@ -91,4 +92,11 @@ test('the legacy email field deep link opens verified email change', () => {
   mockField = 'email';
   render(<SettingsScreen />);
   expect(mockPush).toHaveBeenCalledWith('/(tabs)/profile/change-email');
+});
+
+test('each profile field row carries an e2e locator keyed by its field id', () => {
+  render(<SettingsScreen />);
+  // Maestro 的资料流程从这里点「昵称」打开编辑弹层。
+  expect(screen.getByTestId(E2E_TEST_IDS.profileFieldRow('nickname'))).toBeTruthy();
+  expect(screen.getByTestId(E2E_TEST_IDS.profileFieldRow('email'))).toBeTruthy();
 });

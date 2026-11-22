@@ -21,6 +21,7 @@ import { useChangeAvatar } from '@/hooks/use-change-avatar';
 import { updateUserProfile } from '@/services/api/profile';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ProfileFieldEditSheet } from '@/features/profile/components/profile-field-edit-sheet';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import {
   formatProfileFieldValue,
   getProfileEditField,
@@ -178,6 +179,7 @@ export default function SettingsScreen() {
   const renderRow = (item: SettingsRowItem, index: number, total: number) => (
     <View key={item.id}>
       <Pressable
+        testID={E2E_TEST_IDS.profileFieldRow(item.id)}
         style={({ pressed }) => [s.row, pressed ? s.rowPressed : null]}
         onPress={() => handleRowPress(item)}
         accessibilityRole="button"

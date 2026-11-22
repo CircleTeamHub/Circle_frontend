@@ -619,7 +619,7 @@ export default function AppSettingsScreen() {
 
         <View style={[s.footer, d.card]}>
           <Pressable
-            testID={E2E_TEST_IDS.settingsLogout}
+            testID={E2E_TEST_IDS.settingsSwitchAccount}
             accessibilityRole="button"
             accessibilityLabel={t('settingsPage.switchAccount')}
             style={({ pressed }) => [
@@ -634,6 +634,7 @@ export default function AppSettingsScreen() {
           </Pressable>
           <Divider />
           <Pressable
+            testID={E2E_TEST_IDS.settingsLogout}
             accessibilityRole="button"
             accessibilityLabel={t('settingsPage.logout')}
             style={({ pressed }) => [

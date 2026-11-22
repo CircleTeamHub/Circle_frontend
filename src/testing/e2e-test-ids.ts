@@ -44,9 +44,14 @@ export const E2E_TEST_IDS = Object.freeze({
   settingsScreen: 'windnote.settings.screen',
   settingsRow: (id: string) => dynamicTestId('windnote.settings.row', id),
   settingsLogout: 'windnote.settings.logout',
+  settingsSwitchAccount: 'windnote.settings.switch-account',
   profileEditScreen: 'windnote.profile.edit.screen',
   profileEditInput: 'windnote.profile.edit.input',
   profileEditSave: 'windnote.profile.edit.save',
+  profileFieldRow: (id: string) => dynamicTestId('windnote.profile-field.row', id),
+  profileFieldSheet: 'windnote.profile-field.sheet',
+  profileFieldInput: 'windnote.profile-field.input',
+  profileFieldSave: 'windnote.profile-field.save',
   settingsDetailScreen: (name: string) =>
     dynamicTestId('windnote.settings-detail.screen', name),
   settingsDetailRow: (id: string) =>
