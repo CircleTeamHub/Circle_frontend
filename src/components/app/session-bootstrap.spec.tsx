@@ -12,6 +12,7 @@ import { reportError } from '@/observability/sentry';
 import * as apiClient from '@/services/api/client';
 import { ApiError } from '@/services/api/client';
 import type { AuthUser } from '@/stores/authStore';
+import { showTopNotice } from '@/components/app/top-notice-store';
 
 // authStore 只需要「按 selector 取值 + getState」这两种用法；bootstrap 的恢复流程在
 // 挂载时跑一次即可，不需要真正的订阅/重渲染。
@@ -37,6 +38,7 @@ jest.mock('@/i18n', () => ({
       options?.defaultValue ?? key,
   },
 }));
+jest.mock('@/components/app/top-notice-store', () => ({ showTopNotice: jest.fn() }));
 jest.mock('@/services/auth/session', () => ({
   clearLocalSession: jest.fn(async () => undefined),
   registerLogoutHandler: jest.fn(() => () => undefined),
@@ -493,6 +495,29 @@ describe('web reload', () => {
 
     await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false), { timeout: 5_000 });
     expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+  });
+
+  test('a rate-limited restore says the session is still there instead of looking logged out', async () => {
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(new ApiError('busy', { status: 429 }));
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false), { timeout: 5_000 });
+    // 没有凭证进不了 App,只能落在登录页;但 Cookie 会话多半还有效,得告诉用户刷新就能回来。
+    expect(showTopNotice).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'warning',
+      title: '登录状态暂时没能恢复',
+      action: expect.objectContaining({ label: '刷新' }),
+    }));
+  });
+
+  test('a missing cookie is an ordinary logged-out start, with no warning', async () => {
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue(null);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
+    expect(showTopNotice).not.toHaveBeenCalled();
   });
 });
 

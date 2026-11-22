@@ -58,7 +58,7 @@ export function FavoriteSendSheet({ item, recipient, onCancel, onConfirm }: {
           <Text style={[s.actionText, { color: colors.text }]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: !recipient }} disabled={!recipient}
-          style={[s.action, { backgroundColor: recipient ? '#079B50' : colors.surfaceBorder }]}
+          style={[s.action, { backgroundColor: recipient ? colors.primary : colors.surfaceBorder }]}
           onPress={() => { Keyboard.dismiss(); onConfirm(message.trim()); }}>
           <Text style={[s.actionText, { color: colors.white }]}>{t('common.send', { defaultValue: '发送' })}</Text>
         </Pressable>

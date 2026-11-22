@@ -52,7 +52,9 @@
     "keywordPlaceholder": "Por ejemplo: conciertos, empleo, exposiciones",
     "allKeywordsButton": "Seguir todo",
     "noteStatusYesButton": "Avísame",
-    "noteStatusNoButton": "Ahora no"
+    "noteStatusNoButton": "Ahora no",
+    "setupDoneTitle": "Avisos activados",
+    "setupDoneMessage": "Cuando «{{circle}}» tenga novedades que coincidan, te avisaré aquí."
   },
   "settingsDetails": {
     "accountSecurity": {
@@ -599,6 +601,9 @@
     "ownerOnlyAction": "Solo el dueño o los administradores del grupo pueden hacerlo.",
     "recommendFriend": "Recomendar a un amigo",
     "addBlacklist": "Bloquear",
+    "addBlacklistConfirmTitle": "¿Añadir a la lista de bloqueados?",
+    "addBlacklistConfirmMessage": "Bloquear también elimina la amistad (desbloquear no la restaura). No podrá enviarte mensajes ni llamarte.",
+    "addBlacklistConfirm": "Bloquear",
     "report": {
       "paramErrorTitle": "Parámetros no válidos",
       "missingTarget": "Falta el objetivo del reporte",
@@ -3303,7 +3308,10 @@
       "useSecurityQuestions": "¿No tienes un dispositivo de confianza cerca? Verifica con preguntas de seguridad",
       "securityQuestionsIntro": "Responde las dos preguntas de seguridad que configuraste para completar la verificación.",
       "securityQuestionsRetry": "No se pudieron cargar las preguntas de seguridad. Toca para reintentar."
-    }
+    },
+    "webSessionUnreachableTitle": "Aún no se pudo restaurar tu sesión",
+    "webSessionUnreachableMessage": "La red o el servidor están ocupados, pero no se ha cerrado tu sesión. Recarga la página en un momento para volver a tu cuenta.",
+    "webSessionUnreachableReload": "Recargar"
   },
   "media": {
     "saveImage": "Guardar imagen",

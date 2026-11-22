@@ -479,6 +479,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     conversationID,
     isGroupChat,
     canViewGroupMemberProfiles,
+    inputRef: composerInputRef,
   });
 
   const {
@@ -783,8 +784,8 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
   return (
     <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
-      // 普通会话的顶栏悬浮在消息上、自己让开状态栏;小助手的角色头部仍按老布局排在上面。
-      style={[s.composerPanelStack, d.container, { paddingTop: sheet || !isAssistantConversation ? 0 : insets.top }]}
+      // 普通会话的顶栏悬浮在消息上;小助手的角色头部占位排在上面。两者都自己让开状态栏。
+      style={[s.composerPanelStack, d.container]}
       // The note-collection sheet is a separate full-screen modal. Keeping the
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.

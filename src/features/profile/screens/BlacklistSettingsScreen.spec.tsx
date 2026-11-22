@@ -77,3 +77,16 @@ test('confirming removal drops the user from the list', async () => {
   expect(screen.queryByText('Alice')).toBeNull();
   alert.mockRestore();
 });
+
+test('a blocked friend shows the remark I gave them, falling back to the nickname', async () => {
+  jest.mocked(fetchBlockedUsers).mockResolvedValue([
+    { id: 'u1', nickname: 'Alice', remark: '大学室友', avatarUrl: null, blockedAt: '2026-11-01T08:00:00.000Z' },
+    { id: 'u2', nickname: 'Bob', remark: null, avatarUrl: null, blockedAt: '2026-11-01T08:00:00.000Z' },
+  ] as never);
+  render(<BlacklistSettingsScreen />);
+
+  // 拉黑会删掉好友关系;只显示昵称时,改过备注的人在这里认不出来。
+  expect(await screen.findByText('大学室友')).toBeTruthy();
+  expect(screen.queryByText('Alice')).toBeNull();
+  expect(screen.getByText('Bob')).toBeTruthy();
+});

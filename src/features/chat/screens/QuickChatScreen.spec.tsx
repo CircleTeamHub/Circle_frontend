@@ -40,6 +40,10 @@ afterAll(() => {
 
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack(), push: (route: unknown) => mockPush(route), canGoBack: () => true },
+  Redirect: ({ href }: { href: string }) => {
+    const { Text } = jest.requireActual('react-native');
+    return <Text>{`redirect:${href}`}</Text>;
+  },
   useLocalSearchParams: () => mockParams,
   useSegments: () => ['quick-chat'],
 }));
@@ -110,10 +114,12 @@ test('expand closes the sheet and opens the full chat page', () => {
   });
 });
 
-test('nothing renders without a conversation id', () => {
+test('without a conversation id it goes to the messages tab instead of a blank page', () => {
   mockParams = {};
   render(<QuickChatScreen />);
   expect(mockChat).not.toHaveBeenCalled();
+  // 网页直接打开 /quick-chat(书签、手改地址)以前是一整页空白,没有任何出路。
+  expect(screen.getByText('redirect:/(tabs)/messages')).toBeTruthy();
 });
 
 test('leaving the sheet closes it before navigating so no second tab stack is pushed', () => {
@@ -261,3 +267,4 @@ test('the sheet draws an edge so it separates from the page behind it', () => {
   expect(style.borderTopWidth).toBeGreaterThan(0);
   expect(style.borderColor).toBe(mockThemeColors.surfaceBorder);
 });
+

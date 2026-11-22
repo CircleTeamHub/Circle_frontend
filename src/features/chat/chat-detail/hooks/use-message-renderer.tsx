@@ -12,7 +12,7 @@ import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { type ChatMessage, type NoteCardData } from '@/types';
-import { type GestureResponderEvent, Pressable, View } from 'react-native';
+import { type GestureResponderEvent, Platform, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MemberName } from '@/components/ui/member-name';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
@@ -236,19 +236,37 @@ export function useMessageRenderer({
   );
 
   const withMessageActions = useCallback(
-    (message: ChatMessage, node: ReactElement) => (
-      <Pressable
-        style={
-          message.id === highlightedMessageID
-            ? [s.targetMessageHighlight, d.targetMessageHighlight]
-            : undefined
-        }
-        onLongPress={getMessageLongPressHandler(message)}
-        delayLongPress={350}
-      >
-        {withGroupSenderLabel(message, node)}
-      </Pressable>
-    ),
+    (message: ChatMessage, node: ReactElement) => {
+      const openActions = getMessageLongPressHandler(message);
+      // 电脑浏览器上用户会右键消息：打开同一个操作菜单，并拦下浏览器自带的右键菜单。
+      // 鼠标事件同样带 pageX/pageY，菜单定位在点击处。
+      const webContextMenu =
+        Platform.OS === 'web'
+          ? {
+              onContextMenu: (event: GestureResponderEvent & { preventDefault: () => void }) => {
+                // 手机网页触摸长按后浏览器还会补发 contextmenu:Pressable 已按长按开过菜单并
+                // preventDefault 了,这里跳过,只处理电脑上的鼠标右键。
+                if ((event.nativeEvent as { defaultPrevented?: boolean }).defaultPrevented) return;
+                event.preventDefault();
+                openActions(event);
+              },
+            }
+          : null;
+      return (
+        <Pressable
+          style={
+            message.id === highlightedMessageID
+              ? [s.targetMessageHighlight, d.targetMessageHighlight]
+              : undefined
+          }
+          onLongPress={openActions}
+          delayLongPress={350}
+          {...webContextMenu}
+        >
+          {withGroupSenderLabel(message, node)}
+        </Pressable>
+      );
+    },
     [
       d.targetMessageHighlight,
       getMessageLongPressHandler,

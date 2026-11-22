@@ -74,10 +74,16 @@ test('a search hit from a sub-page names the page it lives on', () => {
 
 test('switch account and logout sit in their own action card as full-width rows', () => {
   render(<AppSettingsScreen />);
-  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.settingsLogout));
+  // e2e 的退出子流程点 settingsLogout 后等登录页：它必须挂在「退出登录」上，
+  // 以前挂在「切换账号」上，Maestro 点进去的是账号切换。
+  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.settingsSwitchAccount));
   expect(mockSwitchAccount).toHaveBeenCalledTimes(1);
-  fireEvent.press(screen.getByRole('button', { name: 'settingsPage.logout' }));
+  expect(mockLogout).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.settingsLogout));
   expect(mockLogout).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId(E2E_TEST_IDS.settingsLogout).props.accessibilityLabel).toBe(
+    'settingsPage.logout',
+  );
   // 退出登录是红字行，不再是一整块实心红按钮。
   expect(screen.queryByText('icon:log-out-outline')).toBeNull();
 });

@@ -7,7 +7,9 @@ type NetworkStatus = {
 };
 
 let cachedOnline = true;
-const NETWORK_PROBE_URL = `${API_URL}/auth/me`;
+// 后端的存活探针 /healthz:挂在 api/v1 前缀之外,不鉴权、不过应用层限流、不记请求日志,
+// 线上 Caddy 也有意把它留在公网(给外部 uptime 监控)。
+const NETWORK_PROBE_URL = `${API_URL.replace(/^(https?:\/\/[^/]+).*$/, '$1')}/healthz`;
 
 /**
  * 探测客户端是否能到达后端。
@@ -16,22 +18,24 @@ const NETWORK_PROBE_URL = `${API_URL}/auth/me`;
  * 但这个域名在国内被墙，对所有国内用户来说，探测永远失败 → 4 个商城/钱包/收藏屏永远展示
  * 「网络异常」横幅，把整套页面砸成一坨。
  *
- * 改用应用自己的后端接口做 HEAD 探测：既测了真正关心的"我能访问后端吗"，又顺便规避了
- * GFW 问题。探测 `/auth/me` 而不是 `/api/v1` 根路径，是因为后端没有根路径 handler，
- * 会刷 `Cannot HEAD /api/v1` WARN。未登录时 401 也说明 TCP/HTTP 通路打通，对"是否在线"足够。
- * 真正断网时 fetch 抛 TypeError；5xx 是后端故障但网络在 —— 也算 online，让 UI 不要误报。
+ * 改用应用自己的后端做 HEAD 探测。原来探的是 `/auth/me`:未登录、或网页刷新后令牌还没恢复时,
+ * 每次都是一条 401,还占着后端每 IP 300 次/分钟的全局限流额度。现在探 /healthz。
+ *
+ * 网页跨域、/healthz 不带 CORS 头:用 no-cors,拿到的是 opaque 响应(status 0),能拿到就说明
+ * 通了。任何能拿到的响应都算在线 —— 包括 4xx/5xx(后端有故障但网络在),让 UI 不要误报;
+ * 真正断网时 fetch 抛 TypeError。
  */
-async function probe(): Promise<boolean> {
+export async function probeBackendReachable(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     const response = await fetch(NETWORK_PROBE_URL, {
       method: 'HEAD',
+      mode: 'no-cors',
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    // 任何能拿到 status 的响应都算 TCP 通了 —— 包括 4xx/5xx（后端有故障但网络在）。
-    return response.status > 0;
+    return response.type === 'opaque' || response.status > 0;
   } catch {
     return false;
   }
@@ -44,7 +48,7 @@ export function useNetworkStatus(): NetworkStatus {
     let active = true;
 
     const check = async () => {
-      const online = await probe();
+      const online = await probeBackendReachable();
       cachedOnline = online;
       if (active) {
         setIsOffline(!online);

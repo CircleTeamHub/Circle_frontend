@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createVideoPlayer } from 'expo-video';
 import { ImageManipulator } from 'expo-image-manipulator';
 import {
@@ -5,7 +6,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { uploadChatVideoPoster } from './chat-video-poster';
+import { captureVideoPosterFrame, uploadChatVideoPoster } from './chat-video-poster';
 
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
@@ -161,5 +162,19 @@ describe('uploadChatVideoPoster', () => {
     await expect(uploading).resolves.toBeNull();
     expect(beforeUpload).toHaveBeenCalledTimes(1);
     expect(mockUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe('captureVideoPosterFrame on web', () => {
+  it('skips the capture without reporting, since expo-video cannot grab frames on web', async () => {
+    jest.clearAllMocks();
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      await expect(captureVideoPosterFrame('https://media.example/v.mp4', 3)).resolves.toBeNull();
+    } finally {
+      restore.restore();
+    }
+    expect(mockCreateVideoPlayer).not.toHaveBeenCalled();
+    expect(reportHandledFailure).not.toHaveBeenCalled();
   });
 });

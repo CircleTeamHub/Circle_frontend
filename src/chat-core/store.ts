@@ -1772,8 +1772,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 本地已删的消息被重投时既不该回到预览、也不该再算一次未读。
     if (isMessageDeletedLocally(message.id, message.d)) return true;
     const target = conversations[index];
+    // 系统通知没有 sender，操作人记在 actorId：我自己改群名、设管理员、禁言产生的通知
+    // 同样是「自己做的」，不能给自己挂未读（与服务端 unreadCountsQuery 同一口径）。
     const fromSelf =
-      currentUserId !== null && message.sender?.id === currentUserId;
+      currentUserId !== null &&
+      (message.sender?.id === currentUserId ||
+        (message.type === 'system' && message.content['actorId'] === currentUserId));
     // 幂等:同一条消息重复投递不再累计未读。时间线本来就按 id 去重,
     // 不挡这里的话角标会被灌大,而列表里根本找不到对应的新消息。
     const alreadyIngested = (

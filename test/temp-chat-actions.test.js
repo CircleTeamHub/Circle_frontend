@@ -85,6 +85,7 @@ test('forward picker names TEMP targets with their stable room title', () => {
       if (name === '@/i18n') return { default: { t: (key, options) => options?.defaultValue ?? key } };
       if (name === '@/services/api/utils') return { normalizeMediaUrl: (url) => url };
       if (name === '@/utils/locale') return { getLocalizedDateTimeLocale: () => 'en-US' };
+      if (name === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error('Unexpected mapper dependency: ' + name);
     },
   });

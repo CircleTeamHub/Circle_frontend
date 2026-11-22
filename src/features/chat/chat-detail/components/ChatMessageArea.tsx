@@ -14,7 +14,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { MAX_SCROLL_TO_INDEX_RETRIES } from '@/features/chat/chat-detail/constants';
 import { Spacing, type ThemeColors, Typography } from '@/theme';
 import { type TFunction } from 'i18next';
-import { useCallback, type ReactElement, type RefObject } from 'react';
+import { useCallback, useRef, type ReactElement, type RefObject } from 'react';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -86,17 +86,22 @@ export function ChatMessageArea({
   keyExtractor,
   closeInputPanels,
 }: ChatMessageAreaProps) {
+  // 回调本身必须一辈子不换：react-native-web 的 FlatList 在 componentDidUpdate 里断言
+  // onViewableItemsChanged 不能换函数（原生 RN 只查有没有），未读锚点晚到一换，网页
+  // 聊天页就整页崩到错误边界。最新的锚点和回调从 ref 里读。
+  const unreadAnchorRef = useRef({ unreadStartMessageID, handleUnreadStartVisibilityChange });
+  unreadAnchorRef.current = { unreadStartMessageID, handleUnreadStartVisibilityChange };
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (!unreadStartMessageID) {
-        handleUnreadStartVisibilityChange(false);
+      const { unreadStartMessageID: anchorID, handleUnreadStartVisibilityChange: report } =
+        unreadAnchorRef.current;
+      if (!anchorID) {
+        report(false);
         return;
       }
-      handleUnreadStartVisibilityChange(
-        viewableItems.some((token) => token.item?.id === unreadStartMessageID),
-      );
+      report(viewableItems.some((token) => token.item?.id === anchorID));
     },
-    [handleUnreadStartVisibilityChange, unreadStartMessageID],
+    [],
   );
 
   return (

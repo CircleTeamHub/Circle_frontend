@@ -52,7 +52,9 @@
     "keywordPlaceholder": "예: 콘서트, 채용, 전시",
     "allKeywordsButton": "모든 소식 팔로우",
     "noteStatusYesButton": "알려 주세요",
-    "noteStatusNoButton": "지금은 안 함"
+    "noteStatusNoButton": "지금은 안 함",
+    "setupDoneTitle": "알림을 켰어요",
+    "setupDoneMessage": "「{{circle}}」에 조건에 맞는 새 소식이 있으면 여기서 알려 드릴게요."
   },
   "settingsDetails": {
     "accountSecurity": {
@@ -595,6 +597,9 @@
     "ownerOnlyAction": "그룹장 또는 관리자만 할 수 있는 작업입니다.",
     "recommendFriend": "친구에게 추천",
     "addBlacklist": "차단",
+    "addBlacklistConfirmTitle": "차단 목록에 추가할까요?",
+    "addBlacklistConfirmMessage": "추가하면 친구 관계도 삭제돼요(차단을 해제해도 복구되지 않아요). 상대방은 더 이상 메시지를 보내거나 전화할 수 없어요.",
+    "addBlacklistConfirm": "추가",
     "report": {
       "paramErrorTitle": "잘못된 매개변수",
       "missingTarget": "신고 대상이 없습니다",
@@ -3297,7 +3302,10 @@
       "useSecurityQuestions": "신뢰할 수 있는 기기가 곁에 없나요? 보안 질문으로 인증",
       "securityQuestionsIntro": "설정한 보안 질문 2개에 답해 인증을 완료하세요.",
       "securityQuestionsRetry": "보안 질문을 불러오지 못했습니다. 눌러서 다시 시도하세요."
-    }
+    },
+    "webSessionUnreachableTitle": "로그인 상태를 아직 복원하지 못했어요",
+    "webSessionUnreachableMessage": "네트워크가 불안정하거나 서버가 혼잡해요. 로그아웃된 것은 아니에요. 잠시 후 페이지를 새로고침하면 원래 계정으로 돌아갈 수 있어요.",
+    "webSessionUnreachableReload": "새로고침"
   },
   "media": {
     "saveImage": "이미지 저장",

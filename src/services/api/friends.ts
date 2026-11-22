@@ -81,6 +81,8 @@ type BackendFriendActivity = Omit<FriendActivity, 'counterparty'> & {
 
 export type BlockedUser = FriendActivityCounterparty & {
   blockedAt: string;
+  /** 拉黑时我给对方的备注快照(拉黑会删掉好友关系);没有备注、陌生人、旧记录为 null。 */
+  remark: string | null;
 };
 
 type FriendStatusResponse = {
@@ -322,9 +324,11 @@ export async function removeFriendFromBlacklist(friendUserId: string) {
 }
 
 export async function fetchBlockedUsers() {
-  const users = await apiClient<BlockedUser[]>('/friend/blocked');
-  return users.map((user) => ({
+  const users = await apiClient<(Omit<BlockedUser, 'remark'> & { remark?: string | null })[]>('/friend/blocked');
+  return users.map((user): BlockedUser => ({
     ...user,
+    // 旧后端不带这个字段;空白备注等同没有。
+    remark: user.remark?.trim() || null,
     avatarUrl: allowPeerMediaUrl(user.avatarUrl),
   }));
 }

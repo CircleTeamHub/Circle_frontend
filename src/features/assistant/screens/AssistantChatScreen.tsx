@@ -26,6 +26,7 @@ import { useChatStore } from '@/chat-core/store';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
@@ -267,6 +268,17 @@ export default function AssistantChatScreen() {
             ? undefined
             : updateAssistantPreferences({ noteStatusAlerts }),
         ]);
+        // 小助手会话里此时还没有消息:不说一声就落到空聊天,用户不知道设置成没成。
+        showTopNotice({
+          type: 'success',
+          title: t('assistant.setupDoneTitle', { defaultValue: '提醒已开启' }),
+          message: selectedCircle
+            ? t('assistant.setupDoneMessage', {
+                defaultValue: '「{{circle}}」有符合的新动态时，我会在这里告诉你。',
+                circle: selectedCircle.name,
+              })
+            : undefined,
+        });
         navigateToChat(bootstrap);
       } catch (cause) {
         reportHandledFailure('assistant', 'saveSetup', cause);
@@ -277,7 +289,7 @@ export default function AssistantChatScreen() {
         setSubmitting(false);
       }
     },
-    [appendEntry, bootstrap, navigateToChat, selectedCircleId, submitting, t],
+    [appendEntry, bootstrap, navigateToChat, selectedCircle, selectedCircleId, submitting, t],
   );
 
   const confirmKeywords = useCallback(
@@ -375,12 +387,12 @@ export default function AssistantChatScreen() {
 
   return (
     <KeyboardAvoidingContainer
-      style={[
-        styles.container,
-        { backgroundColor: colors.background, paddingTop: insets.top },
-      ]}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
+      {/* 占位而不是悬浮:悬浮头部约 140pt 高,会把第一条消息整个盖住。
+          加载/出错态也是占位,三种状态头像位置一致。 */}
       <AssistantFloatingHeader
+        inline
         onBack={() => router.back()}
         spinning={assistantSpinning}
         title={t('assistant.name', { defaultValue: 'AI小助手' })}

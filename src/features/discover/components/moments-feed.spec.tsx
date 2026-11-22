@@ -2,7 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { MomentsFeed } from './moments-feed';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
-import { setMomentLike } from '@/services/api/moments';
+import { fetchNewMomentsCount, setMomentLike } from '@/services/api/moments';
+import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import type { MomentPost } from '@/types';
 
 const mockAuth = { user: null, isAuthenticated: false, sessionEpoch: 1 };
@@ -107,4 +108,46 @@ test('a failed like rolls the card back and the next tap tries again', async () 
   fireEvent.press(screen.getByLabelText('like-m2'));
   await waitFor(() => expect(screen.getByText('m2:not-liked:3')).toBeTruthy());
   expect(jest.mocked(setMomentLike).mock.calls).toEqual([['m2', false], ['m2', false]]);
+});
+
+function showFeedAfterOwnPost() {
+  // 列表停在 10:00 的刷新；之后自己发了一条（10:05，已插到列表顶上）。
+  useMomentsStore.setState({
+    moments: [
+      { id: 'mine', createdAt: '2026-11-21T10:05:00.000Z', isLikedByMe: false, likeCount: 0, comments: [] },
+      { id: 'old', createdAt: '2026-11-21T09:00:00.000Z', isLikedByMe: false, likeCount: 0, comments: [] },
+    ] as unknown as MomentPost[],
+    lastRefreshTime: '2026-11-21T10:00:00.000Z',
+    loading: false,
+    hasMore: false,
+    fetchError: false,
+  });
+  render(<MomentsFeed />);
+}
+
+async function receiveFeedSignal(serverCount: number) {
+  jest.mocked(fetchNewMomentsCount).mockResolvedValue(serverCount);
+  // 发帖会给自己也推一次 feed 更新信号。
+  act(() => useMomentsFeedSignalStore.getState().bump());
+  await act(async () => {
+    jest.advanceTimersByTime(800);
+  });
+}
+
+describe('new posts banner after publishing', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  test('my own post, already in the list, is not announced as new', async () => {
+    showFeedAfterOwnPost();
+    await receiveFeedSignal(1); // 服务端把自己那条也算进去了
+    expect(fetchNewMomentsCount).toHaveBeenCalledWith('2026-11-21T10:00:00.000Z');
+    expect(screen.queryByText('discover.newPosts')).toBeNull();
+  });
+
+  test('a friend post that landed before mine is still announced', async () => {
+    showFeedAfterOwnPost();
+    await receiveFeedSignal(2); // 好友 10:03 一条 + 自己 10:05 一条
+    expect(screen.getByText('discover.newPosts')).toBeTruthy();
+  });
 });

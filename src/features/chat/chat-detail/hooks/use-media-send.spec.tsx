@@ -6,9 +6,17 @@ import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail'
 import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { prepareChatVideoForUpload } from '@/features/chat/utils/chat-video-compress';
+import { Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibraryFast } from '@/features/profile/image-picker';
 
 jest.mock('@/features/chat/utils/media-error-guard', () => ({ mediaErrorGuard: () => () => true }));
-jest.mock('expo-image-picker', () => ({}));
+jest.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+  VideoExportPreset: { H264_1280x720: 'h264-720' },
+  launchCameraAsync: jest.fn(async () => ({ canceled: true, assets: null })),
+  requestCameraPermissionsAsync: jest.fn(async () => ({ granted: true })),
+}));
 jest.mock('@/features/profile/image-picker', () => ({ launchImageLibraryFast: jest.fn() }));
 jest.mock('@/services/api/temp-chat', () => ({ assertMyTempChatConversationOpen: jest.fn() }));
 jest.mock('@/services/api/upload', () => ({
@@ -229,4 +237,36 @@ test('reuses uploaded keys and compressed metadata after a socket acknowledgemen
   expect(sendVideoMessage).toHaveBeenCalledTimes(2);
   expect(sendVideoMessage).toHaveBeenLastCalledWith(expect.objectContaining({ width: 1280, height: 720, size: 1_000_000, duration: 42 }));
   expect(cleanup).toHaveBeenCalledTimes(1);
+});
+
+describe('media source sheet on web', () => {
+  // 浏览器只在点击的同一调用栈里放行文件选择框(Safari 最严):中间隔一帧或先 await 一次
+  // 权限请求,选择框就被静默拦掉。网页也没有相册权限,应用内相册只会显示「需要相册权限」。
+  test('album opens the system file picker within the tap, not the in-app gallery', () => {
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      jest.mocked(launchImageLibraryFast).mockReturnValue(new Promise(() => {}));
+      const { result } = renderHook(() => useMediaSend(params));
+      act(() => result.current.handleMediaSourceSelect('album'));
+      expect(launchImageLibraryFast).toHaveBeenCalledWith(ImagePicker, expect.objectContaining({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+      }));
+      expect(result.current.galleryMode).toBeNull();
+    } finally {
+      restore.restore();
+    }
+  });
+
+  test('camera opens the capture picker within the tap, without awaiting a permission request', () => {
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      const { result } = renderHook(() => useMediaSend(params));
+      act(() => result.current.handleMediaSourceSelect('camera'));
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledTimes(1);
+      expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
+  });
 });

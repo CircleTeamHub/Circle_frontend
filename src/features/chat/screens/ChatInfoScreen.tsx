@@ -1364,7 +1364,9 @@ export default function ChatInfoScreen() {
   );
 
   const handleOpenGroupReport = useCallback(() => {
-    if (!groupID) {
+    // 独立群聊没有圈子,举报对象就是群会话本身(后端 /group/:id/report 认会话 id)。
+    const reportTargetID = isStandaloneGroup ? conversationID : groupID;
+    if (!reportTargetID) {
       return;
     }
 
@@ -1372,11 +1374,11 @@ export default function ChatInfoScreen() {
       pathname: `/(tabs)/${scope}/report-friend`,
       params: {
         targetType: 'group',
-        groupID,
+        groupID: reportTargetID,
         groupName: groupTitle,
       },
     });
-  }, [groupID, groupTitle, scope]);
+  }, [conversationID, groupID, groupTitle, isStandaloneGroup, scope]);
 
   const handleLeaveGroup = useCallback(() => {
     if (isStandaloneGroup && standaloneDirectoryAccess !== 'allowed') return;
@@ -1471,7 +1473,7 @@ export default function ChatInfoScreen() {
     t,
   ]);
 
-  const handleToggleBlacklist = useCallback(
+  const applyBlacklist = useCallback(
     (nextValue: boolean) => {
       if (!friendId || blacklistPending || blacklistInFlightRef.current) {
         return;
@@ -1495,6 +1497,21 @@ export default function ChatInfoScreen() {
         });
     },
     [blacklist, blacklistPending, friendId, openActionError],
+  );
+
+  // 拉黑会同时删掉好友关系(移出黑名单也不会恢复),先确认;移出黑名单直接生效。
+  const handleToggleBlacklist = useCallback(
+    (nextValue: boolean) => {
+      if (!nextValue) {
+        applyBlacklist(false);
+        return;
+      }
+      Alert.alert(t('chat.addBlacklistConfirmTitle'), t('chat.addBlacklistConfirmMessage'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('chat.addBlacklistConfirm'), style: 'destructive', onPress: () => applyBlacklist(true) },
+      ]);
+    },
+    [applyBlacklist, t],
   );
 
   const handleConfirmDeleteContact = useCallback(() => {

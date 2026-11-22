@@ -61,7 +61,9 @@
     "keywordPlaceholder": "例如：演唱会、招聘、展览",
     "allKeywordsButton": "关注全部信息",
     "noteStatusYesButton": "提醒我",
-    "noteStatusNoButton": "暂时不用"
+    "noteStatusNoButton": "暂时不用",
+    "setupDoneTitle": "提醒已开启",
+    "setupDoneMessage": "「{{circle}}」有符合的新动态时，我会在这里告诉你。"
   },
   "media": {
     "saveImage": "保存图片",
@@ -233,7 +235,10 @@
       "useSecurityQuestions": "受信任设备不在身边？通过密保问题验证登录",
       "securityQuestionsIntro": "回答你设置的两个密保问题完成验证。",
       "securityQuestionsRetry": "密保问题加载失败，点击重试"
-    }
+    },
+    "webSessionUnreachableTitle": "登录状态暂时没能恢复",
+    "webSessionUnreachableMessage": "网络不稳或服务器繁忙，你并没有退出登录。稍后刷新页面即可回到原来的账号。",
+    "webSessionUnreachableReload": "刷新"
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -700,6 +705,9 @@
     "ownerOnlyAction": "仅群主或管理员可执行该操作。",
     "recommendFriend": "把他推荐给朋友",
     "addBlacklist": "加入黑名单",
+    "addBlacklistConfirmTitle": "加入黑名单？",
+    "addBlacklistConfirmMessage": "加入黑名单会删除你们的好友关系（移出后也不会恢复），对方将无法再给你发消息或打电话。",
+    "addBlacklistConfirm": "拉黑",
     "report": {
       "paramErrorTitle": "参数错误",
       "missingTarget": "缺少举报对象",

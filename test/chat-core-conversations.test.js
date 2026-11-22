@@ -27,6 +27,7 @@ function loadBurnDurations(translate = (key) => key) {
       if (request === '@/i18n') {
         return { __esModule: true, default: { t: translate, language: 'zh' } };
       }
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     },
   };
@@ -135,6 +136,7 @@ function loadStore() {
       }
       if (request === './local-db') return __localDbStub;
     if (request === './burn-durations') return loadBurnDurations();
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     }),
   };
@@ -165,6 +167,7 @@ function loadMappers() {
       }
       if (request === '@/types' || request === './protocol') return {};
       if (request === './burn-durations') return loadBurnDurations();
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
       throw new Error(`unexpected require: ${request}`);
     },
   };
@@ -280,6 +283,23 @@ test('own messages and active-conversation messages do not count unread', () => 
   store.setActiveConversationId(null);
   store.applyIncomingMessage(msg({ id: 'm3' }));
   assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
+test('system notices for my own actions do not count unread, others still do', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('u1');
+  store.setConversations([conv()]);
+
+  // 我改的群名、我设的管理员、我禁的言：系统通知没有 sender，操作人在 actorId。
+  store.applyIncomingMessage(msg({ id: 's1', height: 2, type: 'system', sender: null, content: { kind: 'group-renamed', name: 'x', actorId: 'u1' } }));
+  store.applyIncomingMessage(msg({ id: 's2', height: 3, type: 'system', sender: null, content: { kind: 'member-silenced', actorId: 'u1' } }));
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+
+  // 别人做的、或者没有操作人的通知照常计未读。
+  store.applyIncomingMessage(msg({ id: 's3', height: 4, type: 'system', sender: null, content: { kind: 'member-silenced', actorId: 'u2' } }));
+  store.applyIncomingMessage(msg({ id: 's4', height: 5, type: 'system', sender: null, content: { kind: 'member-joined', names: ['C'] } }));
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 2);
 });
 
 test('markConversationReadLocal zeroes unread without touching others', () => {

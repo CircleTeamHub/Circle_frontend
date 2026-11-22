@@ -333,7 +333,7 @@ export default function PostSignupsScreen() {
         keyExtractor={(item) => item.userId}
         ListHeaderComponent={
           <>
-          {post?.id === postId ? (
+          {post && post.id === postId ? (
             <View style={s.postDetails}>
               <PlazaPostCard
                 post={post}

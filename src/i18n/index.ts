@@ -134,7 +134,7 @@ export function rehydrateLanguageFromStorage() {
 /**
  * 网页端把 <html lang> 跟着当前语言走。
  *
- * +html.tsx 是静态模板，SSG 出来的是同一份 HTML（写死 lang="zh"），
+ * public/index.html 是单页模板，所有语言拿到的都是同一份 HTML（写死 lang="zh"），
  * 切到英/日/韩/西语后文档仍自称中文：读屏会按中文发音规则念英文，
  * 浏览器的翻译提示和断词规则也跟着错。只能在运行时同步。
  *

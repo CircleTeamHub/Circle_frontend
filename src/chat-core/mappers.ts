@@ -3,6 +3,8 @@ import { normalizeMediaUrl } from '@/services/api/utils';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import type { Conversation } from '@/types';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
+// 与 message-mappers 互相引用：两边都只在调用时取对方的函数，模块初始化不依赖彼此。
+import { systemNoticeText } from './message-mappers';
 
 /**
  * chat-core DTO → UI 类型的映射(替代 src/im/mappers 的会话侧)。
@@ -132,6 +134,9 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
       // 文件名是对端可控文本,列表里截断,别让一条超长名字撑坏整行。
       return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
     }
+    case 'system':
+      // 建群、进群、改群名等：列表里显示聊天页同一句通知，不再是「[消息]」。
+      return systemNoticeText(message.content) || tPreview('default', '[消息]');
     case 'transfer-card':
       return tPreview('transfer', '[转账]');
     case 'note-card':

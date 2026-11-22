@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { FlatList } from 'react-native';
+import { FlatList, Platform } from 'react-native';
 import { saveImageToLibrary } from '@/utils/save-image';
 import { getNoteDetailHref } from '@/features/user/utils/routes';
 import type { ChatMessage } from '@/types';
@@ -238,3 +238,51 @@ test('acknowledging the tapped anchor preserves its gallery and the currently vi
 });
 
 test('assistant messages suppress receipts', () => { function Assistant() { const item: ChatMessage = { id: 'assistant-send', type: 'sent', outgoing: true, text: 'Hello' }; const { renderItem } = useMessageRenderer({ ...params, messages: [item], isAssistantConversation: true }); return renderItem({ item }); } render(<Assistant />); expect(screen.getByText('status-hidden')).toBeTruthy(); });
+
+describe('right-click on a message', () => {
+  // 电脑浏览器上右键消息以前没有任何反应，只能按住鼠标不放才出操作菜单。
+  function Row() {
+    const item: ChatMessage = { id: 'ctx-1', type: 'sent', outgoing: true, text: 'Hi' };
+    const { renderItem } = useMessageRenderer({ ...params, messages: [item] });
+    return renderItem({ item });
+  }
+  const contextHandlers = () =>
+    screen.UNSAFE_root.findAll((node: { props: Record<string, unknown> }) => typeof node.props.onContextMenu === 'function');
+
+  it('opens the same action menu as a long press on web', () => {
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      const openMenu = jest.fn();
+      jest.mocked(params.getMessageLongPressHandler).mockReturnValue(openMenu);
+      render(<Row />);
+      const preventDefault = jest.fn();
+      const event = { preventDefault, nativeEvent: { pageX: 120, pageY: 340 } };
+      contextHandlers()[0].props.onContextMenu(event);
+      expect(preventDefault).toHaveBeenCalled();
+      expect(openMenu).toHaveBeenCalledWith(event);
+    } finally {
+      restore.restore();
+    }
+  });
+
+  it('leaves a touch long-press on mobile web to the long-press handler', () => {
+    const restore = jest.replaceProperty(Platform, 'OS', 'web');
+    try {
+      const openMenu = jest.fn();
+      jest.mocked(params.getMessageLongPressHandler).mockReturnValue(openMenu);
+      render(<Row />);
+      // 安卓 Chrome 长按后还会补发 contextmenu;Pressable 自己已按长按处理并 preventDefault,
+      // 这里再开一次菜单就是重复打开。
+      const event = { preventDefault: jest.fn(), nativeEvent: { pageX: 120, pageY: 340, defaultPrevented: true } };
+      contextHandlers()[0].props.onContextMenu(event);
+      expect(openMenu).not.toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
+  });
+
+  it('adds nothing on native, where there is no right click', () => {
+    render(<Row />);
+    expect(contextHandlers()).toHaveLength(0);
+  });
+});

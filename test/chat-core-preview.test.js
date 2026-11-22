@@ -82,6 +82,7 @@ function loadMappers({ withRealLocale = false, locale = 'zh' } = {}) {
       if (request === './protocol') return {};
       if (request === '@/types') return {};
       if (request === './local-db') return __localDbStub;
+      if (request === './message-mappers') return { systemNoticeText: () => '' };
     throw new Error(`unexpected require: ${request}`);
     },
   };
