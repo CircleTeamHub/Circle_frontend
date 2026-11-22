@@ -58,6 +58,11 @@ export type NoteEditorDraftRecord = {
   pendingSubmission?: PendingNoteSubmission;
   /** 加城市之前存下的草稿没有这个字段，按未选处理。 */
   city?: string | null;
+  /**
+   * 编辑已有笔记时，编辑开始那一刻笔记在服务端的 updatedAt。笔记之后又被保存过（服务端时间更晚），
+   * 这份草稿就作废了：判断只比服务端时间，不受手机时钟快慢影响。新笔记和之前存下的草稿没有。
+   */
+  baseNoteUpdatedAt?: string;
 };
 
 export type NoteLocalDraftSummary = {
@@ -499,21 +504,15 @@ export function confirmNoteDraftDeletion(userId: string, draftId: string, cleane
 }
 
 /**
- * 笔记被永久删除后，本地「编辑这篇笔记」的草稿改成新笔记草稿：内容保留，保存时
- * 走新建而不是去更新一篇已不存在的笔记（与服务端草稿 sourceNoteID 的 onDelete:
- * SetNull 同口径）。指向它的「未确认提交」目标已不存在，一并丢掉。
+ * 笔记被永久删除后，本机「编辑这篇笔记」的草稿一并删掉。编辑已有笔记只能存回原笔记：
+ * 原笔记没了，没存的改动也就没有去处，不能改成新笔记另发一篇，否则「我的笔记」里会冒出
+ * 一篇它的副本（服务端永久删除时同样删掉这篇笔记的草稿）。
  */
-export function detachLocalNoteDraftsFromNote(userId: string, noteId: string): void {
+export function removeLocalNoteDraftsForNote(userId: string, noteId: string): void {
   for (const item of readIndex(userId).items) {
     if (item.noteId !== noteId) continue;
-    const record = readLocalNoteDraft(userId, item.id);
-    if (!record || record.noteId !== noteId) continue;
-    saveLocalNoteDraft(userId, {
-      ...record,
-      noteId: null,
-      pendingSubmission:
-        record.pendingSubmission?.noteId === noteId ? undefined : record.pendingSubmission,
-    });
+    if (readLocalNoteDraft(userId, item.id)?.noteId !== noteId) continue;
+    removeLocalNoteDraft(userId, item.id);
   }
 }
 

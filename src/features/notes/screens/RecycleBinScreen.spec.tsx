@@ -4,7 +4,7 @@ import { Alert, FlatList } from 'react-native';
 import RecycleBinScreen from './RecycleBinScreen';
 import { ApiError } from '@/services/api/api-error';
 import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
-import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
+import { removeLocalNoteDraftsForNote } from '@/features/notes/utils/note-editor-drafts';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
@@ -43,7 +43,7 @@ jest.mock('@/features/notes/components/NoteCard', () => {
     ),
   };
 });
-jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ detachLocalNoteDraftsFromNote: jest.fn() }));
+jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ removeLocalNoteDraftsForNote: jest.fn() }));
 // No persisted recycle-bin snapshot: every test starts from the network load.
 jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), getCachedDeletedNotes: () => null, purgeNote: jest.fn(), restoreNote: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
@@ -88,27 +88,27 @@ test('a 404 from delete-now means it is already gone: the row leaves and no fail
   } finally { alert.mockRestore(); }
 });
 
-test('delete-now detaches local drafts that still edit the purged note', async () => {
+test('delete-now removes local drafts that still edit the purged note', async () => {
   jest.mocked(purgeNote).mockResolvedValueOnce(undefined);
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   render(<RecycleBinScreen />);
   try {
     fireEvent.press(await screen.findByLabelText('more:n1'));
     await confirmPurge(alert);
-    expect(detachLocalNoteDraftsFromNote).toHaveBeenCalledWith('owner', 'n1');
+    expect(removeLocalNoteDraftsForNote).toHaveBeenCalledWith('owner', 'n1');
   } finally { alert.mockRestore(); }
 });
 
-test('a local draft detach failure remains observable after successful purge', async () => {
+test('a local draft removal failure remains observable after successful purge', async () => {
   const error = new Error('storage unavailable');
   jest.mocked(purgeNote).mockResolvedValueOnce(undefined);
-  jest.mocked(detachLocalNoteDraftsFromNote).mockImplementationOnce(() => { throw error; });
+  jest.mocked(removeLocalNoteDraftsForNote).mockImplementationOnce(() => { throw error; });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   render(<RecycleBinScreen />);
   try {
     fireEvent.press(await screen.findByLabelText('more:n1'));
     await confirmPurge(alert);
-    expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'detachDrafts', error);
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'removeDrafts', error);
     expect(screen.queryByText('回收站里的笔记')).toBeNull();
     expect(alert).not.toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', expect.anything());
   } finally { alert.mockRestore(); }
@@ -196,7 +196,7 @@ test('a real delete-now failure keeps the row and tells the user', async () => {
     await confirmPurge(alert);
     expect(alert).toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', 'common.retryLater');
     expect(screen.getByText('回收站里的笔记')).toBeTruthy();
-    expect(detachLocalNoteDraftsFromNote).not.toHaveBeenCalled();
+    expect(removeLocalNoteDraftsForNote).not.toHaveBeenCalled();
   } finally { alert.mockRestore(); }
 });
 

@@ -184,8 +184,13 @@ async function run({
       // 普通更新保留置顶，已发出的提交则原样重放。详情 404 可能是回收站里的笔记，不能另建一篇。
       const current = target.noteId && !pending ? await fetchNoteDetail(target.noteId) : null;
       if (!isCurrent()) break;
-      if (current && Date.parse(current.updatedAt) > target.updatedAt) {
-        result.resumeDraft ??= { draftId, noteId: target.noteId };
+      // 本机草稿比的是编辑开始时笔记的服务端版本，不比手机时钟；之前存下、没记版本的才退回比草稿时间。
+      // 服务端草稿的 updatedAt 本来就是服务端时间。
+      const editStartedAt = target.local?.baseNoteUpdatedAt ? Date.parse(target.local.baseNoteUpdatedAt) : target.updatedAt;
+      if (current && Date.parse(current.updatedAt) > editStartedAt) {
+        // 笔记在这份草稿之后又存过：草稿已作废。不拿它覆盖新版，也不再每次都提示「继续编辑」。
+        removeLocalNoteDraft(userId, draftId);
+        void deleteNoteDraft(draftId).catch((error) => reportHandledFailure('noteRecovery', 'staleDraftDelete', error));
         continue;
       }
       const saved = target.noteId
