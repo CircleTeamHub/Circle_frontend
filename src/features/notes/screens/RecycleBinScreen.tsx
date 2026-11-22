@@ -15,7 +15,7 @@ import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
-import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
+import { removeLocalNoteDraftsForNote } from '@/features/notes/utils/note-editor-drafts';
 import { ApiError } from '@/services/api/api-error';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -175,13 +175,13 @@ function RecycleBinContent() {
                   return;
                 }
               }
-              // 本地「编辑这篇笔记」的草稿改成新笔记草稿，内容保留、不再指向已删笔记。
+              // 本机「编辑这篇笔记」的草稿一并删掉：编辑只能存回原笔记，原笔记没了就不能另发成新笔记。
               if (userId) {
                 try {
-                  detachLocalNoteDraftsFromNote(userId, note.id);
+                  removeLocalNoteDraftsForNote(userId, note.id);
                 } catch (error) {
-                  reportHandledFailure('noteRecycleBin', 'detachDrafts', error);
-                  // 本地存储失败不影响删除结果；草稿保存时会按 404 提示。
+                  reportHandledFailure('noteRecycleBin', 'removeDrafts', error);
+                  // 本地存储失败不影响删除结果；留下的草稿补存时按 404 跳过，不会另发成新笔记。
                 }
               }
               await removeSettledNote(note.id);

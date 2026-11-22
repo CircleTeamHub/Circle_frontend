@@ -2200,6 +2200,52 @@ test('saving a pinned unlisted note preserves pinned and leaves status to the se
   } finally { rendered.unmount(); }
 });
 
+// 编辑已有笔记，返回时只能存回原笔记，绝不另建一篇。
+test('Back from editing an existing note saves into that note and never creates another', async () => {
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  mockRouteId = 'existing-note';
+  mockFetchNoteDetail.mockResolvedValue(noteResult({ title: 'Original note', contentJson: [], media: [], groupIds: [] }, 'existing-note'));
+  jest.mocked(updateNote).mockImplementation(async (id, input) => noteResult(input, id));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Original note'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Edited title');
+    rendered.rerender(<EditNoteScreen />);
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    await waitFor(() => expect(updateNote).toHaveBeenCalledWith('existing-note', expect.objectContaining({ title: 'Edited title' })));
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
+    expect(updateNote).toHaveBeenCalledTimes(1);
+    expect(createNote).not.toHaveBeenCalled();
+    expect(alert).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+// 闪退补存靠它判断笔记在编辑开始后有没有被别处保存过（不比手机时钟）。
+test('the autosaved draft of an existing note remembers which server version the edit started from', async () => {
+  jest.useFakeTimers();
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  mockRouteId = 'existing-note';
+  const values = durableDraftStorage();
+  mockFetchNoteDetail.mockResolvedValue({
+    ...noteResult({ title: 'Original note', contentJson: [], media: [], groupIds: [] }, 'existing-note'),
+    updatedAt: '2026-11-20T08:00:00.000Z',
+  });
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Original note'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Edited title');
+    await act(async () => { jest.advanceTimersByTime(700); await Promise.resolve(); });
+    const stored = [...values.entries()]
+      .filter(([key]) => key.startsWith('circle-im-note-draft:v1:'))
+      .map(([, value]) => JSON.parse(value) as { noteId?: string; title?: string; baseNoteUpdatedAt?: string })
+      .find((draft) => draft.noteId === 'existing-note');
+    expect(stored?.title).toBe('Edited title');
+    expect(stored?.baseNoteUpdatedAt).toBe('2026-11-20T08:00:00.000Z');
+  } finally { rendered.unmount(); jest.useRealTimers(); }
+});
+
 test('accepts a successful PATCH when the server canonicalizes the edited note', async () => {
   mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
   mockRouteId = 'existing-note';
@@ -3780,6 +3826,31 @@ test('Back on a new note with content saves it as an untitled note without askin
     })));
     await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
     expect([...values.keys()].some((key) => key.endsWith(':fresh-note-keep'))).toBe(false);
+    expect(alert).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
+});
+
+// 只点出了空的文字栏、图片栏，什么都没写：返回不能发出一篇空的「未命名笔记」。
+test('Back on a new note with only empty bars added publishes nothing', async () => {
+  jest.useFakeTimers();
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' }; mockRouteDraftId = 'fresh-note-empty-bars'; mockDraftMode = 'new';
+  const values = durableDraftStorage();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.text' })).toBeEnabled());
+    pressComposer('text');
+    // 只加图片栏，不点「添加图片」。
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.image' }));
+    expect(screen.getByTestId('note-image-section')).toBeTruthy();
+    await waitFor(() => expect(mockEditorProps).toBeTruthy());
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: '  ', styles: {} }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    await act(async () => { jest.runOnlyPendingTimers(); await Promise.resolve(); });
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
+    expect(createNote).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('fresh-note-empty-bars'));
+    expect([...values.keys()].some((key) => key.endsWith(':fresh-note-empty-bars'))).toBe(false);
     expect(alert).not.toHaveBeenCalled();
   } finally { rendered.unmount(); jest.useRealTimers(); alert.mockRestore(); }
 });

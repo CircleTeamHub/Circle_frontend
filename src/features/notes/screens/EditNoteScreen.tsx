@@ -161,6 +161,7 @@ import {
   finishLocalNoteDraftDeletion,
   confirmNoteDraftDeletion,
   retainDeletedNoteDraftRecording,
+  interruptedNoteHasContent,
   type NoteEditorDraftRecord,
 } from '@/features/notes/utils/note-editor-drafts';
 import { trackOpenNoteEditor } from '@/features/notes/utils/interrupted-note-recovery';
@@ -548,6 +549,8 @@ export default function EditNoteScreen() {
   // 编辑时必须原样回传：后端 PATCH 对缺省 pinned 按 false 处理，
   // 不带的话「编辑一篇置顶笔记」会静默取消置顶。
   const pinnedRef = useRef(false);
+  // 编辑开始时笔记在服务端的 updatedAt，跟着草稿存下：闪退补存靠它判断笔记之后有没有被别处保存过。
+  const baseNoteUpdatedAtRef = useRef<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingSubmission, setPendingSubmission] = useState<PendingNoteSubmission | null>(null);
   const pendingSubmissionRef = useRef<PendingNoteSubmission | null>(null);
@@ -991,6 +994,7 @@ export default function EditNoteScreen() {
       createdAt: Date.parse(createdAtIso) || Date.now(),
       updatedAt: Date.now(),
       pendingSubmission: pendingSubmissionRef.current ?? undefined,
+      baseNoteUpdatedAt: id ? baseNoteUpdatedAtRef.current : undefined,
     };
   }, [
     audioItems,
@@ -1075,6 +1079,7 @@ export default function EditNoteScreen() {
       draftPersistedFingerprintRef.current = emptyFingerprint;
       setSettledRouteKey(null);
       existingSectionsRef.current = null;
+      baseNoteUpdatedAtRef.current = undefined;
       textBlocksByIdRef.current = {};
       textStatsStore.reset();
       setGroupSheetVisible(false);
@@ -1145,6 +1150,7 @@ export default function EditNoteScreen() {
     // 换一篇笔记就重新收起地图：上一篇是用户点开过的，不代表这一篇也同意了。
     setMapRevealed(false);
     pinnedRef.current = false;
+    baseNoteUpdatedAtRef.current = undefined;
     setEditorMounted(false);
 
     fetchNoteDetail(id)
@@ -1248,6 +1254,7 @@ export default function EditNoteScreen() {
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         pinnedRef.current = note.pinned;
+        baseNoteUpdatedAtRef.current = note.updatedAt || undefined;
         setCreatedAtIso(note.createdAt);
         setLoadedNoteId(id);
         baselineFingerprintRef.current = draftFingerprint({
@@ -1375,6 +1382,8 @@ export default function EditNoteScreen() {
       if (record) {
         pendingSubmissionRef.current = record.pendingSubmission ?? null;
         setPendingSubmission(record.pendingSubmission ?? null);
+        // 接着之前的草稿编辑：编辑是从那份草稿记下的版本开始的，不是刚才读到的最新版。
+        baseNoteUpdatedAtRef.current = record.baseNoteUpdatedAt;
         const restoredBlocks = restoreNoteComposerMediaBlocks(
           record.composerBlocks.length ? normalizeNoteComposerBlocks(record.composerBlocks, null, false) : [],
           { media: { items: record.mediaItems }, showcase: { items: record.showcaseItems } },
@@ -1669,23 +1678,28 @@ export default function EditNoteScreen() {
       }
       const userId = currentUser?.id;
       if (!userId) { completeNavigation(action); return; }
-      const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
+      const currentRecord = buildCurrentDraftRecord();
       const changedThisSession = hasUndurableRecording || (
         draftHydratedRef.current &&
         entryFingerprintRef.current != null &&
-        entryFingerprintRef.current !== currentFingerprint);
+        entryFingerprintRef.current !== draftFingerprint(currentRecord));
       if (draftMode === 'recovery' && !changedThisSession) {
         completeNavigation(action);
         return;
       }
-      if (changedThisSession || entryDraftRecordRef.current) {
+      // 没上传成的图片、录音也算有内容：交给 submitNote 让人选继续编辑还是不存退出。
+      const hasContent = mediaItems.length + showcaseItems.length + audioItems.length > 0 ||
+        interruptedNoteHasContent(currentRecord);
+      if (hasContent && (changedThisSession || entryDraftRecordRef.current)) {
         saveAndExit();
         return;
       }
-      // 新笔记改了又全部改回去：自动保存替闪退写下的中间状态删掉，不留着等下次被存成笔记。
+      // 没改动、改了又全部改回去，或者只点出了空的文字栏/图片栏：都没有可存的。
+      // 自动保存替闪退写下的中间状态删掉，不留着等下次被存成笔记；已有笔记保持原样。
       discardDraftAndExit(action);
     },
     [
+      audioItems.length,
       completeNavigation,
       currentUser?.id,
       discardDraftAndExit,
@@ -1694,6 +1708,8 @@ export default function EditNoteScreen() {
       editorDraftId,
       draftRemoteQueue,
       hasUndurableRecording,
+      mediaItems.length,
+      showcaseItems.length,
       t,
     ],
   );

@@ -9,6 +9,7 @@ import {
 } from '@/services/api/notes';
 import {
   loadLocalNoteDraft,
+  removeLocalNoteDraftsForNote,
   saveLocalNoteDraft,
   type NoteEditorDraftRecord,
 } from './note-editor-drafts';
@@ -131,14 +132,56 @@ test('interrupted edits to an existing note update it and keep it pinned', async
   expect(createNote).not.toHaveBeenCalled();
 });
 
-test('an older draft is offered for review instead of replacing a newer note', async () => {
+// 笔记在这份草稿之后又存过：草稿已经作废。不能拿它覆盖新版，也不能每次都弹「继续编辑」。
+test('a draft older than the latest save of its note is dropped, neither overwriting it nor offered again', async () => {
   saveLocalNoteDraft(USER, record({ noteId: 'note-old' }));
-  jest.mocked(fetchNoteDetail).mockResolvedValueOnce({
+  jest.mocked(fetchNoteDetail).mockResolvedValue({
     id: 'note-old', pinned: false, updatedAt: new Date(NOW + 60_000).toISOString(),
   } as never);
-  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: { draftId: 'draft-1', noteId: 'note-old' } });
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: null });
   expect(updateNote).not.toHaveBeenCalled();
-  expect(loadLocalNoteDraft(USER, 'draft-1')).not.toBeNull();
+  expect(loadLocalNoteDraft(USER, 'draft-1')).toBeNull();
+  expect(deleteNoteDraft).toHaveBeenCalledWith('draft-1');
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: null });
+});
+
+// 本机草稿按「编辑开始时笔记在服务端的版本」判断有没有作废，不看手机时钟。
+test('a crash draft on a phone whose clock runs slow still saves into its note', async () => {
+  const base = new Date(NOW).toISOString();
+  saveLocalNoteDraft(USER, record({ noteId: 'note-old', title: '改到一半', baseNoteUpdatedAt: base, updatedAt: NOW - 2 * 60 * 60_000 }));
+  jest.mocked(fetchNoteDetail).mockResolvedValue({ id: 'note-old', pinned: false, updatedAt: base } as never);
+  await expect(run()).resolves.toBe(1);
+  expect(updateNote).toHaveBeenCalledWith('note-old', expect.objectContaining({ title: '改到一半' }));
+  expect(createNote).not.toHaveBeenCalled();
+});
+
+test('a crash draft whose note was saved again after the edit began is dropped even on a phone whose clock runs fast', async () => {
+  const base = new Date(NOW).toISOString();
+  saveLocalNoteDraft(USER, record({ noteId: 'note-old', baseNoteUpdatedAt: base, updatedAt: NOW + 24 * 60 * 60_000 }));
+  jest.mocked(fetchNoteDetail).mockResolvedValue({
+    id: 'note-old', pinned: false, updatedAt: new Date(NOW + 60_000).toISOString(),
+  } as never);
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: null });
+  expect(updateNote).not.toHaveBeenCalled();
+  expect(loadLocalNoteDraft(USER, 'draft-1')).toBeNull();
+});
+
+test('a server draft left behind before its note was saved again is dropped too', async () => {
+  const at = clock + 60 * 60_000;
+  const draftAt = new Date(at - 7 * 24 * 60 * 60_000).toISOString();
+  jest.mocked(fetchNoteDrafts).mockResolvedValue([
+    { id: 'remote-stale', title: '旧改动', contentPreview: null, mediaCount: 0, createdAt: draftAt, updatedAt: draftAt },
+  ]);
+  jest.mocked(fetchNoteDraft).mockResolvedValue({
+    id: 'remote-stale', title: '旧改动', content: '旧内容', contentJson: null, sections: null,
+    groupIds: [], mediaKeys: [], sourceNoteId: 'note-old', contentPreview: null, mediaCount: 0, createdAt: draftAt, updatedAt: draftAt,
+  });
+  jest.mocked(fetchNoteDetail).mockResolvedValue({
+    id: 'note-old', pinned: false, updatedAt: new Date(at - 60 * 60_000).toISOString(),
+  } as never);
+  await expect(recover()).resolves.toEqual({ published: 0, resumeDraft: null });
+  expect(updateNote).not.toHaveBeenCalled();
+  expect(deleteNoteDraft).toHaveBeenCalledWith('remote-stale');
 });
 
 test('a trashed note stays in the recycle bin and its local edits are retained', async () => {
@@ -148,6 +191,20 @@ test('a trashed note stays in the recycle bin and its local edits are retained',
   expect(updateNote).not.toHaveBeenCalled();
   expect(createNote).not.toHaveBeenCalled();
   expect(loadLocalNoteDraft(USER, 'draft-1')).not.toBeNull();
+});
+
+// 编辑已有笔记只能存回原笔记：原笔记被永久删除后，没存的改动一起丢掉，绝不另发成一篇新笔记。
+test('edits to a permanently deleted note are thrown away, never published as a new note', async () => {
+  saveLocalNoteDraft(USER, record({ noteId: 'note-purged', title: '改过的' }));
+  saveLocalNoteDraft(USER, record({ id: 'draft-other', noteId: 'note-kept', title: '另一篇' }));
+  removeLocalNoteDraftsForNote(USER, 'note-purged');
+  expect(loadLocalNoteDraft(USER, 'draft-1')).toBeNull();
+  expect(loadLocalNoteDraft(USER, 'draft-other')?.noteId).toBe('note-kept');
+  jest.mocked(fetchNoteDetail).mockResolvedValue({ id: 'note-kept', pinned: false, updatedAt: new Date(NOW).toISOString() } as never);
+  await run();
+  expect(createNote).not.toHaveBeenCalled();
+  expect(updateNote).toHaveBeenCalledTimes(1);
+  expect(updateNote).toHaveBeenCalledWith('note-kept', expect.objectContaining({ title: '另一篇' }));
 });
 
 test('a save that was already sent when the app died is replayed exactly, not rebuilt from newer content', async () => {

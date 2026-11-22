@@ -258,19 +258,20 @@ test('an explicit discard deletes a draft even when it carries a publication rec
   assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['pending']);
 });
 
-test('a permanently deleted note detaches local drafts that edit it, keeping their content', () => {
-  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
-  utils.saveLocalNoteDraft('owner', { ...draft('edit-gone'), noteId: 'gone', title: 'Keep me',
+test('a permanently deleted note removes the local drafts that edit it, never turning them into new notes', () => {
+  const store = memoryStorage(); const removed = [];
+  const utils = loadDraftUtils({ removeNoteRecording: async (_owner, id) => { removed.push(id); } }, store);
+  utils.saveLocalNoteDraft('owner', { ...draft('edit-gone', [audio('gone-only'), audio('shared')]), noteId: 'gone', title: 'Old edit',
     pendingSubmission: { noteId: 'gone', input: { title: 'x', media: [], clientDraftID: 'edit-gone' } } });
-  utils.saveLocalNoteDraft('owner', { ...draft('edit-other'), noteId: 'other' });
-  utils.detachLocalNoteDraftsFromNote('owner', 'gone');
-  const detached = utils.loadLocalNoteDraft('owner', 'edit-gone');
-  // 服务端草稿 sourceNoteID 是 onDelete: SetNull，本地同口径：变成「新笔记」草稿，内容保留。
-  assert.equal(detached.noteId, null);
-  assert.equal(detached.title, 'Keep me');
-  // 指向已删笔记的「未确认提交」也一并失效（那次更新的目标已不存在）。
-  assert.equal(detached.pendingSubmission, undefined);
+  utils.saveLocalNoteDraft('owner', { ...draft('edit-other', [audio('shared')]), noteId: 'other' });
+  utils.saveLocalNoteDraft('owner', draft('new-note'));
+  utils.removeLocalNoteDraftsForNote('owner', 'gone');
+  // 编辑已有笔记只能存回原笔记：原笔记没了，草稿整份删掉，不能变成「新笔记」草稿另发一篇。
+  assert.equal(utils.loadLocalNoteDraft('owner', 'edit-gone'), null);
+  assert.deepEqual(Array.from(utils.loadLocalNoteDraftSummaries('owner'), (item) => item.id).sort(), ['edit-other', 'new-note']);
   assert.equal(utils.loadLocalNoteDraft('owner', 'edit-other').noteId, 'other');
+  // 只清它独占的录音；别的草稿还引用的留着。
+  assert.deepEqual(removed, ['recording-gone-only.m4a']);
 });
 
 test('partial content or recording deletion stays retryable and never cleans a retained recording', async () => {
