@@ -333,19 +333,21 @@ const STALL_DIAGNOSTIC_COUNTS = [
   'completedWhileWaiting',
   'loopLagMs',
 ] as const;
-const STALL_DIAGNOSTIC_FLAGS = ['xhrEarlyEvent', 'appStateChanged'] as const;
+const STALL_DIAGNOSTIC_FLAGS = ['xhrEarlyEvent', 'appStateChanged', 'online'] as const;
 const STALL_DIAGNOSTIC_ENUMS: Readonly<Record<string, RegExp>> = {
   xhrStage: /^(untracked|sent|acked|headers|loading|done)$/,
   appState: /^(active|background|inactive|unknown|extension)$/,
   retry: /^(recovered|failed)$/,
+  failedOn: /^device$/,
+  pageVisibility: /^(visible|hidden|prerender)$/,
 };
 const STALL_DIAGNOSTIC_KEYS = [
   ...STALL_DIAGNOSTIC_COUNTS,
   ...STALL_DIAGNOSTIC_FLAGS,
   ...Object.keys(STALL_DIAGNOSTIC_ENUMS),
 ];
-// 能在 Sentry 里按 tag 筛的那几项：「卡在哪一步」「重试救没救回来」「前后台」。
-const STALL_DIAGNOSTIC_TAG_KEYS = ['stage', 'xhrStage', 'retry', 'appState'];
+// 能在 Sentry 里按 tag 筛的那几项：「卡在哪一步」「重试救没救回来」「前后台」「请求有没有出设备」。
+const STALL_DIAGNOSTIC_TAG_KEYS = ['stage', 'xhrStage', 'retry', 'appState', 'failedOn'];
 
 function isSafeStallDiagnostic(key: string, value: unknown): boolean {
   // stage 也进 tag：现有取值都是代码里的标识符（handshake / local-read / reading-body…）。
@@ -1357,7 +1359,8 @@ function safeErrorMessage(context: Record<string, unknown> | undefined, error?: 
   if (detected) return detected;
   if (context && readTagValue(context, 'endpointPath')) {
     const retryOutcome = context.retry === 'recovered' ? '｜重试已救回' : context.retry === 'failed' ? '｜重试也失败' : '';
-    return `${requestSummary('接口请求失败', context)}｜${explanation}${retryOutcome}`;
+    const onDevice = context.failedOn === 'device' ? '｜请求没发出本机' : '';
+    return `${requestSummary('接口请求失败', context)}｜${explanation}${retryOutcome}${onDevice}`;
   }
   const operation = context ? readTagValue(context, 'operation') : undefined;
   if (operation && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(operation)) {
@@ -1442,9 +1445,11 @@ function buildCaptureContext(
       tags.failureKind ?? 'http',
       // 卡顿救回来（用户无感）与重试也失败（用户看到报错）各成一个 issue，计数与告警不混。
       ...(tags.retry ? [tags.retry] : []),
+      // 请求没出设备（断网 / 切网 / 页面刷新）与真的连不上服务器分开。
+      ...(tags.failedOn ? [`on-${tags.failedOn}`] : []),
     ];
-    // 救回来的只是现场采样。Sentry 按级别给新 issue 定优先级，error 会触发「高优先级」告警推到 Discord。
-    if (tags.retry === 'recovered') captureContext.level = 'warning';
+    // 救回来的、没出设备的都只是现场采样。Sentry 按级别给新 issue 定优先级，error 会触发「高优先级」告警推到 Discord。
+    if (tags.retry === 'recovered' || tags.failedOn === 'device') captureContext.level = 'warning';
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
     // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。

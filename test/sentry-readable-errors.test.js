@@ -202,6 +202,33 @@ test('a retry that also failed names the outcome and stays an error', () => {
   assert.equal(captures[1].context.level, undefined);
 });
 
+// 重试也在几毫秒内失败 = 请求没出设备（断网 / 切网 / 页面刷新），不是我们能修的故障：
+// 留在 Sentry 里能查，但按 warning 报、单独成 issue，不推高优先级告警。
+test('a retry that failed on the device reads as such, is a warning and lands in its own issue', () => {
+  const { sentry, options, captures } = setup();
+  const base = {
+    endpointPath: '/trace/feed/new-count', method: 'GET', status: 0, durationMs: 2,
+    failureKind: 'network', retry: 'failed', attempts: 2,
+  };
+  sentry.reportError(new Error('Failed to fetch'), { ...base, failedOn: 'device', online: false, pageVisibility: 'visible' });
+  sentry.reportError(new Error('Failed to fetch'), base);
+  const [onDevice, plain] = captures;
+
+  assert.equal(onDevice.error.message, '接口请求失败｜GET /trace/feed/new-count｜未收到响应｜2 ms｜网络连接失败｜重试也失败｜请求没发出本机');
+  assert.equal(onDevice.context.level, 'warning');
+  assert.notDeepEqual([...onDevice.context.fingerprint], [...plain.context.fingerprint]);
+  assert.equal(plain.context.level, undefined);
+
+  const event = options.beforeSend({
+    ...onDevice.context,
+    exception: { values: [{ type: onDevice.error.name, value: onDevice.error.message }] },
+  });
+  assert.equal(event.level, 'warning');
+  assert.equal(event.tags.failedOn, 'device');
+  assert.equal(event.extra.online, false);
+  assert.equal(event.extra.pageVisibility, 'visible');
+});
+
 test('every client-side failure kind gets its own explanation instead of the generic runtime error', () => {
   const { sentry, captures } = setup();
   sentry.reportError(new Error('Aborted'), {
