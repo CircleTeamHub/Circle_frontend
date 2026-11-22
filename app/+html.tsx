@@ -15,9 +15,12 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        {/* maximum-scale=1：iOS Safari 聚焦字号 < 16px 的输入框会自动放大页面，
+            打完字也不缩回，只能手动捏回去。加了它 iOS 不再自动放大，但用户
+            双指缩放照常可用（iOS 10 起 Safari 忽略缩放上限对手势的限制）。 */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no"
+          content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no"
         />
         {/* ScrollView 在 web 上正确滚动所需的基础样式重置（官方模板同款）。 */}
         <ScrollViewStyleReset />

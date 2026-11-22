@@ -50,6 +50,15 @@ test('selects keep a focus indicator even though text inputs drop theirs', () =>
   );
 });
 
+test('focusing a text input does not leave the page zoomed in on iOS', () => {
+  const source = read('app/+html.tsx');
+  // 输入框字号 < 16px 时 iOS Safari 聚焦就自动放大，打完字不缩回，
+  // 用户只能手动捏回去。maximum-scale=1 关掉的只是这种自动放大。
+  assert.match(source, /name="viewport"\s+content="[^"]*maximum-scale=1[,"]/);
+  // 不能顺手写 user-scalable=no：那会连用户主动的双指缩放一起禁掉。
+  assert.doesNotMatch(source, /user-scalable\s*=\s*no/);
+});
+
 test('zoom panning is bounded by the rendered image, not the container', () => {
   const source = read('src/components/ui/zoomable-image.tsx');
   // contentFit="contain"：竖图放进横屏容器时两侧都是空白，按容器宽算的
