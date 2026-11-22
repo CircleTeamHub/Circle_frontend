@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createVideoPlayer, type VideoPlayer } from 'expo-video';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -21,6 +22,8 @@ export async function captureVideoPosterFrame(
   uri: string,
   durationSeconds: number | undefined,
 ): Promise<{ uri: string } | null> {
+  // 网页上 expo-video 没有截帧，调了必然失败；以前每次都当错误上报（Sentry「chatVideoPoster 失败」）。
+  if (Platform.OS === 'web') return null;
   let player: VideoPlayer | null = null;
   try {
     // Load the item before grabbing a frame. iOS `createVideoPlayer(uri)` attaches the item in
