@@ -60,11 +60,13 @@ function okResponse(data) {
   };
 }
 
-function loadClient({ fetchImpl, timers, session = { epoch: 1 } }) {
+// clock：请求耗时用的时钟（默认真实时间）；browser：网页版才有的 navigator / document。
+function loadClient({ fetchImpl, timers, session = { epoch: 1 }, clock, browser = {} }) {
   const reports = [];
   const calls = [];
   const client = loadTsModule('src/services/api/client.ts', {
     context: {
+      ...browser,
       __DEV__: false,
       AbortController,
       ArrayBuffer,
@@ -82,7 +84,9 @@ function loadClient({ fetchImpl, timers, session = { epoch: 1 } }) {
     },
     requireShim: (request) => {
       if (request === '@/observability/http-diagnostics') {
-        return loadTsModule('src/observability/http-diagnostics.ts');
+        return loadTsModule('src/observability/http-diagnostics.ts', {
+          context: clock ? { performance: { now: () => clock.now } } : {},
+        });
       }
       if (request === '@/constants/config') {
         return { API_URL: 'https://api.example.test/api/v1' };
@@ -607,6 +611,71 @@ test('a GET that fails with a network error before the backup point is retried o
   assert.equal(reports.length, 1);
   assert.equal(reports[0].context.failureKind, 'network');
   assert.equal(reports[0].context.retry, 'recovered');
+});
+
+// 2026-11-22 网页版：断网 / 切网 / 页面刷新那一刻，一串 GET 和各自的重试都在几毫秒内失败。
+// 到服务器的任何往返都比这长，请求根本没出设备；照报会按 error 推 Discord。
+test('a GET whose retry also fails within milliseconds is reported as a failure on the device', async () => {
+  const timers = makeTimers();
+  const clock = { now: 1_000 };
+  const { apiClient, reports, calls } = loadClient({
+    timers,
+    clock,
+    fetchImpl: () => {
+      clock.now += 2;
+      return Promise.reject(new TypeError('Failed to fetch'));
+    },
+  });
+
+  await assert.rejects(apiClient('/trace/feed/new-count'), (error) => error.failureKind === 'network');
+  assert.equal(calls.length, 2);
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].context.retry, 'failed');
+  assert.equal(reports[0].context.failedOn, 'device');
+});
+
+test('a retry that fails only after it had time to reach the network stays an ordinary failure', async () => {
+  const timers = makeTimers();
+  const clock = { now: 1_000 };
+  const { apiClient, reports } = loadClient({
+    timers,
+    clock,
+    fetchImpl: (_options, n) => {
+      clock.now += n === 1 ? 2 : 180;
+      return Promise.reject(new TypeError('Network request failed'));
+    },
+  });
+
+  await assert.rejects(apiClient('/trace/feed/new-count'));
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].context.retry, 'failed');
+  assert.equal(reports[0].context.failedOn, undefined);
+});
+
+test('on the web a transport failure records whether the browser was online and the page visible', async () => {
+  const timers = makeTimers();
+  const { apiClient, reports } = loadClient({
+    timers,
+    browser: { navigator: { onLine: false }, document: { visibilityState: 'hidden' } },
+    fetchImpl: () => Promise.reject(new TypeError('Failed to fetch')),
+  });
+
+  await assert.rejects(apiClient('/coin/wallet'));
+  assert.equal(reports[0].context.online, false);
+  assert.equal(reports[0].context.pageVisibility, 'hidden');
+});
+
+test('on native (no navigator.onLine, no document) no browser state is attached', async () => {
+  const timers = makeTimers();
+  const { apiClient, reports } = loadClient({
+    timers,
+    browser: { navigator: { product: 'ReactNative' } },
+    fetchImpl: () => Promise.reject(new TypeError('Network request failed')),
+  });
+
+  await assert.rejects(apiClient('/coin/wallet'));
+  assert.equal('online' in reports[0].context, false);
+  assert.equal('pageVisibility' in reports[0].context, false);
 });
 
 test('a non-GET request that fails with a network error is not retried', async () => {

@@ -326,6 +326,22 @@ const GET_HEDGE_AFTER_MS = 2_500;
 const GET_RETRYABLE_FAILURES: ReadonlySet<string> = new Set(['network']);
 // 剩余预算再少也给这么多：刚建一条新连接（TLS 握手 + 一个往返）就要这个量级。
 const GET_RETRY_MIN_TIMEOUT_MS = 3_000;
+// 重试在这么短的时间里就以 network 失败：请求根本没出设备（断网、切网或页面正在刷新）——服务器
+// 拒连也得等一个往返，离新加坡最近的华南用户也要几十毫秒。2026-11-22 网页版一次断网就按 error
+// 报了 6 条、推到 Discord，那几次重试都在 13ms 内失败。我们修不了，只留现场不告警；宁可放过
+// 几条也不能把服务器真的拒连藏起来，所以门槛压在往返之下。
+const FAILED_ON_DEVICE_MS = 30;
+
+// 网页版没有 request-trace 钩子：记下浏览器认为自己在不在线、页面在不在前台，好分辨断网和
+// 切回标签页。原生端没有 navigator.onLine 和 document，什么也不加。
+function browserNetworkState(): RequestTrace {
+  const online = typeof navigator === 'undefined' ? undefined : navigator.onLine;
+  const visibility = typeof document === 'undefined' ? undefined : document.visibilityState;
+  return {
+    ...(typeof online === 'boolean' ? { online } : {}),
+    ...(typeof visibility === 'string' ? { pageVisibility: visibility } : {}),
+  };
+}
 
 type RequestStage = 'device-id' | 'awaiting-response' | 'reading-body';
 type RequestBudget = {
@@ -546,7 +562,7 @@ async function executeRequest<T>(
       failure.requestId = requestId;
       failure.clientRequestId = clientRequestId;
       failure.durationMs = durationMs;
-      if (transportFailure) failure.diagnostics = { ...trace, stage };
+      if (transportFailure) failure.diagnostics = { ...trace, ...browserNetworkState(), stage };
     }
     const details = {
       endpointPath,
@@ -864,7 +880,7 @@ function wasSuspendedInBackground(error: ApiError): boolean {
   );
 }
 
-type StallRetryReport = { attempts: number; retry: 'recovered' | 'failed' };
+type StallRetryReport = { attempts: number; retry: 'recovered' | 'failed'; failedOn?: 'device' };
 
 // Report unexpected backend failures (network + 5xx) to Sentry; expected
 // 4xx (validation/auth/not-found) are left to normal handling.
@@ -909,6 +925,7 @@ function reportApiFailure(
     captureContext.apiCode,
     captureContext.failureKind,
     stallRetry?.retry,
+    stallRetry?.failedOn,
   ].join(':');
   try {
     if (shouldCaptureFailure(signature)) reportError(error, captureContext);
@@ -968,7 +985,12 @@ async function sendGet<T>(
     // 真失败的，同样不报。
     if (error instanceof ApiError && error.status === 0 && sessionUnchanged()) {
       if (!wasSuspendedInBackground(error)) {
-        reportApiFailure(stuck, endpoint, options, { attempts: 2, retry: 'failed' });
+        const failedOnDevice = error.failureKind === 'network' && (error.durationMs ?? Infinity) < FAILED_ON_DEVICE_MS;
+        reportApiFailure(stuck, endpoint, options, {
+          attempts: 2,
+          retry: 'failed',
+          ...(failedOnDevice ? { failedOn: 'device' as const } : {}),
+        });
       }
       report.done = true;
     }
