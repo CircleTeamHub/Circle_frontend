@@ -38,8 +38,28 @@ test('an image-only album post still has a way into its detail page', () => {
   assert.match(source, /accessibilityLabel=\{t\('moment\.openDetail'/);
 });
 
+test('the web shell lives where single-page export actually reads it', () => {
+  const app = JSON.parse(read('app.json'));
+  // output: "single" 时 Expo 只认 public/index.html；app/+html.tsx 只在
+  // static/server 输出下生效。以前样式全写在 +html.tsx 里，线上一条都没生效：
+  // 输入框聚焦有蓝框、iOS 打字自动放大。
+  assert.equal(app.expo.web.output, 'single');
+  assert.ok(fs.existsSync(path.join(process.cwd(), 'public/index.html')));
+  assert.ok(
+    !fs.existsSync(path.join(process.cwd(), 'app/+html.tsx')),
+    'single 模式下 +html.tsx 不会被读取，写在里面的东西不会上线',
+  );
+});
+
+test('text inputs drop the browser focus ring inside our rounded fields', () => {
+  const source = read('public/index.html');
+  // 不摘掉的话，iOS Safari 会在自绘圆角边框里再套一圈蓝色方框。
+  assert.match(source, /input:focus,\s*\n\s*input:focus-visible,\s*\n\s*textarea:focus,/);
+  assert.match(source, /textarea:focus-visible,[\s\S]{0,120}\{\s*\n\s*outline: none;/);
+});
+
 test('selects keep a focus indicator even though text inputs drop theirs', () => {
-  const source = read('app/+html.tsx');
+  const source = read('public/index.html');
   // 文本框有光标指示焦点，下拉没有：把它一起摘掉，键盘用户 tab 进来
   // 完全看不出焦点在哪一个 select 上。
   assert.match(source, /select:focus-visible \{\s*\n\s*outline: 2px solid currentColor;/);
@@ -51,12 +71,14 @@ test('selects keep a focus indicator even though text inputs drop theirs', () =>
 });
 
 test('focusing a text input does not leave the page zoomed in on iOS', () => {
-  const source = read('app/+html.tsx');
+  const source = read('public/index.html');
+  const viewport = /<meta\s+name="viewport"\s+content="([^"]*)"/.exec(source);
+  assert.ok(viewport, '找不到 viewport meta');
   // 输入框字号 < 16px 时 iOS Safari 聚焦就自动放大，打完字不缩回，
   // 用户只能手动捏回去。maximum-scale=1 关掉的只是这种自动放大。
-  assert.match(source, /name="viewport"\s+content="[^"]*maximum-scale=1[,"]/);
+  assert.match(viewport[1], /(^|,\s*)maximum-scale=1(\s*,|$)/);
   // 不能顺手写 user-scalable=no：那会连用户主动的双指缩放一起禁掉。
-  assert.doesNotMatch(source, /user-scalable\s*=\s*no/);
+  assert.doesNotMatch(viewport[1], /user-scalable\s*=\s*no/);
 });
 
 test('zoom panning is bounded by the rendered image, not the container', () => {
@@ -190,7 +212,7 @@ test('deleting the open conversation collapses the split detail pane', () => {
 test('the document language follows the selected locale on web', () => {
   const source = read('src/i18n/index.ts');
 
-  // +html.tsx 是静态模板，SSG 出来的是同一份写死 lang="zh" 的 HTML。
+  // public/index.html 是单页模板，所有语言拿到的都是同一份写死 lang="zh" 的 HTML。
   assert.match(source, /document\.documentElement\.lang = lng/);
   // 挂在 i18n 上而不是组件里：语言能从设置页/系统语言/存储回灌多处改。
   assert.match(source, /i18n\.on\('languageChanged', syncDocumentLang\)/);

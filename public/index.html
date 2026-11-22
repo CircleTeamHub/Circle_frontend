@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<!--
+  Web 外壳。app.json 的 web.output 是 "single"（单页应用），这种模式下
+  Expo 只认这份 public/index.html（dev 与 export 共用），app/+html.tsx
+  不会被读取 —— 以前写在那里的样式线上一条都没生效过。
+-->
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      maximum-scale=1：iOS Safari 聚焦字号 < 16px 的输入框会自动放大页面，
+      打完字也不缩回，只能手动捏回去。加了它 iOS 不再自动放大，用户双指缩放
+      照常可用（iOS 10 起 Safari 对手势忽略缩放上限）。
+      不要写 user-scalable=no：那会把主动缩放也一起禁掉。
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no"
+    />
+    <title>%WEB_TITLE%</title>
+    <style id="expo-reset">
+      /* react-native-web 推荐的根元素重置：全高、根节点 flex。 */
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      #root {
+        display: flex;
+        flex: 1;
+      }
+      /* 把文档级滚动锁死：App 是固定视口应用，滚动只应发生在内部
+         ScrollView/FlatList；文档本身能滚，输入框聚焦等触发就可能把整页
+         滚到错误位置。overscroll-behavior 关掉整页回弹和下拉刷新。 */
+      html {
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+      body {
+        overflow: hidden;
+      }
+      /* 文字输入去掉浏览器默认的焦点框：RNW 的 TextInput 渲染成
+         <input>/<textarea>，聚焦时浏览器会在我们自绘的圆角边框里再套一圈
+         方框（iOS Safari 上是一圈蓝框）。这几类元素有光标指示焦点，
+         按钮/链接的焦点环保留，键盘导航看得见落点。
+
+         为什么不留 :focus-visible —— 规范规定「接受键盘文本输入的元素」
+         始终匹配 :focus-visible，点击也算，留着等于把那圈框原样放回来。 */
+      input:focus,
+      input:focus-visible,
+      textarea:focus,
+      textarea:focus-visible,
+      [contenteditable]:focus,
+      [contenteditable]:focus-visible {
+        outline: none;
+        box-shadow: none;
+      }
+      /* select 是例外，必须留焦点指示：它没有光标，摘掉之后键盘用户 tab
+         进来完全看不出焦点落在哪一个下拉上。默认亮环换成跟随主题文本色的
+         描边 —— 不扎眼，也不会丢失落点。 */
+      select:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 1px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
