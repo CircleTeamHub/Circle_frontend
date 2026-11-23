@@ -3168,3 +3168,14 @@ export function selectTotalUnread(state: {
     0,
   );
 }
+
+/** AI 小助手(SUPPORT)会话的未读:不进消息 tab,亮在探索 tab 和探索页的小助手卡片上。 */
+export function selectAssistantUnread(state: {
+  conversations: ChatConversationDto[];
+}): number {
+  return state.conversations.reduce(
+    (sum, c) =>
+      c.type === 'SUPPORT' && !c.muted ? sum + c.unreadCount : sum,
+    0,
+  );
+}

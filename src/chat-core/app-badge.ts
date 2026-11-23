@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { selectTotalUnread, useChatStore } from './store';
+import { selectAssistantUnread, selectTotalUnread, useChatStore } from './store';
 
 /**
  * G-18 轻方案:App 图标角标跟随消息 tab 未读合计(免打扰会话不计入,
@@ -43,24 +43,32 @@ export function syncAppBadge(total: number): void {
 }
 
 let lastConversations: unknown = null;
-let lastTotal = 0;
+let lastTotals = { messages: 0, assistant: 0 };
 
-/** tab 与图标角标共用的口径:服务端未读合计。 */
-function memoizedTotalUnread(): number {
+/** tab 与图标角标共用的口径:服务端未读合计;AI 小助手单算一份。 */
+function memoizedUnreadTotals(): { messages: number; assistant: number } {
   const state = useChatStore.getState();
   // chat store 每次写入都会来到这里(「正在输入」「在线」「已送达」也算),而这些事件
   // 不改会话列表。会话列表引用没变就直接用上次的结果,免得每次都整表求和。
-  if (lastConversations === state.conversations) return lastTotal;
-  lastTotal = selectTotalUnread(state);
+  if (lastConversations === state.conversations) return lastTotals;
+  lastTotals = {
+    messages: selectTotalUnread(state),
+    assistant: selectAssistantUnread(state),
+  };
   lastConversations = state.conversations;
-  return lastTotal;
+  return lastTotals;
 }
 
 /** 幂等安装 store 订阅;connectChat 时调用,登出 reset 会把角标随之清零。 */
 export function initChatAppBadgeSync(): void {
   if (installed) return;
   installed = true;
-  const push = (): void => syncAppBadge(memoizedTotalUnread());
+  const push = (): void => {
+    const totals = memoizedUnreadTotals();
+    syncAppBadge(totals.messages);
+    // 小助手不进消息 tab 和图标角标,只亮探索 tab 与小助手卡片。
+    useTabBadgeStore.getState().setAssistantUnread(totals.assistant);
+  };
   useChatStore.subscribe(push);
   push();
 }

@@ -38,6 +38,8 @@ type TabBadgeState = {
   circlePlazaChangedAt: number | null;
   /** 探索 tab / 朋友圈磁贴的小红点：好友发了新动态（不推送，只亮这个点）。不计数。 */
   momentsHasUpdate: boolean;
+  /** AI 小助手会话的未读（由 chat store 同步，见 app-badge）：探索 tab 亮点，小助手卡片显示数字。 */
+  assistantUnread: number;
   isRealtimeConnected: boolean;
   lastSyncedAt: number | null;
   setMessagesUnread: (count: number) => void;
@@ -51,6 +53,7 @@ type TabBadgeState = {
   setGroupNoticeUnread: (count: number) => void;
   setCirclePlazaHasUpdate: (hasUpdate: boolean, changedAt?: number) => void;
   setMomentsHasUpdate: (hasUpdate: boolean) => void;
+  setAssistantUnread: (count: number) => void;
   applySnapshot: (snapshot: TabBadgeSnapshot) => void;
   setRealtimeConnected: (connected: boolean) => void;
   reset: () => void;
@@ -69,6 +72,7 @@ const initialState = {
   circlePlazaHasUpdate: false,
   circlePlazaChangedAt: null,
   momentsHasUpdate: false,
+  assistantUnread: 0,
   isRealtimeConnected: false,
   lastSyncedAt: null,
 };
@@ -93,6 +97,9 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
     };
   }),
   setMomentsHasUpdate: (momentsHasUpdate) => set({ momentsHasUpdate }),
+  // chat store 每次写入都会同步一次：数没变就原样返回，不惊动订阅方。
+  setAssistantUnread: (assistantUnread) =>
+    set((state) => (state.assistantUnread === assistantUnread ? state : { assistantUnread })),
   applySnapshot: (snapshot) =>
     set((state) => {
       // A legacy snapshot cannot replace a known semantic version.
@@ -133,3 +140,8 @@ export const selectNoticeUnread = (state: Pick<
   state.profileUnread +
   state.contactsUnread +
   state.groupAdmissionsUnread;
+
+/** 探索 tab 的小点：好友发了新动态，或者 AI 小助手有未读。探索 tab 只亮点、不计数。 */
+export const selectExploreHasUpdate = (
+  state: Pick<TabBadgeState, 'momentsHasUpdate' | 'assistantUnread'>,
+): boolean => state.momentsHasUpdate || state.assistantUnread > 0;

@@ -510,6 +510,36 @@ test('applyIncomingMessage reports an unknown conversation instead of silently d
   assert.equal(store.applyIncomingMessage(msg({ id: 'a', height: 1 })), false);
 });
 
+test('AI 小助手的新消息只计入小助手未读,不进消息 tab 的合计', () => {
+  const { useChatStore, selectTotalUnread, selectAssistantUnread } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({ unreadCount: 3 }),
+    conversation({ id: 'assistant-1', type: 'SUPPORT', peer: null }),
+  ]);
+  assert.equal(selectAssistantUnread(useChatStore.getState()), 0);
+
+  store.applyIncomingMessage(msg({
+    id: 'alert-1',
+    conversationId: 'assistant-1',
+    height: 1,
+    type: 'assistant-note-status',
+    sender: { id: 'system:windnote-assistant' },
+  }));
+  const state = useChatStore.getState();
+  assert.equal(selectAssistantUnread(state), 1);
+  assert.equal(selectTotalUnread(state), 3);
+});
+
+test('免打扰的小助手会话不亮小助手红点', () => {
+  const { useChatStore, selectAssistantUnread } = loadChatStore();
+  useChatStore.getState().setConversations([
+    conversation({ id: 'assistant-1', type: 'SUPPORT', peer: null, unreadCount: 2, muted: true }),
+  ]);
+  assert.equal(selectAssistantUnread(useChatStore.getState()), 0);
+});
+
 test('applyIncomingMessage does not inflate unread on a duplicate delivery', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

@@ -32,7 +32,11 @@ import {
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
-import { selectNoticeUnread, useTabBadgeStore } from '@/stores/tabBadgeStore';
+import {
+  selectExploreHasUpdate,
+  selectNoticeUnread,
+  useTabBadgeStore,
+} from '@/stores/tabBadgeStore';
 import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { useTheme, withAlpha } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
@@ -461,7 +465,7 @@ function CustomTabBar({
   colors,
   badgeMap,
   plazaDotVisible,
-  momentsDotVisible,
+  exploreDotVisible,
   styles,
 }: BottomTabBarProps & {
   hidden: boolean;
@@ -469,7 +473,7 @@ function CustomTabBar({
   colors: ThemeColors;
   badgeMap: Record<string, number>;
   plazaDotVisible: boolean;
-  momentsDotVisible: boolean;
+  exploreDotVisible: boolean;
   styles: TabBarStyles;
 }) {
   const { t } = useTranslation();
@@ -624,7 +628,7 @@ function CustomTabBar({
                   label={label}
                   focused={focused}
                   badgeCount={badgeMap[route.name] ?? 0}
-                  showUpdateDot={route.name === 'explore' && momentsDotVisible}
+                  showUpdateDot={route.name === 'explore' && exploreDotVisible}
                   colors={colors}
                   styles={styles}
                   onPress={pressHandlerFor(route, focused)}
@@ -668,7 +672,6 @@ type BadgeCounts = ReturnType<typeof useTabBadgeStore.getState>;
 const selectMessagesUnread = (state: BadgeCounts) => state.messagesUnread;
 const selectCircleUnread = (state: BadgeCounts) => state.circleUnread;
 const selectSignupUnread = (state: BadgeCounts) => state.signupUnread;
-const selectMomentsHasUpdate = (state: BadgeCounts) => state.momentsHasUpdate;
 
 /** active=false 时不跟着未读数变化重渲染（看不见的那几份 tab bar），重新 active 时按最新值取。 */
 export function useTabBadgeMap(active = true): Record<string, number> {
@@ -736,8 +739,8 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
   const compactDock = inMessagePane && listPaneWidth < 360;
   const badgeMap = useTabBadgeMap(active);
   const plazaDotVisible = useCirclePlazaDotVisible();
-  // 探索 tab 的小点：好友发了新动态。探索 tab 不再计数，只亮这个点。
-  const momentsDotVisible = useStoreWhileActive(useTabBadgeStore, selectMomentsHasUpdate, active);
+  // 探索 tab 的小点：好友发了新动态，或者 AI 小助手有未读。探索 tab 不计数，只亮这个点。
+  const exploreDotVisible = useStoreWhileActive(useTabBadgeStore, selectExploreHasUpdate, active);
 
   const styles = useMemo<TabBarStyles>(() => StyleSheet.create({
     // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
@@ -954,7 +957,7 @@ export function FloatingTabBar({ tabProps, hidden, active = true }: FloatingTabB
       colors={colors}
       badgeMap={badgeMap}
       plazaDotVisible={plazaDotVisible}
-      momentsDotVisible={momentsDotVisible}
+      exploreDotVisible={exploreDotVisible}
       styles={styles}
     />
   );
