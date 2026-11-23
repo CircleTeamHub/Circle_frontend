@@ -81,6 +81,7 @@ const params = {
   scope: 'messages',
   conversationID: 'conversation',
   groupMemberNames: {},
+  groupManagerRoles: {},
   selfDestructEnabled: false,
   selfDestructCacheKey: '',
   isGroupChat: false,
@@ -235,6 +236,35 @@ test('acknowledging the tapped anchor preserves its gallery and the currently vi
 
   expect(galleryImages()).toEqual([older.imageUrl, acknowledged.imageUrl, newer.imageUrl]);
   expect(activePhoto().props.uri).toBe(newer.imageUrl);
+});
+
+describe('group sender role tag', () => {
+  function GroupMessages({ messages }: { messages: ChatMessage[] }) {
+    const { renderItem } = useMessageRenderer({
+      ...params,
+      messages,
+      isGroupChat: true,
+      groupManagerRoles: { 'u-owner': 'OWNER', 'u-admin': 'ADMIN' },
+    });
+    return <>{messages.map((item) => <React.Fragment key={item.id}>{renderItem({ item })}</React.Fragment>)}</>;
+  }
+  const received = (id: string, senderID: string): ChatMessage => ({ ...photo(id), senderID });
+
+  it('puts the owner and admin tags in front of their names only', () => {
+    render(<GroupMessages messages={[received('m-1', 'u-owner'), received('m-2', 'u-admin'), received('m-3', 'u-member')]} />);
+    expect(screen.getAllByText('chat.groupOwner')).toHaveLength(1);
+    expect(screen.getAllByText('chat.groupAdmin')).toHaveLength(1);
+  });
+
+  it('tags nothing outside group chats', () => {
+    function Direct() {
+      const item = received('m-1', 'u-owner');
+      const { renderItem } = useMessageRenderer({ ...params, messages: [item], groupManagerRoles: { 'u-owner': 'OWNER' } });
+      return renderItem({ item });
+    }
+    render(<Direct />);
+    expect(screen.queryByText('chat.groupOwner')).toBeNull();
+  });
 });
 
 test('assistant messages suppress receipts', () => { function Assistant() { const item: ChatMessage = { id: 'assistant-send', type: 'sent', outgoing: true, text: 'Hello' }; const { renderItem } = useMessageRenderer({ ...params, messages: [item], isAssistantConversation: true }); return renderItem({ item }); } render(<Assistant />); expect(screen.getByText('status-hidden')).toBeTruthy(); });

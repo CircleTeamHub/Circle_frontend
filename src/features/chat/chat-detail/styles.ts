@@ -4,12 +4,18 @@ import { Radius, Spacing, Typography } from '@/theme';
 
 /** 聊天详情页的静态样式(随主题变化的那部分在 useChatDetailThemedStyles)。 */
 export const chatDetailStyles = StyleSheet.create({
-  // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
-  // marginBottom 给名字与气泡之间留一点呼吸空间，避免名字贴着气泡显得拥挤。
-  senderLabel: {
-    ...Typography.small,
+  // 群聊接收气泡上方的发送者名字那一行（缩进对齐气泡起点 = 头像宽 + 间距），
+  // 群主/管理员在名字前多一个身份标签。marginBottom 给名字与气泡之间留一点呼吸空间。
+  senderLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
     marginLeft: AVATAR_COLUMN_SIZE + Spacing.sm,
     marginBottom: Spacing.xs + 2,
+  },
+  senderLabel: {
+    ...Typography.small,
+    flexShrink: 1,
   },
   // 「隐藏聊天头像」把整列去掉，气泡贴边；名字要跟着回到 0，否则名字缩进、
   // 它自己的气泡贴边，两者对不上。合并头像不走这条 —— 那时占位还在。

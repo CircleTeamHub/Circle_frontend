@@ -11,6 +11,7 @@ import type {
   ChatBurnPolicyDto,
   ChatConversationDto,
   ChatGroupEventsPageDto,
+  ChatGroupManagerDto,
   ChatGroupPoliciesDto,
   ChatHistoryPageDto,
   ChatMemberDto,
@@ -1024,6 +1025,15 @@ export function fetchChatMembers(
     }
     return members;
   });
+}
+
+/** 群主和管理员(在座成员都能读,不受「显示群成员」限制):聊天里给他们的发言标身份。 */
+export function fetchChatGroupManagers(
+  conversationId: string,
+): Promise<ChatGroupManagerDto[]> {
+  return apiClient<ChatGroupManagerDto[]>(
+    `/chat/conversations/${conversationId}/managers`,
+  );
 }
 
 /** 全局搜索(服务端):跨本人全部会话搜文本(最新在前,扁平)。 */
