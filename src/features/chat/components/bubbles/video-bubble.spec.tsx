@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Modal } from 'react-native';
+import { Modal, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
 import { MEDIA_PROGRESS_DELAY_MS } from '@/components/ui/media-image';
@@ -213,6 +213,61 @@ describe('VideoBubble poster', () => {
       />,
     );
     expect(posterProps.at(-1)?.cachePolicy).toBe('memory');
+  });
+});
+
+// 网页版截不了帧:没封面的视频(11-11 之前发的、从网页版发的)以前在网页上是一块黑。
+// 让浏览器自己把开头那一帧画出来。
+describe('VideoBubble first frame on the web', () => {
+  const originalOS = Platform.OS;
+  const frames = () => screen.UNSAFE_root.findAllByType('video');
+
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  });
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+  });
+
+  it('lets the browser draw the opening frame of a video without a poster', () => {
+    render(<VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} />);
+    const [frame] = frames();
+    // #t= 让 iOS Safari 停在这一帧上画出来;片段不发给服务器,签名地址不受影响。
+    expect(frame.props.src).toBe(`${video.videoUrl}#t=0.1`);
+    expect(frame.props.preload).toBe('metadata');
+    expect(frame.props.muted).toBe(true);
+    expect(frame.props.playsInline).toBe(true);
+    // 点按仍归气泡(打开查看器),这一帧只是画面。
+    fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+    expect(frames()).toHaveLength(1);
+  });
+
+  it('uses the poster when the message has one', () => {
+    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(frames()).toHaveLength(0);
+    expect(screen.getByTestId('chat-video-poster')).toBeTruthy();
+  });
+
+  it('leaves a disappearing video without a poster dark', () => {
+    render(<VideoBubble message={{ ...video, burnDurationSec: 30 } as ChatMessage} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(frames()).toHaveLength(0);
+  });
+
+  // 签名地址过期等加载失败:退回黑底加播放键;地址换新(每小时轮换)再试一次。
+  it('falls back to the dark frame when the video fails to load, and retries a new address', () => {
+    const view = render(<VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} />);
+    act(() => frames()[0].props.onError());
+    expect(frames()).toHaveLength(0);
+    expect(screen.getByText('play')).toBeTruthy();
+
+    view.rerender(<VideoBubble message={{ ...video, videoUrl: 'https://media.example.com/clip.mp4?sig=2' }} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(frames()[0].props.src).toBe('https://media.example.com/clip.mp4?sig=2#t=0.1');
+  });
+
+  it('never draws it on the phone, which captures a frame instead', () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+    render(<VideoBubble message={video} outgoing={false} onVideoPress={jest.fn()} />);
+    expect(frames()).toHaveLength(0);
   });
 });
 
