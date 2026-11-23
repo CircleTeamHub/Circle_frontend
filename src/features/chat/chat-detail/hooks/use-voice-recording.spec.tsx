@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import { PanResponder } from 'react-native';
 import { requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 import { useVoiceRecording, type VoiceRecordingParams } from './use-voice-recording';
 
 const mockRecorder = {
@@ -16,7 +17,7 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn(),
   useAudioRecorder: () => mockRecorder,
 }));
-jest.mock('@/features/chat/utils/voice-recording-options', () => ({ VOICE_RECORDING_OPTIONS: {} }));
+jest.mock('@/features/chat/utils/voice-recording-options', () => ({ VOICE_RECORDING_OPTIONS: { extension: '.m4a' } }));
 jest.mock('@/features/chat/utils/media-error-guard', () => ({ mediaErrorGuard: () => () => true }));
 jest.mock('@/hooks/use-elapsed-seconds', () => ({ useElapsedSeconds: () => 0 }));
 jest.mock('@/features/chat/chat-detail/constants', () => ({ PANEL_LAYOUT_ANIM: {} }));
@@ -55,6 +56,18 @@ afterEach(() => jest.restoreAllMocks());
 async function startRecording() {
   await act(async () => { gesture.onPanResponderGrant?.({} as never, {} as never); });
 }
+
+test('prepares every recording with the voice options so iOS rebuilds the recording file', async () => {
+  // iOS 的 prepareToRecordAsync() 不带参数时复用构造时的那个文件路径:目录被「清理缓存」
+  // 删掉后照样返回成功却不建文件,松手后找不到录音、语音立刻失败。带参数才会重建目录与新文件。
+  mockRecorder.getStatus.mockReturnValue({ canRecord: false, durationMillis: 0 });
+  renderHook(() => useVoiceRecording(params));
+
+  await startRecording();
+
+  expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledWith(VOICE_RECORDING_OPTIONS);
+  expect(mockRecorder.record).toHaveBeenCalledTimes(1);
+});
 
 test('reports a live recorder stop failure and restores the composer state', async () => {
   const error = new Error('native stop failed');

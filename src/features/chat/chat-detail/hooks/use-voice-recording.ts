@@ -147,7 +147,11 @@ export function useVoiceRecording({
       }
       const status = voiceRecorder.getStatus();
       if (!status.canRecord) {
-        await voiceRecorder.prepareToRecordAsync();
+        // 必须带参数:iOS 不带参数时复用录音器构造时定下的那个文件路径,而 ExpoAudio
+        // 目录只在构造时建一次。聊天页开着时目录被「清理缓存」删掉,prepare 照样成功却不建
+        // 文件,录完找不到录音、语音立刻失败;同一路径还会让每条语音覆盖上一条。带参数会
+        // 重建目录并换新文件名。安卓每次 prepare 本来就新建文件,行为不变。
+        await voiceRecorder.prepareToRecordAsync(VOICE_RECORDING_OPTIONS);
       }
       if (!voicePressActiveRef.current || recordSession !== voiceRecordSessionRef.current) {
         if (recordingAudioModeSessionRef.current === recordSession) {
