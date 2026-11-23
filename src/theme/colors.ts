@@ -69,6 +69,8 @@ export const darkColors: ThemeColors = {
   badgeFancy: '#A855F7',
   sentBubble: '#6366F1',
   receivedBubble: '#1C1C1E',
+  // 群聊里群主发言前的身份标签底色(字用 warningText);管理员用 primaryLight + primary。
+  groupOwnerTagBg: 'rgba(251, 140, 0, 0.25)',
   inputBg: '#1C1C1E',
   memberCardBg: '#D4A574',
   memberCardText: '#5C3D1A',
@@ -150,6 +152,7 @@ export const lightColors: ThemeColors = {
   badgeFancy: '#A855F7',
   sentBubble: '#6366F1',
   receivedBubble: '#FFFFFF',
+  groupOwnerTagBg: 'rgba(251, 140, 0, 0.15)',
   inputBg: '#FFFFFF',
   memberCardBg: '#D4A574',
   memberCardText: '#5C3D1A',

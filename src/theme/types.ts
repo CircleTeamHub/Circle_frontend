@@ -84,6 +84,7 @@ export interface ThemeColors {
   badgeFancy: string;
   sentBubble: string;
   receivedBubble: string;
+  groupOwnerTagBg: string;
   inputBg: string;
   memberCardBg: string;
   memberCardText: string;

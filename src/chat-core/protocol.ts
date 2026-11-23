@@ -593,6 +593,12 @@ export interface ChatMemberDto {
   silencedUntil?: string | null;
 }
 
+/** 群主/管理员一行(GET /chat/conversations/:id/managers);只含仍在群里的人。 */
+export interface ChatGroupManagerDto {
+  userId: string;
+  role: 'OWNER' | 'ADMIN';
+}
+
 /** 群策略开关(PATCH /chat/conversations/:id/policies;群主/管理员可改)。 */
 export interface ChatGroupPoliciesDto {
   /** 普通成员能否拉人进群(圈子群 = Circle.memberCanInvite)。 */

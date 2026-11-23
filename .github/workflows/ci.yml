@@ -120,6 +120,11 @@ jobs:
               # Once that branch is merged and deleted, ls-remote misses and this falls back to main.
               backend_ref=feat/unified-notification-entry
               ;;
+            feat/group-sender-role-tag)
+              # The managers endpoint rides on the backend group-notices PR.
+              # Once that branch is merged and deleted, ls-remote misses and this falls back to main.
+              backend_ref=feat/group-admin-notices-log-only
+              ;;
           esac
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$HEAD_REF" ] \
             && git ls-remote --exit-code --heads \

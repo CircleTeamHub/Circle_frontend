@@ -45,6 +45,7 @@ import { useAttachmentActions } from '@/features/chat/chat-detail/hooks/use-atta
 import { useComposerSend } from '@/features/chat/chat-detail/hooks/use-composer-send';
 import { useComposerPanels } from '@/features/chat/chat-detail/hooks/use-composer-panels';
 import { useComposerInput } from '@/features/chat/chat-detail/hooks/use-composer-input';
+import { useGroupManagerRoles } from '@/features/chat/chat-detail/hooks/use-group-manager-roles';
 import { useQuickTextSend } from '@/features/chat/chat-detail/hooks/use-quick-text-send';
 import { useChatDetailThemedStyles } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 import { useMessageRenderer } from '@/features/chat/chat-detail/hooks/use-message-renderer';
@@ -192,6 +193,11 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     params,
     currentUserID,
   });
+  // 临时房没有群主/管理员;预览(还没会话)没有座位,接口只会 403。
+  const groupManagerRoles = useGroupManagerRoles(
+    conversationID,
+    isGroupChat && !isTempChat && !isPreviewMode,
+  );
 
   const [assistantSpinning, setAssistantSpinning] = useState(false);
   const assistantLatestMessageIdRef = useRef<string | null>(null);
@@ -581,6 +587,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     scope,
     conversationID,
     groupMemberNames,
+    groupManagerRoles,
     selfDestructEnabled,
     selfDestructCacheKey,
     isGroupChat,

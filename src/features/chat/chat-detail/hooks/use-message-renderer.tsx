@@ -15,6 +15,8 @@ import { type ChatMessage, type NoteCardData } from '@/types';
 import { type GestureResponderEvent, Platform, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MemberName } from '@/components/ui/member-name';
+import { GroupRoleTag } from '@/features/chat/chat-detail/components/GroupRoleTag';
+import type { GroupManagerRoles } from './use-group-manager-roles';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import {
   CallRecordBubble,
@@ -97,6 +99,8 @@ export interface MessageRendererParams {
   scope: UserProfileScope;
   conversationID: string;
   groupMemberNames: Record<string, string>;
+  /** 群主/管理员 userId → 角色:名字前标【群主】【管理员】。 */
+  groupManagerRoles: GroupManagerRoles;
   selfDestructEnabled: boolean;
   selfDestructCacheKey: string;
   isGroupChat: boolean;
@@ -134,6 +138,7 @@ export function useMessageRenderer({
   scope,
   conversationID,
   groupMemberNames,
+  groupManagerRoles,
   selfDestructEnabled,
   selfDestructCacheKey,
   isGroupChat,
@@ -217,22 +222,27 @@ export function useMessageRenderer({
       if (!isGroupChat || !message.senderID) {
         return node;
       }
+      const role = groupManagerRoles[message.senderID];
       return (
         <View>
-          <MemberName
-            name={receivedDisplayName(message)}
-            userId={message.senderID}
+          <View
             style={[
-              s.senderLabel,
+              s.senderLabelRow,
               hideChatAvatar && s.senderLabelWithoutAvatarColumn,
-              { color: colors.text },
             ]}
-          />
+          >
+            {role ? <GroupRoleTag role={role} /> : null}
+            <MemberName
+              name={receivedDisplayName(message)}
+              userId={message.senderID}
+              style={[s.senderLabel, { color: colors.text }]}
+            />
+          </View>
           {node}
         </View>
       );
     },
-    [isGroupChat, receivedDisplayName, colors.text, hideChatAvatar],
+    [isGroupChat, groupManagerRoles, receivedDisplayName, colors.text, hideChatAvatar],
   );
 
   const withMessageActions = useCallback(
