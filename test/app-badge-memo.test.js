@@ -8,6 +8,7 @@ function loadBadge() {
   const chatListeners = [];
   let sums = 0;
   const applied = [];
+  const assistantApplied = [];
   const chatState = { conversations: [{ id: 'a', unreadCount: 2 }] };
   const badge = loadTsModule('src/chat-core/app-badge.ts', {
     requireShim: (request) => {
@@ -16,7 +17,10 @@ function loadBadge() {
       if (request === '@/stores/tabBadgeStore') {
         return {
           useTabBadgeStore: {
-            getState: () => ({ setMessagesUnread: (n) => applied.push(n) }),
+            getState: () => ({
+              setMessagesUnread: (n) => applied.push(n),
+              setAssistantUnread: (n) => assistantApplied.push(n),
+            }),
           },
         };
       }
@@ -24,8 +28,13 @@ function loadBadge() {
         return {
           selectTotalUnread: (state) => {
             sums += 1;
-            return state.conversations.reduce((total, c) => total + c.unreadCount, 0);
+            return state.conversations
+              .filter((c) => c.type !== 'SUPPORT')
+              .reduce((total, c) => total + c.unreadCount, 0);
           },
+          selectAssistantUnread: (state) => state.conversations
+            .filter((c) => c.type === 'SUPPORT')
+            .reduce((total, c) => total + c.unreadCount, 0),
           useChatStore: {
             getState: () => chatState,
             subscribe: (listener) => chatListeners.push(listener),
@@ -39,6 +48,7 @@ function loadBadge() {
     badge,
     chatState,
     applied,
+    assistantApplied,
     emitChat: () => chatListeners.forEach((listener) => listener()),
     sums: () => sums,
   };
@@ -64,4 +74,18 @@ test('a new conversation list recomputes the total', () => {
   env.chatState.conversations = [{ id: 'a', unreadCount: 5 }];
   env.emitChat();
   assert.deepEqual(env.applied, [2, 5]);
+});
+
+// AI 小助手不进消息 tab 和图标角标,它的未读单独交给探索 tab 和小助手卡片。
+test('the assistant unread feeds the explore badge, never the messages tab', () => {
+  const env = loadBadge();
+  env.badge.initChatAppBadgeSync();
+
+  env.chatState.conversations = [
+    { id: 'a', unreadCount: 2 },
+    { id: 'assistant-1', type: 'SUPPORT', unreadCount: 1 },
+  ];
+  env.emitChat();
+  assert.deepEqual(env.applied, [2]);
+  assert.deepEqual(env.assistantApplied, [0, 1]);
 });

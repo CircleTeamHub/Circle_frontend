@@ -2,6 +2,7 @@ import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { MediaImage } from '@/components/ui/media-image';
 import { useMemo } from 'react';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +18,7 @@ import { BubbleStatusText, MessageAvatar } from './shared';
 import { MediaUploadProgress } from './media-upload-progress';
 import { ExpiredMediaPlaceholder } from './expired-media-placeholder';
 import { useVideoFrameFallback } from '@/features/chat/hooks/use-video-frame-fallback';
+import { WebVideoFirstFrame } from './web-video-first-frame';
 
 interface VideoBubbleProps {
   message: ChatMessage;
@@ -140,7 +142,9 @@ export function VideoBubble({
     message.deliveryId ?? message.id,
     !posterUrl && !ephemeral,
   );
-  const hasPoster = Boolean(posterUrl ?? fallbackPoster);
+  // 网页版截不了帧:没封面就让浏览器自己画开头那一帧。阅后即焚的和手机上一样不画。
+  const webFirstFrame = Platform.OS === 'web' && !posterUrl && !ephemeral;
+  const hasPoster = Boolean(posterUrl ?? fallbackPoster) || webFirstFrame;
 
   const avatarNode = (
     <MessageAvatar
@@ -208,6 +212,11 @@ export function VideoBubble({
                   pointerEvents="none"
                   overlay={playOverlay}
                 />
+              ) : webFirstFrame ? (
+                <>
+                  <WebVideoFirstFrame uri={videoUrl} />
+                  {playOverlay}
+                </>
               ) : playOverlay}
             </View>
           ) : message.mediaExpired ? (

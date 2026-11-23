@@ -8,6 +8,7 @@ import { fetchAssistantBootstrap } from '@/services/api/assistant';
 const mockRouter = { push: jest.fn() };
 let mockMomentsUnread = 0;
 let mockMomentsHasUpdate = false;
+let mockAssistantUnread = 0;
 
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
@@ -65,8 +66,17 @@ jest.mock('@/theme', () => ({
 
 jest.mock('@/stores/tabBadgeStore', () => ({
   useTabBadgeStore: (
-    selector: (state: { momentsUnread: number; momentsHasUpdate: boolean }) => unknown,
-  ) => selector({ momentsUnread: mockMomentsUnread, momentsHasUpdate: mockMomentsHasUpdate }),
+    selector: (state: {
+      momentsUnread: number;
+      momentsHasUpdate: boolean;
+      assistantUnread: number;
+    }) => unknown,
+  ) =>
+    selector({
+      momentsUnread: mockMomentsUnread,
+      momentsHasUpdate: mockMomentsHasUpdate,
+      assistantUnread: mockAssistantUnread,
+    }),
 }));
 
 describe('ExploreScreen', () => {
@@ -77,6 +87,7 @@ describe('ExploreScreen', () => {
     jest.mocked(fetchAssistantBootstrap).mockReset().mockReturnValue(new Promise(() => {}));
     mockMomentsUnread = 0;
     mockMomentsHasUpdate = false;
+    mockAssistantUnread = 0;
   });
 
   it('asks where the assistant leads as soon as the page shows, then opens it on tap without waiting', async () => {
@@ -214,5 +225,21 @@ describe('ExploreScreen', () => {
     mockMomentsUnread = 2;
     view.rerender(<ExploreScreen />);
     expect(screen.queryByTestId(`${E2E_TEST_IDS.exploreMomentsEntry}-update-dot`)).toBeNull();
+  });
+
+  // 小助手发来消息：卡片挂数字红点，读完（进聊天页上报已读）就消失。
+  it('badges the assistant tile with its unread messages', () => {
+    const view = render(<ExploreScreen />);
+    const assistant = () => screen.getByTestId(E2E_TEST_IDS.exploreAssistantEntry);
+    expect(assistant().props.accessibilityLabel).toBe('assistant.name');
+
+    mockAssistantUnread = 2;
+    view.rerender(<ExploreScreen />);
+    expect(assistant()).toHaveTextContent(/2/);
+    expect(assistant().props.accessibilityLabel).toBe('assistant.name unread:2');
+
+    mockAssistantUnread = 0;
+    view.rerender(<ExploreScreen />);
+    expect(assistant()).not.toHaveTextContent(/2/);
   });
 });

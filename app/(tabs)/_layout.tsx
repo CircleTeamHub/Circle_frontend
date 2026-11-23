@@ -12,6 +12,7 @@ import {
 } from '@/components/app/floating-tab-bar';
 import { openCirclePlazaUpdate } from '@/features/discover/utils/circle-plaza-update';
 import { useTabBarBridgeStore } from '@/stores/tabBarBridgeStore';
+import { selectExploreHasUpdate, useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // 原生端：tab bar 由各 tab 首页自己渲染（TabRootScreen），这里只把导航器
 // props 发布出去，自身不画任何东西。深层页面不渲染 bar，因此无需显隐开关。
@@ -36,6 +37,7 @@ export default function TabLayout() {
   const hideTabBar = segments.length > 2;
   const badgeMap = useTabBadgeMap();
   const plazaDotVisible = useCirclePlazaDotVisible();
+  const exploreDotVisible = useTabBadgeStore(selectExploreHasUpdate);
 
   return (
     <Tabs
@@ -54,7 +56,10 @@ export default function TabLayout() {
         const label = t(tab.key);
         const badgeCount = badgeMap[tab.name] ?? 0;
         const unreadHint = badgeCount > 0 ? t('tabs.unreadCount', { count: badgeCount }) : null;
-        const updateHint = tab.name === 'discover' && plazaDotVisible ? t('tabs.hasUpdate') : null;
+        const dotVisible =
+          (tab.name === 'discover' && plazaDotVisible) ||
+          (tab.name === 'explore' && exploreDotVisible);
+        const updateHint = dotVisible ? t('tabs.hasUpdate') : null;
         return (
           <Tabs.Screen
             key={tab.name}

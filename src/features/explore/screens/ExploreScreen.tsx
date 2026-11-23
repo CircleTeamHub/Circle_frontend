@@ -62,6 +62,8 @@ export default function ExploreScreen() {
   // 没有未读时，好友发了新动态亮一个不带数字的小点。
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
   const momentsHasUpdate = useTabBadgeStore((state) => state.momentsHasUpdate);
+  // 小助手卡片的数字 = 小助手会话的未读，进聊天页读完就消失（探索 tab 的点同一口径）。
+  const assistantUnread = useTabBadgeStore((state) => state.assistantUnread);
 
   const d = useMemo(
     () => ({
@@ -172,7 +174,12 @@ export default function ExploreScreen() {
             gradient={Gradients.exploreAssistant}
             titleFontFamily={titleFontFamily}
             art={<AssistantTileArt />}
-            accessibilityLabel={assistantTitle}
+            badgeCount={assistantUnread}
+            accessibilityLabel={
+              assistantUnread > 0
+                ? `${assistantTitle} ${t('tabs.unreadCount', { count: assistantUnread })}`
+                : assistantTitle
+            }
             onPress={handleOpenAssistant}
           />
           <ExploreTile

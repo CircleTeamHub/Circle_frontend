@@ -129,6 +129,20 @@ it('lights a dot on the explore tab when friends posted new moments', () => {
   expect(exploreDot()).toHaveLength(0);
 });
 
+// AI 小助手在探索 tab 下面：它发来消息，探索 tab 亮点（只亮点，不计数）。
+it('lights the explore dot while the assistant has unread messages', () => {
+  renderBar();
+  const exploreDot = () =>
+    screen.queryAllByTestId(/-update-dot$/).filter((node) => node.props.testID !== DOT);
+
+  act(() => useTabBadgeStore.getState().setAssistantUnread(2));
+  expect(exploreDot()).toHaveLength(1);
+  expect(screen.queryByText('2')).toBeNull();
+
+  act(() => useTabBadgeStore.getState().setAssistantUnread(0));
+  expect(exploreDot()).toHaveLength(0);
+});
+
 it('stays dark for someone the feed has told to upgrade', () => {
   mockMembershipRequired = true;
   useTabBadgeStore.getState().setCirclePlazaHasUpdate(true);
