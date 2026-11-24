@@ -94,6 +94,8 @@ module.exports = () => {
           : plugin,
       ),
       ['./plugins/with-notification-sound', { pushProvider }],
+      // 诊断分支专用：预发包可被 adb shell 剖析，用来定位原生内存是谁分配的。
+      ...(isPreproduction ? ['./plugins/with-android-profileable'] : []),
       ...(amapAndroidKey || amapIosKey
         ? [
             [
