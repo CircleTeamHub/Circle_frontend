@@ -96,6 +96,9 @@ function sanitizeNoteSummary<T extends NoteSummary>(note: T): T {
       ? {
           ...sanitized.cover,
           url: allowPeerMediaUrl(sanitized.cover.url) ?? '',
+          ...(typeof sanitized.cover.thumbUrl === 'string'
+            ? { thumbUrl: allowPeerMediaUrl(sanitized.cover.thumbUrl) }
+            : {}),
         }
       : null,
   };

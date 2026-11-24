@@ -141,6 +141,10 @@ function NoteCardInner({
     [note, onSourcePress],
   );
 
+  // 小图和原图各用各的缓存键：先缓存过原图的老笔记补上小图后，不会一直拿原图顶着。
+  const coverCacheKey = note.cover
+    ? `note:${note.id}:cover:${note.cover.id}${note.cover.thumbUrl ? ':thumb' : ''}`
+    : undefined;
   const chipsEnabled = Boolean(onSourcePress) && (!selectionMode || selectionSourceDetails);
   const canShowActions = showActions && Boolean(onMorePress) && !selectionMode;
 
@@ -165,8 +169,8 @@ function NoteCardInner({
       <View testID={`note-card-cover-column-${note.id}`} style={s.coverColumn}>
       {note.cover ? (
         <Image
-          source={{ uri: note.cover.url, cacheKey: `note:${note.id}:cover:${note.cover.id}` }}
-          recyclingKey={`note:${note.id}:cover:${note.cover.id}`}
+          source={{ uri: note.cover.thumbUrl || note.cover.url, cacheKey: coverCacheKey }}
+          recyclingKey={coverCacheKey}
           cachePolicy="memory-disk"
           style={s.thumbnail}
           contentFit="cover"

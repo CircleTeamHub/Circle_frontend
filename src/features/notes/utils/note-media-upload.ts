@@ -33,6 +33,8 @@ export type EditorNoteMediaDraft = {
   durationMs?: number;
   mimeType?: string;
   posterUrl?: string;
+  /** 图片随原图上传的小图的 object key，随提交发给服务端。 */
+  thumbObjectKey?: string;
   sortOrder: number;
   uploadStatus: 'PENDING' | 'UPLOADED';
 };
