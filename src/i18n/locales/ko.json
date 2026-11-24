@@ -3196,7 +3196,14 @@
       "emptyHint": "노트 제목에서 도시를 선택하고 좋은 평가를 받으면 랭킹에 오릅니다.",
       "emptyHintNationwide": "좋은 평가를 받은 노트가 랭킹에 오릅니다.",
       "loadFailed": "랭킹을 불러오지 못했습니다",
-      "rankA11y": "{{rank}}위"
+      "rankA11y": "{{rank}}위",
+      "boardGood": "좋은 평가",
+      "boardBad": "나쁜 평가",
+      "heroTitleBad": "{{month}}월 나쁜 평가 랭킹",
+      "heroTitleBadNoMonth": "이번 달 나쁜 평가 랭킹",
+      "emptyBad": "이번 달 나쁜 평가 랭킹에 오른 노트가 아직 없습니다",
+      "emptyCityBad": "이번 달 {{city}} 나쁜 평가 랭킹에 오른 노트가 아직 없습니다",
+      "emptyHintBad": "나쁜 평가를 받은 노트가 여기에 표시됩니다."
     }
   },
   "onboarding": {

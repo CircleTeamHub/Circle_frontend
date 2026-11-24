@@ -27,7 +27,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockT }) }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 }),
 }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 // 榜单直接用聊天里的笔记卡片：记下它收到的卡片数据，标题和「视频」块都能点。
 type MockCardProps = {
@@ -116,7 +116,7 @@ test('opens on the profile city, ranks the notes in server order and opens a not
   render(<NoteRankingScreen />);
   await act(async () => {});
 
-  expect(fetchNoteRanking).toHaveBeenCalledWith('成都');
+  expect(fetchNoteRanking).toHaveBeenCalledWith('成都', 'good');
   expect(screen.getByText('explore.ranking.heroTitle:11')).toBeTruthy();
   expect(screen.getAllByLabelText('explore.ranking.rankA11y')).toHaveLength(2);
   expect(screen.getAllByText(/^[12]$/).map((node) => node.props.children)).toEqual([1, 2]);
@@ -160,7 +160,7 @@ test('an empty city chart offers the nationwide chart in one tap', async () => {
 
   expect(screen.getByText('explore.ranking.emptyCity:成都')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByText('explore.ranking.viewNationwide')); });
-  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null);
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null, 'good');
   expect(screen.getByText('全国第一')).toBeTruthy();
 });
 
@@ -169,7 +169,7 @@ test('全国 shows every city, and the city chip opens the shared single-pick ci
   jest.mocked(fetchNoteRanking).mockResolvedValue(ranking(null, []));
   render(<NoteRankingScreen />);
   await act(async () => {});
-  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null);
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null, 'good');
   expect(screen.getByText('explore.ranking.empty')).toBeTruthy();
   // 全国榜不要求选城市，空状态不能再叫人去选城市。
   expect(screen.getByText('explore.ranking.emptyHintNationwide')).toBeTruthy();
@@ -184,7 +184,7 @@ test('全国 shows every city, and the city chip opens the shared single-pick ci
   // 选城市页交回结果，回到本页时取走并按新城市重拉。
   useCityPickStore.getState().pick('ranking', '杭州');
   await act(async () => { mockFocus?.(); });
-  expect(fetchNoteRanking).toHaveBeenLastCalledWith('杭州');
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith('杭州', 'good');
   expect(screen.getByText('explore.ranking.emptyCity:杭州')).toBeTruthy();
   expect(screen.getByText('explore.ranking.emptyHint')).toBeTruthy();
 });
@@ -222,9 +222,9 @@ test('after switching to 全国, the city segment goes straight back to the last
   await act(async () => {});
 
   await act(async () => { fireEvent.press(screen.getByText('explore.ranking.nationwide')); });
-  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null);
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null, 'good');
   await act(async () => { fireEvent.press(screen.getByText('成都')); });
-  expect(fetchNoteRanking).toHaveBeenLastCalledWith('成都');
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith('成都', 'good');
   expect(mockPush).not.toHaveBeenCalled();
 
   // 已在城市榜：再点城市那一段就是换城市。
@@ -233,4 +233,61 @@ test('after switching to 全国, the city segment goes straight back to the last
     pathname: '/(tabs)/explore/select-city',
     params: { target: 'ranking', city: '成都' },
   });
+});
+
+test('差评榜 reloads the same city by bad ratings, without medals, and 好评榜 switches back', async () => {
+  jest.mocked(fetchNoteRanking)
+    .mockResolvedValueOnce(ranking('成都', [note('a', '火锅')]))
+    .mockResolvedValueOnce(ranking('成都', [note('x', '黑店'), note('y', '宰客')]))
+    .mockResolvedValueOnce(ranking('成都', [note('a', '火锅')]));
+  render(<NoteRankingScreen />);
+  await act(async () => {});
+  expect(screen.getByRole('tab', { name: 'explore.ranking.boardGood' }).props.accessibilityState).toEqual({ selected: true });
+  expect(screen.getByTestId('note-rank-medal-1')).toBeTruthy();
+
+  await act(async () => { fireEvent.press(screen.getByText('explore.ranking.boardBad')); });
+
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith('成都', 'bad');
+  expect(screen.getByRole('tab', { name: 'explore.ranking.boardBad' }).props.accessibilityState).toEqual({ selected: true });
+  expect(screen.getByText('explore.ranking.heroTitleBad:11')).toBeTruthy();
+  expect(screen.queryByText('explore.ranking.heroTitle:11')).toBeNull();
+  expect(screen.getByText('黑店')).toBeTruthy();
+  expect(screen.queryByText('火锅')).toBeNull();
+  // 差评最多不发奖牌：前三名也只是数字。
+  expect(screen.queryByTestId('note-rank-medal-1')).toBeNull();
+  expect(screen.getAllByText(/^[12]$/).map((node) => node.props.children)).toEqual([1, 2]);
+
+  await act(async () => { fireEvent.press(screen.getByText('explore.ranking.boardGood')); });
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith('成都', 'good');
+  expect(screen.getByText('火锅')).toBeTruthy();
+});
+
+test('an empty 差评榜 says so in its own words and still offers the nationwide one', async () => {
+  jest.mocked(fetchNoteRanking).mockResolvedValue(ranking('成都', []));
+  render(<NoteRankingScreen />);
+  await act(async () => {});
+  await act(async () => { fireEvent.press(screen.getByText('explore.ranking.boardBad')); });
+
+  expect(screen.getByText('explore.ranking.emptyCityBad:成都')).toBeTruthy();
+  expect(screen.getByText('explore.ranking.emptyHintBad')).toBeTruthy();
+  expect(screen.queryByText('explore.ranking.emptyHint')).toBeNull();
+
+  await act(async () => { fireEvent.press(screen.getByText('explore.ranking.viewNationwide')); });
+  expect(fetchNoteRanking).toHaveBeenLastCalledWith(null, 'bad');
+  expect(screen.getByText('explore.ranking.emptyBad')).toBeTruthy();
+});
+
+test('a slow 好评榜 answer never shows up under 差评榜', async () => {
+  const good = deferred<NoteRanking>();
+  jest.mocked(fetchNoteRanking)
+    .mockReturnValueOnce(good.promise)
+    .mockResolvedValueOnce(ranking('成都', [note('x', '黑店')]));
+  render(<NoteRankingScreen />);
+
+  fireEvent.press(screen.getByText('explore.ranking.boardBad'));
+  await act(async () => {});
+  await act(async () => good.resolve(ranking('成都', [note('a', '火锅')])));
+
+  expect(screen.getByText('黑店')).toBeTruthy();
+  expect(screen.queryByText('火锅')).toBeNull();
 });

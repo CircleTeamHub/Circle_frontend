@@ -8,13 +8,14 @@ import { Spacing, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 import { useNoteRanking } from '@/features/notes/hooks/use-note-ranking';
+import { NoteRankingBoardTabs } from '@/features/notes/components/NoteRankingBoardTabs';
 import { NoteRankingHero } from '@/features/notes/components/NoteRankingHero';
 import { NoteRankingRow, RANK_COLUMN_WIDTH, RANK_GAP } from '@/features/notes/components/NoteRankingRow';
 import { NoteRankingStatus } from '@/features/notes/components/NoteRankingStatus';
 import type { NoteCardSection } from '@/features/chat/components/bubbles/note-card-body';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { getNoteDetailHref } from '@/features/user/utils/routes';
-import type { NoteRankingItem } from '@/features/notes/types';
+import type { NoteRankingBoard, NoteRankingItem } from '@/features/notes/types';
 
 /** 宽屏（平板、桌面网页）上榜单不铺满：卡片再宽四宫格就太大了。 */
 const MAX_CONTENT_WIDTH = 600;
@@ -29,11 +30,15 @@ const s = StyleSheet.create({
     paddingTop: Spacing.sm,
     gap: Spacing.md,
   },
+  header: { gap: Spacing.md - Spacing.xs },
 });
 
 const keyExtractor = (note: NoteRankingItem) => note.id;
 
-/** 探索 → 大众点评：本月好评最多的笔记，全国或按城市看，每月 1 号（上海时区）重新排。 */
+/**
+ * 探索 → 大众点评：本月好评最多（好评榜）或差评最多（差评榜）的笔记，全国或按城市看，
+ * 每月 1 号（上海时区）重新排。
+ */
 export default function NoteRankingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -44,8 +49,9 @@ export default function NoteRankingScreen() {
   const homeCity = useAuthStore((state) => state.user?.city ?? null);
   const [city, setCity] = useState<string | null>(homeCity);
   const [lastCity, setLastCity] = useState<string | null>(homeCity);
+  const [board, setBoard] = useState<NoteRankingBoard>('good');
   const consumePickedCity = useCityPickStore((state) => state.consume);
-  const { ranking, loading, error, reload } = useNoteRanking(city);
+  const { ranking, loading, error, reload } = useNoteRanking(city, board);
   const pull = usePullRefresh(reload);
 
   useFocusEffect(
@@ -86,28 +92,32 @@ export default function NoteRankingScreen() {
   );
   const renderItem = useCallback(
     ({ item, index }: { item: NoteRankingItem; index: number }) => (
-      <NoteRankingRow rank={index + 1} note={item} cardWidth={cardWidth} onOpen={openNote} />
+      <NoteRankingRow rank={index + 1} board={board} note={item} cardWidth={cardWidth} onOpen={openNote} />
     ),
-    [cardWidth, openNote],
+    [board, cardWidth, openNote],
   );
 
   const month = ranking ? Number(ranking.month.slice(5, 7)) : null;
   const header = (
-    <NoteRankingHero
-      month={month}
-      city={city}
-      cityLabel={city ?? lastCity}
-      onNationwide={showNationwide}
-      onCity={pressCity}
-    />
+    <View style={s.header}>
+      <NoteRankingBoardTabs board={board} onChange={setBoard} />
+      <NoteRankingHero
+        board={board}
+        month={month}
+        city={city}
+        cityLabel={city ?? lastCity}
+        onNationwide={showNationwide}
+        onCity={pressCity}
+      />
+    </View>
   );
   const status =
     loading && !pull.refreshing ? (
-      <NoteRankingStatus kind="loading" />
+      <NoteRankingStatus kind="loading" board={board} />
     ) : error ? (
       <NoteRankingStatus kind="error" message={error} onRetry={reload} />
     ) : (
-      <NoteRankingStatus kind="empty" city={city} onNationwide={showNationwide} />
+      <NoteRankingStatus kind="empty" board={board} city={city} onNationwide={showNationwide} />
     );
 
   return (

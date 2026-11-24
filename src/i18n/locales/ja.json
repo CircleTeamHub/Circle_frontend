@@ -3196,7 +3196,14 @@
       "emptyHint": "ノートのタイトルで都市を選び、高評価が付くとランクインします。",
       "emptyHintNationwide": "高評価が付いたノートがランクインします。",
       "loadFailed": "ランキングを読み込めませんでした",
-      "rankA11y": "{{rank}}位"
+      "rankA11y": "{{rank}}位",
+      "boardGood": "高評価",
+      "boardBad": "低評価",
+      "heroTitleBad": "{{month}}月の低評価ランキング",
+      "heroTitleBadNoMonth": "今月の低評価ランキング",
+      "emptyBad": "今月はまだ低評価ランキングに入ったノートがありません",
+      "emptyCityBad": "今月は{{city}}の低評価ランキングに入ったノートがまだありません",
+      "emptyHintBad": "低評価が付いたノートがここに表示されます。"
     }
   },
   "onboarding": {

@@ -3202,7 +3202,14 @@
       "emptyHint": "Elige una ciudad en el título de una nota; cuando reciba buenas valoraciones aparecerá aquí.",
       "emptyHintNationwide": "Las notas aparecen aquí cuando reciben buenas valoraciones.",
       "loadFailed": "No se pudo cargar la clasificación",
-      "rankA11y": "Puesto {{rank}}"
+      "rankA11y": "Puesto {{rank}}",
+      "boardGood": "Mejor valoradas",
+      "boardBad": "Peor valoradas",
+      "heroTitleBad": "Peor valoradas del mes {{month}}",
+      "heroTitleBadNoMonth": "Peor valoradas de este mes",
+      "emptyBad": "Aún no hay notas entre las peor valoradas este mes",
+      "emptyCityBad": "Aún no hay notas de {{city}} entre las peor valoradas este mes",
+      "emptyHintBad": "Las notas aparecen aquí cuando reciben malas valoraciones."
     }
   },
   "onboarding": {
