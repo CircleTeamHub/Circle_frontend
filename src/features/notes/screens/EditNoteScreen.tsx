@@ -248,7 +248,7 @@ const COMPOSER_ACTIONS: readonly {
   { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
   { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
   { kind: 'audio', icon: 'mic-outline', translationKey: 'audio', defaultLabel: '录音' },
-  { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '验证视频' },
+  { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '展示' },
   { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
   { kind: 'contact', icon: 'person-outline', translationKey: 'contact', defaultLabel: '名片' },
   { kind: 'group', icon: 'people-outline', translationKey: 'group', defaultLabel: '群名片' },
@@ -3175,22 +3175,34 @@ export default function EditNoteScreen() {
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
 
-  // 文字以外的每个区块都和文字条同款：白色圆角条，有内容时内容在上，最下一行
-  // 是「＋ 添加…」按钮和右侧红色删除。没有小节头、计数和内框 —— 按钮文案本身
-  // 就说明了这是哪一种区块。
+  const renderMaterialBadge = useCallback((label: string, backgroundColor = colors.primary, color = colors.white) => (
+    <Text
+      testID="note-material-badge"
+      pointerEvents="none"
+      style={[s.materialBadge, { backgroundColor, color }]}
+    >
+      {label}
+    </Text>
+  ), [colors.primary, colors.white]);
+
+  // 已有媒体直接平铺；空素材保留选择入口，类型和删除操作放在各素材自身上。
   const renderSectionBar = ({
     testID,
     label,
     onRemove,
     content,
     actions,
+    media = false,
   }: {
     testID?: string;
     label: string;
     onRemove?: () => void;
     content?: ReactNode;
     actions: ReactNode;
-  }) => (
+    media?: boolean;
+  }) => media && content ? (
+    <View testID={testID} style={s.materialBlock}>{content}</View>
+  ) : (
     <View testID={testID} style={[s.sectionBar, d.textBar]}>
       {content ? <View style={s.sectionBarContent}>{content}</View> : null}
       <View style={s.sectionBarRow}>
@@ -3269,6 +3281,11 @@ export default function EditNoteScreen() {
           const thumbUri =
             item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
           const videoUri = item.type === 'VIDEO' ? item.previewUri ?? item.url : undefined;
+          const label = target === 'showcase'
+            ? t('notes.edit.sections.showcase', { defaultValue: '展示视频' })
+            : item.type === 'VIDEO'
+              ? t('notes.edit.composer.video', { defaultValue: '视频' })
+              : t('notes.edit.composer.image', { defaultValue: '图片' });
           return (
             <View
               key={item.clientId}
@@ -3329,12 +3346,19 @@ export default function EditNoteScreen() {
                 <NoteMediaUploadRing progressKey={item.clientId} />
               ) : null}
               </Pressable>
+              {renderMaterialBadge(
+                label,
+                target === 'showcase' ? colors.success : colors.primary,
+                target === 'showcase' ? colors.black : colors.white,
+              )}
               <Pressable
-                style={s.mediaRemoveButton}
+                style={[s.mediaRemoveButton, { backgroundColor: colors.dangerFill }]}
                 onPress={() => handleRemoveSectionMedia(target, item.clientId)}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${label}`}
               >
-                <Ionicons name="close" size={15} color={colors.text} />
+                <Ionicons name="trash-outline" size={20} color={colors.white} />
               </Pressable>
             </View>
           );
@@ -3343,10 +3367,15 @@ export default function EditNoteScreen() {
     );
   }, [
     colors.iconAccent,
-    colors.text,
+    colors.black,
+    colors.dangerFill,
+    colors.primary,
+    colors.success,
+    colors.white,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
+    renderMaterialBadge,
     uploadedClientIds,
     t,
   ]);
@@ -3503,6 +3532,7 @@ export default function EditNoteScreen() {
 
         {renderSectionBar({
           testID: 'note-image-section',
+          media: true,
           label: t('notes.edit.composer.image', { defaultValue: '图片' }),
           onRemove: () => handleRemoveComposerBlock(block),
           content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
@@ -3513,6 +3543,7 @@ export default function EditNoteScreen() {
       case 'video':
         return renderSectionBar({
           testID: 'note-video-section',
+          media: true,
           label: t('notes.edit.composer.video', { defaultValue: '视频' }),
           onRemove: () => handleRemoveComposerBlock(block),
           content: renderMediaTiles(getMediaItemsForBlock(mediaItems, 'media', block.id), 'media'),
@@ -3521,10 +3552,11 @@ export default function EditNoteScreen() {
       case 'showcase':
         return renderSectionBar({
           testID: 'note-showcase-section',
-          label: t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
+          media: true,
+          label: t('notes.edit.sections.showcase', { defaultValue: '展示视频' }),
           onRemove: () => handleRemoveComposerBlock(block),
           content: renderMediaTiles(getMediaItemsForBlock(showcaseItems, 'showcase', block.id), 'showcase'),
-          actions: renderMediaAdd('showcase', 'video', block.id, t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' })),
+          actions: renderMediaAdd('showcase', 'video', block.id, t('notes.edit.addShowcaseVideo', { defaultValue: '添加展示视频' })),
         });
       case 'audio':
         return renderSectionBar({
@@ -3532,6 +3564,7 @@ export default function EditNoteScreen() {
           onRemove: () => handleRemoveComposerBlock(block),
           content: isFirstAudioBlock && audioItems.length > 0 ? audioItems.map((item) => (
             <View key={item.clientId} style={s.audioRow}>
+              {renderMaterialBadge(t('notes.edit.composer.audio', { defaultValue: '录音' }))}
               <Ionicons name="mic" size={18} color={colors.iconAccent} />
               <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
                 {typeof item.durationMs === 'number' && item.durationMs > 0
@@ -3585,6 +3618,9 @@ export default function EditNoteScreen() {
             const avatar = getNoteCardAvatar(item);
             return (
               <View key={item.id} style={s.cardRow}>
+                {renderMaterialBadge(isGroup
+                  ? t('notes.edit.composer.group', { defaultValue: '群名片' })
+                  : t('notes.edit.composer.contact', { defaultValue: '名片' }))}
                 {avatar ? (
                   <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                 ) : (
@@ -3690,6 +3726,7 @@ export default function EditNoteScreen() {
                   </Pressable>
                 </View>
               </View>
+              {renderMaterialBadge(t('notes.edit.sections.location', { defaultValue: '位置' }))}
             </View>
           ) : null,
         });
@@ -4482,9 +4519,9 @@ const s = StyleSheet.create({
   scrollContent: { paddingTop: Spacing.sm },
   // Keep spacing on the native wrapper instead of ScrollView gap, which is not
   // applied consistently to contentContainerStyle across supported platforms.
-  composerBlock: { marginBottom: Spacing.md },
+  composerBlock: { marginBottom: Spacing.sm },
   heroCard: {
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.sm,
     marginBottom: 0,
     borderWidth: 1,
     borderRadius: Radius.xxl,
@@ -4669,19 +4706,30 @@ const s = StyleSheet.create({
   },
   groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
   sectionSubtitle: { ...Typography.small },
-  // 其余区块与文字条同一套外形：左内边距 16 让「＋」和正文首字对齐，
-  // 右侧只留删除按钮的位置；内容区在上，按钮行在下。
+  materialBlock: { marginHorizontal: Spacing.sm },
+  materialBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 1,
+    maxWidth: '75%',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderBottomRightRadius: Radius.xs,
+    ...Typography.body,
+    fontWeight: '600',
+  },
   sectionBar: {
-    marginHorizontal: Spacing.lg,
-    paddingLeft: Spacing.lg,
+    marginHorizontal: Spacing.sm,
+    paddingLeft: Spacing.sm,
     paddingRight: Spacing.xs,
     borderRadius: Radius.lg,
     borderCurve: 'continuous',
     overflow: 'hidden',
   },
   sectionBarContent: {
-    paddingTop: Spacing.md,
-    paddingRight: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingRight: Spacing.xs,
     gap: Spacing.sm,
   },
   sectionBarRow: {
@@ -4708,7 +4756,7 @@ const s = StyleSheet.create({
   // 上下各留 2pt，WebView 不碰圆角（安卓不一定按父视图圆角裁 WebView），
   // 单行时整条正好 50 高。
   textBar: {
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 2,
@@ -4747,7 +4795,6 @@ const s = StyleSheet.create({
   mediaPreviewTile: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   mediaThumb: {
@@ -4767,25 +4814,25 @@ const s = StyleSheet.create({
   },
   mediaRemoveButton: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: 0,
+    right: 0,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.86)',
   },
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
   audioRow: {
-    minHeight: 44,
+    minHeight: 76,
+    paddingTop: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
   cardRow: {
-    minHeight: 44,
+    minHeight: 76,
+    paddingTop: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,

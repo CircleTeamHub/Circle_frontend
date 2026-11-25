@@ -6,17 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
-import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface NoteActionsSheetProps {
   /** 非空即打开菜单；菜单针对这条笔记 */
   note: NoteSummary | null;
-  /** 当前登录用户，用于兼容旧接口缺少 canEdit 时的源笔记所有权判断。 */
-  currentUserId?: string | null;
   /**
    * 非空数组即打开批量菜单(多选「下一步」)。动作集合与单选一致
-   * (多选项和单条状态设置除外——状态只允许逐条修改)，逐项作用于整个选中集。
+   * (多选项除外)，逐项作用于整个选中集。
    */
   batchNotes?: NoteSummary[] | null;
   onClose: () => void;
@@ -36,18 +33,11 @@ interface NoteActionsSheetProps {
   onShare: (note: NoteSummary) => void;
   /** 软删除进回收站（30 天内可恢复） */
   onDelete?: (note: NoteSummary) => void;
-  onUnlist: (note: NoteSummary) => void;
-  /** 仅源笔记可用；收藏副本由 source status 统一跟随原笔记。 */
-  onSetWorkStatus?: (
-    note: NoteSummary,
-    workStatus: SetNoteWorkStatus,
-  ) => void;
   /** 批量置顶/取消置顶（pinned = 目标状态，由「是否全部已置顶」推导） */
   onBatchPin?: (notes: NoteSummary[], pinned: boolean) => void;
   onBatchRemark?: (notes: NoteSummary[]) => void;
   onBatchEditGroups?: (notes: NoteSummary[]) => void;
   onBatchShare?: (notes: NoteSummary[]) => void;
-  onBatchUnlist?: (notes: NoteSummary[]) => void;
   onBatchDelete?: (notes: NoteSummary[]) => void;
 }
 
@@ -64,7 +54,6 @@ type NoteAction = {
 
 export function NoteActionsSheet({
   note,
-  currentUserId,
   batchNotes,
   onClose,
   onPin,
@@ -77,13 +66,10 @@ export function NoteActionsSheet({
   onEditGroups,
   onShare,
   onDelete,
-  onUnlist,
-  onSetWorkStatus,
   onBatchPin,
   onBatchRemark,
   onBatchEditGroups,
   onBatchShare,
-  onBatchUnlist,
   onBatchDelete,
 }: NoteActionsSheetProps) {
   const { colors } = useTheme();
@@ -106,13 +92,6 @@ export function NoteActionsSheet({
   // 批量态：动作集合与单选一致（多选项除外），作用于整个选中集。
   const batch = batchNotes && batchNotes.length > 0 ? batchNotes : null;
   const allPinned = batch ? batch.every((item) => item.pinned) : false;
-  const canManageWorkStatus = Boolean(
-    note &&
-      onSetWorkStatus &&
-      !note.collectedFrom &&
-      (note.canEdit === true ||
-        (Boolean(currentUserId) && note.ownerId === currentUserId)),
-  );
 
   const batchActions: NoteAction[] = batch
     ? [
@@ -168,18 +147,6 @@ export function NoteActionsSheet({
                 label: t('notes.actions.delete', { defaultValue: '删除' }),
                 destructive: true,
                 run: () => onBatchDelete(batch),
-              },
-            ]
-          : []),
-        // 全部已下架时不再出现下架项（与单选对 UNLISTED 隐藏一致）。
-        ...(onBatchUnlist && batch.some((item) => item.status !== 'UNLISTED')
-          ? [
-              {
-                key: 'unlist',
-                icon: 'archive-outline' as const,
-                label: t('notes.actions.unlist', { defaultValue: '下架' }),
-                destructive: true,
-                run: () => onBatchUnlist(batch),
               },
             ]
           : []),
@@ -262,26 +229,6 @@ export function NoteActionsSheet({
               },
             ]
           : []),
-        ...(canManageWorkStatus
-          ? [
-              {
-                key: 'work-status-closed',
-                icon: 'moon-outline' as const,
-                label: t('chat.groupManagement.noteClosed', {
-                  defaultValue: '打烊',
-                }),
-                run: () => onSetWorkStatus?.(note, 'CLOSED'),
-              },
-              {
-                key: 'work-status-working',
-                icon: 'sunny-outline' as const,
-                label: t('chat.groupManagement.noteWorking', {
-                  defaultValue: '开工',
-                }),
-                run: () => onSetWorkStatus?.(note, 'WORKING'),
-              },
-            ]
-          : []),
         {
           key: 'share',
           icon: 'share-outline',
@@ -299,17 +246,6 @@ export function NoteActionsSheet({
               },
             ]
           : []),
-        ...(note.status === 'UNLISTED'
-          ? []
-          : [
-              {
-                key: 'unlist',
-                icon: 'archive-outline' as const,
-                label: t('notes.actions.unlist', { defaultValue: '下架' }),
-                destructive: true,
-                run: () => onUnlist(note),
-              },
-            ]),
       ]
     : [];
 

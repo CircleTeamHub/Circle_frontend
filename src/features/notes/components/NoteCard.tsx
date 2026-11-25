@@ -24,7 +24,7 @@ interface Props {
   note: NoteSummary;
   /** 回调统一携带 note，父层可用稳定的 useCallback，让 memo 生效 */
   onPress: (note: NoteSummary) => void;
-  /** 点「⋯」打开动作菜单（置顶/多选/备注/编辑/分组/分享/删除/下架）——由父层承载菜单 */
+  /** 点「⋯」打开动作菜单（置顶/多选/备注/编辑/分组/分享/删除）——由父层承载菜单 */
   onMorePress?: (note: NoteSummary) => void;
   /** 长按进入多选（父层切 selectionMode） */
   onLongPress?: (note: NoteSummary) => void;
@@ -225,8 +225,12 @@ function NoteCardInner({
             {note.contentPreview}
           </Text>
         ) : null}
-        {/* 下架（status=UNLISTED）压过开工/打烊：收藏者和群里看到的也是「下架」。 */}
-        {shownWorkStatus === null ? null : (
+        {/* 来源删除优先显示，与聊天里的笔记卡片使用同一条提示。 */}
+        {note.status === 'DELETED' ? (
+          <Text style={[s.status, { color: colors.warning }]} numberOfLines={1}>
+            {t('chat.noteCard.workStatus.deleted', { defaultValue: '笔记已删除' })}
+          </Text>
+        ) : shownWorkStatus === null ? null : (
           <View
             style={[
               s.statusBadge,

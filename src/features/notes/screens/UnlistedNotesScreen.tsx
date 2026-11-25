@@ -21,7 +21,7 @@ import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
 } from '@/features/notes/utils/note-sync';
-import { deleteNote, fetchNotes, getCachedNotes, notesMutatedSince, relistNote } from '@/services/api/notes';
+import { deleteNote, fetchNotes, getCachedNotes, notesMutatedSince } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { reuseUnchanged } from '@/utils/structural-sharing';
@@ -140,14 +140,14 @@ function UnlistedNotesContent() {
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
-  // 上架 / 删除请求还在路上时这行仍在列表里：不许再对它开菜单重复操作。
+  // 删除请求还在路上时这行仍在列表里：不许再对它开菜单重复操作。
   const pendingIdsRef = useRef(new Set<string>());
   const openMenu = useCallback((note: NoteSummary) => {
     if (!pendingIdsRef.current.has(note.id)) setMenuNote(note);
   }, []);
 
-  // 上架/删除已在服务端成功：这行一定离开「已下架」列表。先本地移除（真实且乐观），
-  // 再刷新；刷新失败不能再报「上架/删除失败」，否则用户会对已成功的操作反复重试。
+  // 删除已在服务端成功：这行一定离开「已下架」列表。先本地移除，
+  // 再刷新；刷新失败不能再报「删除失败」，否则用户会对已成功的操作反复重试。
   // load() 自带序号，会作废在飞的旧刷新（其响应还包含这一行）。
   const removeSettledNote = useCallback(
     (noteId: string) => {
@@ -160,29 +160,6 @@ function UnlistedNotesContent() {
     },
     [load],
   );
-
-  const handleRelistNote = useCallback(async () => {
-    const note = menuNote;
-    if (!note) return;
-    closeMenu();
-    if (pendingIdsRef.current.has(note.id)) return;
-    pendingIdsRef.current.add(note.id);
-    try {
-      await relistNote(note.id);
-    } catch (error) {
-      reportHandledFailure('unlistedNotes', 'relist', error);
-      if (mountedRef.current) {
-        Alert.alert(
-          t('notes.alerts.relistFailedTitle', { defaultValue: '上架失败' }),
-          t('common.retryLater', { defaultValue: '请稍后重试' }),
-        );
-      }
-      return;
-    } finally {
-      pendingIdsRef.current.delete(note.id);
-    }
-    removeSettledNote(note.id);
-  }, [closeMenu, menuNote, removeSettledNote, t]);
 
   // 删除是软删除：笔记进回收站（30 天后自动清除），与「我的笔记」列表的删除同一个接口。
   const handleDeleteNote = useCallback(() => {
@@ -231,7 +208,6 @@ function UnlistedNotesContent() {
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      sheetAction: { color: colors.iconAccent },
       sheetDanger: { color: colors.danger },
       daysLeft: { color: colors.textSecondary },
     }),
@@ -326,19 +302,6 @@ function UnlistedNotesContent() {
             {menuNote.title}
           </Text>
         ) : null}
-        <Pressable
-          style={s.sheetRow}
-          onPress={() => void handleRelistNote()}
-          accessibilityRole="button"
-          accessibilityLabel={t('notes.actions.relist', {
-            defaultValue: '上架',
-          })}
-        >
-          <Ionicons name="cloud-upload-outline" size={20} color={colors.iconAccent} />
-          <Text style={[s.sheetLabel, d.sheetAction]}>
-            {t('notes.actions.relist', { defaultValue: '上架' })}
-          </Text>
-        </Pressable>
         <Pressable
           style={s.sheetRow}
           onPress={handleDeleteNote}

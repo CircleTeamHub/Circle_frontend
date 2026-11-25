@@ -81,6 +81,9 @@ const moveRow = async (label: string, actionName: 'increment' | 'decrement') => 
     );
   });
 };
+const saveOrder = async () => {
+  await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'common.save' })); });
+};
 
 async function renderScreen(filterOrder: string[] = []) {
   useMessageGroupsStore.setState({ groups: [family, work], filterOrder, loading: false, error: null });
@@ -126,14 +129,18 @@ test('custom groups open their editor, built-in tabs do not, and the footer star
   expect(mockRouter.push).toHaveBeenLastCalledWith('/(tabs)/messages/group-edit');
 });
 
-test('moving a built-in tab is saved on the device only', async () => {
+test('moving a built-in tab is staged until Save and then saved on the device only', async () => {
   await renderScreen();
 
   await moveRow('messages.all', 'increment');
 
   expect(rowLabels().slice(0, 2)).toEqual(['messages.unread', 'messages.all']);
+  expect(useMessageGroupsStore.getState().filterOrder).toEqual([]);
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  await saveOrder();
   expect(useMessageGroupsStore.getState().filterOrder.slice(0, 2)).toEqual(['unread', 'all']);
   expect(updateConversationGroup).not.toHaveBeenCalled();
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
 });
 
 test('moving a group past another group also saves the new group order to the server', async () => {
@@ -147,22 +154,26 @@ test('moving a group past another group also saves the new group order to the se
   await moveRow('工作', 'decrement');
 
   expect(rowLabels().slice(-2)).toEqual(['工作', '家人']);
+  expect(updateConversationGroup).not.toHaveBeenCalled();
+  await saveOrder();
   expect(updateConversationGroup).toHaveBeenCalledWith('g-2', { sortOrder: 0 });
   expect(updateConversationGroup).toHaveBeenCalledWith('g-1', { sortOrder: 1 });
   expect(alertSpy).not.toHaveBeenCalled();
 });
 
-test('if the server rejects the new group order, the whole list goes back and the user is told', async () => {
+test('a failed Save restores persisted order, keeps staged edits for retry and stays on the page', async () => {
   jest.mocked(updateConversationGroup).mockRejectedValue(new Error('network'));
   await renderScreen(['all', 'unread', 'group', 'private', 'custom:g-1', 'custom:g-2']);
 
   await moveRow('工作', 'decrement');
+  await saveOrder();
 
   expect(alertSpy).toHaveBeenCalledWith(
     'messages.groups.reorderFailedTitle',
     'messages.groups.reorderFailedMessage',
   );
-  expect(rowLabels().slice(-2)).toEqual(['家人', '工作']);
+  expect(rowLabels().slice(-2)).toEqual(['工作', '家人']);
+  expect(mockRouter.back).not.toHaveBeenCalled();
   expect(useMessageGroupsStore.getState().filterOrder).toEqual([
     'all',
     'unread',
@@ -171,4 +182,35 @@ test('if the server rejects the new group order, the whole list goes back and th
     'custom:g-1',
     'custom:g-2',
   ]);
+  jest.mocked(updateConversationGroup).mockImplementation(async (id, patch) =>
+    makeGroup({ ...(id === 'g-1' ? family : work), sortOrder: patch.sortOrder ?? 0 }));
+  await saveOrder();
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+
+test('leaving without Save discards staged ordering', async () => {
+  await renderScreen();
+  await moveRow('工作', 'decrement');
+  const rendered = screen;
+  rendered.unmount();
+  await renderScreen();
+  expect(rowLabels().slice(-2)).toEqual(['家人', '工作']);
+  expect(updateConversationGroup).not.toHaveBeenCalled();
+});
+
+test('Save waits for the server and disables both footer actions until it finishes', async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  jest.mocked(updateConversationGroup).mockImplementation(async (id, patch) => {
+    await pending;
+    return makeGroup({ ...(id === 'g-1' ? family : work), sortOrder: patch.sortOrder ?? 0 });
+  });
+  await renderScreen();
+  await moveRow('工作', 'decrement');
+  fireEvent.press(screen.getByRole('button', { name: 'common.save' }));
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'common.saving' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'messages.groups.create' })).toBeDisabled();
+  await act(async () => { finish(); await pending; });
+  expect(mockRouter.back).toHaveBeenCalledTimes(1);
 });

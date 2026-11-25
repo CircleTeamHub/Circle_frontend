@@ -25,7 +25,8 @@ test('NotesScreen has 新建 button', () => {
 
 test('NotesScreen has 已下架 entry button', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(src, /已下架/);
+  assert.match(src, /<NotesHeaderActions/);
+  assert.match(read('src/features/notes/components/NotesHeaderActions.tsx'), /notes\.unlisted.*已下架/);
 });
 
 test('NotesScreen opens a standalone unlisted notes page instead of filtering inline', () => {
@@ -45,20 +46,18 @@ test('NotesScreen opens a standalone unlisted notes page instead of filtering in
   assert.doesNotMatch(src, /notes\.unlistedAutoDeleteHint/);
 });
 
-test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => {
+test('UnlistedNotesScreen lists unlisted notes and leaves status edits to group management', () => {
   const screen = read('src/features/notes/screens/UnlistedNotesScreen.tsx');
   const route = read('app/(tabs)/profile/notes/unlisted.tsx');
   const zh = read('src/i18n/locales/zh.json');
 
   assert.match(route, /UnlistedNotesScreen/);
   assert.match(screen, /fetchNotes\(\{ status: 'UNLISTED' \}\)/);
-  assert.match(screen, /relistNote/);
-  assert.match(screen, /notes\.actions\.relist/);
-  assert.match(screen, /cloud-upload-outline/);
+  assert.doesNotMatch(screen, /relistNote|notes\.actions\.relist|cloud-upload-outline/);
   assert.match(screen, /notes\.unlistedAutoDeleteHint/);
   assert.match(screen, /notes\.empty\.noUnlisted/);
   // 语义拍板（2026-11-13，取代 08-16 的「不自动删除」）：下架 60 天后自动删除，回收站取消。
-  assert.match(zh, /下架 60 天后自动删除，期间可随时重新上架/);
+  assert.match(JSON.parse(zh).notes.unlistedAutoDeleteHint, /下架 60 天后自动删除.*群内的笔记管理/);
   assert.doesNotMatch(zh, /已下架笔记不会自动删除/);
   assert.match(zh, /上架/);
 });
@@ -566,26 +565,21 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.doesNotMatch(card, /onPinPress/);
   assert.doesNotMatch(card, /onEditPress/);
 
-  // 菜单承载置顶/多选/备注/编辑/分组/分享/删除/下架；删除是软删进回收站
+  // 菜单承载置顶/多选/备注/编辑/分组/分享/删除；删除是软删进回收站
   // (30 天可恢复),用 notes.actions.delete 专属文案,不复用 common.delete。
   assert.match(screen, /<NoteActionsSheet/);
   assert.match(screen, /onMorePress=\{openMenu\}/);
-  assert.match(screen, /unlistNote/);
-  assert.match(screen, /handleUnlistNote/);
+  assert.doesNotMatch(screen, /unlistNote|handleUnlistNote|handleSetWorkStatus/);
   assert.match(sheet, /notes\.actions\.pin/);
   assert.match(sheet, /notes\.actions\.edit/);
   assert.match(sheet, /notes\.actions\.share/);
-  assert.match(sheet, /notes\.actions\.unlist/);
-  assert.match(sheet, /archive-outline/);
+  assert.doesNotMatch(sheet, /notes\.actions\.unlist|archive-outline/);
   assert.match(sheet, /notes\.actions\.delete/);
   assert.match(sheet, /trash-outline/);
   assert.match(sheet, /onDelete/);
-  assert.match(screen, /onSetWorkStatus=\{handleSetWorkStatus\}/);
-  assert.match(screen, /currentUserId=\{currentUserId\}/);
-  assert.match(sheet, /chat\.groupManagement\.noteClosed/);
-  assert.match(sheet, /chat\.groupManagement\.noteWorking/);
+  assert.doesNotMatch(screen, /onSetWorkStatus|onUnlist|onBatchUnlist/);
+  assert.doesNotMatch(sheet, /chat\.groupManagement\.noteClosed|chat\.groupManagement\.noteWorking/);
   assert.match(sheet, /!note\.collectedFrom/);
-  assert.match(sheet, /note\.ownerId === currentUserId/);
   assert.doesNotMatch(sheet, /common\.delete/);
 });
 
@@ -664,7 +658,7 @@ test('long-image export is handled as media instead of share text', () => {
 
   assert.match(src, /const saveLongImageExport = useCallback/);
   assert.match(src, /saveMediaToLibrary\(result\.url, \{\s*mimeType: result\.mimeType/);
-  assert.match(src, /if \(format === 'IMAGE'\) \{\s*await saveLongImageExport\(result\);/);
+  assert.match(src, /if \(format === 'IMAGE'\) \{\s*if \(!\(await saveLongImageExport\(result\)\)\) return;/);
   // The URL is kept out of Share.message for the long-image branch, which is
   // what prevents iOS/Android from presenting the generated artifact as text.
   const imageBranch = src.match(/if \(format === 'IMAGE'\) \{([\s\S]*?)\n\s*\} else \{/);
@@ -801,10 +795,10 @@ test('secondary note buttons use the tonal brand fill instead of white', () => {
   assert.match(editor, /composerPreviewButtonContent: \{ color: colors\.link \}/);
 });
 
-test('the showcase composer tool is labelled 验证 while its section keeps the full name', () => {
+test('the showcase composer tool is labelled 展示 and its material badge uses 展示视频', () => {
   const zh = JSON.parse(read('src/i18n/locales/zh.json'));
 
-  assert.equal(zh.notes.edit.composer.showcase, '验证');
-  assert.equal(zh.notes.edit.sections.showcase, '验证视频');
+  assert.equal(zh.notes.edit.composer.showcase, '展示');
+  assert.equal(zh.notes.edit.sections.showcase, '展示视频');
   assert.equal(zh.notes.edit.textPlaceholder, undefined);
 });

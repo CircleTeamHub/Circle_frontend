@@ -19,12 +19,12 @@ import { recordMetric } from '@/observability/metrics';
 import { useCityPickStore } from '@/features/discover/store/use-city-pick-store';
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
-// 图片格子里只有图本身:不再在底部垫一条写着「图片 / 视频」的白条。
-test('a media tile shows the image without a type label bar', async () => {
+test('a media tile identifies its type in a badge without a section action footer', async () => {
   render(<EditNoteScreen />);
   const upload = await beginDeferredImageUpload();
   const tile = screen.getByTestId('note-media-preview-tile');
-  expect(within(tile).queryByText('notes.edit.imageItem')).toBeNull();
+  expect(within(tile).getByText('notes.edit.composer.image')).toBeTruthy();
+  expect(within(screen.getByTestId('note-image-section')).queryByRole('button', { name: 'notes.edit.addImage' })).toBeNull();
   await act(async () => { upload.resolve(); });
 });
 
@@ -137,6 +137,9 @@ test('ordinary and verification videos open their own full-screen source without
   await screen.findByDisplayValue('Videos');
   expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull();
   for (const [section, uri] of [['video', video.url], ['showcase', verification.url]]) {
+    expect(within(screen.getByTestId(`note-${section}-section`)).getByTestId('note-material-badge')).toHaveTextContent(
+      section === 'video' ? 'notes.edit.composer.video' : 'notes.edit.sections.showcase',
+    );
     fireEvent.press(within(screen.getByTestId(`note-${section}-section`)).getByRole('button', { name: 'chat.detail.playVideo' }));
     expect(jest.mocked(NoteVideoViewer).mock.calls.at(-1)?.[0].uri).toBe(uri);
     act(() => jest.mocked(NoteVideoViewer).mock.calls.at(-1)?.[0].onClose());
@@ -298,6 +301,12 @@ test('stacks complete editor images at full width and opens the tapped image in 
   });
   act(() => jest.mocked(ImageViewer).mock.calls.at(-1)?.[0].onClose());
   expect(screen.UNSAFE_queryByType(ImageViewer)).toBeNull();
+  fireEvent.press(within(tiles[0]).getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' }));
+  expect(screen.getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  expect(screen.getByTestId('note-media-preview-image').props.source.uri).toBe(images[1].url);
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(updateNote).toHaveBeenCalled());
+  expect(jest.mocked(updateNote).mock.calls.at(-1)?.[1].sections?.media?.items.map((item) => item.objectKey)).toEqual([images[1].objectKey]);
 });
 
 test('keeps legacy audio editable and saves its attachment after removing the recording toolbar entry', async () => {
@@ -312,8 +321,8 @@ test('keeps legacy audio editable and saves its attachment after removing the re
   expect(screen.queryByRole('button', { name: 'notes.edit.composer.audio' })).toBeNull();
   expect(screen.getByText('notes.edit.audioDuration')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
-  // 录音区块本身没有小节头，名字只出现在排序列表里。
-  expect(screen.getAllByText('notes.edit.composer.audio')).toHaveLength(1);
+  // 素材标签与排序列表都显示录音类型。
+  expect(screen.getAllByText('notes.edit.composer.audio')).toHaveLength(2);
   fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Updated legacy audio');
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
@@ -947,6 +956,7 @@ test('each add button opens the picker with only the slots left for that kind (9
   await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 2 })));
   pressComposer('video');
   await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 5 })));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.showcase' }));
   const showcaseAdds = screen.getAllByRole('button', { name: 'notes.edit.addShowcaseVideo' });
   fireEvent.press(showcaseAdds[showcaseAdds.length - 1]);
   await waitFor(() => expect(mockLaunchPicker).toHaveBeenCalledTimes(3));
@@ -1042,8 +1052,8 @@ test('releases overflow and removed main-editor blob previews without revoking a
 
     resolveUpload();
     await upload;
-    await waitFor(() => expect(screen.getAllByText('close')).toHaveLength(9));
-    fireEvent.press(screen.getAllByText('close')[0]);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' })).toHaveLength(9));
+    fireEvent.press(screen.getAllByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' })[0]);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:main-active');
 
     rendered.unmount();

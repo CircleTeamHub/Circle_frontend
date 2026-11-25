@@ -105,33 +105,12 @@ test('a failed delete keeps the row and tells the user', async () => {
   } finally { alert.mockRestore(); }
 });
 
-test('a successful relist whose list refresh fails removes the row and does not report a relist failure', async () => {
-  jest.mocked(relistNote).mockResolvedValueOnce(undefined as never);
-  jest.mocked(fetchNotes).mockRejectedValueOnce(new Error('offline'));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+test('the personal unlisted list permits deletion but leaves relisting to group note management', async () => {
   render(<UnlistedNotesScreen />);
-  try {
-    fireEvent.press(await screen.findByLabelText('more:n1'));
-    await act(async () => { fireEvent.press(screen.getByLabelText('notes.actions.relist')); });
-    expect(relistNote).toHaveBeenCalledWith('n1');
-    await waitFor(() => expect(screen.queryByText('已下架的笔记')).toBeNull());
-    expect(alert).not.toHaveBeenCalledWith('notes.alerts.relistFailedTitle', expect.anything());
-    expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'refreshAfterMutation', expect.any(Error));
-    expect(reportHandledFailure).toHaveBeenCalledTimes(1);
-  } finally { alert.mockRestore(); }
-});
-
-test('a rejected relist reports the action and keeps the row', async () => {
-  const error = new Error('relist unavailable');
-  jest.mocked(relistNote).mockRejectedValueOnce(error);
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  render(<UnlistedNotesScreen />);
-  try {
-    fireEvent.press(await screen.findByLabelText('more:n1'));
-    fireEvent.press(screen.getByLabelText('notes.actions.relist'));
-    await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'relist', error));
-    expect(screen.getByText('已下架的笔记')).toBeTruthy();
-  } finally { alert.mockRestore(); }
+  fireEvent.press(await screen.findByLabelText('more:n1'));
+  expect(screen.getByLabelText('notes.actions.delete')).toBeTruthy();
+  expect(screen.queryByLabelText('notes.actions.relist')).toBeNull();
+  expect(relistNote).not.toHaveBeenCalled();
 });
 
 test('an initial unlisted load failure is observable', async () => {

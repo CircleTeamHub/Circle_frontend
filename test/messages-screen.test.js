@@ -315,11 +315,12 @@ test('group management has exactly one sortable list for built-in and custom tab
   // 以前「分组排序」和「我的分组」各有一套拖柄，两边还互相同步；现在只剩一条。
   assert.equal((screen.match(/useDragReorder\(/g) ?? []).length, 1);
   assert.match(screen, /ids: order,/);
-  assert.match(screen, /onCommit: commitOrder/);
+  assert.match(screen, /onCommit: setOrder/);
+  assert.match(screen, /await commitOrder\(\)/);
   assert.match(screen, /scrollEnabled=\{!draggingId\}/);
   assert.doesNotMatch(screen, /reorderGroups|setFilterOrder|PanResponder/);
   assert.match(order, /buildManagedFilterOrder\(/);
-  assert.match(order, /changedGroupOrder\(order, nextOrder\)/);
+  assert.match(order, /changedGroupOrder\(previousOrder, order\)/);
   assert.match(order, /setFilterOrder\(previousStored\)/);
 });
 

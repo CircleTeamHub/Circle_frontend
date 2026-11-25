@@ -61,7 +61,7 @@ import { collectNote, createNoteExport, fetchNoteDetail, findCollectedNote, getC
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
-import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
+import { saveMediaToLibrary } from '@/utils/save-image';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useChatStore } from '@/chat-core/store';
@@ -401,21 +401,11 @@ function NoteDetailContent() {
         return false;
       }
 
-      // 某些原生系统不接受 SVG 写入相册，仍给用户一个文件分享兜底；
-      // 这里刻意只传 url，不传 message，避免退化成一段文本。
-      const cached = await downloadMediaToCache(result.url, {
-        mimeType: result.mimeType,
-      });
-      if (cached) {
-        try {
-          await Share.share({ url: cached.uri, title: result.filename });
-        } finally {
-          await cached.cleanup();
-        }
-      } else {
-        await Share.share({ url: result.url, title: result.filename });
-      }
-      return true;
+      Alert.alert(
+        t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
+        t('media.saveFailedMessage', { defaultValue: '保存失败，请稍后重试' }),
+      );
+      return false;
     },
     [t],
   );
@@ -464,7 +454,7 @@ function NoteDetailContent() {
             scope: 'ALL',
           });
           if (format === 'IMAGE') {
-            await saveLongImageExport(result);
+            if (!(await saveLongImageExport(result))) return;
           } else {
             await Share.share({
               url: result.url,
@@ -482,6 +472,7 @@ function NoteDetailContent() {
           await saveVideosDirectly();
         }
       } catch (error) {
+        reportHandledFailure('notes', 'export', error, { format });
         Alert.alert(
           t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
           getApiErrorMessage(
