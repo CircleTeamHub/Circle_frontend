@@ -271,6 +271,43 @@ async function checkMobileRegistration(cdp, origin) {
   }
 }
 
+// Keep this last: CSS requests remain paused until the test browser is closed.
+async function checkStartupWithStalledStyles(cdp, origin) {
+  const pausedStyles = [];
+  cdp.on('Fetch.requestPaused', (event) => pausedStyles.push(event.requestId));
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
+      localStorage.removeItem('circle-im-web-startup-diagnostics-v1');
+      const nativeTimeout = window.setTimeout.bind(window);
+      window.setTimeout = (callback, delay, ...args) => nativeTimeout(callback, delay === 60000 ? 50 : delay, ...args);
+      window.fetch = () => Promise.resolve({ok: true});
+    `,
+  });
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  await cdp.send('Fetch.enable', {
+    patterns: [{ urlPattern: `${origin}/_expo/static/css/*`, resourceType: 'Stylesheet' }],
+  });
+  await cdp.send('Page.navigate', { url: `${origin}/?startup-css-stall=1` });
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const result = await cdp.send('Runtime.evaluate', {
+      expression: `JSON.stringify({
+        installed: !!window.__WINDNOTE_WEB_STARTUP__,
+        report: JSON.parse(localStorage.getItem('circle-im-web-startup-diagnostics-v1') || 'null'),
+        panel: !!document.getElementById('windnote-startup-diagnostic')
+      })`,
+      returnByValue: true,
+    });
+    const state = result.result?.value ? JSON.parse(result.result.value) : {};
+    if (pausedStyles.length && state.installed && state.report?.kind === 'startupTimeout' && state.panel) {
+      process.stdout.write('Startup watchdog reports while the stylesheet request remains paused.\n');
+      return;
+    }
+    await sleep(50);
+  }
+  throw new Error(`Startup watchdog did not report while CSS was stalled (${pausedStyles.length} paused requests).`);
+}
+
 async function main() {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) {
     throw new Error('dist/index.html missing; run expo export first');
@@ -358,6 +395,7 @@ async function main() {
     if (web.missing.length) {
       throw new Error(`Web export referenced missing local assets: ${web.missing.join(', ')}`);
     }
+    await checkStartupWithStalledStyles(cdp, web.origin);
     process.stdout.write('Web export browser smoke passed for /, the /qr deep link and mobile registration.\n');
   } finally {
     await closeBrowser(cdp);

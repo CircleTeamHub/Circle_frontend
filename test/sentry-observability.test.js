@@ -111,6 +111,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
       if (name === "./http-diagnostics") return load("src/observability/http-diagnostics.ts");
       if (name === "./detector-titles") return load("src/observability/detector-titles.ts");
+      if (name === "./web-startup") return load("src/observability/web-startup.ts");
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
@@ -155,6 +156,20 @@ test("initSentry is a no-op without a dsn", () => {
   const enabled = initSentry({ client });
   assert.equal(enabled, false);
   assert.equal(calls.length, 0);
+});
+
+test("the early web probe is marked only after Sentry initializes successfully", () => {
+  const stages = [];
+  const { initSentry } = load("src/observability/sentry.ts", {
+    "@sentry/react-native": {},
+    "expo-constants": { expoConfig: { extra: {} } },
+    "./web-startup": { markWebStartupStage: stage => stages.push(stage) },
+  });
+  assert.equal(initSentry(), false);
+  assert.equal(initSentry({ dsn: "https://a@o/1", client: { init() { throw Error("SDK unavailable"); } } }), false);
+  assert.deepEqual(stages, []);
+  assert.equal(initSentry({ dsn: "https://a@o/1", client: { init() {} } }), true);
+  assert.deepEqual(stages, ["sentry"]);
 });
 
 test("initSentry initializes with the resolved dsn and safe defaults", () => {

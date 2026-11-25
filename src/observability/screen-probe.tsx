@@ -14,6 +14,7 @@ import { AppState } from 'react-native';
 import { diagnosticNow } from './http-diagnostics';
 import { recordMetric } from './metrics';
 import { reportHandledFailure, toStableCode } from './report-failure';
+import { markWebStartupStage } from './web-startup';
 
 export const SLOW_SCREEN_MS = 1000;
 const REPORT_COOLDOWN_MS = 10 * 60_000;
@@ -68,6 +69,7 @@ const ScreenProbe: React.FC<LayoutProps> = ({ route, navigation, children }) => 
   useLayoutEffect(() => {
     if (measured.current) return;
     measured.current = true;
+    markWebStartupStage('page');
     if (!firstScreenSeen) {
       firstScreenSeen = true;
       return;
@@ -93,6 +95,12 @@ const ScreenProbe: React.FC<LayoutProps> = ({ route, navigation, children }) => 
 /** 叶子栈的 screenLayout：量每个页面的首次渲染。 */
 export function probeScreenLayout(props: LayoutProps): React.ReactElement {
   return <ScreenProbe {...props} />;
+}
+
+/** Root groups have their own leaf probes; the root index is only a startup redirect. */
+export function probeRootScreenLayout(props: LayoutProps): React.ReactElement {
+  if (props.route.name === 'index' || props.route.name.startsWith('(')) return <>{props.children}</>;
+  return probeScreenLayout(props);
 }
 
 type NavigationStateLike = {
