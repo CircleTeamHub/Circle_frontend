@@ -17,10 +17,8 @@ jest.mock('@/services/api/upload', () => ({
 jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: jest.fn(),
 }));
-let mockSessionEpoch = 1;
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: { getState: () => ({ sessionEpoch: mockSessionEpoch }) },
-}));
+let sessionCurrent = true;
+const isCurrentSession = () => sessionCurrent;
 
 const mockManipulateAsync = manipulateAsync as jest.MockedFunction<typeof manipulateAsync>;
 const mockRequestUploadPresign = requestUploadPresign as jest.MockedFunction<
@@ -33,7 +31,7 @@ const mockUploadLocalFile = uploadLocalFileToPresignedUrl as jest.MockedFunction
 describe('uploadNoteImageThumbnail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSessionEpoch = 1;
+    sessionCurrent = true;
     mockManipulateAsync.mockResolvedValue({ uri: 'file:///thumb.jpg', width: 512, height: 384 });
   });
 
@@ -46,12 +44,12 @@ describe('uploadNoteImageThumbnail', () => {
     mockUploadLocalFile.mockResolvedValue(undefined);
 
     await expect(
-      uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg'),
+      uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg', isCurrentSession),
     ).resolves.toBe('notes/user-1/thumb.jpg');
 
     expect(mockRequestUploadPresign).toHaveBeenCalledWith(
       expect.objectContaining({ folder: 'notes', contentType: 'image/jpeg', fileUri: 'file:///thumb.jpg' }),
-      expect.any(Function),
+      isCurrentSession,
     );
     // 和原图一样走 iOS 前台会话：人就停在编辑页等着。
     expect(mockUploadLocalFile).toHaveBeenCalledWith(
@@ -61,15 +59,15 @@ describe('uploadNoteImageThumbnail', () => {
 
   it('skips images that are already small', async () => {
     await expect(
-      uploadNoteImageThumbnail('file:///small.jpg', 400, 'small.jpg'),
+      uploadNoteImageThumbnail('file:///small.jpg', 400, 'small.jpg', isCurrentSession),
     ).resolves.toBeNull();
 
     expect(mockRequestUploadPresign).not.toHaveBeenCalled();
   });
 
   it('does not presign a thumbnail when the account changes during generation', async () => {
-    const pending = uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg');
-    mockSessionEpoch += 1;
+    const pending = uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg', isCurrentSession);
+    sessionCurrent = false;
 
     await expect(pending).resolves.toBeNull();
     expect(mockRequestUploadPresign).not.toHaveBeenCalled();
@@ -79,7 +77,7 @@ describe('uploadNoteImageThumbnail', () => {
     mockRequestUploadPresign.mockRejectedValue(new Error('presign down'));
 
     await expect(
-      uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg'),
+      uploadNoteImageThumbnail('file:///original.jpg', 2048, 'original.jpg', isCurrentSession),
     ).resolves.toBeNull();
 
     expect(mockUploadLocalFile).not.toHaveBeenCalled();

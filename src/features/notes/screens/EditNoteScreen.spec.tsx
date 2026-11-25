@@ -893,6 +893,38 @@ test('caps a web-overflow photo pick at the 9-photo note limit in picker order a
   );
 });
 
+test('does not start queued note images after switching accounts', async () => {
+  const firstWave = createDeferred<void>();
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: Array.from({ length: 4 }, (_, index) => ({
+      uri: `file:///queued-${index}.jpg`, width: 100, height: 80,
+    })),
+  });
+  mockRequestPresign.mockImplementation(({ filename }: { filename: string }) =>
+    Promise.resolve({
+      uploadUrl: `https://upload.example/${filename}`,
+      key: `notes/${filename}`,
+      requiredHeaders: {},
+    }),
+  );
+  mockUploadFile.mockReturnValue(firstWave.promise);
+
+  const rendered = render(<EditNoteScreen />);
+  pressComposer('image');
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(3));
+
+  mockDraftAuth.user = { id: 'owner-b', nickname: 'B' };
+  mockDraftAuth.sessionEpoch += 1;
+  rendered.rerender(<EditNoteScreen />);
+  await act(async () => { firstWave.resolve(); });
+
+  expect(mockRequestPresign).toHaveBeenCalledTimes(3);
+  expect(mockUploadFile).toHaveBeenCalledTimes(3);
+});
+
 test('each add button opens the picker with only the slots left for that kind (9 photos / 5 videos / 5 verification videos)', async () => {
   mockRouteId = 'limit-slots';
   const photos = Array.from({ length: 7 }, (_, index) => ({

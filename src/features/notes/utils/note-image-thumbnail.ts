@@ -5,7 +5,6 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
-import { useAuthStore } from '@/stores/authStore';
 
 /**
  * 给笔记图片顺带传一张小图（宽 ≤ 512），返回它的 object key。
@@ -19,9 +18,8 @@ export async function uploadNoteImageThumbnail(
   uri: string,
   originalWidth: number | undefined,
   filename: string,
+  isCurrentSession: () => boolean,
 ): Promise<string | null> {
-  const { sessionEpoch } = useAuthStore.getState();
-  const isCurrentSession = () => useAuthStore.getState().sessionEpoch === sessionEpoch;
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
     if (!thumbnail || !isCurrentSession()) return null;
