@@ -474,6 +474,56 @@ export type UploadSizeSource =
   | { fileUri: string; sizeBytes?: never }
   | { sizeBytes: number; fileUri?: never };
 
+/** 被按分钟限流后最多等几次;等完还被限就照常失败。 */
+const PRESIGN_RATE_LIMIT_MAX_WAITS = 2;
+/** 服务端的限流窗口是一分钟;给的等待时间超过它就不是这种限流,不等。 */
+const PRESIGN_RATE_LIMIT_MAX_WAIT_SECONDS = 60;
+
+/**
+ * 服务端对「按分钟的次数限流」会在 429 的响应体里给出还要等多少秒
+ * (data.retryAfterSeconds);每日流量额度用完时不给 —— 那种等也没用。
+ */
+function presignRetryAfterMs(error: unknown): number | null {
+  const failure = error as { status?: unknown; data?: unknown } | null;
+  if (!failure || failure.status !== 429) return null;
+  const data = failure.data as { retryAfterSeconds?: unknown } | null;
+  const seconds = data && typeof data === 'object' ? data.retryAfterSeconds : null;
+  return typeof seconds === 'number' &&
+    seconds > 0 &&
+    seconds <= PRESIGN_RATE_LIMIT_MAX_WAIT_SECONDS
+    ? seconds * 1000
+    : null;
+}
+
+/**
+ * 要上传凭证;被按分钟限流时等服务端说的时间再要,而不是让这一个文件直接失败。
+ *
+ * 凭证按每人每分钟的个数限流,而一张图要两个(原图 + 缩略图):一次选几十张就会超。
+ * 超出的那部分等窗口过去就能拿到,用户看到的只是这几张多传一会儿。
+ */
+async function postPresignWaitingOutRateLimit(
+  body: Record<string, unknown>,
+  isSessionCurrent: () => boolean,
+): Promise<UploadPresignResponse> {
+  for (let waits = 0; ; waits += 1) {
+    try {
+      return await apiClient<UploadPresignResponse>('/upload/presign', {
+        method: 'POST',
+        body,
+      });
+    } catch (error) {
+      const waitMs = presignRetryAfterMs(error);
+      if (waitMs === null || waits >= PRESIGN_RATE_LIMIT_MAX_WAITS) throw error;
+      // 加一点随机量:同一批被限流的凭证不要在同一毫秒一起回来。
+      await new Promise((resolve) =>
+        setTimeout(resolve, waitMs + Math.random() * 300),
+      );
+      // 等的这段时间里可能已经退出登录或切了账号。
+      assertUploadSessionCurrent(isSessionCurrent);
+    }
+  }
+}
+
 export async function requestUploadPresign<F extends UploadFolder>(
   payload: {
     filename: string;
@@ -516,17 +566,17 @@ export async function requestUploadPresign<F extends UploadFolder>(
           : await resolveLocalFileSize(payload.fileUri),
     );
     assertUploadSessionCurrent(isSessionCurrent);
-    const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
-      method: 'POST',
+    const raw = await postPresignWaitingOutRateLimit(
       // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
-      body: {
+      {
         filename: ensureFilenameExtension(filename, contentType),
         contentType,
         folder: payload.folder,
         sizeBytes,
         ...(payload.purpose ? { purpose: payload.purpose } : {}),
       },
-    });
+      isSessionCurrent,
+    );
     assertUploadSessionCurrent(isSessionCurrent);
     const response = expectShape(
       raw,

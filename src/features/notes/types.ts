@@ -7,6 +7,8 @@ export interface NoteMediaSummary {
   id: string;
   type: NoteMediaType;
   url: string;
+  /** 封面的小图（列表用）；老笔记和旧服务端没有，退回 url。 */
+  thumbUrl?: string | null;
 }
 
 export interface NoteMedia {
@@ -255,6 +257,8 @@ export interface CreateNoteMediaInput {
   height?: number;
   durationMs?: number;
   posterUrl?: string;
+  /** 图片随原图上传的小图的 object key；服务端校验后存成这张图的 posterUrl。 */
+  thumbObjectKey?: string;
   sortOrder: number;
 }
 

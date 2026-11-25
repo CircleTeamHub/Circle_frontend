@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 import CreatePostScreen from './CreatePostScreen';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
@@ -148,7 +148,9 @@ test('a post cannot be published until a city is chosen, and says so', async () 
   await Promise.resolve();
   expect(createPlazaPost).not.toHaveBeenCalled();
 
-  usePostFormStore.setState({ selectedCities: ['上海', '杭州'] });
+  // 测试里直接改 store 要包进 act:不包的话这次更新不保证在 waitFor 超时前刷到界面上
+  // (CI 上连着两次卡在这里,本机能过)。
+  act(() => usePostFormStore.setState({ selectedCities: ['上海', '杭州'] }));
   await waitFor(() => expect(screen.queryByTestId('create-post-missing')).toBeNull());
   jest.mocked(createPlazaPost).mockResolvedValue({ id: 'published' } as never);
   fireEvent.press(screen.getByText('plaza.create.submit'));

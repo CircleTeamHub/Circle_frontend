@@ -184,6 +184,7 @@ import { recordMetric } from '@/observability/metrics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { uploadNoteImageThumbnail } from '@/features/notes/utils/note-image-thumbnail';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -314,6 +315,7 @@ function normalizeSectionMedia(
       ...(typeof item.height === 'number' ? { height: item.height } : {}),
       ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
       ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
+      ...(typeof item.thumbObjectKey === 'string' ? { thumbObjectKey: item.thumbObjectKey } : {}),
       clientId: `stored:${item.objectKey}:${item.url ?? ''}`,
       sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
       uploadStatus: 'UPLOADED',
@@ -1944,6 +1946,11 @@ export default function EditNoteScreen() {
             folder: 'notes',
             fileUri: upload.uri,
           });
+          // 小图排在原图拿到上传凭证之后：凭证按用户每分钟限量，不能让小图抢走原图的名额。
+          // 之后和原图同时传，不多等一轮；它失败只会得到 null，不影响原图。
+          const thumbnailUpload = isVideo
+            ? null
+            : uploadNoteImageThumbnail(upload.uri, upload.width, upload.filename);
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
             upload.contentType,
@@ -1954,6 +1961,7 @@ export default function EditNoteScreen() {
             // 走 iOS 前台会话:后台会话由系统排期,会长时间停在 99%。
             { progressKey: clientId, foreground: true },
           );
+          const thumbObjectKey = await thumbnailUpload;
           markClientUploaded(clientId);
           // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
           // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
@@ -1961,6 +1969,7 @@ export default function EditNoteScreen() {
             clientId,
             type: isVideo ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
+            ...(thumbObjectKey ? { thumbObjectKey } : {}),
             width: upload.width,
             height: upload.height,
             mimeType: presign.requiredHeaders['Content-Type'],

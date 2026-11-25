@@ -91,6 +91,21 @@ test('pending drafts show local previews immediately, block save, and retain onl
   ]);
 });
 
+test('the thumbnail key uploaded with an image reaches the submitted media', () => {
+  const {
+    createPendingNoteMediaDrafts,
+    reconcileNoteMediaDrafts,
+    stripEditorMediaDrafts,
+  } = loadNoteMediaUpload();
+  const pending = createPendingNoteMediaDrafts([{ uri: 'file:///big.jpg', width: 2048, height: 1536 }], 'IMAGE');
+
+  const settled = reconcileNoteMediaDrafts(pending, [
+    { clientId: pending[0].clientId, objectKey: 'notes/u/big.jpg', thumbObjectKey: 'notes/u/thumb-big.jpg' },
+  ]);
+
+  assert.equal(stripEditorMediaDrafts(settled)[0].thumbObjectKey, 'notes/u/thumb-big.jpg');
+});
+
 test('same local asset receives independent opaque draft identities across picker batches', () => {
   const { createPendingNoteMediaDrafts, reconcileNoteMediaDrafts } = loadNoteMediaUpload();
   const asset = { uri: 'file:///library/reselected.jpg' };

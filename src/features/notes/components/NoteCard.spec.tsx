@@ -64,6 +64,27 @@ test('the good and bad rating icons are coloured, not grey', () => {
   expect(screen.getByTestId(`icon:${NOTE_RATING_BAD_ICON}`).props.accessibilityHint).toBe(lightColors.ratingBad);
 });
 
+// 列表一行只画 72pt 的封面：有小图就只下小图，别把整张原图拉下来。
+test('the cover loads the thumbnail when the note has one', () => {
+  render(
+    <NoteCard note={{ ...note, cover: { ...note.cover!, thumbUrl: 'thumb?sig=a' } }} onPress={jest.fn()} />,
+  );
+
+  expect(screen.getByTestId('note-cover').props.source).toEqual({
+    uri: 'thumb?sig=a',
+    cacheKey: 'note:note-1:cover:media:thumb',
+  });
+});
+
+test('the cover falls back to the original for notes saved before thumbnails', () => {
+  render(<NoteCard note={note} onPress={jest.fn()} />);
+
+  expect(screen.getByTestId('note-cover').props.source).toEqual({
+    uri: 'cover?sig=a',
+    cacheKey: 'note:note-1:cover:media',
+  });
+});
+
 test('a card without a cover still shows its ratings under the placeholder', () => {
   render(<NoteCard note={{ ...note, cover: null }} onPress={jest.fn()} />);
   expect(isAncestor(

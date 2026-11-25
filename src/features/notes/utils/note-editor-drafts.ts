@@ -85,6 +85,7 @@ const SERVER_MEDIA_FIELDS = [
   'height',
   'durationMs',
   'posterUrl',
+  'thumbObjectKey',
   'sortOrder',
 ] as const;
 
