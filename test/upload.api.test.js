@@ -29,6 +29,8 @@ function loadUploadApi() {
   const presignCalls = [];
   let conversionFails = false;
   let presignFails = false;
+  // 依次抛出的 presign 失败(用完之后恢复成功):模拟被限流几次之后放行。
+  const presignFailureQueue = [];
   let uploadStatus = 200;
 
   const context = {
@@ -44,6 +46,7 @@ function loadUploadApi() {
           apiClient: (...args) => {
             presignCalls.push(args);
             if (presignFails) throw new Error('presign failed');
+            if (presignFailureQueue.length > 0) throw presignFailureQueue.shift();
             return ({
             uploadUrl: `${presignHost}/circle/avatars/test.jpeg?signature=123`,
             fileUrl: `${presignHost}/circle/avatars/test.jpeg`,
@@ -167,6 +170,7 @@ function loadUploadApi() {
   context.module.exports.__presignCalls = presignCalls;
   context.module.exports.__setConversionFails = (value) => { conversionFails = value; };
   context.module.exports.__setPresignFails = (value) => { presignFails = value; };
+  context.module.exports.__queuePresignFailures = (errors) => { presignFailureQueue.push(...errors); };
   context.module.exports.__setUploadStatus = (value) => { uploadStatus = value; };
   return context.module.exports;
 }
@@ -222,6 +226,51 @@ test('failed presign cleans the converted HEIC file', async () => {
   await assert.rejects(api.requestUploadPresign({ filename: 'avatar.heic', contentType: 'image/heic', folder: 'avatars', fileUri: 'file:///avatar.heic' }), /presign failed/);
   assert.deepEqual(api.__deletedFiles, ['file:///converted.jpg']);
 });
+
+// 上传凭证按每人每分钟限流。一次选 30 张图要 60 个凭证(每张原图 + 缩略图),超出的
+// 那部分以前直接失败;现在服务端告诉还要等多少秒,客户端等过去再要。
+const presignRateLimited = (retryAfterSeconds) =>
+  Object.assign(new Error('Too many upload requests'), {
+    status: 429,
+    ...(retryAfterSeconds === undefined ? {} : { data: { retryAfterSeconds } }),
+  });
+const presignArgs = { filename: 'photo.jpg', contentType: 'image/jpeg', folder: 'avatars', sizeBytes: 12345 };
+
+test('a rate-limited presign waits the time the server names and then succeeds', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('https://storage.example.com');
+  api.__queuePresignFailures([presignRateLimited(0.02), presignRateLimited(0.02)]);
+  const startedAt = Date.now();
+
+  const presign = await api.requestUploadPresign(presignArgs);
+
+  assert.equal(presign.key, 'avatars/test.jpeg');
+  assert.equal(api.__presignCalls.length, 3);
+  assert.ok(Date.now() - startedAt >= 40, 'both waits happened');
+});
+
+test('a presign still limited after two waits fails with the server error', async () => {
+  const api = loadUploadApi();
+  api.__queuePresignFailures([presignRateLimited(0.01), presignRateLimited(0.01), presignRateLimited(0.01)]);
+
+  await assert.rejects(api.requestUploadPresign(presignArgs), { status: 429 });
+  assert.equal(api.__presignCalls.length, 3);
+});
+
+// 每日流量额度用完时服务端不给等待时间:等也没用,立刻报错。离谱的等待时间同样不等。
+for (const [name, error] of [
+  ['no retry time', presignRateLimited(undefined)],
+  ['a retry time beyond one window', presignRateLimited(3600)],
+  ['a malformed retry time', presignRateLimited('soon')],
+]) {
+  test(`a 429 presign with ${name} fails at once`, async () => {
+    const api = loadUploadApi();
+    api.__queuePresignFailures([error]);
+
+    await assert.rejects(api.requestUploadPresign(presignArgs), { status: 429 });
+    assert.equal(api.__presignCalls.length, 1);
+  });
+}
 
 test('failed HEIC PUT cleans the converted file without reporting success', async () => {
   const api = loadUploadApi();
