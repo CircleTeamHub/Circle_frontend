@@ -10,8 +10,8 @@ export function prepareWebStartup(directory, { dsn, environment = 'production' }
   if (html.includes('id="windnote-web-startup"')) return;
   const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="\/_expo\/static\/js\/web\/([^"/]+\.js)"[^>]*>/g)];
   if (!scripts.length) throw new Error('Web export has no Expo entry scripts.');
-  const body = /<body\b[^>]*>/i.exec(html);
-  if (!body || scripts[0].index < body.index) throw new Error('Expected Expo entry scripts inside the document body.');
+  const head = /<head\b[^>]*>\s*(?:<meta\b[^>]*\bcharset\s*=[^>]*>)?/i.exec(html);
+  if (!head) throw new Error('Web export has no document head.');
   const assets = scripts.map(match => match[1]);
   const build = /-([a-f0-9]{32})\.js$/.exec(assets.find(asset => asset.startsWith('index-')) ?? '')?.[1];
   let endpoint;
@@ -23,7 +23,8 @@ export function prepareWebStartup(directory, { dsn, environment = 'production' }
   }
   const config = JSON.stringify({ assets, build, environment, endpoint }).replace(/</g, '\\u003c');
   const probe = `<script id="windnote-web-startup">(${installWebStartup.toString()})(window,document,${config});</script>`;
-  writeFileSync(index, html.slice(0, body.index + body[0].length) + probe + html.slice(body.index + body[0].length));
+  const insertAt = head.index + head[0].length;
+  writeFileSync(index, html.slice(0, insertAt) + probe + html.slice(insertAt));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

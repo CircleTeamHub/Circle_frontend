@@ -129,15 +129,34 @@ test('a stalled telemetry connection is bounded and retains the local report', (
   assert.equal(JSON.parse([...b.storage.values()][0]).delivery, 'failed');
 });
 
+test('an early failure is reported before body exists and its panel appears when parsing advances', async () => {
+  const b = browser();
+  const body = b.document.body;
+  b.document.body = null;
+  b.timeout();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(b.requests.length, 1, 'reporting must not wait for DOM readiness');
+  assert.equal(b.nodes.size, 0);
+  assert.equal(typeof b.listeners.get('document:readystatechange'), 'function');
+  b.document.body = body;
+  b.document.readyState = 'interactive';
+  b.listeners.get('document:readystatechange')();
+  assert.ok(b.nodes.has('windnote-startup-diagnostic'));
+  b.window.__WINDNOTE_WEB_STARTUP__.ready();
+  assert.equal(b.listeners.size, 0);
+});
+
 test('web export installs the standalone probe before any application scripts and does not duplicate it', async () => {
   const { prepareWebStartup } = await import('../scripts/prepare-web-startup.mjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'windnote-web-startup-'));
   try {
     const index = path.join(dir, 'index.html');
-    fs.writeFileSync(index, `<html><head></head><body><div id="root"></div><script src="/_expo/static/js/web/${asset}" defer></script></body></html>`);
+    fs.writeFileSync(index, `<html><head><meta charset="utf-8"><link rel="stylesheet" href="/_expo/static/css/slow.css"></head><body><div id="root"></div><script src="/_expo/static/js/web/${asset}" defer></script></body></html>`);
     prepareWebStartup(dir, { dsn: 'https://public@ingest.sentry.test/1' });
     const output = fs.readFileSync(index, 'utf8');
     assert.ok(output.indexOf('windnote-web-startup') < output.indexOf('<div id="root">'));
+    assert.ok(output.indexOf('windnote-web-startup') < output.indexOf('<link rel="stylesheet"'), 'the watchdog must execute before stylesheets can block scripts');
+    assert.ok(output.indexOf('<meta charset="utf-8">') < output.indexOf('windnote-web-startup'), 'keep the encoding declaration ahead of the inline probe');
     assert.match(output, /https:\/\/ingest\.sentry\.test\/api\/1\/envelope\//);
     assert.doesNotMatch(output, /require\(|module\.exports|SENTRY_AUTH_TOKEN/);
     const inline = /<script id="windnote-web-startup">([\s\S]*?)<\/script>/.exec(output)[1];

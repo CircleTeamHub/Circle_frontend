@@ -19,7 +19,12 @@ module.exports = function installWebStartup(win, doc, config) {
   }
 
   function show() {
-    if (pageReady || !doc.body) return;
+    if (pageReady) return;
+    if (!doc.body) {
+      doc.addEventListener('readystatechange', show);
+      return;
+    }
+    doc.removeEventListener('readystatechange', show);
     var panel = doc.getElementById('windnote-startup-diagnostic');
     if (!panel) {
       panel = doc.createElement('section');
@@ -133,6 +138,7 @@ module.exports = function installWebStartup(win, doc, config) {
       win.removeEventListener('load', onLoad, true);
       win.removeEventListener('unhandledrejection', onRejection);
       doc.removeEventListener('visibilitychange', arm);
+      doc.removeEventListener('readystatechange', show);
       var panel = doc.getElementById('windnote-startup-diagnostic');
       if (panel) panel.remove();
     }
