@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { RouteErrorBoundary, reportRouteRenderError } from './RouteErrorBoundary';
 import { reportError } from './sentry';
@@ -21,6 +21,41 @@ jest.mock('@/i18n', () => ({
 describe('RouteErrorBoundary', () => {
   beforeEach(() => {
     mockReportError.mockClear();
+  });
+
+  it('reloads a failed Web route chunk on explicit retry so React.lazy can recover', () => {
+    const platform = Platform.OS;
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const reload = jest.fn();
+    Platform.OS = 'web';
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { reload } } });
+    try {
+      const error = Object.assign(new Error('chunk request failed'), { name: 'AsyncRequireError' });
+      const retry = jest.fn(async () => {});
+      const view = render(<RouteErrorBoundary error={error} retry={retry} />);
+      expect(reload).not.toHaveBeenCalled();
+      fireEvent.press(view.getByTestId('router_error_retry'));
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(retry).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = platform;
+      if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
+      else Reflect.deleteProperty(globalThis, 'window');
+    }
+  });
+
+  it('keeps the existing native retry for an async module failure', () => {
+    const platform = Platform.OS;
+    Platform.OS = 'ios';
+    try {
+      const error = Object.assign(new Error('module load failed'), { name: 'AsyncRequireError' });
+      const retry = jest.fn(async () => {});
+      const view = render(<RouteErrorBoundary error={error} retry={retry} />);
+      fireEvent.press(view.getByTestId('router_error_retry'));
+      expect(retry).toHaveBeenCalledTimes(1);
+    } finally {
+      Platform.OS = platform;
+    }
   });
 
   it('hides raw render errors, allows retry and reports to Sentry once', () => {

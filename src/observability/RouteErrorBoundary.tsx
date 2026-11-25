@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { ErrorBoundaryProps } from 'expo-router';
-import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import i18n from '@/i18n';
 import { darkColors, lightColors } from '@/theme/colors';
 import { reportError } from './sentry';
@@ -48,7 +48,11 @@ export function RouteErrorBoundary(props: ErrorBoundaryProps) {
       <Pressable
         accessibilityRole="button"
         testID="router_error_retry"
-        onPress={retry}
+        // Expo 55 caches each route's React.lazy, including a failed download.
+        // A user-initiated reload creates a fresh route loader for that case.
+        onPress={Platform.OS === 'web' && error.name === 'AsyncRequireError'
+          ? () => window.location.reload()
+          : retry}
         style={[styles.button, { backgroundColor: colors.primary }]}
       >
         <Text style={{ color: colors.white }}>

@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { launchImageLibraryFast } from '@/features/profile/image-picker';
-import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
@@ -22,22 +22,10 @@ import {
 import { useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useNoteEditorDomHealth } from '@/features/notes/hooks/use-note-editor-dom-health';
-
-type NoteBlockEditorDOMComponent =
-  typeof import('@/features/notes/dom/NoteBlockEditor.dom').default;
-
-let NoteBlockEditorDOM: NoteBlockEditorDOMComponent | null = null;
+import { getNoteBlockEditorDOM } from './note-editor-loader';
 
 function canLoadDOMEditor() {
   return Platform.OS !== 'web' || typeof window !== 'undefined';
-}
-
-function getNoteBlockEditorDOM() {
-  // Lazy sync load keeps Expo DOM out of the native startup path.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  NoteBlockEditorDOM ??= require('@/features/notes/dom/NoteBlockEditor.dom')
-    .default as NoteBlockEditorDOMComponent;
-  return NoteBlockEditorDOM;
 }
 
 // Stable reference so the Expo DOM bridge doesn't see a new `dom` object on
@@ -348,7 +336,9 @@ function NoteBlockEditorImpl({
     [onContentChange],
   );
 
-  const handleEditorReady = useNoteEditorDomHealth(canLoadDOMEditor(), fitContent);
+  const [editorModuleReady, setEditorModuleReady] = useState(Platform.OS !== 'web');
+  const handleEditorModuleReady = useCallback(() => setEditorModuleReady(true), []);
+  const handleEditorReady = useNoteEditorDomHealth(canLoadDOMEditor() && editorModuleReady, fitContent);
 
   const containerStyle = fitContent
     ? {
@@ -364,11 +354,14 @@ function NoteBlockEditorImpl({
   }
 
   const DOMEditor = getNoteBlockEditorDOM();
+  // Web chunk failures belong to the route's visible error/retry boundary.
+  const EditorBoundary = Platform.OS === 'web' ? Fragment : DOMBridgeErrorBoundary;
 
   return (
-    <DOMBridgeErrorBoundary>
+    <EditorBoundary>
       <View testID="note-block-editor-frame" style={containerStyle}>
         <DOMEditor
+          {...(Platform.OS === 'web' ? { onModuleReady: handleEditorModuleReady } : {})}
           dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
           pendingInserts={pendingInserts}
@@ -386,7 +379,7 @@ function NoteBlockEditorImpl({
           onEditorReady={handleEditorReady}
         />
       </View>
-    </DOMBridgeErrorBoundary>
+    </EditorBoundary>
   );
 }
 

@@ -9,12 +9,13 @@
  * 页面名是「所在栈 + 路由模板名」（如 `/(tabs)/explore/index`），不是实际参数，不含任何标识符。
  * 以前还查过「切回来没解冻」（FE#354）；导航器不再开 freezeOnBlur 后没有冻结了，已删。
  */
-import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import React, { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { AppState, Platform } from 'react-native';
 import { diagnosticNow } from './http-diagnostics';
 import { recordMetric } from './metrics';
 import { reportHandledFailure, toStableCode } from './report-failure';
 import { markWebStartupStage } from './web-startup';
+import WebScreenReady from './web-screen-ready';
 
 export const SLOW_SCREEN_MS = 1000;
 const REPORT_COOLDOWN_MS = 10 * 60_000;
@@ -66,10 +67,10 @@ const ScreenProbe: React.FC<LayoutProps> = ({ route, navigation, children }) => 
   // React 会重跑 layout effect，量出来的是「首渲到重新显示」整段（REACT-NATIVE-D2 的 26 秒）。
   const measured = useRef(false);
 
-  useLayoutEffect(() => {
+  const measureFirstCommit = useCallback(() => {
     if (measured.current) return;
     measured.current = true;
-    markWebStartupStage('page');
+    if (Platform.OS !== 'web') markWebStartupStage('page');
     if (!firstScreenSeen) {
       firstScreenSeen = true;
       return;
@@ -86,10 +87,13 @@ const ScreenProbe: React.FC<LayoutProps> = ({ route, navigation, children }) => 
         code: toStableCode(page),
       });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [navigation, renderStartedAt, route.name]);
 
-  return <>{children}</>;
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web') measureFirstCommit();
+  }, [measureFirstCommit]);
+
+  return <WebScreenReady onReady={measureFirstCommit}>{children}</WebScreenReady>;
 };
 
 /** 叶子栈的 screenLayout：量每个页面的首次渲染。 */

@@ -1,6 +1,6 @@
 import React from 'react';
-import { AppState, Text } from 'react-native';
-import { renderAsync } from '@testing-library/react-native';
+import { AppState, Platform, Text } from 'react-native';
+import { act, renderAsync } from '@testing-library/react-native';
 import { Freeze } from 'react-freeze';
 import {
   checkNavigationShape,
@@ -13,6 +13,15 @@ import {
 const mockReportHandledFailure = jest.fn();
 const mockRecordMetric = jest.fn();
 let mockNow = 0;
+let mockCommitWebContent = () => {};
+
+jest.mock('./web-screen-ready', () => ({
+  __esModule: true,
+  default: ({ children, onReady }: { children: import('react').ReactNode; onReady?: () => void }) => {
+    mockCommitWebContent = onReady ?? (() => {});
+    return children;
+  },
+}));
 
 jest.mock('./report-failure', () => ({
   reportHandledFailure: (...args: unknown[]) => mockReportHandledFailure(...args),
@@ -58,6 +67,30 @@ test('the first page of a cold start is startup cost, not a slow page', async ()
 
   expect(mockRecordMetric).not.toHaveBeenCalled();
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
+});
+
+test('Web measures the loaded page rather than the empty async route shell', async () => {
+  const platform = Platform.OS;
+  Platform.OS = 'web';
+  try {
+    const home = await renderAsync(probeScreenLayout({ route: { name: 'index' }, navigation: navigationIn('/(tabs)/messages'), children: <Text>home</Text> }));
+    act(() => mockCommitWebContent());
+    await home.unmountAsync();
+    mockNow = 100;
+    const page = await renderAsync(probeScreenLayout({ route: { name: 'notes/edit' }, navigation: navigationIn('/(tabs)/profile'), children: null }));
+    expect(mockRecordMetric).not.toHaveBeenCalled();
+    mockNow += SLOW_SCREEN_MS + 200;
+    act(() => mockCommitWebContent());
+    expect(mockRecordMetric).toHaveBeenCalledWith('screen.first_commit.duration', SLOW_SCREEN_MS + 200);
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('render', 'slowScreen', expect.any(Error), expect.objectContaining({
+      page: '/(tabs)/profile/notes/edit', durationMs: SLOW_SCREEN_MS + 200,
+    }));
+    act(() => mockCommitWebContent());
+    expect(mockRecordMetric).toHaveBeenCalledTimes(1);
+    await page.unmountAsync();
+  } finally {
+    Platform.OS = platform;
+  }
 });
 
 test('the standalone web watchdog is stopped only after a page commits', async () => {
