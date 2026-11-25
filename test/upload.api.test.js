@@ -236,6 +236,22 @@ const presignRateLimited = (retryAfterSeconds) =>
   });
 const presignArgs = { filename: 'photo.jpg', contentType: 'image/jpeg', folder: 'avatars', sizeBytes: 12345 };
 
+test('presigning stops if the caller session changes while reading the file size', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('https://storage.example.test');
+  let isCurrentSession = true;
+  const pending = api.requestUploadPresign({
+    filename: 'thumb.jpg',
+    contentType: 'image/jpeg',
+    folder: 'avatars',
+    fileUri: 'file:///thumb.jpg',
+  }, () => isCurrentSession);
+  isCurrentSession = false;
+
+  await assert.rejects(pending, /登录状态已变更/);
+  assert.equal(api.__presignCalls.length, 0);
+});
+
 test('a rate-limited presign waits the time the server names and then succeeds', async () => {
   const api = loadUploadApi();
   api.__setPresignHost('https://storage.example.com');

@@ -1800,10 +1800,10 @@ export default function EditNoteScreen() {
       if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
       uploadInFlightRef.current = true;
       const operationToken = uploadOperationGuardRef.current.begin();
-      // 结果能否落库只认这一条：批次开始时编辑的是哪一篇笔记。
+      const isCurrentSession = () => useAuthStore.getState().sessionEpoch === sessionEpoch;
       const batchNoteKey = editedNoteKeyRef.current;
       let batchDraftIds: Set<string> = new Set();
-      const stillEditingSameNote = () => editedNoteKeyRef.current === batchNoteKey;
+      const stillEditingSameNote = () => isCurrentSession() && editedNoteKeyRef.current === batchNoteKey;
       const blockIsMounted = () =>
         !blockId || composerBlocksRef.current.some((block) => block.id === blockId);
       const uploadKey: UploadingSection = `${target}:${kind}`;
@@ -1837,7 +1837,7 @@ export default function EditNoteScreen() {
         if (outcome.status === 'denied') return;
         const { result } = outcome;
         const pickerAssets = result.assets ?? [];
-        if (!uploadOperationGuardRef.current.isActive(operationToken)) {
+        if (!isCurrentSession() || !uploadOperationGuardRef.current.isActive(operationToken)) {
           pickerPreviewDisposerRef.current.retainAssets(pickerAssets);
           pickerPreviewDisposerRef.current.disposeAssets(pickerAssets);
           return;
@@ -1922,6 +1922,7 @@ export default function EditNoteScreen() {
         const batch = await uploadNoteMediaBatch(
           acceptedAssets.map((asset, index) => ({ asset, clientId: pendingDrafts[index].clientId })),
           async ({ asset, clientId }) => {
+          if (!isCurrentSession()) throw new Error('Note media upload session changed');
           const isVideo = kind === 'video';
           const fallbackName = isVideo ? 'video.mp4' : 'image.jpg';
           const fallbackType = isVideo ? 'video/mp4' : 'image/jpeg';
@@ -1945,12 +1946,12 @@ export default function EditNoteScreen() {
             contentType: upload.contentType,
             folder: 'notes',
             fileUri: upload.uri,
-          });
+          }, isCurrentSession);
           // 小图排在原图拿到上传凭证之后：凭证按用户每分钟限量，不能让小图抢走原图的名额。
           // 之后和原图同时传，不多等一轮；它失败只会得到 null，不影响原图。
           const thumbnailUpload = isVideo
             ? null
-            : uploadNoteImageThumbnail(upload.uri, upload.width, upload.filename);
+            : uploadNoteImageThumbnail(upload.uri, upload.width, upload.filename, isCurrentSession);
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
             upload.contentType,
@@ -1994,7 +1995,7 @@ export default function EditNoteScreen() {
           if (target === 'media') setMediaItems(commitBatch);
           else setShowcaseItems(commitBatch);
         }
-        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+        if (!isCurrentSession() || !uploadOperationGuardRef.current.isActive(operationToken)) return;
         if (batch.failedCount) {
           const { error, errorNames } = summarizeNoteMediaBatchFailure(batch.errors);
           reportHandledFailure('noteEditor', 'sectionMediaUploadBatch', error, {
@@ -2045,7 +2046,7 @@ export default function EditNoteScreen() {
         }
       }
     },
-    [isRouteDataReady, markClientUploaded, mediaItems, showcaseItems, t],
+    [isRouteDataReady, markClientUploaded, mediaItems, sessionEpoch, showcaseItems, t],
   );
 
   const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {

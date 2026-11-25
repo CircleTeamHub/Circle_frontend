@@ -18,17 +18,18 @@ export async function uploadNoteImageThumbnail(
   uri: string,
   originalWidth: number | undefined,
   filename: string,
+  isCurrentSession: () => boolean,
 ): Promise<string | null> {
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
-    if (!thumbnail) return null;
+    if (!thumbnail || !isCurrentSession()) return null;
 
     const presign = await requestUploadPresign({
       filename: sanitizeUploadFilename(`thumb-${filename}`),
       contentType: 'image/jpeg',
       folder: 'notes',
       fileUri: thumbnail.uri,
-    });
+    }, isCurrentSession);
     await uploadLocalFileToPresignedUrl(
       presign.uploadUrl,
       'image/jpeg',
@@ -40,7 +41,7 @@ export async function uploadNoteImageThumbnail(
     );
     return presign.key;
   } catch (error) {
-    reportHandledFailure('noteEditor', 'thumbnailUpload', error);
+    if (isCurrentSession()) reportHandledFailure('noteEditor', 'thumbnailUpload', error);
     return null;
   }
 }
