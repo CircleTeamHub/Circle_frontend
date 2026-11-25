@@ -237,8 +237,10 @@
       "securityQuestionsRetry": "密保问题加载失败，点击重试"
     },
     "webSessionUnreachableTitle": "登录状态暂时没能恢复",
-    "webSessionUnreachableMessage": "网络不稳或服务器繁忙，你并没有退出登录。稍后刷新页面即可回到原来的账号。",
-    "webSessionUnreachableReload": "刷新"
+    "webSessionUnreachableMessage": "请检查网络连接，或稍后重试。",
+    "webSessionInvalidatedTitle": "此标签页的登录状态已变更",
+    "webSessionInvalidatedMessage": "请重新加载页面，以浏览器当前的登录状态继续。",
+    "webSessionReload": "重新加载"
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -1211,8 +1213,11 @@
       "tag": "置顶",
       "failed": "操作失败",
       "fallbackPreview": "[消息]",
-      "bannerA11y": "置顶消息：{{preview}}",
-      "listTitle": "置顶 · {{count}} 条"
+      "jumpA11y": "跳转到置顶消息：{{preview}}",
+      "unpinA11y": "取消置顶：{{preview}}",
+      "openList_other": "查看 {{count}} 条置顶消息",
+      "listHeading": "置顶消息",
+      "listCount_other": "{{count}} 条"
     },
     "clearRequest": {
       "accept": "确定授权",
@@ -4105,6 +4110,7 @@
     "AUTH_LOGIN_CHALLENGE_REJECTED": "登录请求已被受信任设备拒绝",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "验证码错误次数过多，本次验证已作废，请重新发起",
     "AUTH_SESSION_DEVICE_UNBOUND": "登录状态需要更新，请稍后重试",
+    "AUTH_WEB_SESSION_CHANGED": "网页登录状态已变更，请重新加载页面",
     "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录",
     "CHAT_GROUP_ACCEPT_REQUIRED": "请先处理并接受群邀请",
     "CHAT_GROUP_INVITATION_INVALID": "邀请已过期或失效",

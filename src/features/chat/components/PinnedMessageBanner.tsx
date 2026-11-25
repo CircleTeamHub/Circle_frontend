@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Pin } from 'lucide-react-native';
+import { ChevronRight, List, Pin } from 'lucide-react-native';
 import type { ChatPinnedMessageDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
-import { ScrollingAnnouncementBanner } from '@/components/ui/scrolling-announcement-banner';
 import { PinnedMessagesSheet } from '@/features/chat/components/pinned-messages-sheet';
 import { canManageChatPins } from '@/features/chat/utils/chat-pins';
-import { Spacing } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface PinnedMessageBannerProps {
   conversationID: string;
@@ -16,11 +15,6 @@ interface PinnedMessageBannerProps {
 
 const NO_PINS: ChatPinnedMessageDto[] = [];
 
-/**
- * 聊天顶部的置顶横幅(所有人可见),跟群公告横幅同一个组件、同一个样子,排在公告下面。
- * 一个会话最多置顶 5 条(最新的在前):横幅显示最新的那条,多条时标签写「置顶 · 3 条」;
- * 跟点公告进详情一样,点它弹出全部置顶,在那里点哪条跳哪条,有权限的人逐条取消。
- */
 export function PinnedMessageBanner({ conversationID, onJump }: PinnedMessageBannerProps) {
   // 分开取:整个会话行每来一条消息都会换,横幅只关心置顶和权限。
   const pins = useChatStore(
@@ -32,34 +26,60 @@ export function PinnedMessageBanner({ conversationID, onJump }: PinnedMessageBan
   });
   // 置顶清空时整块卸掉,列表开着的状态跟着丢:之后再有人置顶,列表不会自己弹出来。
   if (pins.length === 0) return null;
-  return <PinnedBannerWithList conversationID={conversationID} pins={pins} canManage={canManage} onJump={onJump} />;
+  return (
+    <PinnedBannerWithList
+      key={conversationID}
+      conversationID={conversationID}
+      pins={pins}
+      canManage={canManage}
+      onJump={onJump}
+    />
+  );
 }
 
 function PinnedBannerWithList({ conversationID, pins, canManage, onJump }: PinnedMessageBannerProps & {
   pins: readonly ChatPinnedMessageDto[];
   canManage: boolean;
 }) {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [listOpen, setListOpen] = useState(false);
-  const preview = pins[0].preview || t('chat.pin.fallbackPreview', { defaultValue: '[消息]' });
+  const latestPin = pins[0];
+  const preview = latestPin.preview?.replace(/\s+/g, ' ').trim() || t('chat.pin.fallbackPreview');
   const multiple = pins.length > 1;
-  const tag = multiple
-    ? t('chat.pin.listTitle', { count: pins.length, defaultValue: '置顶 · {{count}} 条' })
-    : t('chat.pin.tag', { defaultValue: '置顶' });
+  const canOpenList = multiple || canManage;
 
   return (
     <View style={styles.container} testID="pinned-message-banner">
-      <ScrollingAnnouncementBanner
-        icon={Pin}
-        title=""
-        body={preview}
-        tag={tag}
-        // 多条时读出「置顶 · 3 条」再读最新那条,跟看到的一致。
-        accessibilityLabel={multiple
-          ? `${tag} ${preview}`
-          : t('chat.pin.bannerA11y', { preview, defaultValue: '置顶消息:{{preview}}' })}
-        onPress={() => setListOpen(true)}
-      />
+      <View style={[styles.bar, { backgroundColor: colors.pinnedSurface, borderColor: colors.surfaceBorder }]}>
+        <Pressable
+          style={({ pressed }) => [styles.jump, pressed && styles.pressed]}
+          onPress={() => onJump(latestPin.messageId)}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.pin.jumpA11y', { preview })}
+        >
+          <Pin size={15} color={colors.link} />
+          <Text style={[styles.tag, { color: colors.text }]} numberOfLines={1}>
+            {t('chat.pin.tag')}
+          </Text>
+          <Text style={[styles.preview, { color: colors.pinnedTextSecondary }]} numberOfLines={1}>
+            {preview}
+          </Text>
+          {canOpenList ? null : <ChevronRight size={16} color={colors.pinnedTextSecondary} />}
+        </Pressable>
+        {canOpenList ? (
+          <Pressable
+            style={({ pressed }) => [styles.list, { borderColor: colors.surfaceBorder }, pressed && styles.pressed]}
+            onPress={() => setListOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.pin.openList', { count: pins.length })}
+            accessibilityState={{ expanded: listOpen }}
+          >
+            <List size={17} color={colors.link} />
+            {multiple ? <Text style={[styles.count, { color: colors.link }]}>{pins.length}</Text> : null}
+          </Pressable>
+        ) : null}
+      </View>
       <PinnedMessagesSheet
         visible={listOpen}
         conversationID={conversationID}
@@ -74,4 +94,32 @@ function PinnedBannerWithList({ conversationID, pins, canManage, onJump }: Pinne
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  bar: {
+    flexDirection: 'row',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous',
+  },
+  jump: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    gap: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: Spacing.sm,
+  },
+  tag: { ...Typography.caption, fontWeight: '700', maxWidth: '35%' },
+  preview: { ...Typography.bodyRegular, flex: 1 },
+  list: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderStartWidth: StyleSheet.hairlineWidth,
+  },
+  count: { ...Typography.caption, fontVariant: ['tabular-nums'] },
+  pressed: { opacity: 0.65 },
 });

@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { loadWebSession } = require('./helpers/web-session-module');
 
 function deferred() {
   let resolve;
@@ -34,6 +35,7 @@ function loadSessionModule(mocks) {
       if (request in mocks) {
         return mocks[request];
       }
+      if (request === '@/services/auth/web-session') return loadWebSession();
       throw new Error(`Unexpected import: ${request}`);
     }),
     // session.ts gates console.warn on `typeof __DEV__ !== 'undefined' && __DEV__`.
@@ -163,6 +165,48 @@ function makeBaseMocks() {
     authState,
   };
 }
+
+test('confirmed Web account changes preserve user-scoped drafts while discarding shared caches', async () => {
+  const { mocks, calls } = makeBaseMocks();
+  mocks['@/chat-core/composer-drafts'] = { useComposerDraftStore: {
+    getState: () => ({ resetForLogout: () => calls.push('resetDrafts') }),
+    persist: { clearStorage: () => calls.push('deleteDrafts') },
+  } };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession(undefined, { preserveComposerDrafts: true });
+
+  assert.ok(calls.includes('resetGroups'));
+  assert.ok(!calls.includes('resetDrafts'));
+  assert.ok(!calls.includes('deleteDrafts'));
+});
+
+test('a revoked Web tab cannot clear another tab’s account data', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  authState.invalidateWebSession = () => calls.push('invalidate-tab');
+  mocks['@/services/auth/web-session'] = loadWebSession({ web: true });
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession(1, { reason: 'realtime-revoked' });
+
+  assert.deepEqual(calls, ['invalidate-tab']);
+});
+
+test('a revoked socket leaves a pending bound Web logout in charge of local cleanup', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  authState.invalidateWebSession = () => calls.push('invalidate-tab');
+  const logout = deferred();
+  mocks['@/services/auth/web-session'] = {
+    ...loadWebSession({ web: true }), getPendingWebLogout: () => logout.promise,
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  const revoked = clearLocalSession(1, { reason: 'realtime-revoked' });
+  logout.resolve();
+  await revoked;
+
+  assert.deepEqual(calls, []);
+});
 
 test('clearLocalSession runs registered teardown handlers, then resets stores auth-first, then clears persistence', async () => {
   const { mocks, calls } = makeBaseMocks();

@@ -40,7 +40,7 @@ test("account switcher store is a runtime-only open/close toggle (not persisted)
 test("switch account opens the sheet instead of logging out", () => {
   const useAuth = read("src/hooks/use-auth.ts");
 
-  // 「切换账号」= 打开 sheet，不再走 endSession 登出
+  // 原生切换账号打开 sheet，Web 则先确认退出。
   assert.match(
     useAuth,
     /const switchAccount = useCallback\(\(\) => \{[\s\S]{0,600}?useAccountSwitcherStore\.getState\(\)\.open\(\);/,
@@ -50,18 +50,18 @@ test("switch account opens the sheet instead of logging out", () => {
   // 登录成功记入本设备账号列表
   assert.match(useAuth, /upsertAccount\(\{[\s\S]*accessToken: tokens\.accessToken/);
   // 退出 = 从列表移除当前账号
-  assert.match(useAuth, /removeAccount\(currentId\)/);
+  assert.match(useAuth, /removeAccount\(user\.id\)/);
 });
 
 test("logout clears session once and lets the auth route guard navigate to login", () => {
   const useAuth = read("src/hooks/use-auth.ts");
-  const endSession = useAuth.slice(
-    useAuth.indexOf("const endSession = useCallback"),
+  const logout = useAuth.slice(
     useAuth.indexOf("const logout = useCallback"),
+    useAuth.indexOf("const switchAccount = useCallback"),
   );
 
-  assert.match(endSession, /await clearLocalSession\(undefined, \{ reason: 'user-logout', userInitiated: true \}\)/);
-  assert.doesNotMatch(endSession, /router\.replace\(['"]\/\(auth\)\/login['"]\)/);
+  assert.match(logout, /await clearLocalSession\(sessionEpoch, \{ reason: 'user-logout', userInitiated: true \}\)/);
+  assert.doesNotMatch(logout, /router\.replace\(['"]\/\(auth\)\/login['"]\)/);
 });
 
 test("switch-to-account validates the session and falls back to login on expiry", () => {

@@ -24,6 +24,10 @@ function response(ok, status, body, requestId) {
   };
 }
 
+function testAccessToken(sub, sid) {
+  return `header.${Buffer.from(JSON.stringify({ sub, sid })).toString('base64url')}.signature`;
+}
+
 async function waitFor(condition) {
   for (let i = 0; i < 50; i += 1) {
     if (condition()) return;
@@ -60,6 +64,13 @@ function loadApiClientHarness({ persistError = false, commitError = false, pause
     isAuthenticated: true,
     refreshAttemptId: null,
     sessionEpoch: 1,
+    invalidateWebSession: () => {
+      authState.webSessionInvalidated = true;
+      authState.accessToken = null;
+      authState.refreshToken = null;
+      authState.isAuthenticated = false;
+      authState.sessionEpoch += 1;
+    },
     setTokens: async (tokens) => {
       setTokenCalls.push(tokens);
       authState.accessToken = tokens.accessToken;
@@ -1245,23 +1256,64 @@ test('native requests send neither the web session header nor cookies', async ()
   assert.equal(init.headers['X-Web-Session'], undefined);
 });
 
-test('web: refresh sends no token in the body and keeps the cookie placeholder in the store', async () => {
+test('web: refresh binds the cookie to the current tab and accepts a rotation of the same account', async () => {
   const harness = loadApiClientHarness({ web: true });
+  const sessionId = '01111111-1111-4111-8111-111111111111';
+  const nextToken = testAccessToken('account-a', '01111111-1111-4111-8111-111111111112');
+  harness.authState.accessToken = testAccessToken('account-a', sessionId);
   harness.authState.refreshToken = 'web-cookie-session';
   harness.requestResponses.push(
     { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
     { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
   );
   // The server keeps the rotated refresh token in its cookie and only returns the access token.
-  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'next-access' } })) });
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: nextToken } })) });
   await harness.apiClient('/users/me/settings');
 
   const [, refreshInit] = harness.fetchCalls.find(([url]) => String(url).endsWith('/auth/refresh'));
   assert.equal(refreshInit.body, '{}');
+  assert.equal(refreshInit.headers.Authorization, `WebSession ${sessionId}`);
   assert.equal(refreshInit.credentials, 'include');
   assert.equal(harness.setTokenCalls.length, 1);
-  assert.equal(harness.setTokenCalls[0].accessToken, 'next-access');
+  assert.equal(harness.setTokenCalls[0].accessToken, nextToken);
   assert.equal(harness.setTokenCalls[0].refreshToken, 'web-cookie-session');
+  assert.equal(harness.getClearCalls(), 0);
+});
+
+test('web: a different account token is never installed or used to replay a pending write', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.authState.accessToken = testAccessToken('account-a', '01111111-1111-4111-8111-111111111111');
+  harness.authState.refreshToken = 'web-cookie-session';
+  harness.requestResponses.push({ promise: Promise.resolve(response(false, 401, { code: 401, message: 'expired' })) });
+  const otherAccount = testAccessToken('account-b', '02222222-2222-4222-8222-222222222222');
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, {
+    code: 0, message: 'ok', data: { accessToken: otherAccount },
+  })) });
+
+  await assert.rejects(harness.apiClient('/users/me/settings', { method: 'PUT', body: { enabled: true } }),
+    error => error.failureKind === 'session-changed');
+  assert.equal(harness.authState.webSessionInvalidated, true);
+  assert.equal(harness.setTokenCalls.length, 0);
+  assert.equal(harness.getClearCalls(), 0);
+  const requestCount = harness.fetchCalls.length;
+  await assert.rejects(harness.refreshSessionAccessToken(), error => error.failureKind === 'session-changed');
+  await assert.rejects(harness.apiClient('/users/me/settings'), error => error.failureKind === 'session-changed');
+  assert.equal(harness.fetchCalls.length, requestCount);
+  assert.equal(harness.fetchCalls.filter(([url]) => String(url).endsWith('/users/me/settings')).length, 1);
+});
+
+test('web: a server binding mismatch invalidates only the old tab', async () => {
+  const harness = loadApiClientHarness({ web: true });
+  harness.authState.accessToken = testAccessToken('account-a', '01111111-1111-4111-8111-111111111111');
+  harness.authState.refreshToken = 'web-cookie-session';
+  harness.requestResponses.push({ promise: Promise.resolve(response(false, 401, { code: 401, message: 'expired' })) });
+  harness.refreshResponses.push({ promise: Promise.resolve(response(false, 409, {
+    code: 409, errorCode: 'AUTH_WEB_SESSION_CHANGED', message: 'changed',
+  })) });
+
+  await assert.rejects(harness.apiClient('/users/me/settings'), error => error.failureKind === 'session-changed');
+  assert.equal(harness.authState.webSessionInvalidated, true);
+  assert.equal(harness.setTokenCalls.length, 0);
   assert.equal(harness.getClearCalls(), 0);
 });
 
@@ -1273,6 +1325,7 @@ test('web: a page reload restores the access token from the refresh cookie', asy
   assert.equal(await harness.restoreWebSessionAccessToken(ATTEMPT_ID), 'restored-access');
   const [, init] = harness.fetchCalls[0];
   assert.equal(init.body, '{}');
+  assert.equal(init.headers.Authorization, 'WebSession restore');
   assert.equal(init.credentials, 'include');
   // Retries pass the same id, so the server can tell a retry from a replayed old cookie.
   assert.equal(init.headers['Idempotency-Key'], ATTEMPT_ID);

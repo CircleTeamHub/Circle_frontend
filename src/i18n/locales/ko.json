@@ -1096,8 +1096,11 @@
       "tag": "고정",
       "failed": "작업에 실패했습니다",
       "fallbackPreview": "[메시지]",
-      "bannerA11y": "고정 메시지: {{preview}}",
-      "listTitle": "고정 · {{count}}개"
+      "jumpA11y": "고정 메시지로 이동: {{preview}}",
+      "unpinA11y": "메시지 고정 해제: {{preview}}",
+      "openList_other": "고정 메시지 {{count}}개 보기",
+      "listHeading": "고정 메시지",
+      "listCount_other": "{{count}}개"
     },
     "clearRequest": {
       "accept": "동의",
@@ -3311,8 +3314,10 @@
       "securityQuestionsRetry": "보안 질문을 불러오지 못했습니다. 눌러서 다시 시도하세요."
     },
     "webSessionUnreachableTitle": "로그인 상태를 아직 복원하지 못했어요",
-    "webSessionUnreachableMessage": "네트워크가 불안정하거나 서버가 혼잡해요. 로그아웃된 것은 아니에요. 잠시 후 페이지를 새로고침하면 원래 계정으로 돌아갈 수 있어요.",
-    "webSessionUnreachableReload": "새로고침"
+    "webSessionUnreachableMessage": "연결 상태를 확인하거나 잠시 후 다시 시도해 주세요.",
+    "webSessionInvalidatedTitle": "이 탭의 로그인 상태가 변경되었어요",
+    "webSessionInvalidatedMessage": "브라우저의 현재 로그인 상태로 계속하려면 페이지를 새로고침해 주세요.",
+    "webSessionReload": "새로고침"
   },
   "media": {
     "saveImage": "이미지 저장",
@@ -4105,6 +4110,7 @@
     "AUTH_LOGIN_CHALLENGE_REJECTED": "신뢰할 수 있는 기기에서 로그인 요청을 거부했습니다",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "인증 코드 오류가 너무 많아 이번 인증이 취소되었습니다. 다시 시작해 주세요",
     "AUTH_SESSION_DEVICE_UNBOUND": "로그인 상태를 갱신해야 합니다. 잠시 후 다시 시도해 주세요",
+    "AUTH_WEB_SESSION_CHANGED": "브라우저의 로그인 상태가 변경되었습니다. 계속하려면 페이지를 새로고침해 주세요.",
     "AUTH_SECURITY_CODE_NOT_SET": "로그인 보안 코드가 설정되지 않았습니다. 신뢰할 수 있는 기기에서 확인해 주세요",
     "CHAT_GROUP_ACCEPT_REQUIRED": "먼저 그룹 초대를 수락해 주세요",
     "CHAT_GROUP_INVITATION_INVALID": "초대가 만료되었거나 유효하지 않습니다",

@@ -35,7 +35,7 @@ import {
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
-import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { SessionBootstrap, WebSessionRecovery } from '@/components/app/session-bootstrap';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
@@ -314,6 +314,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   const firstSegment = segments[0];
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const webSessionInvalidated = useAuthStore((state) => state.webSessionInvalidated);
   const hasCachedSession = useAuthStore(
     (state) =>
       state.isAuthenticated &&
@@ -332,10 +333,15 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     isAuthenticated,
     isLoading,
     hasCachedSession,
+    webSessionInvalidated,
     onboardingRequired,
     accountSwitching,
     addingAccount,
   });
+
+  if (decision.type === 'web-session-invalidated') {
+    return <WebSessionRecovery kind="invalidated" onPress={() => window.location.reload()} />;
+  }
 
   if (decision.type === 'redirect') {
     // 关键：重定向时必须保持导航器（children 里的 <Stack>）挂载。
@@ -445,51 +451,52 @@ function RootLayout() {
       <MemberNameAnimationProvider>
         <AppUpdateHost />
         <AppOperationsHost />
-        <SessionBootstrap />
-        <AuthRouteGuard>
-          {/* Android 玻璃面（弹窗 / 顶部横幅）的模糊靶子：整棵 App 内容。 */}
-          <AppBlurTarget>
-          <View style={{ flex: 1 }}>
-            <RootStack />
-            <ActiveCallHost />
-            {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
-                商店包不多出无标签可访问元素、也不暴露 API origin。 */}
-            {E2E_TARGET_MARKER_ENABLED ? (
-              <View
-                accessible
-                testID={RUNTIME_API_TARGET_ID}
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  width: 1,
-                  height: 1,
-                  opacity: 0.01,
-                }}
-              />
-            ) : null}
-          </View>
-          </AppBlurTarget>
-          <NotificationSnackbarHost />
-          {/* 顶部提醒（操作回执 toast），与消息横幅同一套外壳。 */}
-          <TopNoticeHost />
-          {/* 聊天笔记卡片长按 / 我的笔记 ⋯ 面板里打差评的原因面板。 */}
-          <NoteRatingFlowHost />
-          <UploadProgressHost />
-          <PushNotificationRouteHandler />
-          <PushNotificationTokenRegistrar />
-          <CallInviteHost />
-          {/* 陌生设备登录：本机作为受信任设备时弹「是否是你本人」并下发验证码。 */}
-          <LoginApprovalHost />
-          <AccountSwitcherSheet />
-          <LoginSecurityCodeGate />
-          {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
-          <AppDialogHost />
-          {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
-          {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
-          {Platform.OS === 'web' ? <WebPushSession /> : null}
-        </AuthRouteGuard>
+        <SessionBootstrap>
+          <AuthRouteGuard>
+            {/* Android 玻璃面（弹窗 / 顶部横幅）的模糊靶子：整棵 App 内容。 */}
+            <AppBlurTarget>
+              <View style={{ flex: 1 }}>
+                <RootStack />
+                <ActiveCallHost />
+                {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
+                    商店包不多出无标签可访问元素、也不暴露 API origin。 */}
+                {E2E_TARGET_MARKER_ENABLED ? (
+                  <View
+                    accessible
+                    testID={RUNTIME_API_TARGET_ID}
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      width: 1,
+                      height: 1,
+                      opacity: 0.01,
+                    }}
+                  />
+                ) : null}
+              </View>
+            </AppBlurTarget>
+            <NotificationSnackbarHost />
+            {/* 顶部提醒（操作回执 toast），与消息横幅同一套外壳。 */}
+            <TopNoticeHost />
+            {/* 聊天笔记卡片长按 / 我的笔记 ⋯ 面板里打差评的原因面板。 */}
+            <NoteRatingFlowHost />
+            <UploadProgressHost />
+            <PushNotificationRouteHandler />
+            <PushNotificationTokenRegistrar />
+            <CallInviteHost />
+            {/* 陌生设备登录：本机作为受信任设备时弹「是否是你本人」并下发验证码。 */}
+            <LoginApprovalHost />
+            <AccountSwitcherSheet />
+            <LoginSecurityCodeGate />
+            {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
+            <AppDialogHost />
+            {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
+            {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
+            {Platform.OS === 'web' ? <WebPushSession /> : null}
+          </AuthRouteGuard>
+        </SessionBootstrap>
       </MemberNameAnimationProvider>
     </ThemeProvider>
   );

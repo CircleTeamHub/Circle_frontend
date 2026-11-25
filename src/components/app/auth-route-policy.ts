@@ -1,6 +1,7 @@
 type AuthRouteDecision =
   | { type: 'allow' }
   | { type: 'loading' }
+  | { type: 'web-session-invalidated' }
   | {
       type: 'redirect';
       href: '/(auth)/login' | '/(tabs)/messages' | '/(onboarding)/profile';
@@ -12,6 +13,7 @@ type AuthRouteDecisionInput = {
   isLoading: boolean;
   /** 本地已水合出可用会话时，先展示缓存页面，网络校验在后台进行。 */
   hasCachedSession?: boolean;
+  webSessionInvalidated?: boolean;
   onboardingRequired: boolean;
   /** 切换账号进行中:会话短暂处于「已清空、新账号未激活」,此时不做任何重定向。 */
   accountSwitching?: boolean;
@@ -24,10 +26,12 @@ export function getAuthRouteDecision({
   isAuthenticated,
   isLoading,
   hasCachedSession = false,
+  webSessionInvalidated = false,
   onboardingRequired,
   accountSwitching = false,
   addingAccount = false,
 }: AuthRouteDecisionInput): AuthRouteDecision {
+  if (webSessionInvalidated) return { type: 'web-session-invalidated' };
   if (accountSwitching) return { type: 'allow' };
 
   const isAuthRoute = firstSegment === '(auth)';

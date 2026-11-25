@@ -1,8 +1,14 @@
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { LoginSecurityCodeGate } from './login-security-code-gate';
 import { fetchLoginSecurityCodeStatus } from '@/services/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { useLoginApprovalStore } from '@/features/security/store/login-approval-store';
+import { clearLocalSession } from '@/services/auth/session';
+
+const mockLogout = jest.fn(async () => undefined);
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ logout: mockLogout }) }));
 
 jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
@@ -97,4 +103,20 @@ test('keeps approval actions locked when the account security status request fai
   await waitFor(() => expect(fetchLoginSecurityCodeStatus).toHaveBeenCalled());
   await act(async () => {});
   expect(useLoginApprovalStore.getState().appLocked).toBe(true);
+});
+
+test('a locked Web app uses bound logout and stays locked until the session actually changes', async () => {
+  const platform = jest.replaceProperty(Platform, 'OS', 'web');
+  try {
+    jest.mocked(fetchLoginSecurityCodeStatus).mockResolvedValueOnce({ enabled: true });
+    render(<LoginSecurityCodeGate />);
+    fireEvent.press(await screen.findByText('profile.logoutToLogin'));
+
+    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+    expect(clearLocalSession).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByText('profile.logoutToLogin')).toBeOnTheScreen();
+  } finally {
+    platform.restore();
+  }
 });

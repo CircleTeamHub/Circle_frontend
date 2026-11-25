@@ -1100,8 +1100,13 @@
       "tag": "Fijado",
       "failed": "No se pudo completar",
       "fallbackPreview": "[Mensaje]",
-      "bannerA11y": "Mensaje fijado: {{preview}}",
-      "listTitle": "Fijados · {{count}}"
+      "jumpA11y": "Ir al mensaje fijado: {{preview}}",
+      "unpinA11y": "Quitar mensaje fijado: {{preview}}",
+      "openList_one": "Ver {{count}} mensaje fijado",
+      "openList_other": "Ver {{count}} mensajes fijados",
+      "listHeading": "Mensajes fijados",
+      "listCount_one": "{{count}} mensaje",
+      "listCount_other": "{{count}} mensajes"
     },
     "clearRequest": {
       "accept": "Aceptar",
@@ -3317,8 +3322,10 @@
       "securityQuestionsRetry": "No se pudieron cargar las preguntas de seguridad. Toca para reintentar."
     },
     "webSessionUnreachableTitle": "Aún no se pudo restaurar tu sesión",
-    "webSessionUnreachableMessage": "La red o el servidor están ocupados, pero no se ha cerrado tu sesión. Recarga la página en un momento para volver a tu cuenta.",
-    "webSessionUnreachableReload": "Recargar"
+    "webSessionUnreachableMessage": "Comprueba tu conexión o vuelve a intentarlo en un momento.",
+    "webSessionInvalidatedTitle": "La sesión de esta pestaña ha cambiado",
+    "webSessionInvalidatedMessage": "Vuelve a cargar la página para continuar con la sesión actual del navegador.",
+    "webSessionReload": "Recargar"
   },
   "media": {
     "saveImage": "Guardar imagen",
@@ -4111,6 +4118,7 @@
     "AUTH_LOGIN_CHALLENGE_REJECTED": "Un dispositivo de confianza rechazó este inicio de sesión",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "Demasiados códigos incorrectos. Esta verificación se canceló; vuelve a empezar",
     "AUTH_SESSION_DEVICE_UNBOUND": "Tu sesión necesita actualizarse. Inténtalo de nuevo",
+    "AUTH_WEB_SESSION_CHANGED": "La sesión del navegador ha cambiado. Vuelve a cargar la página para continuar.",
     "AUTH_SECURITY_CODE_NOT_SET": "No hay un código de seguridad configurado. Confirma en un dispositivo de confianza",
     "CHAT_GROUP_ACCEPT_REQUIRED": "Acepta primero la invitación al grupo",
     "CHAT_GROUP_INVITATION_INVALID": "La invitación ha caducado o ya no es válida",

@@ -8,6 +8,7 @@ function loadWebSession({ web = false } = {}) {
   return loadTsModule('src/services/auth/web-session.ts', {
     requireShim: (request) => {
       if (request === 'react-native') return { Platform: { OS: web ? 'web' : 'ios' } };
+      if (request === '@/utils/jwt-expiry') return loadTsModule('src/utils/jwt-expiry.ts');
       return require(request);
     },
   });

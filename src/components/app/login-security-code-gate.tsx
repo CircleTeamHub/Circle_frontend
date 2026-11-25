@@ -20,7 +20,9 @@ import {
 } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
+import { usesWebSessionCookie } from '@/services/auth/web-session';
 import { useAuthStore } from '@/stores/authStore';
+import { useAuth } from '@/hooks/use-auth';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -81,6 +83,7 @@ export function LoginSecurityCodeGate() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { logout, submitting: logoutSubmitting } = useAuth();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
@@ -221,15 +224,18 @@ export function LoginSecurityCodeGate() {
   }
 
   async function handleLogout() {
+    const web = usesWebSessionCookie();
     try {
-      await clearLocalSession(undefined, { reason: 'user-logout', userInitiated: true });
+      if (web) await logout();
+      else await clearLocalSession(undefined, { reason: 'user-logout', userInitiated: true });
     } catch (error) {
       reportHandledFailure('securityCodeGate', 'logoutCleanup', error);
-    } finally {
-      setGateState('unlocked');
-      setSecurityCode('');
-      router.replace('/(auth)/login');
     }
+    // Web 由会话门禁处理跳转。退出没确认时安全码遮罩继续挡住页面。
+    if (web) return;
+    setGateState('unlocked');
+    setSecurityCode('');
+    router.replace('/(auth)/login');
   }
 
   const locked =
@@ -295,7 +301,7 @@ export function LoginSecurityCodeGate() {
                     <Text style={d.buttonText}>{t('profile.unlockSecurityCodeAction')}</Text>
                   )}
                 </Pressable>
-                <Pressable style={s.textButton} onPress={handleLogout}>
+                <Pressable style={s.textButton} onPress={handleLogout} accessibilityRole="button" disabled={logoutSubmitting}>
                   <Text style={d.textButton}>{t('profile.logoutToLogin')}</Text>
                 </Pressable>
               </View>

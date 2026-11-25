@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { setChatPinnedMessage } from '@/chat-core/api';
@@ -7,25 +7,17 @@ import type { ChatConversationDto, ChatPinnedMessageDto } from '@/chat-core/prot
 
 let mockConversation: Partial<ChatConversationDto> | undefined;
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: (cb: () => void) => {
-    const React = jest.requireActual<typeof import('react')>('react');
-    React.useEffect(cb, [cb]);
-  },
-}));
-jest.mock('@/hooks/use-reduce-motion', () => ({ useReduceMotion: () => true }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@/theme', () => ({
   ...jest.requireActual('@/theme/tokens'),
-  useTheme: () => ({ colors: { primary: '#6855ee' } }),
-  withAlpha: () => '#eee',
+  useTheme: () => ({ colors: jest.requireActual('@/theme/colors').lightColors }),
 }));
 jest.mock('@/components/ui/bottom-sheet-modal', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { ScrollView, View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
       visible ? <View testID="pinned-messages-sheet">{children}</View> : null,
+    BottomSheetScrollView: ScrollView,
   };
 });
 jest.mock('react-i18next', () => ({
@@ -52,38 +44,42 @@ const notePin = pin('msg-3', '[笔记] 周末羽毛球场地');
 const textPin = pin('msg-2', '下周六 9 点集合');
 const imagePin = pin('msg-1', '[图片]');
 
-/** 面板没开时屏幕上只有横幅这一个按钮。 */
-const openList = () => fireEvent.press(screen.getByRole('button'));
+const openList = (count: number) =>
+  fireEvent.press(screen.getByRole('button', { name: `chat.pin.openList:${count}` }));
 
 beforeEach(() => {
   jest.clearAllMocks();
-  AppState.currentState = 'active';
   mockConversation = { id: 'conv-1', type: 'GROUP', myRole: 'MEMBER', pinnedMessages: [textPin] };
 });
 
-test('a single pin reads like the group notice banner, with no unpin control on it', () => {
-  render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
+test('the banner jumps straight to a single pin', () => {
+  const onJump = jest.fn();
+  render(<PinnedMessageBanner conversationID="conv-1" onJump={onJump} />);
   expect(screen.getByText('chat.pin.tag')).toBeTruthy();
-  expect(screen.getByText('下周六 9 点集合')).toBeTruthy();
-  expect(screen.getByLabelText('chat.pin.bannerA11y:下周六 9 点集合')).toBeTruthy();
+  const preview = screen.getByText('下周六 9 点集合');
+  fireEvent.press(preview);
+  expect(onJump.mock.calls).toEqual([['msg-2']]);
+  expect(preview.props.numberOfLines).toBe(1);
   expect(screen.queryByTestId('pinned-messages-sheet')).toBeNull();
-  expect(screen.queryByLabelText('chat.pin.unpin')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'chat.pin.openList:1' })).toBeNull();
 });
 
-test('several pins: the banner shows the newest and the count', () => {
+test('a multiple-pin banner still jumps to the newest pin', () => {
   mockConversation = { ...mockConversation, pinnedMessages: [notePin, textPin, imagePin] };
-  render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  expect(screen.getByText('chat.pin.listTitle:3')).toBeTruthy();
-  expect(screen.getByText('[笔记] 周末羽毛球场地')).toBeTruthy();
+  const onJump = jest.fn();
+  render(<PinnedMessageBanner conversationID="conv-1" onJump={onJump} />);
   expect(screen.queryByText('下周六 9 点集合')).toBeNull();
-  // 读屏也要听到一共几条,而不只是最新那条。
-  expect(screen.getByLabelText('chat.pin.listTitle:3 [笔记] 周末羽毛球场地')).toBeTruthy();
+  fireEvent.press(screen.getByText('[笔记] 周末羽毛球场地'));
+  expect(onJump.mock.calls).toEqual([['msg-3']]);
+  expect(screen.getByRole('button', { name: 'chat.pin.jumpA11y:[笔记] 周末羽毛球场地' })).toBeTruthy();
+  expect(screen.getByText('3')).toBeTruthy();
+  expect(screen.queryByTestId('pinned-messages-sheet')).toBeNull();
 });
 
 test('once the last pin is gone, a later pin shows the banner with the list closed', () => {
   mockConversation = { ...mockConversation, myRole: 'ADMIN' };
   const view = render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  openList();
+  openList(1);
   expect(screen.getByTestId('pinned-messages-sheet')).toBeTruthy();
 
   // 开着列表时最后一条没了(自己 ×、别人取消、被撤回都一样)。
@@ -98,44 +94,58 @@ test('once the last pin is gone, a later pin shows the banner with the list clos
   expect(screen.queryByTestId('pinned-messages-sheet')).toBeNull();
 });
 
-test('tapping the banner lists every pin; tapping one closes the list and jumps there', () => {
+test('the count opens the list without jumping and each row jumps to its message', () => {
   mockConversation = { ...mockConversation, pinnedMessages: [notePin, textPin, imagePin] };
   const onJump = jest.fn();
   render(<PinnedMessageBanner conversationID="conv-1" onJump={onJump} />);
 
-  openList();
+  openList(3);
   expect(screen.getByTestId('pinned-messages-sheet')).toBeTruthy();
-  expect(screen.getByText('下周六 9 点集合')).toBeTruthy();
-  expect(screen.getByText('[图片]')).toBeTruthy();
+  expect(screen.getByRole('header', { name: 'chat.pin.listHeading' })).toBeTruthy();
+  expect(screen.getByText('chat.pin.listCount:3')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'chat.pin.jumpA11y:下周六 9 点集合' })).toBeTruthy();
+  expect(onJump).not.toHaveBeenCalled();
 
-  fireEvent.press(screen.getByText('[图片]'));
-  expect(onJump).toHaveBeenCalledWith('msg-1');
+  fireEvent.press(screen.getByRole('button', { name: 'chat.pin.jumpA11y:[图片]' }));
+  expect(onJump.mock.calls).toEqual([['msg-1']]);
   expect(screen.queryByTestId('pinned-messages-sheet')).toBeNull();
+});
+
+test('close dismisses the list without jumping', () => {
+  mockConversation = { ...mockConversation, pinnedMessages: [notePin, imagePin] };
+  const onJump = jest.fn();
+  render(<PinnedMessageBanner conversationID="conv-1" onJump={onJump} />);
+  openList(2);
+
+  fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
+  expect(screen.queryByRole('header', { name: 'chat.pin.listHeading' })).toBeNull();
+  expect(onJump).not.toHaveBeenCalled();
 });
 
 test('ordinary group members can open the list but not unpin', () => {
   mockConversation = { ...mockConversation, pinnedMessages: [notePin, textPin] };
   render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  openList();
+  openList(2);
   expect(screen.getByText('下周六 9 点集合')).toBeTruthy();
-  expect(screen.queryByLabelText('chat.pin.unpin')).toBeNull();
+  expect(screen.queryByRole('button', { name: /^chat\.pin\.unpinA11y/ })).toBeNull();
 });
 
 test('a group admin unpins exactly the row they tap', async () => {
   mockConversation = { ...mockConversation, myRole: 'ADMIN', pinnedMessages: [notePin, textPin, imagePin] };
-  render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  openList();
-  const unpinButtons = screen.getAllByLabelText('chat.pin.unpin');
-  expect(unpinButtons).toHaveLength(3);
-  await act(async () => { fireEvent.press(unpinButtons[1]); });
-  expect(setChatPinnedMessage).toHaveBeenCalledWith('conv-1', 'msg-2', false);
+  const onJump = jest.fn();
+  render(<PinnedMessageBanner conversationID="conv-1" onJump={onJump} />);
+  openList(3);
+  const unpin = screen.getByRole('button', { name: 'chat.pin.unpinA11y:下周六 9 点集合' });
+  await act(async () => { fireEvent.press(unpin); });
+  expect(jest.mocked(setChatPinnedMessage).mock.calls).toEqual([['conv-1', 'msg-2', false]]);
+  expect(onJump).not.toHaveBeenCalled();
 });
 
 test('both sides of a direct chat can unpin', () => {
   mockConversation = { ...mockConversation, type: 'DIRECT', myRole: undefined };
   render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  openList();
-  expect(screen.getByLabelText('chat.pin.unpin')).toBeTruthy();
+  openList(1);
+  expect(screen.getByRole('button', { name: 'chat.pin.unpinA11y:下周六 9 点集合' })).toBeTruthy();
 });
 
 test('a failed unpin tells the user and keeps the list open', async () => {
@@ -143,8 +153,10 @@ test('a failed unpin tells the user and keeps the list open', async () => {
   jest.mocked(setChatPinnedMessage).mockRejectedValueOnce(new Error('offline'));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   render(<PinnedMessageBanner conversationID="conv-1" onJump={jest.fn()} />);
-  openList();
-  await act(async () => { fireEvent.press(screen.getByLabelText('chat.pin.unpin')); });
+  openList(1);
+  await act(async () => {
+    fireEvent.press(screen.getByRole('button', { name: 'chat.pin.unpinA11y:下周六 9 点集合' }));
+  });
   expect(alert).toHaveBeenCalledWith('chat.pin.failed', 'common.retryLater');
   expect(screen.getByTestId('pinned-messages-sheet')).toBeTruthy();
   alert.mockRestore();

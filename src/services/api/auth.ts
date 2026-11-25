@@ -8,13 +8,13 @@
  * - logout：使 refreshToken 失效
  */
 import * as Device from "expo-device";
-import { apiClient, refreshSessionAccessToken } from "@/services/api/client";
+import { ApiError, apiClient, refreshSessionAccessToken } from "@/services/api/client";
 import { isDisplayIconShape } from "@/services/api/response-shapes";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import i18n from "@/i18n";
 import { UserFacingError } from "@/utils/user-facing-error";
-import { usesWebSessionCookie, withWebRefreshToken } from "@/services/auth/web-session";
+import { WEB_SESSION_CHANGED, readWebSessionIdentity, usesWebSessionCookie, webSessionBindingHeader, withWebRefreshToken } from "@/services/auth/web-session";
 import {
   isSecurityQuestionKey,
   SECURITY_QUESTION_COUNT,
@@ -428,12 +428,19 @@ export async function fetchCurrentUserWithToken(accessToken: string) {
   return normalizeUser(ensureBackendAuthUser(user));
 }
 
-export async function logout(refreshToken: string) {
+export async function logout(refreshToken: string, webAccessToken?: string | null) {
+  const web = usesWebSessionCookie();
+  const expectedSessionId = web ? readWebSessionIdentity(webAccessToken)?.sessionId : undefined;
+  if (web && !expectedSessionId) {
+    throw new ApiError(i18n.t('common.errors.sessionChangedDuringRefresh'), {
+      status: 409, errorCode: WEB_SESSION_CHANGED,
+    });
+  }
   return apiClient<void>("/auth/logout", {
     method: "POST",
     auth: false,
-    // 网页版由服务端从 Cookie 里取凭证并清掉 Cookie；store 里的只是占位值。
-    body: usesWebSessionCookie() ? {} : { refreshToken },
+    body: web ? {} : { refreshToken },
+    ...(expectedSessionId ? { headers: webSessionBindingHeader(expectedSessionId) } : {}),
   });
 }
 

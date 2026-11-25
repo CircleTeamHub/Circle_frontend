@@ -23,6 +23,7 @@ const mockRouterPush = jest.fn();
 const mockRouter = { replace: jest.fn(), push: mockRouterPush, dismissTo: jest.fn() };
 const mockSetUser = jest.fn();
 const mockSetTokens = jest.fn();
+const mockInvalidateWebSession = jest.fn();
 const signedOutState = {
   user: null,
   accessToken: null,
@@ -31,6 +32,7 @@ const signedOutState = {
   sessionEpoch: 0,
   setUser: mockSetUser,
   setTokens: mockSetTokens,
+  invalidateWebSession: mockInvalidateWebSession,
 };
 let mockAuthState: Record<string, unknown> = signedOutState;
 
@@ -583,6 +585,32 @@ describe('web (one session cookie per browser)', () => {
     await act(async () => {
       buttons.find(button => button.style === 'destructive')?.onPress?.();
     });
-    await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(undefined, { reason: 'user-logout', userInitiated: true }));
+    await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(3, { reason: 'user-logout', userInitiated: true }));
+    expect(logoutRequest).toHaveBeenCalledWith('rotated-refresh', 'rotated-access');
+  });
+
+  test('logout in a stale tab does not clear the current browser account’s local data', async () => {
+    signInPreviousAccount();
+    jest.mocked(logoutRequest).mockRejectedValueOnce(Object.assign(new Error('changed'), { errorCode: 'AUTH_WEB_SESSION_CHANGED' }));
+    const { result } = renderHook(() => useAuth());
+
+    await act(async () => { await result.current.logout(); });
+
+    expect(mockInvalidateWebSession).toHaveBeenCalledTimes(1);
+    expect(clearLocalSession).not.toHaveBeenCalled();
+    expect(mockRemoveAccount).not.toHaveBeenCalled();
+  });
+
+  test('a failed browser logout keeps the current session and shows a retry message', async () => {
+    signInPreviousAccount();
+    jest.mocked(logoutRequest).mockRejectedValueOnce(new Error('network'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { result } = renderHook(() => useAuth());
+
+    await act(async () => { await result.current.logout(); });
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(clearLocalSession).not.toHaveBeenCalled();
+    expect(mockRemoveAccount).not.toHaveBeenCalled();
   });
 });
