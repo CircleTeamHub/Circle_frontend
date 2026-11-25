@@ -258,7 +258,7 @@ test('原生端 tab bar 由各 tab 首页渲染，不再靠导航状态切显隐
   assert.doesNotMatch(layout, /publish\(null\)/);
 
   // 首页外壳在原生端把 bar 作为本页内容渲染，且永远不隐藏。
-  assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<\/>/);
+  assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<WebRoutePrefetch \/><\/>/);
   assert.match(root, /<TabBar tabProps=\{tabProps\} hidden=\{false\} active=\{[^}]+\} \/>/);
   assert.match(root, /const TabBar = memo\(FloatingTabBar, /);
 

@@ -3,6 +3,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { FloatingTabBar } from '@/components/app/floating-tab-bar';
 import { useTabBarBridgeStore } from '@/stores/tabBarBridgeStore';
+import WebRoutePrefetch from './WebRoutePrefetch';
 
 interface TabRootScreenProps {
   children: React.ReactNode;
@@ -47,7 +48,7 @@ function TabRootBar() {
 // 深层页面推入时盖住它、返回时随首页一起出现，不存在「重新显示」的时机。
 // Web 没有原生转场，桌面分栏还要跨栏居中，仍由 Tabs 的全局浮层负责。
 export function TabRootScreen({ children }: TabRootScreenProps) {
-  if (Platform.OS === 'web') return <>{children}</>;
+  if (Platform.OS === 'web') return <>{children}<WebRoutePrefetch /></>;
   return (
     <View style={styles.fill}>
       {children}

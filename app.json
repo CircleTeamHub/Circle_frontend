@@ -68,7 +68,15 @@
           }
         }
       ],
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": "production",
+            "default": false
+          }
+        }
+      ],
       "expo-image",
       "expo-document-picker",
       [

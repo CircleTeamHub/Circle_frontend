@@ -8,6 +8,8 @@
 
 `npm run export:web` 会在导出的 `index.html` 中、主脚本之前内联一个独立探针。它不依赖 React 或 Sentry SDK，捕获入口脚本下载失败、首屏前的执行异常，以及前台等待 60 秒仍未提交页面的启动超时。后台标签页暂停计时。Sentry 初始化和首个叶子页面提交分别标记进度；首屏完成后移除探针监听和计时器。
 
+生产 Web 的路由代码按需加载；导航外壳可能先于叶子页面提交，因此 Web 探针等待叶子区域出现实际文本或输入框、图片等页面控件后才结束启动计时。CSS 或登录路由下载一直挂起时仍可记录超时。拆包、登录后代码预取和部署缓存要求见 [Web 加载说明](web-loading.md)。
+
 构建时使用与 Expo 相同的 `.env` 加载规则读取 `EXPO_PUBLIC_SENTRY_DSN`。配置了 DSN 时，探针直接使用 Sentry envelope 协议上报，搜索 `operation:webStartup`，`kind` 为 `scriptLoadFailed`、`scriptEvaluationFailed` 或 `startupTimeout`。它不是性能 trace，不受 5% trace 采样影响。记录仅含随机事件 ID、构建 hash、入口脚本文件名、下载耗时/大小/协商协议、粗粒度系统类别，以及 Sentry 是否已初始化；不读取账号、Cookie、完整页面 URL、请求参数、异常原文或完整 User-Agent。
 
 最近一次故障同时保存在 `circle-im-web-startup-diagnostics-v1` 本地键中，并显示可选中复制的诊断文本。上报请求最多等待 8 秒；`delivery=sent` 只表示 Sentry 接收端返回成功，不表示已发送通知。若 Sentry 本身不可达或存储不可用，页面仍显示当前内存诊断。它不会自动重传旧记录。完全收不到入口 HTML 的 DNS/TLS/连接故障无法由页面内探针捕获，仍需失败设备的浏览器网络记录或外部探测。

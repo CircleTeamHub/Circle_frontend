@@ -516,7 +516,8 @@ test('note block editor defers DOM editor imports during web server rendering', 
   assert.doesNotMatch(source, /import\s+NoteBlockEditorDOM\s+from/);
   assert.match(source, /function canLoadDOMEditor\(\)/);
   assert.match(source, /Platform\.OS !== 'web' \|\| typeof window !== 'undefined'/);
-  assert.match(source, /require\('@\/features\/notes\/dom\/NoteBlockEditor\.dom'\)/);
+  const nativeLoader = fs.readFileSync(path.join(process.cwd(), 'src/features/notes/components/note-editor-loader.tsx'), 'utf8');
+  assert.match(nativeLoader, /require\('@\/features\/notes\/dom\/NoteBlockEditor\.dom'\)/);
   assert.match(source, /if \(!canLoadDOMEditor\(\)\) \{\s*return <View style=\{containerStyle\} \/>;\s*\}/s);
 });
 
