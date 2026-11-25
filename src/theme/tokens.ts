@@ -43,6 +43,8 @@ export const Gradients = {
   exploreAssistant: ['#4A2FE6', '#2EC5E8'] as const,
   // 大众点评：好评橙（ratingGood）→ 热度红（dangerFill），和榜单里的好评图标同一色系。
   exploreRanking: ['#F97316', '#E5484D'] as const,
+  // 差评榜页头：乌云灰蓝 → 差评雨云蓝（ratingBad），和榜单里的差评图标同一色系。
+  exploreRankingBad: ['#475569', '#3B82F6'] as const,
   // 大众点评名次奖牌：金 / 银 / 铜（左上受光面 → 右下背光面），配 exploreRanking 色的绶带。
   rankGold: ['#FFD966', '#E8950C'] as const,
   rankSilver: ['#DCE3EC', '#8B97A7'] as const,

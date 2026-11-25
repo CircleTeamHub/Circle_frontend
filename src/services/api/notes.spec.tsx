@@ -129,3 +129,18 @@ test('ranking previews keep at most four allow-listed image urls and default to 
     ['legacy', []],
   ]);
 });
+
+test.each([
+  [null, 'good', '/note/ranking'],
+  ['成都', 'good', '/note/ranking?city=%E6%88%90%E9%83%BD'],
+  [null, 'bad', '/note/ranking?board=bad'],
+  ['成都', 'bad', '/note/ranking?city=%E6%88%90%E9%83%BD&board=bad'],
+] as const)('the ranking for city %s, board %s reads %s', async (city, board, path) => {
+  jest.mocked(apiClient).mockResolvedValue({ month: '2026-11', city, items: [] });
+
+  await fetchNoteRanking(city, board);
+
+  // 好评榜不带 board：还没升级的后端会把不认识的参数拒成 400。
+  expect(apiClient).toHaveBeenLastCalledWith(path);
+});
+

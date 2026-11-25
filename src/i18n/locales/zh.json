@@ -269,7 +269,14 @@
       "emptyHint": "在笔记标题里选上城市，收到好评就会上榜。",
       "emptyHintNationwide": "笔记收到好评就会上榜。",
       "loadFailed": "榜单加载失败",
-      "rankA11y": "第 {{rank}} 名"
+      "rankA11y": "第 {{rank}} 名",
+      "boardGood": "好评榜",
+      "boardBad": "差评榜",
+      "heroTitleBad": "{{month}} 月差评榜",
+      "heroTitleBadNoMonth": "本月差评榜",
+      "emptyBad": "这个月还没有笔记上差评榜",
+      "emptyCityBad": "{{city}}这个月还没有笔记上差评榜",
+      "emptyHintBad": "收到差评的笔记会出现在这里。"
     }
   },
   "messages": {

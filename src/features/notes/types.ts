@@ -190,7 +190,10 @@ export interface NoteRankingItem extends NoteSummary {
   previewUrls: string[];
 }
 
-/** 大众点评月榜：本月（上海时区）好评最多的笔记，已按名次排好。 */
+/** 大众点评的两张月榜：good = 好评榜（好评最多），bad = 差评榜（差评最多）。 */
+export type NoteRankingBoard = 'good' | 'bad';
+
+/** 大众点评月榜：本月（上海时区）好评最多（差评榜：差评最多）的笔记，已按名次排好。 */
 export interface NoteRanking {
   /** YYYY-MM */
   month: string;

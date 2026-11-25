@@ -2,6 +2,7 @@ import { memo, useId } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import { Gradients, Typography, useTheme } from '@/theme';
+import type { NoteRankingBoard } from '@/features/notes/types';
 
 /** 名次列宽：奖牌和两位数的斜体数字都放得下。 */
 export const RANK_BADGE_WIDTH = 32;
@@ -41,22 +42,36 @@ const s = StyleSheet.create({
   },
 });
 
+/** 只有好评榜的前三名发奖牌。 */
+function hasMedal(rank: number, board: NoteRankingBoard) {
+  return board === 'good' && rank <= 3;
+}
+
 /**
  * 奖牌圆心 / 斜体数字的中线距组件顶部多远：行组件据此把名次和卡片标题行对齐。
  */
-export function rankBadgeCenterY(rank: number) {
-  return rank <= 3 ? MEDAL_CENTER_Y : 13;
+export function rankBadgeCenterY(rank: number, board: NoteRankingBoard) {
+  return hasMedal(rank, board) ? MEDAL_CENTER_Y : 13;
 }
 
-/** 榜单名次：前三名是金 / 银 / 铜奖牌（挂两条好评橙、热度红的绶带），其余是粗斜体数字。 */
-export const NoteRankBadge = memo(function NoteRankBadge({ rank }: { rank: number }) {
+/**
+ * 榜单名次。好评榜前三名是金 / 银 / 铜奖牌（挂两条好评橙、热度红的绶带），其余是粗斜体数字；
+ * 差评榜不发奖牌，前三名只是把数字换成差评的雨云蓝。
+ */
+export const NoteRankBadge = memo(function NoteRankBadge({
+  rank,
+  board,
+}: {
+  rank: number;
+  board: NoteRankingBoard;
+}) {
   const { colors } = useTheme();
   const gradientId = `rank-medal-${useId().replace(/:/g, '')}`;
 
-  if (rank > 3) {
+  if (!hasMedal(rank, board)) {
     return (
       <View style={s.plain}>
-        <Text style={[s.plainNumber, { color: colors.textSecondary }]}>{rank}</Text>
+        <Text style={[s.plainNumber, { color: rank <= 3 ? colors.ratingBad : colors.textSecondary }]}>{rank}</Text>
       </View>
     );
   }
@@ -64,7 +79,7 @@ export const NoteRankBadge = memo(function NoteRankBadge({ rank }: { rank: numbe
   const [light, dark] = MEDALS[rank - 1];
   const cx = RANK_BADGE_WIDTH / 2;
   return (
-    <View style={s.medal}>
+    <View style={s.medal} testID={`note-rank-medal-${rank}`}>
       <Svg width={RANK_BADGE_WIDTH} height={MEDAL_HEIGHT}>
         <Defs>
           <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">

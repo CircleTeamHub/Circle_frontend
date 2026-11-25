@@ -12,7 +12,7 @@ import {
   rankBadgeCenterY,
 } from '@/features/notes/components/NoteRankBadge';
 import { Radius, Spacing, useTheme } from '@/theme';
-import type { NoteRankingItem } from '@/features/notes/types';
+import type { NoteRankingBoard, NoteRankingItem } from '@/features/notes/types';
 import type { NoteCardData } from '@/types';
 
 export const RANK_COLUMN_WIDTH = RANK_BADGE_WIDTH;
@@ -32,6 +32,7 @@ const s = StyleSheet.create({
 
 interface NoteRankingRowProps {
   rank: number;
+  board: NoteRankingBoard;
   note: NoteRankingItem;
   cardWidth: number;
   /** section 缺省 = 点了卡片本身；否则是卡片上的分块按钮，详情页定位到那一块。 */
@@ -58,9 +59,10 @@ function toCardData(note: NoteRankingItem): NoteCardData {
   };
 }
 
-/** 榜单一行：左边名次（前三名金银铜奖牌，其余斜体数字），右边是聊天同款笔记卡片。 */
+/** 榜单一行：左边名次（好评榜前三名金银铜奖牌，其余斜体数字），右边是聊天同款笔记卡片。 */
 export const NoteRankingRow = memo(function NoteRankingRow({
   rank,
+  board,
   note,
   cardWidth,
   onOpen,
@@ -69,10 +71,10 @@ export const NoteRankingRow = memo(function NoteRankingRow({
   const { t } = useTranslation();
   const d = useMemo(
     () => ({
-      rank: { marginTop: CARD_TITLE_CENTER_Y - rankBadgeCenterY(rank) },
+      rank: { marginTop: CARD_TITLE_CENTER_Y - rankBadgeCenterY(rank, board) },
       card: { borderColor: colors.surfaceBorder },
     }),
-    [colors.surfaceBorder, rank],
+    [board, colors.surfaceBorder, rank],
   );
   const card = useMemo(() => toCardData(note), [note]);
   const ratingCounts = useMemo(
@@ -92,7 +94,7 @@ export const NoteRankingRow = memo(function NoteRankingRow({
         accessible
         accessibilityLabel={t('explore.ranking.rankA11y', { defaultValue: '第 {{rank}} 名', rank })}
       >
-        <NoteRankBadge rank={rank} />
+        <NoteRankBadge rank={rank} board={board} />
       </View>
       <View style={[s.card, d.card]}>
         <NoteCardBody

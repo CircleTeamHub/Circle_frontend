@@ -16,6 +16,7 @@ import type {
   NoteExportResult,
   NoteGroup,
   NoteRanking,
+  NoteRankingBoard,
   NoteSummary,
   SaveNoteDraftInput,
   NoteWorkStatus,
@@ -226,9 +227,16 @@ export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
 /** 同聊天笔记卡片的四宫格：最多 4 张。 */
 const RANKING_PREVIEW_MAX = 4;
 
-/** 大众点评月榜。city 不传 = 全国（不看城市）；传了只收选了这座城市的源笔记。 */
-export async function fetchNoteRanking(city: string | null): Promise<NoteRanking> {
-  const qs = city ? `?city=${encodeURIComponent(city)}` : '';
+/**
+ * 大众点评月榜。city 不传 = 全国（不看城市）；传了只收选了这座城市的源笔记。
+ * 好评榜不带 board（服务端默认就是它，还没升级的后端会把不认识的参数拒成 400）。
+ */
+export async function fetchNoteRanking(city: string | null, board: NoteRankingBoard = 'good'): Promise<NoteRanking> {
+  const params = [
+    ...(city ? [`city=${encodeURIComponent(city)}`] : []),
+    ...(board === 'bad' ? ['board=bad'] : []),
+  ];
+  const qs = params.length > 0 ? `?${params.join('&')}` : '';
   const ranking = await apiClient<NoteRanking>(`/note/ranking${qs}`);
   return {
     ...ranking,

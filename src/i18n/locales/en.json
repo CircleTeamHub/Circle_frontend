@@ -269,7 +269,14 @@
       "emptyHint": "Pick a city in a note's title; once it gets good ratings it shows up here.",
       "emptyHintNationwide": "Notes show up here once they get good ratings.",
       "loadFailed": "Couldn't load the chart",
-      "rankA11y": "Rank {{rank}}"
+      "rankA11y": "Rank {{rank}}",
+      "boardGood": "Best rated",
+      "boardBad": "Worst rated",
+      "heroTitleBad": "Worst rated · Month {{month}}",
+      "heroTitleBadNoMonth": "Worst rated this month",
+      "emptyBad": "No notes on the worst-rated chart this month yet",
+      "emptyCityBad": "No notes from {{city}} on the worst-rated chart this month yet",
+      "emptyHintBad": "Notes show up here once they get bad ratings."
     }
   },
   "messages": {
