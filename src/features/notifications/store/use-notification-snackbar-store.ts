@@ -20,7 +20,7 @@ export type ChatSnackbarItem = {
   summary: string;
   /** 群聊里发这条消息的人;私聊没有。 */
   senderName?: string;
-  /** 群里点名了我或 @所有人。同一会话后来的消息替换横幅时保留,不让一条普通消息把它冲掉。 */
+  /** 这条消息在群里点名了我或 @所有人。 */
   mentioned?: boolean;
   /** 临时群:群头像的角标换成金色时钟。 */
   temporary?: boolean;
@@ -87,7 +87,7 @@ function enqueue(
     return;
   }
 
-  // 同一个会话只留一条横幅,新消息替换旧的。原来每条消息排一个(各 4 秒):群一多,
+  // 同一个会话只留一条横幅,新消息替换旧的,但普通消息不能替换点名消息。原来每条消息排一个(各 4 秒):群一多,
   // 横幅一个接一个停不下来,每个都要重新进场、再响一次。
   // 排着的原位替换;正在显示的(队头)沿用原横幅 id,界面只换内容 —— 不重新进场、
   // 不再响、不重新计时,一个活跃的群也就挂不住这一格。
@@ -98,10 +98,12 @@ function enqueue(
     );
     if (index >= 0) {
       const replaced = queue[index] as ChatSnackbarItem;
+      const keepMention = replaced.mentioned && !item.mentioned;
+      const preview = keepMention ? replaced : item;
+      const mergedId = keepMention ? item.id : replaced.id;
       const merged: ChatSnackbarItem = {
-        ...item,
-        mergedIds: [...(replaced.mergedIds ?? []), replaced.id].slice(-MAX_MERGED_IDS),
-        ...(item.mentioned || replaced.mentioned ? { mentioned: true } : {}),
+        ...preview,
+        mergedIds: [...(replaced.mergedIds ?? []), mergedId].slice(-MAX_MERGED_IDS),
       };
       const replacement: NotificationSnackbarItem =
         index === 0 ? { ...merged, bannerId: snackbarBannerKey(replaced) } : merged;
