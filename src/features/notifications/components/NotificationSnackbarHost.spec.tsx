@@ -286,6 +286,23 @@ it('a group banner shows the group avatar, the sender and the @-me mark', () => 
   expect(screen.getByLabelText('羽毛球群. chat.snackbarMentionedMe 李四: 晚上来吗')).toBeTruthy();
 });
 
+it('keeps the mention preview and tap target when a plain group message follows', () => {
+  mockSegments = ['(tabs)', 'messages'];
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    const { enqueueChatMessage } = useNotificationSnackbarStore.getState();
+    enqueueChatMessage({ ...chat('mention', '晚上来吗'), senderName: '李四', mentioned: true });
+    enqueueChatMessage({ ...chat('plain', '我到了'), senderName: '张三' });
+  });
+
+  const banner = screen.getByLabelText('group-a. chat.snackbarMentionedMe 李四: 晚上来吗');
+  fireEvent.press(banner);
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ searchedMsgID: 'mention' }),
+  });
+});
+
 it('a direct banner keeps the person avatar and the plain preview', () => {
   render(<NotificationSnackbarHost />);
   act(() => {

@@ -654,7 +654,18 @@ test(
       `backend APP_ERROR_CODES file must exist at ${BACKEND_CODES_PATH}`,
     );
     const contractCodes = [...loadServerErrorCodes().SERVER_ERROR_CODES].sort();
-    const backendCodes = [...loadBackendErrorCodes().APP_ERROR_CODES].sort();
+    const backendCodes = [...loadBackendErrorCodes().APP_ERROR_CODES];
+    const webSessionChanged = 'AUTH_WEB_SESSION_CHANGED';
+    const webSessionBinding = path.resolve(
+      path.dirname(BACKEND_CODES_PATH),
+      '../auth/web-session-changed.exception.ts',
+    );
+    // Web ships before the backend starts returning this error. Once the
+    // backend implements session binding, require its registry to include it.
+    if (!fs.existsSync(webSessionBinding) && !backendCodes.includes(webSessionChanged)) {
+      backendCodes.push(webSessionChanged);
+    }
+    backendCodes.sort();
     assert.deepEqual(
       contractCodes,
       backendCodes,

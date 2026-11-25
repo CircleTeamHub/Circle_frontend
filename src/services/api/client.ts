@@ -10,7 +10,10 @@
 import { API_URL } from '@/constants/config';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
-import { WEB_SESSION_HEADER, usesWebSessionCookie, withWebRefreshLock, withWebRefreshToken } from '@/services/auth/web-session';
+import {
+  WEB_SESSION_HEADER, isWebSessionChanged, readWebSessionIdentity, usesWebSessionCookie,
+  webSessionBindingHeader, withWebSessionLock, withWebRefreshToken, writesWebSessionCookie,
+} from '@/services/auth/web-session';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
@@ -472,16 +475,19 @@ async function executeRequest<T>(
       };
       const viaFreshConnection =
         transport === 'fresh-connection' && freshConnectionTransport !== null && diagnosticMethod === 'GET' && !serializedBody;
+      const send = () => fetch(url, {
+        method,
+        headers: requestHeaders,
+        ...(serializedBody ? { body: serializedBody.body } : {}),
+        ...(usesWebSessionCookie() ? { credentials: 'include' as const } : {}),
+        signal: controller.signal,
+      });
       res = await untilAborted(
         viaFreshConnection
           ? freshConnectionTransport!(url, { headers: requestHeaders, timeoutMs })
-          : fetch(url, {
-              method,
-              headers: requestHeaders,
-              ...(serializedBody ? { body: serializedBody.body } : {}),
-              ...(usesWebSessionCookie() ? { credentials: 'include' as const } : {}),
-              signal: controller.signal,
-            }),
+          : writesWebSessionCookie(diagnosticMethod, endpoint)
+            ? withWebSessionLock(send, controller.signal)
+            : send(),
         controller.signal,
       );
     } catch (error) {
@@ -650,6 +656,7 @@ async function refreshAccessToken(sessionEpoch: number) {
   }
 
   assertSessionEpoch(sessionEpoch);
+  if (useAuthStore.getState().webSessionInvalidated) throw sessionChangedError();
 
   let refreshResponseStatus: number | undefined;
   let refreshResponseDetails: SessionDiagnosticContext = {};
@@ -658,9 +665,10 @@ async function refreshAccessToken(sessionEpoch: number) {
   const refreshRequestId = useAuthStore.getState().refreshAttemptId ?? createHttpRequestId();
   let stage = 'prepare';
   const activeRefreshPromise = (async () => {
-    const { refreshToken } = useAuthStore.getState();
+    const { refreshToken, accessToken, invalidateWebSession } = useAuthStore.getState();
 
     if (!refreshToken) {
+      if (usesWebSessionCookie()) throw sessionChangedError();
       await clearLocalSession(sessionEpoch, { reason: 'refresh-token-missing' });
       throw new ApiError(
         i18n.t('common.errors.sessionExpired', {
@@ -670,6 +678,12 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
+    const webSession = usesWebSessionCookie() ? readWebSessionIdentity(accessToken) : null;
+    if (usesWebSessionCookie() && !webSession) {
+      invalidateWebSession();
+      throw sessionChangedError();
+    }
+
     // Rotation can commit even if the response is lost or this process is killed.
     // Fence the old credential on disk before sending it, not after an error.
     await useAuthStore.getState().prepareRefresh(refreshRequestId);
@@ -677,24 +691,25 @@ async function refreshAccessToken(sessionEpoch: number) {
     const stableDeviceId = await readStableDeviceId();
     assertSessionEpoch(sessionEpoch);
     stage = 'request';
-    const { res, payload, requestId, clientRequestId, durationMs } = await withWebRefreshLock(() => executeRequest<{
+    const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
     }>(
       '/auth/refresh',
       {
         method: 'POST',
-        // 网页版的刷新凭证在 Cookie 里，store 里只是占位值。
-        body: usesWebSessionCookie() ? {} : { refreshToken },
+        body: webSession ? {} : { refreshToken },
         auth: false,
         headers: {
           'Idempotency-Key': refreshRequestId,
+          // Web 用当前标签页的会话标识约束浏览器共享的 Cookie。
+          ...(webSession ? webSessionBindingHeader(webSession.sessionId) : {}),
           ...(stableDeviceId ? { 'X-Stable-Device-Id': stableDeviceId } : {}),
         },
       },
       undefined,
       { preparedRequestId: refreshRequestId },
-    ));
+    );
     refreshResponseStatus = res.status;
     assertSessionEpoch(sessionEpoch);
     const tokens = withWebRefreshToken(unwrapResponse(res, payload, {
@@ -734,6 +749,10 @@ async function refreshAccessToken(sessionEpoch: number) {
 
     const currentAuthState = useAuthStore.getState();
     assertSessionEpoch(sessionEpoch);
+    if (webSession && readWebSessionIdentity(tokens.accessToken)?.userId !== webSession.userId) {
+      currentAuthState.invalidateWebSession();
+      throw sessionChangedError();
+    }
 
     stage = 'persist';
     await currentAuthState.setTokens(tokens);
@@ -743,6 +762,10 @@ async function refreshAccessToken(sessionEpoch: number) {
   })()
     .catch(async (error) => {
       assertSessionEpoch(sessionEpoch);
+      if (usesWebSessionCookie() && isWebSessionChanged(error)) {
+        useAuthStore.getState().invalidateWebSession();
+        throw sessionChangedError();
+      }
       const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus ?? error.status : undefined);
       // 超时、断流、5xx、限流都说明不了服务端有没有轮换：会话和盘上的尝试 ID 都留着，
       // 下次续签带同一 ID 重试，不用把用户赶回登录页。
@@ -809,13 +832,11 @@ async function refreshAccessToken(sessionEpoch: number) {
  * 会认出是重试、作废没送到的那枚再发一枚。
  */
 export async function restoreWebSessionAccessToken(attemptId: string): Promise<string | null> {
-  const { res, payload, requestId, clientRequestId, durationMs } = await withWebRefreshLock(() =>
-    executeRequest<{ accessToken: string }>(
-      '/auth/refresh',
-      { method: 'POST', body: {}, auth: false, headers: { 'Idempotency-Key': attemptId } },
-      undefined,
-      { preparedRequestId: attemptId },
-    ),
+  const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{ accessToken: string }>(
+    '/auth/refresh',
+    { method: 'POST', body: {}, auth: false, headers: { ...webSessionBindingHeader('restore'), 'Idempotency-Key': attemptId } },
+    undefined,
+    { preparedRequestId: attemptId },
   );
   if (res.status === 401 || res.status === 403) return null;
   const tokens = withWebRefreshToken(unwrapResponse(res, payload, {
@@ -1084,6 +1105,7 @@ async function requestOnce<T>(
   options: RequestOptions,
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
+  if (auth && useAuthStore.getState().webSessionInvalidated) throw sessionChangedError();
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
   const requestSessionEpoch =
     auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;

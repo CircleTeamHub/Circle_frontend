@@ -189,7 +189,7 @@ test('登出清理清单点名每一个账号级持久化 store，幸存者留�
   // 清单在 performClearLocalSession 里被消费：先重置内存再删持久化
   assert.match(
     session,
-    /await clearAccountScopedPersistedStores\(clearedSessionEpoch\)/,
+    /await clearAccountScopedPersistedStores\(clearedSessionEpoch, options\.preserveComposerDrafts\)/,
   );
   assert.match(session, /resetForLogout\(\)/);
   assert.match(session, /clearStorage\?\.\(\)/);

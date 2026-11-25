@@ -67,6 +67,7 @@ interface AuthState {
   // Runtime-only auth session identity generation. This advances when a session
   // starts or ends, but remains stable while that session's tokens rotate.
   sessionEpoch: number;
+  webSessionInvalidated: boolean;
   isLoading: boolean;
   hasHydrated: boolean;
 
@@ -79,12 +80,14 @@ interface AuthState {
   prepareRefresh: (requestId: string) => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
-  clearSession: (options?: { preserveLoading?: boolean }) => void;
+  clearSession: (options?: { preserveLoading?: boolean; invalidateWebSession?: boolean }) => void;
+  invalidateWebSession: () => void;
   setLoading: (loading: boolean) => void;
   setHydrated: (hydrated: boolean) => void;
 }
 
 const AUTH_PERSIST_KEY = 'circle-im-auth';
+let webSnapshotEpoch: number | null = null;
 
 function partializeAuthState(state: AuthState) {
   return {
@@ -98,10 +101,12 @@ function partializeAuthState(state: AuthState) {
 }
 
 export async function persistCurrentAuthState(): Promise<void> {
+  const state = useAuthStore.getState();
+  if (usesWebSessionCookie() && !state.accessToken) return;
   await secureAuthStorage.setItem(
     AUTH_PERSIST_KEY,
     JSON.stringify({
-      state: partializeAuthState(useAuthStore.getState()),
+      state: partializeAuthState(state),
       version: AUTH_PERSIST_VERSION,
     }),
   );
@@ -109,7 +114,7 @@ export async function persistCurrentAuthState(): Promise<void> {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       accessToken: null,
       refreshToken: null,
       user: null,
@@ -117,6 +122,7 @@ export const useAuthStore = create<AuthState>()(
       refreshAttemptId: null,
       onboardingRequired: false,
       sessionEpoch: 0,
+      webSessionInvalidated: false,
       isLoading: true,
       hasHydrated: false,
 
@@ -129,6 +135,7 @@ export const useAuthStore = create<AuthState>()(
           refreshAttemptId: options?.refreshAttemptId ?? null,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
+          webSessionInvalidated: false,
           sessionEpoch: state.sessionEpoch + 1,
         })),
 
@@ -157,8 +164,12 @@ export const useAuthStore = create<AuthState>()(
           refreshAttemptId: null,
           onboardingRequired: false,
           isLoading: options?.preserveLoading ? state.isLoading : false,
+          webSessionInvalidated: options?.invalidateWebSession ?? state.webSessionInvalidated,
           sessionEpoch: state.sessionEpoch + 1,
         })),
+
+      // 共享 Cookie 已属于另一个会话。只停用本标签页，避免触发会清浏览器共享草稿的登出清理。
+      invalidateWebSession: () => get().clearSession({ invalidateWebSession: true }),
 
       setLoading: (loading) => set({ isLoading: loading }),
 
@@ -167,7 +178,18 @@ export const useAuthStore = create<AuthState>()(
     {
       name: AUTH_PERSIST_KEY,
       version: AUTH_PERSIST_VERSION,
-      storage: createJSONStorage(() => secureAuthStorage),
+      storage: createJSONStorage(() => ({
+        ...secureAuthStorage,
+        setItem: (key, value) => {
+          // Web 只在建立会话后记录一次缓存归属。旧标签页的续签与失效都不覆盖共享快照。
+          if (usesWebSessionCookie()) {
+            const { accessToken, sessionEpoch } = useAuthStore.getState();
+            if (!accessToken || webSnapshotEpoch === sessionEpoch) return;
+            webSnapshotEpoch = sessionEpoch;
+          }
+          return secureAuthStorage.setItem(key, value);
+        },
+      })),
       // 关闭"建店即自动水合"：secureAuthStorage 走 SecureStore(Keychain) 异步读，
       // 自动水合的完成时机不可控，会和 RootLayout 迁移后那次显式 rehydrate 抢跑，
       // 造成多次水合（也是此前 onboarding 被弹回的放大器）。改为只由 app/_layout.tsx
@@ -249,10 +271,20 @@ export const useAuthStore = create<AuthState>()(
           typeof nextState.refreshToken === 'string' &&
           nextState.refreshToken.length > 0;
         if (!hasValidTokens) {
+          if (usesWebSessionCookie()) {
+            // 保留原快照的归属供 Cookie 恢复时核对。令牌与路由门禁仍保持未认证。
+            useAuthStore.setState({
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false,
+              refreshAttemptId: null,
+              onboardingRequired: false,
+            });
+            return;
+          }
           // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
           // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
-          // 网页版的凭证本来就只在内存里，重新加载必然走到这里（随后靠 Cookie 恢复），不算异常。
-          if (!usesWebSessionCookie() && (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken)) {
+          if (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken) {
             const context = {
               authenticated: nextState.isAuthenticated,
               hasAccessToken: Boolean(nextState.accessToken),

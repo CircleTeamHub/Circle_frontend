@@ -202,13 +202,34 @@ test('partial credentials with authenticated metadata report before hydration cl
   assert.doesNotMatch(JSON.stringify(reports), /access-only/);
 });
 
-test('a web reload drops the in-memory tokens without reporting a forced logout', () => {
+test('a web reload retains only the cached owner for a later identity check', () => {
   // 网页版的凭证本来就只在内存里；重新加载后由 SessionBootstrap 拿 Cookie 恢复。
   const { useAuthStore, persistOptions, reports } = loadAuthStore({ web: true });
-  useAuthStore.setState({ isAuthenticated: true, accessToken: null, refreshToken: null });
+  useAuthStore.setState({ user: { id: 'cached-user' }, isAuthenticated: true, accessToken: null, refreshToken: null });
   persistOptions.onRehydrateStorage()(useAuthStore.getState(), undefined);
   assert.equal(reports.length, 0);
   assert.equal(useAuthStore.getState().isAuthenticated, false);
+  assert.equal(useAuthStore.getState().isLoading, true);
+  assert.equal(useAuthStore.getState().user?.id, 'cached-user');
+});
+
+test('invalidating an old browser tab never overwrites the shared auth metadata', () => {
+  const { useAuthStore, storageSetCalls } = loadAuthStore({ web: true, realPersist: true });
+  useAuthStore.getState().setSession({ accessToken: 'active', refreshToken: 'placeholder' }, { id: 'active-user' });
+  const stored = storageSetCalls.length;
+  useAuthStore.getState().invalidateWebSession();
+  assert.equal(useAuthStore.getState().accessToken, null);
+  assert.equal(useAuthStore.getState().webSessionInvalidated, true);
+  assert.equal(storageSetCalls.length, stored);
+});
+
+test('Web token refresh bookkeeping never republishes a tab’s cached account owner', async () => {
+  const { useAuthStore, storageSetCalls } = loadAuthStore({ web: true, realPersist: true });
+  useAuthStore.getState().setSession({ accessToken: 'active', refreshToken: 'placeholder' }, { id: 'active-user' });
+  assert.equal(storageSetCalls.length, 1);
+  await useAuthStore.getState().prepareRefresh('attempt');
+  await useAuthStore.getState().setTokens({ accessToken: 'rotated', refreshToken: 'placeholder' });
+  assert.equal(storageSetCalls.length, 1);
 });
 
 test('empty native startup does not report a forced logout', () => {

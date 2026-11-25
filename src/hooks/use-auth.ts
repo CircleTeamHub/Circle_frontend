@@ -39,7 +39,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { usesWebSessionCookie } from '@/services/auth/web-session';
+import { isWebSessionChanged, trackWebLogout, usesWebSessionCookie } from '@/services/auth/web-session';
 
 type AuthSuccessOptions = {
   onboardingRequired?: boolean;
@@ -83,6 +83,15 @@ function clearFailedLoginSession(preservedEpoch: number | null): Promise<void> {
     return Promise.resolve();
   }
   return clearLocalSession(undefined, { reason: 'failed-login-cleanup', userInitiated: true });
+}
+
+function revokeCancelledLogin(tokens: AuthTokens) {
+  const request = usesWebSessionCookie()
+    ? logoutRequest(tokens.refreshToken, tokens.accessToken)
+    : logoutRequest(tokens.refreshToken);
+  void request.catch(error => {
+    if (!isWebSessionChanged(error)) reportHandledFailure('auth', 'revokeCancelledLogin', error);
+  });
 }
 
 export function useAuth() {
@@ -142,7 +151,7 @@ export function useAuth() {
 
       const current = useAuthStore.getState();
       if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent()) || (options.expectedSessionEpoch != null && current.sessionEpoch !== options.expectedSessionEpoch)) {
-        void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+        revokeCancelledLogin(tokens);
         return;
       }
       const replacingSession = current.isAuthenticated;
@@ -172,7 +181,7 @@ export function useAuth() {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
               setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshAttemptId: current.refreshAttemptId });
             }
-            void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+            revokeCancelledLogin(tokens);
             return;
           }
         }
@@ -229,7 +238,7 @@ export function useAuth() {
           password,
         });
         if (!isAttemptCurrent() || (preservedEpoch !== null && useAuthStore.getState().sessionEpoch !== preservedEpoch)) {
-          if (result.kind !== 'deviceVerification') void logoutRequest(result.tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+          if (result.kind !== 'deviceVerification') revokeCancelledLogin(result.tokens);
           return;
         }
         if (result.kind === 'deviceVerification') {
@@ -338,38 +347,41 @@ export function useAuth() {
     [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
-  const endSession = useCallback(async () => {
+  const logout = useCallback(async () => {
     if (inFlightRef.current) return;
-    const { refreshToken } = useAuthStore.getState();
+    const { user, accessToken, refreshToken, sessionEpoch, invalidateWebSession } = useAuthStore.getState();
 
     safeSetError(null);
     inFlightRef.current = true;
     safeSetSubmitting(true);
 
-    // 服务端登出与本地清理并行：网络慢时不让 UI 干等到 apiClient 15s 超时；
-    // 失败也不阻塞本地登出 —— 但要在 dev 把错误打出来，避免长期静默回归。
-    if (refreshToken) {
-      void logoutRequest(refreshToken).catch((err) => {
-        reportHandledFailure('auth', 'serverLogout', err);
-      });
-    }
-
     try {
-      await clearLocalSession(undefined, { reason: 'user-logout', userInitiated: true });
+      if (refreshToken && usesWebSessionCookie()) {
+        // 先确认 Cookie 仍属于本标签页。陈旧标签页不能撤销或清理当前浏览器账号。
+        try {
+          await trackWebLogout(sessionEpoch, logoutRequest(refreshToken, accessToken));
+        } catch (error) {
+          if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+          if (isWebSessionChanged(error)) {
+            invalidateWebSession();
+          } else {
+            reportHandledFailure('auth', 'serverLogout', error);
+            Alert.alert(i18n.t('settingsPage.logout'), getApiErrorMessage(error, i18n.t('common.retryLater')));
+          }
+          return;
+        }
+      } else if (refreshToken) {
+        // 原生凭证随本地登出移除，服务端清理仍可在后台完成。
+        void logoutRequest(refreshToken).catch(error => reportHandledFailure('auth', 'serverLogout', error));
+      }
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      if (user?.id) useKnownAccountsStore.getState().removeAccount(user.id);
+      await clearLocalSession(sessionEpoch, { reason: 'user-logout', userInitiated: true });
     } finally {
       inFlightRef.current = false;
       safeSetSubmitting(false);
     }
   }, [safeSetError, safeSetSubmitting]);
-
-  const logout = useCallback(async () => {
-    // 退出 = 从本设备账号列表移除当前账号（下次需重新登录才能回来）。
-    const currentId = useAuthStore.getState().user?.id;
-    if (currentId) {
-      useKnownAccountsStore.getState().removeAccount(currentId);
-    }
-    await endSession();
-  }, [endSession]);
 
   // 「切换账号」打开账号选择 sheet，而不是直接登出。
   // 网页版例外：同一浏览器只有一份登录 Cookie（见 web-session.ts），存不下多个账号，

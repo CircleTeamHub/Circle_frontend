@@ -1,5 +1,5 @@
-import { AppState, Platform } from 'react-native';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { AppState, Platform, Text } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SessionBootstrap } from './session-bootstrap';
 import { fetchCurrentUser, fetchCurrentUserWithToken } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
@@ -12,7 +12,6 @@ import { reportError } from '@/observability/sentry';
 import * as apiClient from '@/services/api/client';
 import { ApiError } from '@/services/api/client';
 import type { AuthUser } from '@/stores/authStore';
-import { showTopNotice } from '@/components/app/top-notice-store';
 
 // authStore 只需要「按 selector 取值 + getState」这两种用法；bootstrap 的恢复流程在
 // 挂载时跑一次即可，不需要真正的订阅/重渲染。
@@ -38,7 +37,6 @@ jest.mock('@/i18n', () => ({
       options?.defaultValue ?? key,
   },
 }));
-jest.mock('@/components/app/top-notice-store', () => ({ showTopNotice: jest.fn() }));
 jest.mock('@/services/auth/session', () => ({
   clearLocalSession: jest.fn(async () => undefined),
   registerLogoutHandler: jest.fn(() => () => undefined),
@@ -97,6 +95,7 @@ beforeEach(() => {
     sessionEpoch: 1,
     setUser: jest.fn(),
     setSession: jest.fn(),
+    invalidateWebSession: jest.fn(),
     setLoading: jest.fn(),
     setOnboardingRequired: jest.fn(),
   };
@@ -429,6 +428,7 @@ describe('web reload', () => {
 
   beforeEach(() => {
     jest.replaceProperty(Platform, 'OS', 'web');
+    jest.mocked(fetchCurrentUserWithToken).mockReset();
     tokenless();
   });
 
@@ -476,6 +476,25 @@ describe('web reload', () => {
     expect(mockAuth.state.setSession).not.toHaveBeenCalled();
   });
 
+  test('a fresh page can recover a confirmed new browser account without deleting scoped drafts', async () => {
+    mockAuth.state.user = storedUser;
+    const currentUser = { ...storedUser, id: 'user-2' };
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue('new-account-access');
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(currentUser);
+
+    render(<SessionBootstrap />);
+
+    await waitFor(() => expect(mockAuth.state.setSession).toHaveBeenCalledWith(
+      { accessToken: 'new-account-access', refreshToken: 'web-cookie-session' }, currentUser,
+    ));
+    expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
+      preserveLoading: true, preserveComposerDrafts: true, reason: 'account-switch',
+    });
+    expect(mockClearLocalSession.mock.invocationCallOrder[0]).toBeLessThan(
+      (mockAuth.state.setSession as jest.Mock).mock.invocationCallOrder[0],
+    );
+  });
+
   test('a superseded run that finds no cookie leaves the cleanup to the newer run', async () => {
     let finish: (value: string | null) => void = () => {};
     jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockReturnValue(new Promise(resolve => { finish = resolve; }));
@@ -488,36 +507,97 @@ describe('web reload', () => {
     expect(mockClearLocalSession).not.toHaveBeenCalled();
   });
 
-  test('when the server cannot be reached it still unlocks the login page', async () => {
-    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(new ApiError('offline', { status: 0, failureKind: 'network' }));
+  test.each([
+    new ApiError('offline', { status: 0, failureKind: 'network' }),
+    new ApiError('busy', { status: 429 }),
+    new ApiError('unavailable', { status: 503 }),
+  ])('preserves drafts and keeps the route gated after a transient restore failure ($status)', async (error) => {
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(error);
 
-    render(<SessionBootstrap />);
+    render(<SessionBootstrap><Text>App route</Text></SessionBootstrap>);
 
-    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false), { timeout: 5_000 });
+    await waitFor(() => expect(restore).toHaveBeenCalledTimes(2));
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+    expect(mockAuth.state.setLoading).not.toHaveBeenCalled();
     expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+    await screen.findByRole('button', { name: '重试' });
+    expect(screen.queryByText('App route')).toBeNull();
   });
 
-  test('a rate-limited restore says the session is still there instead of looking logged out', async () => {
-    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockRejectedValue(new ApiError('busy', { status: 429 }));
+  test('Retry recovers an unconfirmed cookie refresh with the original attempt id', async () => {
+    mockAuth.state.user = storedUser;
+    let finish: (value: string) => void = () => {};
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken')
+      .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+      .mockRejectedValueOnce(new ApiError('timeout', { status: 0, failureKind: 'timeout' }))
+      .mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(storedUser);
+    const app = <SessionBootstrap><Text>App route</Text></SessionBootstrap>;
+    const { rerender } = render(app);
+
+    fireEvent.press(await screen.findByRole('button', { name: '重试' }));
+
+    expect(screen.getByRole('button', { name: '重试' })).toBeDisabled();
+    expect(screen.queryByText('App route')).toBeNull();
+    expect(restore).toHaveBeenCalledTimes(3);
+    expect(restore.mock.calls.map(([id]) => id)).toEqual(Array(3).fill(restore.mock.calls[0][0]));
+
+    await act(async () => { finish('restored-access'); });
+    expect(mockAuth.state.setSession).toHaveBeenCalledWith(
+      { accessToken: 'restored-access', refreshToken: 'web-cookie-session' },
+      storedUser,
+    );
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+
+    mockAuth.state.isLoading = false;
+    rerender(<SessionBootstrap><Text>App route</Text></SessionBootstrap>);
+    expect(screen.getByText('App route')).toBeOnTheScreen();
+  });
+
+  test('Retry invalidates the old tab if the shared cookie now belongs to another user', async () => {
+    mockAuth.state.user = storedUser;
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken')
+      .mockRejectedValueOnce(new ApiError('offline', { status: 0, failureKind: 'network' }))
+      .mockRejectedValueOnce(new ApiError('offline', { status: 0, failureKind: 'network' }))
+      .mockResolvedValueOnce('another-account-access');
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue({ id: 'user-2' } as AuthUser);
+
+    render(<SessionBootstrap><Text>App route</Text></SessionBootstrap>);
+    fireEvent.press(await screen.findByRole('button', { name: '重试' }));
+
+    await waitFor(() => expect(mockAuth.state.invalidateWebSession).toHaveBeenCalledTimes(1));
+    expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
+    expect(mockLoadGroups).not.toHaveBeenCalled();
+    expect(screen.queryByText('App route')).toBeNull();
+  });
+
+  test('Retry starts a fresh refresh attempt after the cookie refresh succeeded but user lookup failed', async () => {
+    const restore = jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue('restored-access');
+    jest.mocked(fetchCurrentUserWithToken)
+      .mockRejectedValueOnce(new ApiError('unavailable', { status: 503 }))
+      .mockRejectedValueOnce(new ApiError('unavailable', { status: 503 }))
+      .mockResolvedValueOnce(storedUser);
 
     render(<SessionBootstrap />);
+    fireEvent.press(await screen.findByRole('button', { name: '重试' }));
 
-    await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false), { timeout: 5_000 });
-    // 没有凭证进不了 App,只能落在登录页;但 Cookie 会话多半还有效,得告诉用户刷新就能回来。
-    expect(showTopNotice).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'warning',
-      title: '登录状态暂时没能恢复',
-      action: expect.objectContaining({ label: '刷新' }),
-    }));
+    await waitFor(() => expect(mockAuth.state.setSession).toHaveBeenCalled());
+    expect(restore).toHaveBeenCalledTimes(2);
+    expect(restore.mock.calls[1][0]).not.toBe(restore.mock.calls[0][0]);
+    expect(mockClearLocalSession).not.toHaveBeenCalled();
   });
 
-  test('a missing cookie is an ordinary logged-out start, with no warning', async () => {
-    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue(null);
+  test('a definitive user lookup rejection clears local data and unlocks the login page', async () => {
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken').mockResolvedValue('rejected-access');
+    jest.mocked(fetchCurrentUserWithToken).mockRejectedValueOnce(new ApiError('unauthorized', { status: 401 }));
 
     render(<SessionBootstrap />);
 
     await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
-    expect(showTopNotice).not.toHaveBeenCalled();
+    expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, { preserveLoading: true, reason: 'bootstrap-tokens-missing' });
+    expect(mockAuth.state.setSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
   });
 });
 

@@ -188,6 +188,22 @@ test('root layout applies the global auth route guard', () => {
   assert.match(source, /<Redirect href=\{decision\.href\}/);
 });
 
+test('an invalidated Web tab stays gated even during account switching or on a public route', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: false,
+      isLoading: false,
+      onboardingRequired: false,
+      accountSwitching: true,
+      webSessionInvalidated: true,
+    })),
+    { type: 'web-session-invalidated' },
+  );
+});
+
 test('redirect keeps the navigator mounted (no infinite-redirect loop)', () => {
   // Regression: returning <Redirect> alone unmounts the <Stack>, so router.replace
   // can't settle the segment and the guard re-redirects forever ("Maximum update

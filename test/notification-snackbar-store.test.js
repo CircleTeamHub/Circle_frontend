@@ -204,8 +204,8 @@ test("a newer chat message updates the banner on screen without becoming a new b
   assert.equal(snackbarBannerKey(useNotificationSnackbarStore.getState().current), "a3");
 });
 
-test("an @-me banner keeps its mark when a plain message from the same group replaces it", () => {
-  // 活跃的群里 @我 那条刚弹出来就被下一条普通消息替换:标记不能跟着丢。
+test("an @-me banner keeps its preview and target when a plain message from the same group arrives", () => {
+  // 普通消息合并入队，横幅继续指向实际点名的那条消息。
   const { useNotificationSnackbarStore } = load(
     "src/features/notifications/store/use-notification-snackbar-store.ts",
   );
@@ -215,7 +215,8 @@ test("an @-me banner keeps its mark when a plain message from the same group rep
   store.enqueueChatMessage(chat("a2", "group-a", "随便聊聊"));
 
   const { current } = useNotificationSnackbarStore.getState();
-  assert.equal(current.summary, "随便聊聊");
+  assert.equal(current.summary, "@你 看一下");
+  assert.equal(current.id, "a1");
   assert.equal(current.mentioned, true);
 
   // 收起之后再来的普通消息是新横幅,不带旧标记。

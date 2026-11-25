@@ -1096,8 +1096,11 @@
       "tag": "固定",
       "failed": "操作に失敗しました",
       "fallbackPreview": "[メッセージ]",
-      "bannerA11y": "固定メッセージ：{{preview}}",
-      "listTitle": "固定 · {{count}}件"
+      "jumpA11y": "固定メッセージへ移動：{{preview}}",
+      "unpinA11y": "メッセージの固定を解除：{{preview}}",
+      "openList_other": "固定メッセージ{{count}}件を表示",
+      "listHeading": "固定メッセージ",
+      "listCount_other": "{{count}}件"
     },
     "clearRequest": {
       "accept": "承認する",
@@ -3311,8 +3314,10 @@
       "securityQuestionsRetry": "秘密の質問を読み込めませんでした。タップして再試行してください。"
     },
     "webSessionUnreachableTitle": "ログイン状態をまだ復元できません",
-    "webSessionUnreachableMessage": "ネットワークが不安定か、サーバーが混み合っています。ログアウトはされていません。少し待ってからページを再読み込みしてください。",
-    "webSessionUnreachableReload": "再読み込み"
+    "webSessionUnreachableMessage": "接続を確認するか、少し待ってからもう一度お試しください。",
+    "webSessionInvalidatedTitle": "このタブのログイン状態が変わりました",
+    "webSessionInvalidatedMessage": "ページを再読み込みして、ブラウザの現在のログイン状態で続けてください。",
+    "webSessionReload": "再読み込み"
   },
   "media": {
     "saveImage": "画像を保存",
@@ -4105,6 +4110,7 @@
     "AUTH_LOGIN_CHALLENGE_REJECTED": "このログインは信頼済みデバイスで拒否されました",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "確認コードの誤りが多すぎるため、この確認は無効になりました。もう一度開始してください",
     "AUTH_SESSION_DEVICE_UNBOUND": "ログイン状態の更新が必要です。しばらくしてから再度お試しください",
+    "AUTH_WEB_SESSION_CHANGED": "ブラウザのログイン状態が変わりました。ページを再読み込みしてください。",
     "AUTH_SECURITY_CODE_NOT_SET": "ログインセキュリティコードが設定されていません。信頼済みデバイスで承認してください",
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",

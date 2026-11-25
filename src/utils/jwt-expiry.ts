@@ -1,8 +1,7 @@
 /**
- * 读 access token 的到期时刻(只解码、不验签)。
+ * 读 access token 的到期时刻和会话标识(只解码、不验签)。
  *
- * 用途只有一个:实时通道被服务端断开、或准备建连时,判断是不是 token 过期了 ——
- * 过期就先走一次刷新,而不是拿着过期 token 反复重连。授权判断永远以服务端为准。
+ * 实时通道据此决定是否先续签，Web 端用标识约束本标签页的续签。授权判断以服务端为准。
  */
 
 const BASE64_ALPHABET =
@@ -33,19 +32,28 @@ function decodeBase64Url(segment: string): string | null {
   return decoded;
 }
 
-export function readJwtExpiryMs(token: string): number | null {
+function readJwtPayload(token: string): { exp?: unknown; sub?: unknown; sid?: unknown } | null {
   const parts = token.split('.');
   if (parts.length !== 3 || !parts[1]) return null;
   const json = decodeBase64Url(parts[1]);
   if (json === null) return null;
   try {
     const payload: unknown = JSON.parse(json);
-    if (!payload || typeof payload !== 'object') return null;
-    const exp = (payload as { exp?: unknown }).exp;
-    return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null;
+    return payload && typeof payload === 'object' ? payload : null;
   } catch {
     return null;
   }
+}
+
+export function readJwtExpiryMs(token: string): number | null {
+  const exp = readJwtPayload(token)?.exp;
+  return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null;
+}
+
+export function readJwtSession(token: string | null | undefined) {
+  const claims = token ? readJwtPayload(token) : null;
+  if (typeof claims?.sub !== 'string' || !claims.sub || typeof claims.sid !== 'string' || !claims.sid) return null;
+  return { userId: claims.sub, sessionId: claims.sid };
 }
 
 /** skewMs 内即将到期也算过期:拿着还剩几秒的 token 建连,握手完就被断开。 */

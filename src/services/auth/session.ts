@@ -1,4 +1,5 @@
 import { secureAuthStorage } from '@/storage/secure-auth-storage';
+import { getPendingWebLogout, usesWebSessionCookie } from '@/services/auth/web-session';
 import {
   persistCurrentAuthState,
   useAuthStore,
@@ -114,6 +115,9 @@ type PersistedResettableStore = {
  * 新增持久化 store 时必须把它加进这里或上面的幸存名单 —— 让「随账号还是随设备」
  * 成为一次显式决定，而不是默认幸存。
  */
+const loadComposerDraftStore = async () =>
+  (await import('@/chat-core/composer-drafts')).useComposerDraftStore;
+
 const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] = [
   async () => {
     const { clearUnreferencedChatBackgroundImages, useChatPreferencesStore } =
@@ -129,8 +133,7 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
     (await import('@/features/discover/store/use-discover-filter-store'))
       .useDiscoverFilterStore,
   // 聊天输入框草稿:没发出去的消息原文,不能留给下一个在这台设备上登录的人。
-  async () =>
-    (await import('@/chat-core/composer-drafts')).useComposerDraftStore,
+  loadComposerDraftStore,
   // 待发聊天媒体的持久副本(还没发出去的照片/录音/视频):不在任何 persist key 里,
   // 只有磁盘足迹。outbox 行在加密的本地库里随账号留着,副本删掉后那几条在下次
   // 登录时按「副本没了」处理(见 socket-manager restorePendingMediaPreview)。
@@ -177,6 +180,7 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
 
 async function clearAccountScopedPersistedStores(
   clearedSessionEpoch: number,
+  preserveComposerDrafts?: boolean,
 ): Promise<void> {
   // 内存重置与磁盘清除必须分开对待（PR #129 review P1）：
   //
@@ -189,6 +193,7 @@ async function clearAccountScopedPersistedStores(
   //   （不能因中途会话变化就 return 掉后面的 store）。新会话若已写过同一个共享 key，
   //   其内存态仍在，persist 会在下次状态变更时把自己的数据重新落盘。
   for (const load of ACCOUNT_SCOPED_STORE_LOADERS) {
+    if (preserveComposerDrafts && load === loadComposerDraftStore) continue;
     try {
       const store = await load();
       if (useAuthStore.getState().sessionEpoch === clearedSessionEpoch) {
@@ -220,8 +225,14 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
 
 interface ClearLocalSessionOptions extends SessionDiagnosticContext {
   preserveLoading?: boolean;
+  /** Web 冷启动确认换号时清共享缓存，保留已按账号隔离的未发送草稿。 */
+  preserveComposerDrafts?: boolean;
   reason?: SessionDiagnosticReason;
 }
+
+const WEB_PASSIVE_REJECTIONS = new Set<SessionDiagnosticReason>([
+  'refresh-rejected', 'request-rejected-after-refresh', 'realtime-revoked', 'bootstrap-rejected',
+]);
 
 async function performClearLocalSession(
   sessionEpoch: number,
@@ -309,7 +320,7 @@ async function performClearLocalSession(
 
   // 账号级持久化 store（#97）：内存重置 + 删除 MMKV key，防止上一账号的
   // conversationID / 圈子引用渗进下一个会话的 UI。
-  await clearAccountScopedPersistedStores(clearedSessionEpoch);
+  await clearAccountScopedPersistedStores(clearedSessionEpoch, options.preserveComposerDrafts);
 
   let persistCleared = false;
   try {
@@ -351,10 +362,22 @@ export function clearLocalSession(
   expectedSessionEpoch?: number,
   options: ClearLocalSessionOptions = {},
 ): Promise<void> {
-  const sessionEpoch =
-    expectedSessionEpoch ?? useAuthStore.getState().sessionEpoch;
+  const auth = useAuthStore.getState();
+  const sessionEpoch = expectedSessionEpoch ?? auth.sessionEpoch;
 
-  if (useAuthStore.getState().sessionEpoch !== sessionEpoch) {
+  if (auth.sessionEpoch !== sessionEpoch || auth.webSessionInvalidated) {
+    return Promise.resolve();
+  }
+
+  if (usesWebSessionCookie() && !options.userInitiated && options.reason && WEB_PASSIVE_REJECTIONS.has(options.reason)) {
+    const invalidate = () => {
+      const current = useAuthStore.getState();
+      if (current.sessionEpoch === sessionEpoch) current.invalidateWebSession();
+    };
+    // 一次主动登出也会通知本标签页断开实时连接。等 Cookie 绑定结果决定由谁负责清理。
+    const pendingLogout = getPendingWebLogout(sessionEpoch);
+    if (pendingLogout) return pendingLogout.then(() => undefined, invalidate);
+    invalidate();
     return Promise.resolve();
   }
 

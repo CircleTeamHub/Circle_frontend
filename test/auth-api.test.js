@@ -30,7 +30,7 @@ function loadAuthApi(apiClientMock, { web = false } = {}) {
       }
 
       if (request === "@/services/api/client") {
-        return { apiClient: apiClientMock };
+        return { apiClient: apiClientMock, ...loadTsModule('src/services/api/api-error.ts') };
       }
 
       if (request === "@/services/api/utils") {
@@ -452,12 +452,22 @@ test("native login still requires the refresh token in the response", async () =
   await assert.rejects(() => login({ identifier: "a@b.com", password: "p" }), /认证返回数据格式异常/);
 });
 
-test("web logout lets the server read and clear the refresh cookie", async () => {
+test("web logout binds the cookie to the calling tab’s access session", async () => {
   const calls = [];
   const { logout } = loadAuthApi(async (endpoint, options) => { calls.push({ endpoint, options }); }, { web: true });
-  await logout("web-cookie-session");
+  const sessionId = '01111111-1111-4111-8111-111111111111';
+  const claims = Buffer.from(JSON.stringify({ sub: 'account-a', sid: sessionId })).toString('base64url');
+  await logout("web-cookie-session", `header.${claims}.signature`);
   assert.equal(calls[0].endpoint, "/auth/logout");
-  assert.equal(JSON.stringify(calls[0].options.body), "{}");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.body)), {});
+  assert.equal(calls[0].options.headers.Authorization, `WebSession ${sessionId}`);
+});
+
+test("web logout with no bound access session fails before a cookie request is sent", async () => {
+  const calls = [];
+  const { logout } = loadAuthApi(async (...args) => { calls.push(args); }, { web: true });
+  await assert.rejects(logout("web-cookie-session"), error => error.errorCode === 'AUTH_WEB_SESSION_CHANGED');
+  assert.equal(calls.length, 0);
 });
 
 test("native logout sends the refresh token", async () => {
