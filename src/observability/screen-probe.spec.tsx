@@ -60,6 +60,22 @@ test('the first page of a cold start is startup cost, not a slow page', async ()
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
 });
 
+test('the standalone web watchdog is stopped only after a page commits', async () => {
+  const ready = jest.fn();
+  const target = globalThis as typeof globalThis & {
+    __WINDNOTE_WEB_STARTUP__?: { ready: () => void; sentryReady: () => void };
+  };
+  target.__WINDNOTE_WEB_STARTUP__ = { ready, sentryReady: jest.fn() };
+  try {
+    expect(ready).not.toHaveBeenCalled();
+    const page = await renderAsync(probeScreenLayout({ route: { name: 'login' }, navigation: navigationIn('/(auth)'), children: <Text>login</Text> }));
+    expect(ready).toHaveBeenCalledTimes(1);
+    await page.unmountAsync();
+  } finally {
+    delete target.__WINDNOTE_WEB_STARTUP__;
+  }
+});
+
 test('a page whose first commit takes over a second is recorded and reported by stack and route template', async () => {
   await startUp();
   await renderAsync(

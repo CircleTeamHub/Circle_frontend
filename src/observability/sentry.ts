@@ -26,6 +26,7 @@ import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
 import { allowedMetricAttributes, metricDefinition } from './metrics';
 import { safeHttpEndpoint } from './http-diagnostics';
+import { markWebStartupStage } from './web-startup';
 import { detectorTitle } from './detector-titles';
 import {
   isBenignDomBridgeRejection,
@@ -204,6 +205,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
     });
     sentryInitialized = true;
     navigationIntegration = navigation;
+    markWebStartupStage('sentry');
     return true;
   } catch {
     sentryInitialized = false;

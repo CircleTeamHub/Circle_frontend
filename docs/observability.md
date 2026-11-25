@@ -4,6 +4,16 @@
 
 2026-11-04 核查与部署：`windnote/react-native` 已收到真实 App 事件，包含 `production` 的 iOS adhoc 包；[REACT-NATIVE-71](https://windnote.sentry.io/issues/7725853141/) 中有路由边界捕获的 `pause` 异常。该事件尚无匹配的 source-map artifacts，堆栈显示 `main.jsbundle:1:<列号>`。服务器指标、看板和日志栈现已部署；生产后端配置仍未启用 Sentry，这与手机 App 的 Sentry 接入状态不同。
 
+## 网页在登录界面出现前卡住
+
+`npm run export:web` 会在导出的 `index.html` 中、主脚本之前内联一个独立探针。它不依赖 React 或 Sentry SDK，捕获入口脚本下载失败、首屏前的执行异常，以及前台等待 60 秒仍未提交页面的启动超时。后台标签页暂停计时。Sentry 初始化和首个叶子页面提交分别标记进度；首屏完成后移除探针监听和计时器。
+
+构建时使用与 Expo 相同的 `.env` 加载规则读取 `EXPO_PUBLIC_SENTRY_DSN`。配置了 DSN 时，探针直接使用 Sentry envelope 协议上报，搜索 `operation:webStartup`，`kind` 为 `scriptLoadFailed`、`scriptEvaluationFailed` 或 `startupTimeout`。它不是性能 trace，不受 5% trace 采样影响。记录仅含随机事件 ID、构建 hash、入口脚本文件名、下载耗时/大小/协商协议、粗粒度系统类别，以及 Sentry 是否已初始化；不读取账号、Cookie、完整页面 URL、请求参数、异常原文或完整 User-Agent。
+
+最近一次故障同时保存在 `circle-im-web-startup-diagnostics-v1` 本地键中，并显示可选中复制的诊断文本。上报请求最多等待 8 秒；`delivery=sent` 只表示 Sentry 接收端返回成功，不表示已发送通知。若 Sentry 本身不可达或存储不可用，页面仍显示当前内存诊断。它不会自动重传旧记录。完全收不到入口 HTML 的 DNS/TLS/连接故障无法由页面内探针捕获，仍需失败设备的浏览器网络记录或外部探测。
+
+2026-11-25 只读核对：[现有通知规则](https://windnote.sentry.io/monitors/alerts/3632905/) 仅在新问题被标为高优先级、或已有问题变为高优先级时通知；同一高优先级问题的后续事件不会因为“又发生一次”而触发该规则。当天记录了两次安卓接口超时的触发。此核对没有修改规则，也没有验证 Discord 实际收件。若要让网页启动失败的持续发生也通知，需要针对 `operation=webStartup` 设置事件频次/再次发生条件，并单独验收通知投递。
+
 ## 如何阅读 App 报错
 
 `REDACTED` 表示原始文本被脱敏。新版上报改用固定的中文故障说明，不再把整个标题替换为占位符。例如：

@@ -78,7 +78,7 @@ import {
 import { reportHandledFailure } from '@/observability/report-failure';
 import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { devWarn } from '@/utils/dev-log';
-import { checkNavigationShape } from '@/observability/screen-probe';
+import { checkNavigationShape, probeRootScreenLayout } from '@/observability/screen-probe';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
 export { RouteErrorBoundary as ErrorBoundary } from '@/observability/RouteErrorBoundary';
@@ -264,6 +264,7 @@ function RootStack() {
       {/* Stack 导航：所有页面以"从右滑入"的动画叠加展示，全局隐藏 header。
           开启横向返回手势，让带有自定义返回按钮的页面也支持从左侧滑回。 */}
       <Stack
+        screenLayout={Platform.OS === 'web' ? probeRootScreenLayout : undefined}
         screenOptions={{
           headerShown: false,                          // 所有页面不显示系统 header
           animation: 'slide_from_right',               // 页面切换动画：从右侧滑入

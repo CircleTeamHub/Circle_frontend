@@ -4,7 +4,7 @@ import { router, type Href } from 'expo-router';
 import Stack from 'expo-router/stack';
 import Tabs from 'expo-router/tabs';
 import { act, renderRouter, screen } from 'expo-router/testing-library';
-import { probeScreenLayout, SLOW_SCREEN_MS } from './screen-probe';
+import { probeScreenLayout, probeRootScreenLayout, resetScreenProbeReports, SLOW_SCREEN_MS } from './screen-probe';
 
 const mockRecordMetric = jest.fn();
 const mockReportHandledFailure = jest.fn();
@@ -20,10 +20,39 @@ jest.mock('./http-diagnostics', () => ({
   diagnosticNow: () => mockNow,
 }));
 
+beforeEach(() => {
+  mockNow = 0;
+  mockRecordMetric.mockClear();
+  mockReportHandledFailure.mockClear();
+  resetScreenProbeReports();
+});
+
 function SlowDetail(): React.ReactElement {
   mockNow += SLOW_SCREEN_MS + 200;
   return <Text>detail</Text>;
 }
+
+test('root loading does not finish startup, but a real root QR page does', async () => {
+  const ready = jest.fn();
+  const target = globalThis as typeof globalThis & {
+    __WINDNOTE_WEB_STARTUP__?: { ready: () => void; sentryReady: () => void };
+  };
+  target.__WINDNOTE_WEB_STARTUP__ = { ready, sentryReady: jest.fn() };
+  try {
+    renderRouter({
+      _layout: () => <Stack screenLayout={probeRootScreenLayout} />,
+      index: () => <Text>restoring session</Text>,
+      qr: () => <Text>QR ready</Text>,
+    }, { initialUrl: '/' });
+    expect(await screen.findByText('restoring session')).toBeTruthy();
+    expect(ready).not.toHaveBeenCalled();
+    act(() => router.replace('/qr' as Href));
+    expect(await screen.findByText('QR ready')).toBeTruthy();
+    expect(ready).toHaveBeenCalledTimes(1);
+  } finally {
+    delete target.__WINDNOTE_WEB_STARTUP__;
+  }
+});
 
 // 集成：探针经 screenLayout 挂在 expo-router 的叶子栈上，确实包住了每个页面；页面名里的栈
 // 来自 expo-router 给导航器的 id（布局路径）。

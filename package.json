@@ -11,7 +11,7 @@
     "pretypecheck": "expo customize tsconfig.json",
     "typecheck": "tsc --noEmit",
     "expo:config": "expo config --type public",
-    "export:web": "expo export --platform web --source-maps && node scripts/upload-expo-sourcemaps.mjs dist --optional --delete-maps",
+    "export:web": "expo export --platform web --source-maps && node scripts/prepare-web-startup.mjs dist && node scripts/upload-expo-sourcemaps.mjs dist --optional --delete-maps",
     "sourcemaps:ota": "node scripts/upload-expo-sourcemaps.mjs dist",
     "sourcemaps:ota:check": "node scripts/upload-expo-sourcemaps.mjs --check",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
