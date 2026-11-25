@@ -336,7 +336,9 @@ function NoteBlockEditorImpl({
     [onContentChange],
   );
 
-  const handleEditorReady = useNoteEditorDomHealth(canLoadDOMEditor(), fitContent);
+  const [editorModuleReady, setEditorModuleReady] = useState(Platform.OS !== 'web');
+  const handleEditorModuleReady = useCallback(() => setEditorModuleReady(true), []);
+  const handleEditorReady = useNoteEditorDomHealth(canLoadDOMEditor() && editorModuleReady, fitContent);
 
   const containerStyle = fitContent
     ? {
@@ -359,6 +361,7 @@ function NoteBlockEditorImpl({
     <EditorBoundary>
       <View testID="note-block-editor-frame" style={containerStyle}>
         <DOMEditor
+          {...(Platform.OS === 'web' ? { onModuleReady: handleEditorModuleReady } : {})}
           dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
           pendingInserts={pendingInserts}

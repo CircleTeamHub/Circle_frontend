@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState, Dimensions, Platform, StyleSheet } from 'react-native';
+import { Alert, AppState, Dimensions, Platform, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NoteBlockEditor } from './NoteBlockEditor';
 
@@ -8,6 +8,19 @@ const mockLaunchPicker = jest.fn();
 const mockRequestPresign = jest.fn();
 const mockUploadFile = jest.fn();
 const mockReportHandledFailure = jest.fn();
+const mockLoadDOMModule = jest.fn();
+
+// Model Metro's platform file selection and lazy download in Jest's CJS VM.
+jest.mock('./note-editor-loader', () => ({
+  getNoteBlockEditorDOM: () => {
+    const { Platform: MockPlatform } = jest.requireActual<typeof import('react-native')>('react-native');
+    return jest.requireActual(MockPlatform.OS === 'web' ? './note-editor-loader.web' : './note-editor-loader.tsx').getNoteBlockEditorDOM();
+  },
+}));
+jest.mock('react', () => {
+  const actual = jest.requireActual<typeof import('react')>('react');
+  return { ...actual, lazy: () => actual.lazy(() => mockLoadDOMModule()) };
+});
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: (...args: unknown[]) => mockRequestPermission(...args),
@@ -57,6 +70,7 @@ jest.mock('@/features/notes/dom/NoteBlockEditor.dom', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockLoadDOMModule.mockReset();
   mockDomProps = undefined;
   mockRequestPermission.mockResolvedValue({ granted: true });
   mockLaunchPicker.mockResolvedValue({
@@ -340,6 +354,35 @@ describe('DOM editor health', () => {
   });
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  test('Web DOM health waits for a slow code download, then times a mounted editor', async () => {
+    const platform = Platform.OS;
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Platform.OS = 'web';
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+    let resolveModule!: (value: { default: () => React.ReactElement }) => void;
+    mockLoadDOMModule.mockReturnValue(new Promise(resolve => { resolveModule = resolve; }));
+    const view = render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+    try {
+      expect(screen.getByRole('progressbar')).toBeTruthy();
+      act(() => jest.advanceTimersByTime(15_000));
+      expect(mockReportHandledFailure).not.toHaveBeenCalled();
+      await act(async () => resolveModule({ default: () => <Text>Web editor loaded</Text> }));
+      expect(screen.getByText('Web editor loaded')).toBeTruthy();
+      act(() => jest.advanceTimersByTime(9999));
+      expect(mockReportHandledFailure).not.toHaveBeenCalled();
+      act(() => jest.advanceTimersByTime(1));
+      expect(mockReportHandledFailure).toHaveBeenCalledTimes(1);
+      expect(mockReportHandledFailure).toHaveBeenCalledWith(
+        'noteEditor', 'domReadyTimeout', expect.any(Error), expect.objectContaining({ platform: 'web', durationMs: 10_000 }),
+      );
+    } finally {
+      view.unmount();
+      Platform.OS = platform;
+      if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
+      else Reflect.deleteProperty(globalThis, 'window');
+    }
   });
 
   // 网页端组件在 web 上是桩、onLoadEnd 永不回调，曾经一直转圈；这类「加载不出来」现在要能看见。

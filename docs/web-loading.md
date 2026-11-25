@@ -1,6 +1,6 @@
 # Web 首屏拆包与登录后预取
 
-生产 Web 使用 Expo Router 的异步路由；开发服务器和 Android/iOS 保持同步路由。笔记 DOM 编辑器在 Web 有独立异步入口，原生端保留原来的按需同步加载和 Expo DOM bridge。Web 编辑器下载期间显示局部加载状态，下载失败交给路由错误页；用户点击重试时，Expo 55 的 `AsyncRequireError` 会刷新当前 URL，清除框架缓存的失败 `React.lazy`。普通渲染错误仍使用原来的重试。
+生产 Web 使用 Expo Router 的异步路由；开发服务器和 Android/iOS 保持同步路由。笔记 DOM 编辑器在 Web 有独立异步入口，原生端保留原来的按需同步加载和 Expo DOM bridge。Web 编辑器下载期间显示局部加载状态，DOM 就绪监控在代码加载完成、编辑器挂载后才开始计时，避免把正常下载误报为 DOM 故障。下载失败交给路由错误页；用户点击重试时，Expo 55 的 `AsyncRequireError` 会刷新当前 URL，清除框架缓存的失败 `React.lazy`。普通渲染错误仍使用原来的重试。
 
 `npm run export:web` 将当前构建的异步 JS 路径写入 HTML 内的 `windnote-web-prefetch-assets` JSON 元素；不依赖可被后续部署替换的共享 manifest URL。列表排除 HTML 已加载的入口脚本，并优先排列笔记编辑器。列表只包含静态代码路径，没有账号、token 或业务数据。
 

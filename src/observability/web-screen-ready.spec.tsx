@@ -16,11 +16,16 @@ test('an empty async route shell does not finish startup; committed page content
   const node = { textContent: '', querySelector: jest.fn(() => null) };
   try {
     mockReady.mockClear();
-    const view = render(<WebScreenReady>{null}</WebScreenReady>, { createNodeMock: () => node });
+    const onReady = jest.fn();
+    const view = render(<WebScreenReady onReady={onReady}>{null}</WebScreenReady>, { createNodeMock: () => node });
     expect(mockReady).not.toHaveBeenCalled();
+    expect(onReady).not.toHaveBeenCalled();
     node.textContent = 'Sign in';
     notify();
     expect(mockReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    notify();
+    expect(onReady).toHaveBeenCalledTimes(1);
     expect(disconnect).toHaveBeenCalled();
     view.unmount();
   } finally {

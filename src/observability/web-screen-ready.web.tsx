@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { markWebStartupStage } from './web-startup';
 
-export default function WebScreenReady({ children }: { children: ReactNode }) {
+export default function WebScreenReady({ children, onReady }: { children: ReactNode; onReady?: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const node = root.current;
@@ -15,10 +15,11 @@ export default function WebScreenReady({ children }: { children: ReactNode }) {
       ready = true;
       observer.disconnect();
       markWebStartupStage('page');
+      onReady?.();
     }
     observer.observe(node, { childList: true, subtree: true, characterData: true });
     check();
     return () => observer.disconnect();
-  }, []);
+  }, [onReady]);
   return <div ref={root} style={{ display: 'contents' }}>{children}</div>;
 }
