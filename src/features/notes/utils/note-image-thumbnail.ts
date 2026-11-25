@@ -5,6 +5,7 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * 给笔记图片顺带传一张小图（宽 ≤ 512），返回它的 object key。
@@ -19,16 +20,18 @@ export async function uploadNoteImageThumbnail(
   originalWidth: number | undefined,
   filename: string,
 ): Promise<string | null> {
+  const { sessionEpoch } = useAuthStore.getState();
+  const isCurrentSession = () => useAuthStore.getState().sessionEpoch === sessionEpoch;
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
-    if (!thumbnail) return null;
+    if (!thumbnail || !isCurrentSession()) return null;
 
     const presign = await requestUploadPresign({
       filename: sanitizeUploadFilename(`thumb-${filename}`),
       contentType: 'image/jpeg',
       folder: 'notes',
       fileUri: thumbnail.uri,
-    });
+    }, isCurrentSession);
     await uploadLocalFileToPresignedUrl(
       presign.uploadUrl,
       'image/jpeg',
@@ -40,7 +43,7 @@ export async function uploadNoteImageThumbnail(
     );
     return presign.key;
   } catch (error) {
-    reportHandledFailure('noteEditor', 'thumbnailUpload', error);
+    if (isCurrentSession()) reportHandledFailure('noteEditor', 'thumbnailUpload', error);
     return null;
   }
 }

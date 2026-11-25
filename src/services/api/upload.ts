@@ -531,6 +531,7 @@ export async function requestUploadPresign<F extends UploadFolder>(
     folder: F;
     purpose?: UploadPurpose;
   } & UploadSizeSource,
+  isCurrentSession?: () => boolean,
 ): Promise<UploadPresignResponseFor<F>> {
   if (
     payload.purpose &&
@@ -538,7 +539,8 @@ export async function requestUploadPresign<F extends UploadFolder>(
   ) {
     throw new Error('Upload purpose does not match folder');
   }
-  const isSessionCurrent = captureUploadProgressScope();
+  const isProgressCurrent = captureUploadProgressScope();
+  const isSessionCurrent = () => isProgressCurrent() && (isCurrentSession?.() ?? true);
   let convertedUri: string | undefined;
   let filename = payload.filename;
   let contentType = payload.contentType;
