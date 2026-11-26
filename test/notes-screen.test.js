@@ -664,7 +664,7 @@ test('long-image export is handled as media instead of share text', () => {
 
   assert.match(src, /const saveLongImageExport = useCallback/);
   assert.match(src, /saveMediaToLibrary\(result\.url, \{\s*mimeType: result\.mimeType/);
-  assert.match(src, /if \(format === 'IMAGE'\) \{\s*await saveLongImageExport\(result\);/);
+  assert.match(src, /if \(format === 'IMAGE'\) \{\s*if \(!\(await saveLongImageExport\(result\)\)\) return;/);
   // The URL is kept out of Share.message for the long-image branch, which is
   // what prevents iOS/Android from presenting the generated artifact as text.
   const imageBranch = src.match(/if \(format === 'IMAGE'\) \{([\s\S]*?)\n\s*\} else \{/);
