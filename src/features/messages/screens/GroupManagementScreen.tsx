@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -45,6 +45,7 @@ const s = StyleSheet.create({
 export default function GroupManagementScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const loading = useMessageGroupsStore((state) => state.loading);
@@ -103,8 +104,8 @@ export default function GroupManagementScreen() {
   const createGroup = useCallback(() => router.push(GROUP_EDIT_PATH), [router]);
   const retryLoad = useCallback(() => void loadGroups(), [loadGroups]);
   const saveOrder = useCallback(async () => {
-    if (await commitOrder()) router.back();
-  }, [commitOrder, router]);
+    if (await commitOrder() && navigation.isFocused()) router.back();
+  }, [commitOrder, navigation, router]);
   const actionsDisabled = loading || reordering || draggingId !== null;
 
   return (

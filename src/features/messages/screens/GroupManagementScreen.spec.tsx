@@ -10,8 +10,12 @@ import {
 import type { CustomConversationGroup } from '@/types';
 
 const mockRouter = { back: jest.fn(), push: jest.fn() };
+const mockNavigation = { isFocused: jest.fn(() => true) };
 
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
+  useNavigation: () => mockNavigation,
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -94,6 +98,7 @@ async function renderScreen(filterOrder: string[] = []) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockNavigation.isFocused.mockReturnValue(true);
   alertSpy.mockImplementation(() => undefined);
 });
 
@@ -213,4 +218,24 @@ test('Save waits for the server and disables both footer actions until it finish
   expect(screen.getByRole('button', { name: 'messages.groups.create' })).toBeDisabled();
   await act(async () => { finish(); await pending; });
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+
+test.each(['blurred', 'unmounted'])('a pending Save does not navigate after the screen is %s', async (state) => {
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  jest.mocked(updateConversationGroup).mockImplementation(async (id, patch) => {
+    await pending;
+    return makeGroup({ ...(id === 'g-1' ? family : work), sortOrder: patch.sortOrder ?? 0 });
+  });
+  await renderScreen();
+  await moveRow('工作', 'decrement');
+  fireEvent.press(screen.getByRole('button', { name: 'common.save' }));
+  if (state === 'blurred') fireEvent.press(screen.getByText('家人'));
+  else screen.unmount();
+  mockNavigation.isFocused.mockReturnValue(false);
+
+  await act(async () => { finish(); await pending; });
+
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  expect(useMessageGroupsStore.getState().filterOrder.slice(-2)).toEqual(['custom:g-2', 'custom:g-1']);
 });
