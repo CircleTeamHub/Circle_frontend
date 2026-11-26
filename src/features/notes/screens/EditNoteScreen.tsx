@@ -46,6 +46,7 @@ import type { FriendProfile } from '@/services/api/friends';
 import { useAuthStore } from '@/stores/authStore';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
+import { NoteMaterialBadge } from '@/features/notes/components/NoteMaterialBadge';
 import { NoteTextStatsConsumer } from '@/features/notes/components/NoteTextStatsConsumer';
 import {
   GROUP_NAME_MAX_LENGTH,
@@ -3175,16 +3176,6 @@ export default function EditNoteScreen() {
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
 
-  const renderMaterialBadge = useCallback((label: string, backgroundColor = colors.primary, color = colors.white) => (
-    <Text
-      testID="note-material-badge"
-      pointerEvents="none"
-      style={[s.materialBadge, { backgroundColor, color }]}
-    >
-      {label}
-    </Text>
-  ), [colors.primary, colors.white]);
-
   // 已有媒体直接平铺；空素材保留选择入口，类型和删除操作放在各素材自身上。
   const renderSectionBar = ({
     testID,
@@ -3346,11 +3337,7 @@ export default function EditNoteScreen() {
                 <NoteMediaUploadRing progressKey={item.clientId} />
               ) : null}
               </Pressable>
-              {renderMaterialBadge(
-                label,
-                target === 'showcase' ? colors.success : colors.primary,
-                target === 'showcase' ? colors.black : colors.white,
-              )}
+              <NoteMaterialBadge label={label} showcase={target === 'showcase'} />
               <Pressable
                 style={[s.mediaRemoveButton, { backgroundColor: colors.dangerFill }]}
                 onPress={() => handleRemoveSectionMedia(target, item.clientId)}
@@ -3367,15 +3354,11 @@ export default function EditNoteScreen() {
     );
   }, [
     colors.iconAccent,
-    colors.black,
     colors.dangerFill,
-    colors.primary,
-    colors.success,
     colors.white,
     d.mediaPreviewTile,
     draftRouteKey,
     handleRemoveSectionMedia,
-    renderMaterialBadge,
     uploadedClientIds,
     t,
   ]);
@@ -3564,7 +3547,7 @@ export default function EditNoteScreen() {
           onRemove: () => handleRemoveComposerBlock(block),
           content: isFirstAudioBlock && audioItems.length > 0 ? audioItems.map((item) => (
             <View key={item.clientId} style={s.audioRow}>
-              {renderMaterialBadge(t('notes.edit.composer.audio', { defaultValue: '录音' }))}
+              <NoteMaterialBadge label={t('notes.edit.composer.audio', { defaultValue: '录音' })} />
               <Ionicons name="mic" size={18} color={colors.iconAccent} />
               <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
                 {typeof item.durationMs === 'number' && item.durationMs > 0
@@ -3618,9 +3601,9 @@ export default function EditNoteScreen() {
             const avatar = getNoteCardAvatar(item);
             return (
               <View key={item.id} style={s.cardRow}>
-                {renderMaterialBadge(isGroup
+                <NoteMaterialBadge label={isGroup
                   ? t('notes.edit.composer.group', { defaultValue: '群名片' })
-                  : t('notes.edit.composer.contact', { defaultValue: '名片' }))}
+                  : t('notes.edit.composer.contact', { defaultValue: '名片' })} />
                 {avatar ? (
                   <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                 ) : (
@@ -3726,7 +3709,7 @@ export default function EditNoteScreen() {
                   </Pressable>
                 </View>
               </View>
-              {renderMaterialBadge(t('notes.edit.sections.location', { defaultValue: '位置' }))}
+              <NoteMaterialBadge label={t('notes.edit.sections.location', { defaultValue: '位置' })} />
             </View>
           ) : null,
         });
@@ -4707,18 +4690,6 @@ const s = StyleSheet.create({
   groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
   sectionSubtitle: { ...Typography.small },
   materialBlock: { marginHorizontal: Spacing.sm },
-  materialBadge: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    zIndex: 1,
-    maxWidth: '75%',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderBottomRightRadius: Radius.xs,
-    ...Typography.body,
-    fontWeight: '600',
-  },
   sectionBar: {
     marginHorizontal: Spacing.sm,
     paddingLeft: Spacing.sm,

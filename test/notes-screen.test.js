@@ -594,20 +594,14 @@ test('ProfileScreen does not include the assistant menu item', () => {
   assert.doesNotMatch(src, /profile\.assistant/);
 });
 
-test('NoteDetailScreen follows the divider + icon-chip section design', () => {
+test('NoteDetailScreen presents a continuous document with per-material labels', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   const renderer = read('src/features/notes/components/NoteDocumentBody.tsx');
   const blockRenderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
 
-  // 设计稿：小节之间用 1pt 分隔线（发丝线真机太淡）+ 主色浅底图标章头分段；
-  // 正文是主角，不加章头直接展开。
-  assert.match(renderer, /divider:\s*\{\s*height:\s*1,/);
-  assert.match(renderer, /sectionIconChip/);
-  assert.match(renderer, /'image-outline'/);
-  assert.match(renderer, /'videocam-outline'/);
-  // 文字区也有自己的 heading（text-outline）—— 所有区域结构一致。
-  assert.match(renderer, /renderSectionHeader\(\s*'text-outline'/);
-  assert.doesNotMatch(renderer, /sectionCard:/);
+  assert.match(detail, /scrollContent:\s*\{\s*paddingHorizontal:\s*Spacing\.sm/);
+  assert.match(renderer, /<NoteMaterialBadge/);
+  assert.doesNotMatch(renderer, /sectionIconChip|renderSectionHeader|virtualSectionDivider/);
 
   // 来源卡片整块从正文移除：来源与下载都收进右下角悬浮列，
   // 原来的浅底卡片与 primaryDeep CTA 胶囊一并删除。
@@ -629,10 +623,8 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(blockRenderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
   assert.match(blockRenderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
 
-  // 文字区始终展示（heading + 分割线与各区域一致）；hasTextBody 只决定
-  // 展示正文还是「暂无文字」占位。不再用 extractPlainText 二次嗅探
-  // （它不递归嵌套 children，会把缩进列表等真实正文误判为空而整段藏掉）。
-  assert.match(renderer, /availability\.hasText/);
+  // 纯素材笔记直接展示素材，整篇没有内容时才展示空态。
+  assert.match(renderer, /getNoteSectionAvailability\(own\)\.hasText/);
   assert.match(renderer, /notes\.section\.emptyText/);
   assert.doesNotMatch(renderer, /textSectionHasContent/);
   assert.doesNotMatch(detail, /extractPlainText\(/);
