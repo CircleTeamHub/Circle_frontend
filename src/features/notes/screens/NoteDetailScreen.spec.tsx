@@ -2,7 +2,8 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import NoteDetailScreen from './NoteDetailScreen';
-import { collectNote, fetchNoteDetail, findCollectedNote, getCachedNoteDetail } from '@/services/api/notes';
+import { collectNote, createNoteExport, fetchNoteDetail, findCollectedNote, getCachedNoteDetail } from '@/services/api/notes';
+import { saveMediaToLibrary } from '@/utils/save-image';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { resolveNoteCollectSource } from '@/features/notes/utils/collect-note-source';
@@ -79,6 +80,40 @@ beforeEach(() => {
 });
 
 afterEach(() => jest.restoreAllMocks());
+
+test('generates the entire note as a PNG from the existing download menu', async () => {
+  jest.mocked(createNoteExport).mockResolvedValue({ url: 'https://storage.test/note.png', filename: '笔记.png', mimeType: 'image/png', size: 123, expiresAt: null });
+  jest.mocked(saveMediaToLibrary).mockResolvedValue('saved');
+  render(<NoteDetailScreen />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'notes.actions.download' })).toBeEnabled(), { timeout: 5000 });
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.download' }));
+  fireEvent.press(screen.getByText('notes.detail.downloadLongImage'));
+  await waitFor(() => expect(saveMediaToLibrary).toHaveBeenCalledWith('https://storage.test/note.png', { mimeType: 'image/png' }));
+  expect(createNoteExport).toHaveBeenCalledWith('note', { format: 'IMAGE', scope: 'ALL' });
+  await waitFor(() => expect(screen.queryByText('notes.detail.downloadLongImage')).toBeNull());
+});
+
+test('keeps the long-image menu available for retry when photo-library permission is denied', async () => {
+  jest.mocked(createNoteExport).mockResolvedValue({ url: 'https://storage.test/note.png', filename: '笔记.png', mimeType: 'image/png', size: 123, expiresAt: null });
+  jest.mocked(saveMediaToLibrary).mockResolvedValue('denied');
+  render(<NoteDetailScreen />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'notes.actions.download' })).toBeEnabled(), { timeout: 5000 });
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.download' }));
+  fireEvent.press(screen.getByText('notes.detail.downloadLongImage'));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('media.saveDeniedTitle', 'media.saveDeniedMessage'));
+  await waitFor(() => expect(screen.getByText('notes.detail.downloadLongImage')).toBeTruthy());
+});
+
+test('shows a save failure and leaves the PNG export available for retry', async () => {
+  jest.mocked(createNoteExport).mockResolvedValue({ url: 'https://storage.test/note.png', filename: '笔记.png', mimeType: 'image/png', size: 123, expiresAt: null });
+  jest.mocked(saveMediaToLibrary).mockResolvedValue('failed');
+  render(<NoteDetailScreen />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'notes.actions.download' })).toBeEnabled(), { timeout: 5000 });
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.download' }));
+  fireEvent.press(screen.getByText('notes.detail.downloadLongImage'));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('notes.detail.exportFailedTitle', 'media.saveFailedMessage'));
+  await waitFor(() => expect(screen.getByText('notes.detail.downloadLongImage')).toBeTruthy());
+});
 
 test('only shows Add for a non-owned note with chat source context', async () => {
   mockParams = { id: 'note' };
