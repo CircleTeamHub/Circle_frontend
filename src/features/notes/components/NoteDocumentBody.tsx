@@ -1,20 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
+import { NoteMaterialBadge } from '@/features/notes/components/NoteMaterialBadge';
 import {
   getNoteSectionAvailability,
   type NoteSectionKind,
   type NoteSections,
 } from '@/features/notes/utils/note-sections';
-import { getNoteDocumentInstances, noteMediaBlocks, type NoteDocumentInstance } from '@/features/notes/utils/note-document-layout';
+import { getNoteDocumentInstances, noteMediaBlocks } from '@/features/notes/utils/note-document-layout';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -25,7 +20,6 @@ export type NoteDocumentGroup = {
 
 type NoteDocumentBodyProps = {
   title: string;
-  /** 作者在标题里选的城市，跟在日期后面。 */
   city?: string | null;
   createdAt: string;
   groups: readonly NoteDocumentGroup[];
@@ -42,12 +36,11 @@ type NoteDocumentBodyProps = {
   onSectionLayout?: (kind: NoteSectionKind) => (event: LayoutChangeEvent) => void;
 };
 
-type VirtualizedNoteRow =
-  | { type: 'section'; id: string; kind: NoteSectionKind; mediaKind?: NoteDocumentInstance['mediaKind']; divider: boolean; trackLayout: boolean }
-  | { type: 'block'; id: string; block: Record<string, unknown> }
-  | { type: 'text'; id: string; content: string | null; empty: boolean }
-  | { type: 'location'; id: string; title: string | null; address: string | null }
-  | { type: 'spacer'; id: string };
+type DocumentRow = { id: string; sectionStart?: NoteSectionKind } & (
+  | { type: 'block'; block: Record<string, unknown>; showcase: boolean }
+  | { type: 'text'; content: string | null }
+  | { type: 'location'; title?: string | null; address?: string | null }
+);
 
 export const NoteDocumentBody = memo(function NoteDocumentBody({
   title,
@@ -68,257 +61,117 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
 }: NoteDocumentBodyProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const documentInstances = useMemo(() => getNoteDocumentInstances(sections, order, layout), [sections, order, layout]);
-  const contactBlocks = useMemo(
-    () => sections.contacts.items.map((card, index) => ({
-      id: card.id || `contact-${index}`,
-      type: 'contact',
-      props: card,
-    })),
-    [sections.contacts.items],
-  );
-  const groupBlocks = useMemo(
-    () => sections.groups.items.map((card, index) => ({
-      id: card.id || `group-${index}`,
-      type: 'group',
-      props: card,
-    })),
-    [sections.groups.items],
-  );
 
-  const virtualizedRows = useMemo<VirtualizedNoteRow[]>(() => {
-    const rows: VirtualizedNoteRow[] = [];
-    const appendSection = (
-      kind: NoteSectionKind,
-      instanceId: string,
-      blocks: Record<string, unknown>[] = [],
-      mediaKind?: NoteDocumentInstance['mediaKind'],
-    ) => {
-      rows.push({
-        type: 'section',
-        id: `section-${instanceId}`,
-        trackLayout: documentInstances.find((entry) => entry.kind === kind)?.id === instanceId,
-        kind,
-        mediaKind,
-        divider: kind !== 'text',
-      });
-      blocks.forEach((block, index) => {
-        const blockId = typeof block.id === 'string' ? block.id : String(index);
-        rows.push({ type: 'block', id: `block-${instanceId}-${blockId}-${index}`, block });
-      });
-      rows.push({ type: 'spacer', id: `spacer-${instanceId}` });
-    };
-
-    for (const entry of documentInstances) {
-      const { kind, sections } = entry;
-      const availability = getNoteSectionAvailability(sections);
-      const mediaBlocks = noteMediaBlocks(sections.media.items);
-      const showcaseBlocks = noteMediaBlocks(sections.showcase.items);
-      const audioBlocks = noteMediaBlocks(sections.audio.items);
+  const rows = useMemo<DocumentRow[]>(() => {
+    const result: DocumentRow[] = [];
+    const anchored = new Set<NoteSectionKind>();
+    for (const { id, kind, sections: own } of getNoteDocumentInstances(sections, order, layout)) {
+      const start = result.length;
+      const appendBlocks = (blocks: Record<string, unknown>[]) => {
+        blocks.forEach((block, index) => {
+          if (!block || typeof block !== 'object') return;
+          result.push({ type: 'block', id: `${id}-${index}`, block, showcase: kind === 'showcase' && block.type === 'video' });
+        });
+      };
       switch (kind) {
         case 'text':
-          appendSection(kind, entry.id);
-          if (availability.hasText && sections.text.contentJson?.length) {
-            sections.text.contentJson.forEach((block, index) => {
-              const blockId = typeof block.id === 'string' ? block.id : String(index);
-              rows.splice(rows.length - 1, 0, {
-                type: 'block',
-                id: `block-${entry.id}-${blockId}-${index}`,
-                block,
-              });
-            });
-          } else {
-            rows.splice(rows.length - 1, 0, {
-              type: 'text',
-              id: `text-${entry.id}`,
-              content: availability.hasText ? sections.text.content : null,
-              empty: !availability.hasText,
-            });
+          if (getNoteSectionAvailability(own).hasText) {
+            if (own.text.contentJson?.length) appendBlocks(own.text.contentJson);
+            else result.push({ type: 'text', id, content: own.text.content });
           }
           break;
         case 'media':
-          if (availability.hasMedia) appendSection(kind, entry.id, mediaBlocks, entry.mediaKind);
-          break;
         case 'showcase':
-          if (availability.hasShowcase) appendSection(kind, entry.id, showcaseBlocks);
-          break;
         case 'audio':
-          if (availability.hasAudio) appendSection(kind, entry.id, audioBlocks);
+          appendBlocks(noteMediaBlocks(own[kind].items));
           break;
         case 'contact':
-          if (availability.hasContacts) appendSection(kind, entry.id, contactBlocks);
+          appendBlocks(own.contacts.items.map((card) => ({ type: 'contact', props: card })));
           break;
         case 'group':
-          if (availability.hasGroups) appendSection(kind, entry.id, groupBlocks);
+          appendBlocks(own.groups.items.map((card) => ({ type: 'group', props: card })));
           break;
         case 'location':
-          if (availability.hasLocation) {
-            appendSection(kind, entry.id);
-            rows.splice(rows.length - 1, 0, {
-              type: 'location',
-              id: `location-${entry.id}`,
-              title: sections.location?.title ?? null,
-              address: sections.location?.address ?? null,
-            });
+          if (getNoteSectionAvailability(own).hasLocation) {
+            result.push({ type: 'location', id, title: own.location?.title, address: own.location?.address });
           }
           break;
-        default:
-          break;
+      }
+      // 聊天笔记卡的分块跳转仍定位到该类型的第一个内容项。
+      if (result.length > start && !anchored.has(kind)) {
+        result[start].sectionStart = kind;
+        anchored.add(kind);
       }
     }
-    return rows;
-  }, [contactBlocks, groupBlocks, documentInstances]);
+    return result.length ? result : [{ type: 'text', id: 'empty', content: null }];
+  }, [sections, order, layout]);
 
-  const renderSectionHeader = (
-    icon: keyof typeof Ionicons.glyphMap,
-    label: string,
-  ) => (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionIconChip, { backgroundColor: colors.primaryLight }]}>
-        <Ionicons name={icon} size={15} color={colors.iconAccent} />
-      </View>
-      <Text style={[s.sectionHeading, { color: colors.text }]}>{label}</Text>
-    </View>
-  );
-
-  const renderSection = ({ id, kind, mediaKind, sections }: NoteDocumentInstance) => {
-    const onLayout = documentInstances.find((entry) => entry.kind === kind)?.id === id ? onSectionLayout?.(kind) : undefined;
-    const availability = getNoteSectionAvailability(sections);
-    const mediaBlocks = noteMediaBlocks(sections.media.items);
-    const showcaseBlocks = noteMediaBlocks(sections.showcase.items);
-    const audioBlocks = noteMediaBlocks(sections.audio.items);
-    switch (kind) {
-      case 'text':
-        return (
-          <View onLayout={onLayout} style={s.section}>
-            {renderSectionHeader(
-              'text-outline',
-              t('notes.section.text', { defaultValue: '文字' }),
-            )}
-            {availability.hasText ? (
-              sections.text.contentJson && sections.text.contentJson.length > 0 ? (
-                <NoteBlockRenderer
-                  onContactPress={onContactPress} onGroupPress={onGroupPress}
-                  blocks={sections.text.contentJson}
-                  onMediaError={onMediaError}
-                  onImagePress={onImagePress}
-                  lazyMedia={lazyMedia}
-                />
-              ) : (
-                <Text style={[s.bodyText, { color: colors.text }]}>
-                  {sections.text.content}
-                </Text>
-              )
-            ) : (
-              <Text style={[s.emptyHint, { color: colors.textSecondary }]}>
-                {t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
+  const renderRow = (item: DocumentRow) => {
+    const onLayout = item.sectionStart ? onSectionLayout?.(item.sectionStart) : undefined;
+    if (item.type === 'text') {
+      return (
+        <View key={item.id} onLayout={onLayout} style={[s.row, s.textInset]}>
+          <Text style={item.content ? [s.bodyText, { color: colors.text }] : [s.emptyHint, { color: colors.textSecondary }]}>
+            {item.content ?? t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
+          </Text>
+        </View>
+      );
+    }
+    if (item.type === 'location') {
+      return (
+        <View key={item.id} testID="note-document-material" onLayout={onLayout} style={s.row}>
+          <NoteMaterialBadge label={t('notes.edit.sections.location', { defaultValue: '位置' })} overlay={false} />
+          <View style={s.locationRow}>
+            <Ionicons name="location-outline" size={20} color={colors.iconAccent} />
+            <View style={s.locationBody}>
+              <Text style={[s.locationTitle, { color: colors.text }]}>
+                {item.title || t('notes.detail.locationFallback', { defaultValue: '位置' })}
               </Text>
-            )}
-          </View>
-        );
-      case 'media':
-        return availability.hasMedia ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              mediaKind === 'video' ? 'videocam-outline' : 'image-outline',
-              mediaKind === 'video'
-                ? t('notes.section.video', { defaultValue: '视频' })
-                : t('notes.section.image', { defaultValue: '图片' }),
-            )}
-            <NoteBlockRenderer
-              blocks={mediaBlocks}
-              onMediaError={onMediaError}
-              onImagePress={onImagePress}
-              lazyMedia={lazyMedia}
-            />
-          </View>
-        ) : null;
-      case 'showcase':
-        return availability.hasShowcase ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              'albums-outline',
-              t('notes.section.showcase', { defaultValue: '验证视频' }),
-            )}
-            <NoteBlockRenderer
-              blocks={showcaseBlocks}
-              onMediaError={onMediaError}
-              onImagePress={onImagePress}
-              lazyMedia={lazyMedia}
-            />
-          </View>
-        ) : null;
-      case 'audio':
-        return availability.hasAudio ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              'mic-outline',
-              t('notes.section.audio', { defaultValue: '录音' }),
-            )}
-            <NoteBlockRenderer blocks={audioBlocks} onMediaError={onMediaError} lazyMedia={lazyMedia} />
-          </View>
-        ) : null;
-      case 'contact':
-        return availability.hasContacts ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              'person-outline',
-              t('notes.section.contact', { defaultValue: '名片' }),
-            )}
-            <NoteBlockRenderer blocks={contactBlocks} onContactPress={onContactPress} />
-          </View>
-        ) : null;
-      case 'group':
-        return availability.hasGroups ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              'people-outline',
-              t('notes.section.group', { defaultValue: '群名片' }),
-            )}
-            <NoteBlockRenderer blocks={groupBlocks} onGroupPress={onGroupPress} />
-          </View>
-        ) : null;
-      case 'location':
-        return availability.hasLocation ? (
-          <View onLayout={onLayout} style={s.section}>
-            <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
-            {renderSectionHeader(
-              'location-outline',
-              t('notes.section.location', { defaultValue: '地址' }),
-            )}
-            <View style={s.locationRow}>
-              <Ionicons name="location-outline" size={20} color={colors.iconAccent} />
-              <View style={s.locationBody}>
-                <Text style={[s.locationTitle, { color: colors.text }]}>
-                  {sections.location?.title ||
-                    t('notes.detail.locationFallback', { defaultValue: '位置' })}
-                </Text>
-                {sections.location?.address ? (
-                  <Text style={[s.meta, { color: colors.textSecondary }]}>
-                    {sections.location.address}
-                  </Text>
-                ) : null}
-              </View>
+              {item.address ? <Text style={[s.meta, { color: colors.textSecondary }]}>{item.address}</Text> : null}
             </View>
           </View>
-        ) : null;
-      default:
-        return null;
+        </View>
+      );
     }
+
+    const type = item.block.type;
+    const visual = type === 'image' || type === 'video';
+    let label: string | undefined;
+    switch (type) {
+      case 'image': label = t('notes.section.image', { defaultValue: '图片' }); break;
+      case 'video': label = item.showcase
+        ? t('notes.edit.sections.showcase', { defaultValue: '展示视频' })
+        : t('notes.section.video', { defaultValue: '视频' }); break;
+      case 'audio': label = t('notes.section.audio', { defaultValue: '录音' }); break;
+      case 'contact': label = t('notes.section.contact', { defaultValue: '名片' }); break;
+      case 'group': label = t('notes.section.group', { defaultValue: '群名片' }); break;
+    }
+    return (
+      <View
+        key={item.id}
+        testID={label ? 'note-document-material' : undefined}
+        onLayout={onLayout}
+        style={[s.row, !label && s.textInset]}
+      >
+        {label && !visual ? <NoteMaterialBadge label={label} overlay={false} /> : null}
+        <NoteBlockRenderer
+          blocks={[item.block]}
+          onContactPress={onContactPress}
+          onGroupPress={onGroupPress}
+          onMediaError={onMediaError}
+          onImagePress={onImagePress}
+          lazyMedia={lazyMedia}
+        />
+        {label && visual ? <NoteMaterialBadge label={label} showcase={item.showcase} /> : null}
+      </View>
+    );
   };
 
   const documentHeader = (
-    <>
+    <View style={[s.documentHeader, s.textInset]}>
       <Text style={[s.title, { color: colors.text }]}>{title}</Text>
       <View style={s.metaRow}>
-        <Text style={[s.meta, { color: colors.text }]}>
-          {formatNoteFullDate(createdAt, t)}
-        </Text>
+        <Text style={[s.meta, { color: colors.text }]}>{formatNoteFullDate(createdAt, t)}</Text>
         {city ? <Text style={[s.meta, { color: colors.text }]}>· {city}</Text> : null}
         {groups.length > 0 ? <Text style={[s.meta, { color: colors.text }]}>·</Text> : null}
         {groups.map((group) => (
@@ -327,173 +180,43 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
           </View>
         ))}
       </View>
-    </>
+    </View>
   );
 
-  const getSectionMeta = (kind: NoteSectionKind, mediaKind?: NoteDocumentInstance['mediaKind']) => {
-    switch (kind) {
-      case 'text':
-        return { icon: 'text-outline' as const, label: t('notes.section.text', { defaultValue: '文字' }) };
-      case 'media':
-        return mediaKind === 'video'
-          ? { icon: 'videocam-outline' as const, label: t('notes.section.video', { defaultValue: '视频' }) }
-          : { icon: 'image-outline' as const, label: t('notes.section.image', { defaultValue: '图片' }) };
-      case 'showcase':
-        return { icon: 'albums-outline' as const, label: t('notes.section.showcase', { defaultValue: '验证视频' }) };
-      case 'audio':
-        return { icon: 'mic-outline' as const, label: t('notes.section.audio', { defaultValue: '录音' }) };
-      case 'contact':
-        return { icon: 'person-outline' as const, label: t('notes.section.contact', { defaultValue: '名片' }) };
-      case 'group':
-        return { icon: 'people-outline' as const, label: t('notes.section.group', { defaultValue: '群名片' }) };
-      case 'location':
-        return { icon: 'location-outline' as const, label: t('notes.section.location', { defaultValue: '地址' }) };
-      default:
-        return { icon: 'document-outline' as const, label: '' };
-    }
-  };
-
-  const renderVirtualizedRow = ({ item }: { item: VirtualizedNoteRow }) => {
-    switch (item.type) {
-      case 'section': {
-        const meta = getSectionMeta(item.kind, item.mediaKind);
-        return (
-          <View
-            onLayout={item.trackLayout ? onSectionLayout?.(item.kind) : undefined}
-            style={[s.virtualSectionStart, item.divider && s.virtualSectionDivider]}
-          >
-            {item.divider ? <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} /> : null}
-            {renderSectionHeader(meta.icon, meta.label)}
-          </View>
-        );
-      }
-      case 'block':
-        return (
-          <View style={s.virtualBlock}>
-            <NoteBlockRenderer
-              blocks={[item.block]}
-              onContactPress={onContactPress} onGroupPress={onGroupPress}
-              onMediaError={onMediaError}
-              onImagePress={onImagePress}
-              lazyMedia={lazyMedia}
-            />
-          </View>
-        );
-      case 'text':
-        return (
-          <View style={s.virtualBlock}>
-            {item.empty ? (
-              <Text style={[s.emptyHint, { color: colors.textSecondary }]}>
-                {t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
-              </Text>
-            ) : (
-              <Text style={[s.bodyText, { color: colors.text }]}>{item.content}</Text>
-            )}
-          </View>
-        );
-      case 'location':
-        return (
-          <View style={s.virtualBlock}>
-            <View style={s.locationRow}>
-              <Ionicons name="location-outline" size={20} color={colors.iconAccent} />
-              <View style={s.locationBody}>
-                <Text style={[s.locationTitle, { color: colors.text }]}>
-                  {item.title ||
-                    t('notes.detail.locationFallback', { defaultValue: '位置' })}
-                </Text>
-                {item.address ? (
-                  <Text style={[s.meta, { color: colors.textSecondary }]}>
-                    {item.address}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          </View>
-        );
-      case 'spacer':
-        return <View style={s.virtualSectionEnd} />;
-      default:
-        return null;
-    }
-  };
-
-  return (
-    virtualized ? (
-      <FlatList
-        data={virtualizedRows}
-        keyExtractor={(item) => item.id}
-        renderItem={renderVirtualizedRow}
-        ListHeaderComponent={documentHeader}
-        style={s.virtualizedList}
-        contentContainerStyle={[
-          s.virtualizedContent,
-          { paddingBottom: contentPaddingBottom },
-        ]}
-        initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        updateCellsBatchingPeriod={16}
-        windowSize={7}
-        removeClippedSubviews
-        showsVerticalScrollIndicator={false}
-      />
-    ) : (
-      <>
-        {documentHeader}
-        {documentInstances.map((entry) => (
-          <View key={entry.id}>{renderSection(entry)}</View>
-        ))}
-      </>
-    )
+  return virtualized ? (
+    <FlatList
+      data={rows}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => renderRow(item)}
+      ListHeaderComponent={documentHeader}
+      style={s.list}
+      contentContainerStyle={[s.virtualizedContent, { paddingBottom: contentPaddingBottom }]}
+      initialNumToRender={12}
+      maxToRenderPerBatch={8}
+      updateCellsBatchingPeriod={16}
+      windowSize={7}
+      removeClippedSubviews
+      showsVerticalScrollIndicator={false}
+    />
+  ) : (
+    <>{documentHeader}{rows.map(renderRow)}</>
   );
 });
 
 const s = StyleSheet.create({
+  list: { flex: 1 },
+  virtualizedContent: { paddingHorizontal: Spacing.sm, paddingTop: Spacing.md },
+  textInset: { paddingHorizontal: Spacing.sm },
+  documentHeader: { marginBottom: Spacing.md },
   title: { ...Typography.title, lineHeight: 40, marginBottom: Spacing.sm },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.sm },
   meta: { ...Typography.caption, fontWeight: '400' },
-  groupTag: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.xs,
-  },
+  groupTag: { paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.xs },
   groupTagText: { ...Typography.small, fontWeight: '600' },
+  row: { marginBottom: Spacing.sm },
   bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
   emptyHint: { ...Typography.caption, fontWeight: '400' },
-  section: { gap: Spacing.md - 4, marginBottom: Spacing.lg },
-  divider: { height: 1, marginBottom: Spacing.md - 4 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm + 2,
-  },
-  sectionIconChip: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionHeading: { ...Typography.h3, fontWeight: '700' },
-  virtualizedList: { flex: 1 },
-  virtualizedContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  virtualSectionStart: { gap: Spacing.md - 4 },
-  virtualSectionDivider: { paddingTop: Spacing.md - 4 },
-  virtualBlock: { paddingTop: Spacing.sm },
-  virtualSectionEnd: { height: Spacing.lg },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-  },
+  locationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
   locationBody: { flex: 1 },
   locationTitle: { ...Typography.body, fontWeight: '600' },
 });

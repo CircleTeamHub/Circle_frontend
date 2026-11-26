@@ -10,7 +10,7 @@ import {
 /**
  * 分组管理页唯一的排序：固定标签和自定义分组在同一条列表里排，
  * 顺序就是消息页顶部标签的顺序（隐藏的分组也占位，重新显示时回到原位）。
- * 整条顺序存本地 filterOrder；分组之间的相对顺序同时写回服务端 sortOrder。
+ * 调整先留在页面里，点保存才写本地 filterOrder 和服务端 sortOrder。
  */
 export function useGroupTabOrder() {
   const { t } = useTranslation();
@@ -19,10 +19,11 @@ export function useGroupTabOrder() {
   const setFilterOrder = useMessageGroupsStore((state) => state.setFilterOrder);
   const reorderGroups = useMessageGroupsStore((state) => state.reorder);
   const [reordering, setReordering] = useState(false);
+  const [draftOrder, setOrder] = useState<string[] | null>(null);
 
   const order = useMemo(
-    () => buildManagedFilterOrder(groups.map((group) => group.id), filterOrder),
-    [filterOrder, groups],
+    () => buildManagedFilterOrder(groups.map((group) => group.id), draftOrder ?? filterOrder),
+    [draftOrder, filterOrder, groups],
   );
   const groupsById = useMemo(
     () => new Map(groups.map((group) => [group.id, group])),
@@ -30,27 +31,31 @@ export function useGroupTabOrder() {
   );
 
   const commitOrder = useCallback(
-    (nextOrder: string[]) => {
+    async () => {
       const previousStored = useMessageGroupsStore.getState().filterOrder;
-      setFilterOrder(nextOrder);
-      const groupIds = changedGroupOrder(order, nextOrder);
-      if (!groupIds) return;
+      const previousOrder = buildManagedFilterOrder(groups.map((group) => group.id), previousStored);
+      setFilterOrder(order);
+      const groupIds = changedGroupOrder(previousOrder, order);
+      if (!groupIds) return true;
       setReordering(true);
-      reorderGroups(groupIds)
-        .catch(() => {
-          // 服务端没存上就整条退回去，免得界面显示的顺序和提示「失败」对不上。
-          setFilterOrder(previousStored);
-          Alert.alert(
-            t('messages.groups.reorderFailedTitle', { defaultValue: '排序失败' }),
-            t('messages.groups.reorderFailedMessage', {
-              defaultValue: '分组顺序保存失败，请稍后再试。',
-            }),
-          );
-        })
-        .finally(() => setReordering(false));
+      try {
+        await reorderGroups(groupIds);
+        return true;
+      } catch {
+        setFilterOrder(previousStored);
+        Alert.alert(
+          t('messages.groups.reorderFailedTitle', { defaultValue: '排序失败' }),
+          t('messages.groups.reorderFailedMessage', {
+            defaultValue: '分组顺序保存失败，请稍后再试。',
+          }),
+        );
+        return false;
+      } finally {
+        setReordering(false);
+      }
     },
-    [order, reorderGroups, setFilterOrder, t],
+    [groups, order, reorderGroups, setFilterOrder, t],
   );
 
-  return { order, groupsById, commitOrder, reordering };
+  return { order, groupsById, setOrder, commitOrder, reordering };
 }

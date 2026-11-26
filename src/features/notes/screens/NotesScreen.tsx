@@ -44,7 +44,6 @@ import {
 } from '@/features/chat/utils/note-batch-send';
 import { NoteSendOptionsRow } from '@/features/chat/components/note-send-options-row';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
-import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
   pruneSelection,
@@ -82,9 +81,7 @@ import {
   getCachedNoteGroups,
   getCachedNotes,
   notesMutatedSince,
-  setNoteWorkStatus,
   togglePinNote,
-  unlistNote,
 } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/chat-core/store';
@@ -551,33 +548,6 @@ function NotesContent() {
     [router, scope],
   );
 
-  const handleSetWorkStatus = useCallback(
-    async (
-      note: NoteSummary,
-      workStatus: SetNoteWorkStatus,
-    ) => {
-      try {
-        const result = await setNoteWorkStatus(note.id, workStatus);
-        if (!mountedRef.current) return;
-        setNotes((prev) =>
-          prev.map((item) =>
-            item.id === note.id
-              ? { ...item, workStatus: result.workStatus }
-              : item,
-          ),
-        );
-      } catch {
-        if (mountedRef.current) {
-          Alert.alert(
-            t('notes.alerts.pinFailedTitle', { defaultValue: '操作失败' }),
-            t('common.retryLater', { defaultValue: '请稍后重试' }),
-          );
-        }
-      }
-    },
-    [t],
-  );
-
   // NoteCard 已 memo：回调保持稳定引用，搜索输入等高频重渲时卡片不再全量重绘。
   const openNote = useCallback(
     (note: NoteSummary) =>
@@ -746,39 +716,6 @@ function NotesContent() {
   }, [selectedNotes, sendOptions, shareNotes]);
   const closeShareNote = useCallback(() => setShareNoteRequest(null), []);
 
-  const handleUnlistNote = useCallback(
-    (note: NoteSummary) => {
-      Alert.alert(
-        t('notes.alerts.unlistTitle', { defaultValue: '下架笔记' }),
-        t('notes.alerts.unlistConfirm', {
-          defaultValue: '下架后可在已下架列表查看，并可随时重新上架。',
-        }),
-        [
-          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          {
-            text: t('notes.actions.unlist', { defaultValue: '下架' }),
-            style: 'destructive',
-            onPress: async () => {
-              if (!mountedRef.current) return;
-              try {
-                await unlistNote(note.id);
-                if (mountedRef.current) await load();
-              } catch {
-                if (mountedRef.current) {
-                  Alert.alert(
-                    t('notes.alerts.unlistFailedTitle', { defaultValue: '下架失败' }),
-                    t('common.retryLater', { defaultValue: '请稍后重试' }),
-                  );
-                }
-              }
-            },
-          },
-        ],
-      );
-    },
-    [load, t],
-  );
-
   const handleDeleteNote = useCallback(
     (note: NoteSummary) => {
       Alert.alert(
@@ -814,7 +751,7 @@ function NotesContent() {
     [load, t],
   );
 
-  // 批量删除/下架共用：settle 后重拉列表；失败的留在选中集里方便直接重试。
+  // 批量删除：settle 后重拉列表；失败的留在选中集里方便直接重试。
   const runBatchAction = useCallback(
     async (ids: string[], task: (id: string) => Promise<void>) => {
       if (!mountedRef.current) return;
@@ -836,29 +773,6 @@ function NotesContent() {
       }
     },
     [exitSelection, load, t],
-  );
-
-  const handleBatchUnlist = useCallback(
-    (notes: NoteSummary[]) => {
-      if (notes.length === 0) return;
-      const ids = notes.map((item) => item.id);
-      Alert.alert(
-        t('notes.alerts.batchUnlistTitle', { defaultValue: '批量下架' }),
-        t('notes.alerts.batchUnlistConfirm', {
-          count: ids.length,
-          defaultValue: `确定下架所选 ${ids.length} 条笔记吗？下架后可随时重新上架。`,
-        }),
-        [
-          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          {
-            text: t('notes.actions.unlist', { defaultValue: '下架' }),
-            style: 'destructive',
-            onPress: () => void runBatchAction(ids, (id) => unlistNote(id)),
-          },
-        ],
-      );
-    },
-    [runBatchAction, t],
   );
 
   const handleBatchDelete = useCallback(
@@ -1195,7 +1109,6 @@ function NotesContent() {
       />
       <NoteActionsSheet
         note={menuNote}
-        currentUserId={currentUserId}
         batchNotes={batchSheetNotes}
         onClose={closeMenu}
         onPin={handlePin}
@@ -1208,13 +1121,10 @@ function NotesContent() {
         onEditGroups={handleEditGroups}
         onShare={handleShareNote}
         onDelete={handleDeleteNote}
-        onUnlist={handleUnlistNote}
-        onSetWorkStatus={handleSetWorkStatus}
         onBatchPin={handleBatchPin}
         onBatchRemark={handleBatchRemark}
         onBatchEditGroups={handleBatchEditGroups}
         onBatchShare={handleBatchShare}
-        onBatchUnlist={handleBatchUnlist}
         onBatchDelete={handleBatchDelete}
       />
       <NoteRemarkSheet

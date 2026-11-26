@@ -129,10 +129,10 @@ test('NoteCard makes the source work status visible on every notes list', () => 
   const workStatus = read('src/features/notes/utils/work-status.ts');
   assert.match(workStatus, /CLOSED: 'moon-outline'/);
   assert.match(workStatus, /OFF_SHELF: 'pause-circle-outline'/);
-  // 两种下架已合并成一种（status=UNLISTED）：菜单里只剩一个「下架」，不再单独设 OFF_SHELF。
+  // 个人笔记菜单不再允许修改状态，统一由群内笔记管理操作。
   const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
   assert.doesNotMatch(sheet, /work-status-off-shelf|onSetWorkStatus\?\.\(note, 'OFF_SHELF'\)/);
-  assert.equal((sheet.match(/key: 'unlist'/g) ?? []).length, 2); // 单选 + 批量各一个
+  assert.equal((sheet.match(/key: 'unlist'/g) ?? []).length, 0);
   assert.doesNotMatch(sheet, /chat\.groupManagement\.noteOffShelf/);
 });
 

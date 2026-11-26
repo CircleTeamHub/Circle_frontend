@@ -10,9 +10,9 @@ jest.mock('./NoteVideoViewer', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { NoteVideoViewer: (props: object) => <View testID="note-fullscreen-video" {...props} /> };
 });
-jest.mock('expo-image', () => ({ Image: () => {
+jest.mock('expo-image', () => ({ Image: (props: object) => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return <View testID="note-image" />;
+  return <View testID="note-image" {...props} />;
 } }));
 const mockAudioPlayer = {
   isLoaded: true,
@@ -68,6 +68,16 @@ beforeEach(() => {
   mockAudioPlayer.pause.mockClear();
   mockAudioPlayer.addListener.mockClear();
   jest.mocked(useVideoPlayer).mockClear();
+});
+
+test('a saved video poster is visible before playback and tapping still opens the video', () => {
+  const url = 'https://cdn.example/video.mp4';
+  const posterUrl = 'https://cdn.example/poster.jpg';
+  render(<NoteBlockRenderer blocks={[{ type: 'video', props: { url, posterUrl } }]} />);
+  expect(screen.getByTestId('note-image').props.source).toEqual({ uri: posterUrl });
+  expect(screen.queryByTestId('note-fullscreen-video')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
+  expect(screen.getByTestId('note-fullscreen-video').props.uri).toBe(url);
 });
 
 test('note images measure initially, follow viewport visibility and unregister on unmount', () => {

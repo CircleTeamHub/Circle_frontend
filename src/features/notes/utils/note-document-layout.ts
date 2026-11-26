@@ -65,7 +65,7 @@ export function noteMediaBlocks(items: StructuredNoteMediaItem[]): Record<string
   return items.filter((item) => Boolean(item.url)).map((item) => ({
     id: item.id ?? item.objectKey ?? item.url,
     type: item.type === 'VIDEO' ? 'video' : item.type === 'AUDIO' ? 'audio' : 'image',
-    props: { url: item.url, objectKey: item.objectKey, caption: '', width: item.width ?? undefined,
+    props: { url: item.url, objectKey: item.objectKey, posterUrl: item.posterUrl, caption: '', width: item.width ?? undefined,
       height: item.height ?? undefined, durationMs: item.durationMs ?? undefined },
   }));
 }

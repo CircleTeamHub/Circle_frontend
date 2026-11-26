@@ -52,7 +52,7 @@ test('NoteDetailScreen prefers contentJson over plain content', () => {
 
 test('NoteDetailScreen falls back to plain content string', () => {
   const body = read('src/features/notes/components/NoteDocumentBody.tsx');
-  assert.match(body, /sections\.text\.content/);
+  assert.match(body, /own\.text\.content/);
 });
 
 test('NoteDetailScreen has edit navigation into the same tab stack it was opened from', () => {

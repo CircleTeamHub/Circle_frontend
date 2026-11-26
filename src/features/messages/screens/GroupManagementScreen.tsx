@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -28,32 +28,35 @@ const s = StyleSheet.create({
   list: { gap: Spacing.sm },
   footerText: { ...Typography.small, textAlign: 'center' },
   retry: { ...Typography.small, fontWeight: '600', textAlign: 'center' },
-  footer: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
+  footer: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, flexDirection: 'row', gap: Spacing.md },
   createButton: {
-    height: 48,
+    flex: 1,
+    minHeight: 48,
     borderRadius: Radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
   },
+  disabled: { opacity: 0.5 },
   createText: { ...Typography.body, fontWeight: '600' },
 });
 
 export default function GroupManagementScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const loading = useMessageGroupsStore((state) => state.loading);
   const error = useMessageGroupsStore((state) => state.error);
   const loadGroups = useMessageGroupsStore((state) => state.load);
-  const { order, groupsById, commitOrder, reordering } = useGroupTabOrder();
+  const { order, groupsById, setOrder, commitOrder, reordering } = useGroupTabOrder();
   const { orderedIds, draggingId, dragY, getHandlers } = useDragReorder({
     ids: order,
     rowStride: GROUP_ORDER_ROW_STRIDE,
-    onCommit: commitOrder,
-    disabled: reordering,
+    onCommit: setOrder,
+    disabled: loading || reordering,
   });
 
   useEffect(() => {
@@ -85,11 +88,11 @@ export default function GroupManagementScreen() {
 
   const handleMove = useCallback(
     (id: string, offset: number) => {
-      if (reordering) return;
+      if (loading || reordering) return;
       const next = reorderMessageFilter(order, id, order.indexOf(id) + offset);
-      if (next !== order) commitOrder(next);
+      if (next !== order) setOrder(next);
     },
-    [commitOrder, order, reordering],
+    [loading, order, reordering, setOrder],
   );
   const openGroup = useCallback(
     (filterId: string) => {
@@ -100,6 +103,10 @@ export default function GroupManagementScreen() {
   );
   const createGroup = useCallback(() => router.push(GROUP_EDIT_PATH), [router]);
   const retryLoad = useCallback(() => void loadGroups(), [loadGroups]);
+  const saveOrder = useCallback(async () => {
+    if (await commitOrder() && navigation.isFocused()) router.back();
+  }, [commitOrder, navigation, router]);
+  const actionsDisabled = loading || reordering || draggingId !== null;
 
   return (
     <View style={d.container}>
@@ -111,7 +118,7 @@ export default function GroupManagementScreen() {
       >
         <Text style={[s.hint, d.secondary]}>
           {t('messages.groups.orderHint', {
-            defaultValue: '按住 ≡ 拖动排序，消息页顶部标签按这个顺序显示。点自定义分组可以改名、选会话。',
+            defaultValue: '按住 ≡ 拖动排序，点保存后应用到消息页顶部标签。点自定义分组可以改名、选会话。',
           })}
         </Text>
         <View style={s.list}>
@@ -165,9 +172,24 @@ export default function GroupManagementScreen() {
       </ScrollView>
       <View style={[s.footer, d.footer]}>
         <Pressable
-          style={[s.createButton, d.createButton]}
-          onPress={createGroup}
+          style={[s.createButton, d.createButton, actionsDisabled && s.disabled]}
+          onPress={() => void saveOrder()}
+          disabled={actionsDisabled}
           accessibilityRole="button"
+          accessibilityState={{ disabled: actionsDisabled, busy: reordering }}
+          accessibilityLabel={reordering ? t('common.saving') : t('common.save')}
+        >
+          <Text style={[s.createText, d.createText]}>
+            {reordering ? t('common.saving') : t('common.save')}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[s.createButton, d.createButton, actionsDisabled && s.disabled]}
+          onPress={createGroup}
+          disabled={actionsDisabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: actionsDisabled }}
+          accessibilityLabel={t('messages.groups.create', { defaultValue: '新建分组' })}
         >
           <Ionicons name="add" size={20} color={colors.white} />
           <Text style={[s.createText, d.createText]}>

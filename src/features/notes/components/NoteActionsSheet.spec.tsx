@@ -37,11 +37,9 @@ function renderSheet(note: NoteSummary) {
   render(
     <NoteActionsSheet
       note={note}
-      currentUserId="me"
       onPin={jest.fn()}
       onEdit={jest.fn()}
       onShare={jest.fn()}
-      onUnlist={jest.fn()}
       {...handlers}
     />,
   );
@@ -71,4 +69,32 @@ test('my own source note offers 查看差评 instead of rating myself', () => {
   expect(screen.getByLabelText('notes.rating.viewBad')).toHaveTextContent(/mci:weather-pouring/);
   fireEvent.press(screen.getByLabelText('notes.rating.viewBad'));
   expect(handlers.onViewBadRatings).toHaveBeenCalledWith(baseNote);
+});
+
+test('my note menu keeps ordinary actions and has no work or listing status controls', () => {
+  renderSheet(baseNote);
+  expect(screen.getByLabelText('notes.actions.pin')).toBeTruthy();
+  expect(screen.getByLabelText('notes.actions.editNote')).toBeTruthy();
+  expect(screen.getByLabelText('notes.actions.share')).toBeTruthy();
+  expect(screen.queryByLabelText('chat.groupManagement.noteClosed')).toBeNull();
+  expect(screen.queryByLabelText('chat.groupManagement.noteWorking')).toBeNull();
+  expect(screen.queryByLabelText('notes.actions.unlist')).toBeNull();
+});
+
+test('the batch menu keeps deletion but offers no status changes', () => {
+  const onBatchDelete = jest.fn();
+  render(<NoteActionsSheet
+    note={null}
+    batchNotes={[baseNote]}
+    onClose={jest.fn()}
+    onPin={jest.fn()}
+    onEdit={jest.fn()}
+    onShare={jest.fn()}
+    onBatchDelete={onBatchDelete}
+  />);
+  expect(screen.queryByLabelText('chat.groupManagement.noteClosed')).toBeNull();
+  expect(screen.queryByLabelText('chat.groupManagement.noteWorking')).toBeNull();
+  expect(screen.queryByLabelText('notes.actions.unlist')).toBeNull();
+  fireEvent.press(screen.getByLabelText('notes.actions.delete'));
+  expect(onBatchDelete).toHaveBeenCalledWith([baseNote]);
 });

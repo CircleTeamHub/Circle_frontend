@@ -94,8 +94,9 @@ function resolveMediaAspectRatio(
   return fallback;
 }
 
-function VideoBlock({ url, caption, captionColor, aspectRatio, backgroundColor, onMediaError }: {
+function VideoBlock({ url, posterUrl, caption, captionColor, aspectRatio, backgroundColor, onMediaError }: {
   url: string;
+  posterUrl?: string;
   caption: string;
   captionColor: string;
   aspectRatio: number;
@@ -114,8 +115,11 @@ function VideoBlock({ url, caption, captionColor, aspectRatio, backgroundColor, 
         style={[s.mediaFrame, { backgroundColor }]}
       >
         <View style={[s.media, s.videoPlaceholder, { aspectRatio, backgroundColor }]}>
-          <View style={[s.videoPlayButton, { backgroundColor: captionColor }]}>
-            <Text style={[s.videoPlayGlyph, { color: backgroundColor }]}>▶</Text>
+          {posterUrl ? (
+            <MediaImage source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit="cover" onError={onMediaError} />
+          ) : null}
+          <View style={s.videoPlayButton}>
+            <Text style={s.videoPlayGlyph}>▶</Text>
           </View>
         </View>
       </Pressable>
@@ -496,6 +500,7 @@ const BlockView = memo(function BlockView({
       return (
         <VideoBlock
           url={url}
+          posterUrl={typeof props.posterUrl === 'string' ? props.posterUrl : undefined}
           caption={caption}
           captionColor={d.secondary}
           aspectRatio={resolveMediaAspectRatio(props, 16 / 9)}
@@ -630,8 +635,11 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
-  videoPlayGlyph: { fontSize: 18, fontWeight: '700' },
+  videoPlayGlyph: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   audioCard: {
     minHeight: 58,
     borderRadius: Radius.lg,

@@ -890,7 +890,7 @@ const s = StyleSheet.create({
   headerAddLabel: { ...Typography.small, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
     paddingTop: Spacing.md,
   },
   meta: { ...Typography.caption, fontWeight: '400' },

@@ -5,6 +5,7 @@ import { NoteCard } from '@/features/notes/components/NoteCard';
 import { NOTE_RATING_BAD_ICON, NOTE_RATING_GOOD_ICON } from '@/features/notes/components/NoteRatingCounts';
 import type { NoteSummary } from '@/features/notes/types';
 import { lightColors } from '@/theme/colors';
+import { applyNoteSourceStatusToSummaries } from '@/features/notes/utils/note-sync';
 
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -130,4 +131,24 @@ test('the outside circle names its note for screen readers', () => {
   const circle = screen.getByTestId(`note-card-select-${note.id}`);
   expect(circle.props.accessibilityLabel.endsWith(note.title)).toBe(true);
   expect(circle.props.accessibilityState).toEqual({ checked: true });
+});
+
+test.each(['WORKING', 'CLOSED', null] as const)('a deleted source replaces the collected note status (%s) with the chat deletion notice', (workStatus) => {
+  const copy: NoteSummary = {
+    ...note, workStatus,
+    collectedFrom: {
+      conversationType: 'private', conversationID: 'conversation', clientMsgID: 'message',
+      sender: { id: 'author', name: 'Author' }, sourceNoteId: 'source-note',
+    },
+  };
+  const rendered = render(<NoteCard note={copy} onPress={jest.fn()} />);
+  const [deleted] = applyNoteSourceStatusToSummaries([copy], {
+    sourceNoteId: 'source-note', status: 'DELETED', workStatus, available: false,
+  });
+  rendered.rerender(<NoteCard note={deleted} onPress={jest.fn()} />);
+  expect(screen.getByText('chat.noteCard.workStatus.deleted')).toBeTruthy();
+  expect(screen.queryByText('notes.list.statusWorking')).toBeNull();
+  expect(screen.queryByText('notes.list.statusClosed')).toBeNull();
+  expect(screen.queryByText('notes.list.statusOffShelf')).toBeNull();
+  expect(screen.getByText(note.title)).toBeTruthy();
 });

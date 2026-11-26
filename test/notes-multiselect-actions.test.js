@@ -51,18 +51,18 @@ test('NotesScreen selection bar sends directly and keeps the rest behind 其他�
   assert.doesNotMatch(src, /notes\.selection\.unlist/);
   assert.doesNotMatch(src, /notes\.selection\.delete/);
 
-  // 批量动作与单选一一对应：置顶/备注/编辑分组/分享/下架/删除。
+  // 批量动作与单选一一对应：置顶/备注/编辑分组/分享/删除。
   assert.match(src, /onBatchPin=\{handleBatchPin\}/);
   assert.match(src, /onBatchRemark=\{handleBatchRemark\}/);
   assert.match(src, /onBatchEditGroups=\{handleBatchEditGroups\}/);
   assert.match(src, /onBatchShare=\{handleBatchShare\}/);
-  assert.match(src, /onBatchUnlist=\{handleBatchUnlist\}/);
+  assert.doesNotMatch(src, /onBatchUnlist|handleBatchUnlist/);
   assert.match(src, /onBatchDelete=\{handleBatchDelete\}/);
 
   // 批量执行：并发限流 settle，部分失败保留选中并提示，全部成功退出多选。
   assert.match(src, /runNoteBatch\(/);
   assert.match(src, /togglePinNote\(id, pinned\)/);
-  assert.match(src, /notes\.alerts\.batchUnlistConfirm/);
+  assert.doesNotMatch(src, /notes\.alerts\.batchUnlistConfirm/);
   assert.match(src, /notes\.alerts\.batchDeleteConfirm/);
   assert.match(src, /notes\.alerts\.batchPartialFailed/);
   assert.match(src, /setSelectedIds\(failed\)/);
@@ -297,7 +297,7 @@ test('lifecycle copy: 下架 60 天后自动删除；删除进回收站，30 天
   assert.match(zh, /下架 60 天后自动删除/);
   assert.match(JSON.parse(zh).notes.alerts.deleteConfirm, /回收站.*30 天/);
   assert.match(unlistedScreen, /unlistedDaysLeft\(item\.unlistedAt, Date\.now\(\)\)/);
-  assert.match(unlistedScreen, /relistNote/);
+  assert.doesNotMatch(unlistedScreen, /relistNote/);
 });
 
 test('collecting a note offers 查看 that locates it in the notes list', () => {
