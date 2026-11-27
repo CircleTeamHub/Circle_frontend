@@ -4518,10 +4518,10 @@ const s = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
     minHeight: 56,
-    maxHeight: 76,
-    fontSize: 20,
+    maxHeight: 72,
+    ...Typography.h3,
     fontWeight: '700',
-    lineHeight: 26,
+    lineHeight: 24,
   },
   // 标题下一行并排放分组和城市两枚胶囊；上下留白给胶囊的 hitSlop（出不了父视图）。
   titleChipRow: {

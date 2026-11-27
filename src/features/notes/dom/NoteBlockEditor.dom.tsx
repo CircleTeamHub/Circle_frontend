@@ -9,6 +9,7 @@ import {
   resolveMediaInsertAnchor,
 } from '../utils/note-media-upload';
 import { routeMultilineTextInputToPaste } from '../utils/note-editor-text-input';
+import { dropTrailingEmptyParagraphs } from '../utils/note-blocks';
 import {
   BlockNoteViewRaw,
   useCreateBlockNote,
@@ -104,7 +105,9 @@ export default function NoteBlockEditor({
         console.warn('[NoteBlockEditor.dom] initialContent JSON is not a block array');
         return undefined;
       }
-      const blocks = parsed as PartialBlock[];
+      const stored = parsed as PartialBlock[];
+      // 贴合内容的输入条不载入末尾的空段，见 dropTrailingEmptyParagraphs。
+      const blocks = onContentHeightChange == null ? stored : dropTrailingEmptyParagraphs(stored);
       return blocks.length > 0 ? blocks : undefined;
     } catch (error) {
       // 一旦保存的笔记 content JSON 变畸形（比如后端 schema 改动 / 旧版本残留），
@@ -124,6 +127,8 @@ export default function NoteBlockEditor({
   const editor = useCreateBlockNote({
     initialContent: parsedInitial,
     dictionary: language === 'zh' ? zh : en,
+    // 默认打字后会在末尾自动补一个空段，贴合内容的输入条会因此多长一行。
+    trailingBlock: onContentHeightChange == null,
     // The slash menu is intentionally disabled below because the DOM bridge
     // does not provide BlockNote's ComponentsContext. Keep every editor
     // placeholder empty so the text area stays visually quiet.
