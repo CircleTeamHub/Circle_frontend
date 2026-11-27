@@ -488,10 +488,16 @@ jest.mock('expo-image', () => {
 
 jest.mock('expo-video', () => {
   return {
-    createVideoPlayer: () => ({
-      generateThumbnailsAsync: (...args: unknown[]) => mockGenerateThumbnails(...args),
-      release: mockVideoPlayerRelease,
-    }),
+    // 照 iOS 的行为：源在后台挂上，挂上之前截帧只会得到空数组。
+    createVideoPlayer: () => {
+      let loaded = false;
+      return {
+        duration: 0,
+        replaceAsync: async () => { loaded = true; },
+        generateThumbnailsAsync: (...args: unknown[]) => (loaded ? mockGenerateThumbnails(...args) : Promise.resolve([])),
+        release: mockVideoPlayerRelease,
+      };
+    },
   };
 });
 

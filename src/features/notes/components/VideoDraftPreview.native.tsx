@@ -9,9 +9,13 @@ let thumbnailWork = Promise.resolve();
 
 function generateThumbnail(uri: string) {
   const work = thumbnailWork.then(async () => {
-    const player = createVideoPlayer(uri);
+    // iOS 的 createVideoPlayer(uri) 在后台任务里才挂上视频；挂上之前截帧拿到的是
+    // 空数组（没有 currentItem），预览就一直是黑块。先 replaceAsync 等它挂好再截。
+    // 很多视频第一帧是黑的（淡入、相机刚启动），够长就取第 0.5 秒。
+    const player = createVideoPlayer(null);
     const pending = player
-      .generateThumbnailsAsync(0, { maxWidth: 320 })
+      .replaceAsync(uri)
+      .then(() => player.generateThumbnailsAsync(player.duration > 1 ? 0.5 : 0, { maxWidth: 320 }))
       .then((thumbnails) => thumbnails[0] ?? null);
     try {
       // 队列是串行的：一个解不开的视频把原生调用挂住，后面每一个缩略图都永远
