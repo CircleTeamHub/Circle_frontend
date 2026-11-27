@@ -3307,8 +3307,10 @@ export default function EditNoteScreen() {
                   });
                 }}
               >
-              {item.type === 'VIDEO' && item.previewUri ? (
-                <VideoDraftPreview uri={item.previewUri} />
+              {/* 重新打开的笔记/草稿里视频只有服务端地址、没有封面（服务端不生成视频封面），
+                  以前这里退成灰底图标；有地址就从地址截首帧。 */}
+              {item.type === 'VIDEO' && videoUri && (item.previewUri || !thumbUri) ? (
+                <VideoDraftPreview uri={videoUri} />
               ) : thumbUri ? (
                 <Image
                   testID="note-media-preview-image"

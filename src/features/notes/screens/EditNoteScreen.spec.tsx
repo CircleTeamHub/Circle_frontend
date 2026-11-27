@@ -403,6 +403,7 @@ const mockVideoThumbnailRelease = jest.fn();
 const mockGeneratedVideoThumbnail = { nativeRefType: 'image', release: mockVideoThumbnailRelease };
 const mockVideoPlayerRelease = jest.fn();
 const mockGenerateThumbnails = jest.fn();
+const mockReplaceVideoSource = jest.fn();
 const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockRouteDraftId: string | undefined;
@@ -493,7 +494,7 @@ jest.mock('expo-video', () => {
       let loaded = false;
       return {
         duration: 0,
-        replaceAsync: async () => { loaded = true; },
+        replaceAsync: async (uri: unknown) => { mockReplaceVideoSource(uri); loaded = true; },
         generateThumbnailsAsync: (...args: unknown[]) => (loaded ? mockGenerateThumbnails(...args) : Promise.resolve([])),
         release: mockVideoPlayerRelease,
       };
@@ -1727,8 +1728,9 @@ test('saving a legacy URL-only showcase image retains its recovered ordinary med
   });
 });
 
-test('stored videos without posters render a video fallback instead of an image URL', async () => {
+test('stored videos without posters show a frame grabbed from the video URL, never the URL as an image', async () => {
   mockRouteId = 'video-without-poster';
+  mockGenerateThumbnails.mockResolvedValue([mockGeneratedVideoThumbnail]);
   mockFetchNoteDetail.mockResolvedValue({
     title: 'Stored video',
     contentJson: [],
@@ -1749,7 +1751,10 @@ test('stored videos without posters render a video fallback instead of an image 
   render(<EditNoteScreen />);
   await screen.findByDisplayValue('Stored video');
 
-  expect(screen.getByTestId('note-media-video-fallback')).toBeTruthy();
+  // 重新打开的笔记没有本机文件、服务端也不给视频封面：以前这里是灰底图标。
+  expect(await screen.findByTestId('note-media-preview-video')).toBeTruthy();
+  expect(mockReplaceVideoSource).toHaveBeenCalledWith('https://cdn.example/video.mp4');
+  expect(screen.queryByTestId('note-media-video-fallback')).toBeNull();
   expect(
     screen.queryAllByTestId('note-media-preview-image').some(
       (node) => node.props.source?.uri === 'https://cdn.example/video.mp4',
