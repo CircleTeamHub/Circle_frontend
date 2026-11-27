@@ -1674,7 +1674,18 @@
         }
       }
     },
-    "unlistedDaysLeft": "あと{{count}}日で削除"
+    "unlistedDaysLeft": "あと{{count}}日で削除",
+    "sort": {
+      "label": "並び順",
+      "edited": "最近編集",
+      "added": "最近追加",
+      "manual": "手動",
+      "adjust": "並べ替え",
+      "adjustHint": "左のハンドルをドラッグして移動、右の矢印で先頭へ移動します",
+      "dragHandle": "ドラッグして並べ替え",
+      "moveToFront": "「{{title}}」を先頭へ移動",
+      "done": "完了"
+    }
   },
   "tempChats": {
     "title": "座席",

@@ -43,6 +43,8 @@ interface Props {
   /** 定位跳转后的短暂高亮（「查看」从聊天跳进列表时用） */
   highlighted?: boolean;
   showActions?: boolean;
+  /** 卡片上的时间显示添加时间（列表按「最近添加」排时），默认显示最后编辑时间。 */
+  showCreatedAt?: boolean;
   accessibilityLabel?: string;
   accessibilityRole?: 'button';
 }
@@ -59,6 +61,7 @@ function NoteCardInner({
   selected = false,
   highlighted = false,
   showActions = true,
+  showCreatedAt = false,
   accessibilityLabel,
   accessibilityRole = 'button',
 }: Props) {
@@ -88,7 +91,7 @@ function NoteCardInner({
 
   const meta = buildNoteMeta(
     {
-      updatedAt: note.updatedAt,
+      updatedAt: showCreatedAt ? note.createdAt : note.updatedAt,
       groupNames: note.groups.map((group) => group.name),
       imageCount: note.imageCount,
       videoCount: note.videoCount,
