@@ -403,6 +403,8 @@ const mockVideoThumbnailRelease = jest.fn();
 const mockGeneratedVideoThumbnail = { nativeRefType: 'image', release: mockVideoThumbnailRelease };
 const mockVideoPlayerRelease = jest.fn();
 const mockGenerateThumbnails = jest.fn();
+const mockReplaceVideoSource = jest.fn();
+type MockStatusListener = (payload: { status: string }) => void;
 const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockRouteDraftId: string | undefined;
@@ -488,10 +490,31 @@ jest.mock('expo-image', () => {
 
 jest.mock('expo-video', () => {
   return {
-    createVideoPlayer: () => ({
-      generateThumbnailsAsync: (...args: unknown[]) => mockGenerateThumbnails(...args),
-      release: mockVideoPlayerRelease,
-    }),
+    // 照 iOS 的行为：replaceAsync 先返回，视频过几个微任务才挂到播放器上并发出
+    // readyToPlay；挂上之前截帧只会得到空数组。
+    createVideoPlayer: () => {
+      let loaded = false;
+      const listeners = new Set<MockStatusListener>();
+      const player = {
+        duration: 0,
+        status: 'idle',
+        addListener: (_event: string, listener: MockStatusListener) => {
+          listeners.add(listener);
+          return { remove: () => { listeners.delete(listener); } };
+        },
+        replaceAsync: async (uri: unknown) => {
+          mockReplaceVideoSource(uri);
+          void Promise.resolve().then(() => undefined).then(() => undefined).then(() => {
+            loaded = true;
+            player.status = 'readyToPlay';
+            listeners.forEach((listener) => listener({ status: 'readyToPlay' }));
+          });
+        },
+        generateThumbnailsAsync: (...args: unknown[]) => (loaded ? mockGenerateThumbnails(...args) : Promise.resolve([])),
+        release: mockVideoPlayerRelease,
+      };
+      return player;
+    },
   };
 });
 
@@ -590,9 +613,8 @@ function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') 
   if (kind === 'image' || kind === 'video') {
     const addButtons = screen.getAllByRole('button', { name: `notes.edit.add${kind === 'image' ? 'Image' : 'Video'}` });
     fireEvent.press(addButtons[addButtons.length - 1]);
-  } else if (kind === 'location') {
-    fireEvent.press(locationAction());
   }
+  // 位置：工具栏本身就会打开选择页。
 }
 
 test('a new note stays blank until the title toolbar action is pressed', () => {
@@ -769,7 +791,9 @@ test('only adds singleton composer blocks once', async () => {
 
   pressComposer('location');
   await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+  // 第二次点不再加区块，但要重新打开位置选择页，而不是没反应。
   pressComposer('location');
+  expect(mockRouter.push).toHaveBeenCalledTimes(2);
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
   // The toolbar label and the single sheet row are the only two occurrences.
   expect(screen.getAllByText('notes.edit.composer.location')).toHaveLength(2);
@@ -866,6 +890,23 @@ test('releases a late native thumbnail when its tile unmounts during generation'
     await deferredThumbnail.promise;
   });
   expect(mockVideoThumbnailRelease).toHaveBeenCalledTimes(1);
+});
+
+// 重开的笔记里视频是远端地址：慢网加载不出来或设备解不开时保留黑色占位，但要上报，线上才看得到。
+test('keeps the placeholder and reports when a video preview cannot load', async () => {
+  mockReplaceVideoSource.mockImplementationOnce(() => {
+    throw new Error('cannot open');
+  });
+  render(<VideoDraftPreview uri="https://cdn.example/broken.mp4" />);
+
+  await waitFor(() =>
+    expect(mockReportHandledFailure).toHaveBeenCalledWith(
+      'noteVideoPreview',
+      'captureFrame',
+      expect.objectContaining({ message: 'cannot open' }),
+    ),
+  );
+  expect(screen.getByTestId('note-media-preview-video-loading')).toBeTruthy();
 });
 
 test('caps a web-overflow photo pick at the 9-photo note limit in picker order and says what was skipped', async () => {
@@ -1481,7 +1522,7 @@ test('renders a map-selected location as read-only details and clears the saved 
   expect(screen.queryByText('notes.edit.locationAddressLabel')).toBeNull();
   expect(screen.queryByText('notes.edit.useCurrentLocation')).toBeNull();
 
-  fireEvent.press(screen.getByText('notes.edit.clearLocation'));
+  fireEvent.press(screen.getByLabelText(REMOVE_LOCATION_LABEL));
   fireEvent.press(screen.getByText('notes.edit.done'));
 
   await waitFor(() => {
@@ -1498,6 +1539,8 @@ test('renders a map-selected location as read-only details and clears the saved 
 // 本机网络元数据交出去，而用户什么都没点。chat 的位置卡片早就定了规矩（见
 // location-card.tsx 的注释与 location-card.spec.tsx）：显式点开才请求。
 const MAP_LABEL = 'chat.location.showPreview';
+// 选好位置后只剩区块自己的删除钮（「删除」+「位置」），不再另有一行「清除位置」。
+const REMOVE_LOCATION_LABEL = 'notes.actions.deletenotes.edit.sections.location';
 
 // 断言「有没有向任何外部主机发图片请求」而不是盯某一个域名：修复前用的是
 // staticmap.openstreetmap.de，修复后用共享瓦片助手的 basemaps.cartocdn.com，
@@ -1532,8 +1575,9 @@ function locatedNote() {
   };
 }
 
+// 位置卡片整体量宽度，地图和它同宽；没点开地图时不再渲染灰色占位框。
 function layoutMap() {
-  fireEvent(screen.getByTestId('note-location-map'), 'layout', {
+  fireEvent(screen.getByTestId('note-location-card'), 'layout', {
     nativeEvent: { layout: { width: 320, height: 126 } },
   });
 }
@@ -1610,7 +1654,7 @@ describe('note location map preview', () => {
     layoutMap();
     expect(remoteImageRequests().length).toBeGreaterThan(0);
 
-    fireEvent.press(screen.getByText('notes.edit.clearLocation'));
+    fireEvent.press(screen.getByLabelText(REMOVE_LOCATION_LABEL));
     imageSources.length = 0;
 
     expect(screen.queryByText('Harbor Cafe')).toBeNull();
@@ -1658,7 +1702,7 @@ test.each([
   await screen.findByDisplayValue('Partial location note');
 
   expect(screen.getByText('notes.edit.locationPreviewTitle')).toBeTruthy();
-  const clearLocation = screen.getByLabelText('notes.edit.clearLocation');
+  const clearLocation = screen.getByLabelText(REMOVE_LOCATION_LABEL);
   expect(clearLocation.props.accessibilityRole).toBe('button');
 
   fireEvent.press(clearLocation);
@@ -1720,8 +1764,9 @@ test('saving a legacy URL-only showcase image retains its recovered ordinary med
   });
 });
 
-test('stored videos without posters render a video fallback instead of an image URL', async () => {
+test('stored videos without posters show a frame grabbed from the video URL, never the URL as an image', async () => {
   mockRouteId = 'video-without-poster';
+  mockGenerateThumbnails.mockResolvedValue([mockGeneratedVideoThumbnail]);
   mockFetchNoteDetail.mockResolvedValue({
     title: 'Stored video',
     contentJson: [],
@@ -1742,7 +1787,10 @@ test('stored videos without posters render a video fallback instead of an image 
   render(<EditNoteScreen />);
   await screen.findByDisplayValue('Stored video');
 
-  expect(screen.getByTestId('note-media-video-fallback')).toBeTruthy();
+  // 重新打开的笔记没有本机文件、服务端也不给视频封面：以前这里是灰底图标。
+  expect(await screen.findByTestId('note-media-preview-video')).toBeTruthy();
+  expect(mockReplaceVideoSource).toHaveBeenCalledWith('https://cdn.example/video.mp4');
+  expect(screen.queryByTestId('note-media-video-fallback')).toBeNull();
   expect(
     screen.queryAllByTestId('note-media-preview-image').some(
       (node) => node.props.source?.uri === 'https://cdn.example/video.mp4',
@@ -2741,7 +2789,6 @@ test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the 
   const rendered = render(<EditNoteScreen />);
   const open = () => {
     fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
-    fireEvent.press(screen.getByText(kind === 'contact' ? 'notes.edit.addContact' : 'notes.edit.addGroup'));
   };
   await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
   open();
@@ -2777,9 +2824,10 @@ test('a legacy note with several contact cards opens the single-select picker wi
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    // 名片已经在了，工具栏的「名片」仍要直接打开选择器（以前这里没反应）。
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.contact' }));
-    fireEvent.press(screen.getByText('notes.edit.addContact'));
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Two' })).toBeTruthy());
+    expect(screen.getAllByText('notes.edit.addContact')).toHaveLength(1);
     // 旧数据两张名片都在，但单选器里只亮第一张。
     expect(screen.getByRole('radio', { name: 'One' }).props.accessibilityState?.checked).toBe(true);
     expect(screen.getByRole('radio', { name: 'Two' }).props.accessibilityState?.checked).toBe(false);

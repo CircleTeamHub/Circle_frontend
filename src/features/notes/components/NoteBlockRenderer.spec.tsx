@@ -10,6 +10,10 @@ jest.mock('./NoteVideoViewer', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { NoteVideoViewer: (props: object) => <View testID="note-fullscreen-video" {...props} /> };
 });
+jest.mock('./VideoDraftPreview', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { VideoDraftPreview: (props: object) => <View testID="note-video-first-frame" {...props} /> };
+});
 jest.mock('expo-image', () => ({ Image: (props: object) => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return <View testID="note-image" {...props} />;
@@ -75,7 +79,16 @@ test('a saved video poster is visible before playback and tapping still opens th
   const posterUrl = 'https://cdn.example/poster.jpg';
   render(<NoteBlockRenderer blocks={[{ type: 'video', props: { url, posterUrl } }]} />);
   expect(screen.getByTestId('note-image').props.source).toEqual({ uri: posterUrl });
+  expect(screen.queryByTestId('note-video-first-frame')).toBeNull();
   expect(screen.queryByTestId('note-fullscreen-video')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
+  expect(screen.getByTestId('note-fullscreen-video').props.uri).toBe(url);
+});
+
+test('a video without a poster shows its first frame instead of a black block', () => {
+  const url = 'file:///picked/clip.mov';
+  render(<NoteBlockRenderer blocks={[{ type: 'video', props: { url } }]} />);
+  expect(screen.getByTestId('note-video-first-frame').props.uri).toBe(url);
   fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
   expect(screen.getByTestId('note-fullscreen-video').props.uri).toBe(url);
 });

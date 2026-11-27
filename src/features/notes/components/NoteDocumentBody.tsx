@@ -208,7 +208,7 @@ const s = StyleSheet.create({
   virtualizedContent: { paddingHorizontal: Spacing.sm, paddingTop: Spacing.md },
   textInset: { paddingHorizontal: Spacing.sm },
   documentHeader: { marginBottom: Spacing.md },
-  title: { ...Typography.title, lineHeight: 40, marginBottom: Spacing.sm },
+  title: { ...Typography.h1, lineHeight: 32, marginBottom: Spacing.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.sm },
   meta: { ...Typography.caption, fontWeight: '400' },
   groupTag: { paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.xs },

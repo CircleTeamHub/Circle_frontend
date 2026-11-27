@@ -281,7 +281,7 @@ function hasLocationDraftValue(location: LocationDraft) {
   );
 }
 
-const LOCATION_MAP_HEIGHT = 126;
+const LOCATION_MAP_HEIGHT = 144;
 
 function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
   return blocks.filter(
@@ -3107,15 +3107,6 @@ export default function EditNoteScreen() {
       mediaMeta: { color: colors.textSecondary },
       legacyMediaWarning: { borderColor: colors.warning },
       legacyMediaWarningText: { color: colors.text },
-      locationClearAction: { borderColor: colors.surfaceBorder },
-      locationClearText: { color: colors.textSecondary },
-      // 地图占位和白条同底会糊成一片，用次级灰把这块内容区托出来。
-      locationMapFallback: { backgroundColor: colors.surfaceMuted },
-      locationMapRevealButton: { backgroundColor: colors.overlay },
-      locationMapRevealText: {
-        color: colors.textSecondary,
-        ...Typography.small,
-      },
       locationMapMarkerDot: { backgroundColor: colors.primary },
       locationMapAttribution: {
         color: colors.text,
@@ -3307,8 +3298,10 @@ export default function EditNoteScreen() {
                   });
                 }}
               >
-              {item.type === 'VIDEO' && item.previewUri ? (
-                <VideoDraftPreview uri={item.previewUri} />
+              {/* 重新打开的笔记/草稿里视频只有服务端地址、没有封面（服务端不生成视频封面），
+                  以前这里退成灰底图标；有地址就从地址截首帧。 */}
+              {item.type === 'VIDEO' && videoUri && (item.previewUri || !thumbUri) ? (
+                <VideoDraftPreview uri={videoUri} />
               ) : thumbUri ? (
                 <Image
                   testID="note-media-preview-image"
@@ -3339,13 +3332,13 @@ export default function EditNoteScreen() {
               </Pressable>
               <NoteMaterialBadge label={label} showcase={target === 'showcase'} />
               <Pressable
-                style={[s.mediaRemoveButton, { backgroundColor: colors.dangerFill }]}
+                style={[s.mediaRemoveButton, { backgroundColor: colors.overlay }]}
                 onPress={() => handleRemoveSectionMedia(target, item.clientId)}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${label}`}
               >
-                <Ionicons name="trash-outline" size={20} color={colors.white} />
+                <Ionicons name="close" size={20} color={colors.white} />
               </Pressable>
             </View>
           );
@@ -3354,7 +3347,7 @@ export default function EditNoteScreen() {
     );
   }, [
     colors.iconAccent,
-    colors.dangerFill,
+    colors.overlay,
     colors.white,
     d.mediaPreviewTile,
     draftRouteKey,
@@ -3626,93 +3619,86 @@ export default function EditNoteScreen() {
           }),
         });
       }
-      case 'location':
+      case 'location': {
+        const locationPickerDisabled = !isRouteDataReady || uploadingSection !== null;
+        const showMapToggle = hasLocation && hasLocationCoordinates && !mapRevealed;
         return renderSectionBar({
           label: t('notes.edit.sections.location', { defaultValue: '位置' }),
           onRemove: () => handleRemoveComposerBlock(block),
-          actions: renderSectionAdd({
-            label: t('notes.edit.pickLocation', { defaultValue: '选择位置' }),
-            onPress: handleOpenLocationPicker,
-            disabled: !isRouteDataReady || uploadingSection !== null,
-          }),
+          // 选好位置后：信息行本身就能点开换位置，底部只留「显示地图」和删除。
+          actions: !hasLocation
+            ? renderSectionAdd({
+                label: t('notes.edit.pickLocation', { defaultValue: '选择位置' }),
+                onPress: handleOpenLocationPicker,
+                disabled: locationPickerDisabled,
+              })
+            : showMapToggle
+              ? renderSectionAdd({
+                  icon: 'map-outline',
+                  label: t('chat.location.showPreview', { defaultValue: '轻点显示地图' }),
+                  onPress: revealMap,
+                  disabled: false,
+                })
+              : null,
           content: hasLocation ? (
-            <View style={s.locationPreview}>
-              <View
-                testID="note-location-map"
-                style={s.locationMapPreview}
-                onLayout={(event) => setMapWidth(event.nativeEvent.layout.width)}
-              >
-                {mapPreview ? (
-                  <>
-                    {mapPreview.tiles.map((tile) => (
-                      <Image
-                        key={`${tile.url}:${tile.left}:${tile.top}`}
-                        source={tile.url}
-                        style={[s.locationMapTile, { left: tile.left, top: tile.top }]}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        transition={0}
-                      />
-                    ))}
-                    <View pointerEvents="none" style={s.locationMapMarker}>
-                      <View style={[s.locationMapMarkerDot, d.locationMapMarkerDot]}>
-                        <Ionicons name="location" size={20} color={colors.white} />
-                      </View>
+            <View
+              testID="note-location-card"
+              style={s.locationPreview}
+              onLayout={(event) => setMapWidth(event.nativeEvent.layout.width)}
+            >
+              {mapPreview ? (
+                <View testID="note-location-map" style={s.locationMapPreview}>
+                  {mapPreview.tiles.map((tile) => (
+                    <Image
+                      key={`${tile.url}:${tile.left}:${tile.top}`}
+                      source={tile.url}
+                      style={[s.locationMapTile, { left: tile.left, top: tile.top }]}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={0}
+                    />
+                  ))}
+                  <View pointerEvents="none" style={s.locationMapMarker}>
+                    <View style={[s.locationMapMarkerDot, d.locationMapMarkerDot]}>
+                      <Ionicons name="location" size={20} color={colors.white} />
                     </View>
-                    <Text
-                      pointerEvents="none"
-                      style={[s.locationMapAttribution, d.locationMapAttribution]}
-                    >
-                      {BASEMAP_ATTRIBUTION}
-                    </Text>
-                  </>
-                ) : (
-                  <View style={[s.locationMapFallback, d.locationMapFallback]}>
-                    <Ionicons name="location" size={28} color={colors.textSecondary} />
-                    {hasLocationCoordinates ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={revealMap}
-                        hitSlop={8}
-                        style={[s.locationMapRevealButton, d.locationMapRevealButton]}
-                      >
-                        <Text style={d.locationMapRevealText}>
-                          {t('chat.location.showPreview', {
-                            defaultValue: '轻点显示地图',
-                          })}
-                        </Text>
-                      </Pressable>
-                    ) : null}
                   </View>
-                )}
-              </View>
-              <View style={s.locationPreviewInfo}>
-                <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
-                  {locationDraft.title ||
-                    t('notes.edit.locationPreviewTitle', { defaultValue: '已选择位置' })}
-                </Text>
-                <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
-                  {locationDraft.address ||
-                    t('notes.edit.locationAddressUnavailable', { defaultValue: '未提供' })}
-                </Text>
-                <View style={s.locationClearRow}>
-                  <Pressable
-                    style={[s.locationClearAction, d.locationClearAction]}
-                    onPress={handleClearLocation}
-                    accessibilityLabel={t('notes.edit.clearLocation', { defaultValue: '清除位置' })}
-                    accessibilityRole="button"
+                  <Text
+                    pointerEvents="none"
+                    style={[s.locationMapAttribution, d.locationMapAttribution]}
                   >
-                    <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[s.locationClearText, d.locationClearText]}>
-                      {t('notes.edit.clearLocation', { defaultValue: '清除位置' })}
-                    </Text>
-                  </Pressable>
+                    {BASEMAP_ATTRIBUTION}
+                  </Text>
+                  <NoteMaterialBadge label={t('notes.edit.sections.location', { defaultValue: '位置' })} />
                 </View>
-              </View>
-              <NoteMaterialBadge label={t('notes.edit.sections.location', { defaultValue: '位置' })} />
+              ) : null}
+              <Pressable
+                style={s.locationInfoRow}
+                onPress={handleOpenLocationPicker}
+                disabled={locationPickerDisabled}
+                accessibilityRole="button"
+                accessibilityLabel={t('notes.edit.pickLocation', { defaultValue: '选择位置' })}
+                accessibilityState={{ disabled: locationPickerDisabled }}
+              >
+                <View style={[s.locationInfoIcon, { backgroundColor: colors.primaryLight }]}>
+                  <Ionicons name="location" size={20} color={colors.iconAccent} />
+                </View>
+                <View style={s.locationPreviewInfo}>
+                  <Text style={[s.locationInfoTitle, d.mediaTitle]} numberOfLines={1}>
+                    {locationDraft.title ||
+                      t('notes.edit.locationPreviewTitle', { defaultValue: '已选择位置' })}
+                  </Text>
+                  <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
+                    {locationDraft.address ||
+                      t('notes.edit.locationAddressUnavailable', { defaultValue: '未提供' })}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </Pressable>
             </View>
           ) : null,
         });
+      }
       default:
         return null;
     }
@@ -3959,7 +3945,10 @@ export default function EditNoteScreen() {
                 disabled={isEditingLocked}
                 onPress={() => {
                   addComposerBlock(action.kind);
-                  if (action.kind === 'group') void openCardPicker('group');
+                  // 位置、名片、群名片只能有一块：点工具栏直接打开选择器，
+                  // 已经加过时也能再点进去换一个，而不是没反应。
+                  if (action.kind === 'location') handleOpenLocationPicker();
+                  else if (action.kind === 'contact' || action.kind === 'group') void openCardPicker(action.kind);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={label}
@@ -4783,12 +4772,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.18)',
   },
+  // 右上角半透明圆形删除钮，和左上角标签一样离边 8pt；32pt 加 hitSlop 8 仍有 48pt 可点范围。
   mediaRemoveButton: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 44,
-    height: 44,
+    top: Spacing.sm,
+    right: Spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4826,7 +4817,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationPreview: { gap: Spacing.sm },
+  locationPreview: { gap: Spacing.md },
   locationMapPreview: {
     width: '100%',
     height: LOCATION_MAP_HEIGHT,
@@ -4859,26 +4850,22 @@ const s = StyleSheet.create({
     fontSize: 8,
     borderRadius: 3,
   },
-  locationMapFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-  },
-  locationMapRevealButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  locationPreviewInfo: { gap: 2 },
-  locationClearRow: { alignItems: 'flex-end' },
-  locationClearAction: {
+  // 地名一行 + 地址最多两行，左边定位图标、右边箭头；整行可点，最少 44pt 高。
+  locationInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.md,
     minHeight: 44,
   },
-  locationClearText: { ...Typography.small, fontWeight: '600' },
+  locationInfoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationInfoTitle: { ...Typography.body, fontWeight: '600' },
+  locationPreviewInfo: { flex: 1, gap: Spacing.xs },
   composerFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 6,

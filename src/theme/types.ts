@@ -53,6 +53,7 @@ export interface ThemeColors {
   /** 玻璃面之上的半透明按钮 / 输入框底：透一点玻璃本身，不用实心 surfaceMuted。 */
   glassButton: string;
   success: string;
+  showcaseBadge: string;
   warning: string;
   /** 开工状态的实心底(笔记管理按钮、笔记卡片标签),两个主题同值。 */
   workingFill: string;

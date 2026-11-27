@@ -54,3 +54,27 @@ function extractPlainTextAtDepth(blocks: Block[], depth: number): string {
 export function extractPlainText(blocks: Block[]): string {
   return extractPlainTextAtDepth(blocks, 0);
 }
+
+interface ParagraphLike {
+  type?: unknown;
+  content?: unknown;
+  children?: unknown;
+}
+
+/**
+ * 去掉末尾连续的空段落。BlockNote 默认在文档末尾补一个空段，旧版保存的正文
+ * 因此都带着它；贴合内容的输入条原样载入会多出一行空白。
+ */
+export function dropTrailingEmptyParagraphs<T extends ParagraphLike>(blocks: readonly T[]): T[] {
+  let end = blocks.length;
+  while (end > 0) {
+    const { type, content, children } = blocks[end - 1];
+    const isEmptyParagraph =
+      (type === undefined || type === 'paragraph') &&
+      (content === undefined || content === '' || (Array.isArray(content) && content.length === 0)) &&
+      (children === undefined || (Array.isArray(children) && children.length === 0));
+    if (!isEmptyParagraph) break;
+    end -= 1;
+  }
+  return blocks.slice(0, end);
+}

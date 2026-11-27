@@ -414,10 +414,12 @@ test('EditNoteScreen keeps location selection map-only with a read-only selected
   // 位置只显示地名和地址本身，不再加「地点名称 / 详细地址」小标签。
   assert.doesNotMatch(src, /notes\.edit\.locationPlaceNameLabel/);
   assert.doesNotMatch(src, /notes\.edit\.locationAddressLabel/);
-  assert.match(src, /notes\.edit\.clearLocation/);
+  // 选好位置后：整行信息可点开换位置（≥44pt），删除只走区块自己的垃圾桶，
+  // 不再另起一行「清除位置」。
   assert.match(src, /handleClearLocation/);
   assert.match(src, /accessibilityRole="button"/);
-  assert.match(src, /locationClearAction:\s*\{[\s\S]*?minHeight:\s*44/);
+  assert.match(src, /locationInfoRow:\s*\{[\s\S]*?minHeight:\s*44/);
+  assert.doesNotMatch(src, /locationClearAction/);
   assert.doesNotMatch(src, /from 'expo-location'/);
   assert.doesNotMatch(src, /handleUseCurrentLocation/);
   assert.doesNotMatch(src, /notes\.edit\.useCurrentLocation/);
@@ -522,7 +524,9 @@ test('EditNoteScreen resets media upload ownership when its route loses focus', 
   assert.match(src, /const leaveEditor = \(\) => \{\s*invalidateUploadOwnership\(\);\s*setEditorVideoViewer\(null\);/);
   assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return leaveEditor/);
   assert.match(src, /if \(pendingSubmissionRef\.current \|\| saveInFlightRef\.current \|\| !isRouteDataReady \|\| uploadInFlightRef\.current\) return;[\s\S]*?router\.push/);
-  assert.match(src, /onPress: handleOpenLocationPicker,\s*disabled: !isRouteDataReady \|\| uploadingSection !== null,/);
+  assert.match(src, /const locationPickerDisabled = !isRouteDataReady \|\| uploadingSection !== null;/);
+  assert.match(src, /onPress: handleOpenLocationPicker,\s*disabled: locationPickerDisabled,/);
+  assert.match(src, /onPress=\{handleOpenLocationPicker\}\s*disabled=\{locationPickerDisabled\}/);
   assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
 });
 
@@ -539,7 +543,7 @@ test('EditNoteScreen gates its map preview behind an explicit tap', () => {
   // 门禁本身：未展开就不算出瓦片，展开由用户点击驱动。
   assert.match(src, /const \[mapRevealed, setMapRevealed\] = useState\(false\)/);
   assert.match(src, /mapRevealed &&/);
-  assert.match(src, /onPress=\{revealMap\}/);
+  assert.match(src, /onPress(?:=\{|: )revealMap/);
   // 例外只有一处：本次会话里刚在选点页选好的位置。
   assert.match(src, /consumePickedLocation\(\)[\s\S]*?setMapRevealed\(true\)/);
 
