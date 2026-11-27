@@ -62,11 +62,60 @@
         outline: 2px solid currentColor;
         outline-offset: 1px;
       }
+
+      /* 启动画面：主包下载、执行完之前唯一能画出来的东西。
+         添加到主屏幕的网页 App 有自己独立的数据区，首次打开要重新下载
+         约 3MB（压缩后）的主包；WebKit 在脚本还在下载、页面又「看起来是空的」时
+         不提交首帧，深色模式下整屏是黑的。图片要大于 32×32 才算非空。
+         它放在 #root 里，React 首次提交时会清空 #root，不用手动移除。
+         主包下载失败 / 一分钟没出页面由 scripts/web-startup.cjs 的诊断面板接手。
+         底色取 src/theme/colors.ts 的浅色 / 深色 background，转圈取 primary。 */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        background-color: #F8F9FA;
+      }
+      /* 图标是不透明的方块，桌面上的圆角是 iOS 自己加的遮罩；这里照着切，
+         看起来就是刚点的那个桌面图标。 */
+      #boot-splash img {
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+      }
+      .boot-spinner {
+        width: 24px;
+        height: 24px;
+        box-sizing: border-box;
+        border: 3px solid rgba(99, 102, 241, 0.25);
+        border-top-color: #6366F1;
+        border-radius: 50%;
+        animation: boot-spin 0.8s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        #boot-splash {
+          background-color: #000000;
+        }
+      }
     </style>
   </head>
 
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-splash">
+        <img src="/icons/windnote-192.png" width="96" height="96" alt="" />
+        <div class="boot-spinner"></div>
+      </div>
+    </div>
   </body>
 </html>
