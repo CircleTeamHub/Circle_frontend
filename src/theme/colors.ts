@@ -42,6 +42,8 @@ export const darkColors: ThemeColors = {
   online: '#22C55E',
   error: '#FF6B6B',
   success: '#22C55E',
+  // 「展示视频」标签底：比 success 深一档，白字对比度约 5:1。
+  showcaseBadge: '#15803D',
   warning: '#FB8C00',
   workingFill: '#22C55E',
   closedFill: '#FFA500',
@@ -124,6 +126,8 @@ export const lightColors: ThemeColors = {
   online: '#22C55E',
   error: '#FF6B6B',
   success: '#22C55E',
+  // 「展示视频」标签底：比 success 深一档，白字对比度约 5:1。
+  showcaseBadge: '#15803D',
   warning: '#FB8C00',
   workingFill: '#22C55E',
   closedFill: '#FFA500',

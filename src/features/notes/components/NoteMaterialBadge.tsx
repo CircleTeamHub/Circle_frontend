@@ -14,7 +14,7 @@ export function NoteMaterialBadge({ label, showcase = false, overlay = true }: {
       style={[
         s.badge,
         overlay ? s.overlay : s.inline,
-        { backgroundColor: showcase ? colors.success : colors.primary, color: showcase ? colors.black : colors.white },
+        { backgroundColor: showcase ? colors.showcaseBadge : colors.primary, color: colors.white },
       ]}
     >
       {label}
