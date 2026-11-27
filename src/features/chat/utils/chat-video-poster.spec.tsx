@@ -26,12 +26,44 @@ const mockManipulate = ImageManipulator.manipulate as jest.Mock;
 const mockPresign = requestUploadPresign as jest.Mock;
 const mockUpload = uploadLocalFileToPresignedUrl as jest.Mock;
 
-function mockPlayer(frames: unknown[] | Error) {
+type MockStatusPayload = { status: string; error?: { message: string } };
+type MockStatusListener = (payload: MockStatusPayload) => void;
+
+/**
+ * 照 iOS 的行为：replaceAsync 先返回，视频过几个微任务才挂到播放器上并发出 readyToPlay
+ * （expo-video 的 replaceCurrentItem 用 DispatchQueue.main.async 挂 currentItem）；
+ * 挂上之前截帧只会得到空数组，时长也还是 0。
+ */
+function mockPlayer(frames: unknown[] | Error, { duration = 0 } = {}) {
+  let loaded = false;
+  const listeners = new Set<MockStatusListener>();
+  const emit = (payload: MockStatusPayload) => {
+    player.status = payload.status;
+    listeners.forEach((listener) => listener(payload));
+  };
+  const attach = () => {
+    loaded = true;
+    player.duration = duration;
+    emit({ status: 'readyToPlay' });
+  };
   const player = {
-    replaceAsync: jest.fn((): Promise<void> => Promise.resolve()),
-    generateThumbnailsAsync: jest.fn(() =>
-      frames instanceof Error ? Promise.reject(frames) : Promise.resolve(frames),
-    ),
+    status: 'idle',
+    duration: 0,
+    emit,
+    attach,
+    addListener: jest.fn((_event: string, listener: MockStatusListener) => {
+      listeners.add(listener);
+      return { remove: () => { listeners.delete(listener); } };
+    }),
+    listenerCount: () => listeners.size,
+    replaceAsync: jest.fn((_uri: string): Promise<void> => {
+      void Promise.resolve().then(() => undefined).then(() => undefined).then(attach);
+      return Promise.resolve();
+    }),
+    generateThumbnailsAsync: jest.fn(() => {
+      if (!loaded) return Promise.resolve([]);
+      return frames instanceof Error ? Promise.reject(frames) : Promise.resolve(frames);
+    }),
     release: jest.fn(),
   };
   mockCreateVideoPlayer.mockReturnValue(player);
@@ -87,17 +119,71 @@ describe('uploadChatVideoPoster', () => {
   });
 
   it('waits for the video to load before grabbing a frame', async () => {
-    // iOS attaches the item in a background task; asking for frames earlier returns [] and the
-    // video goes out with no poster (a black bubble).
+    // iOS attaches the item on the main queue after replaceAsync resolves; asking for frames
+    // earlier returns [] and the video goes out with no poster (a black bubble).
     const player = mockPlayer([{ width: 512, height: 288 }]);
-    let finishLoading!: () => void;
-    player.replaceAsync.mockReturnValueOnce(new Promise<void>((resolve) => { finishLoading = resolve; }));
+    player.replaceAsync.mockImplementationOnce(() => Promise.resolve());
     const uploading = uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov');
-    await Promise.resolve();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
     expect(player.generateThumbnailsAsync).not.toHaveBeenCalled();
-    finishLoading();
+    player.attach();
     await expect(uploading).resolves.toEqual({ key: 'chat/me/poster.jpg' });
     expect(player.generateThumbnailsAsync).toHaveBeenCalledTimes(1);
+    expect(player.listenerCount()).toBe(0);
+  });
+
+  it('grabs the frame right away when the video is already attached as replaceAsync returns', async () => {
+    // Android（和偶尔够快的 iOS）在 replaceAsync 回来之前就已经 readyToPlay，不会再发一次事件。
+    const player = mockPlayer([{ width: 512, height: 288 }]);
+    player.replaceAsync.mockImplementationOnce(() => {
+      player.attach();
+      return Promise.resolve();
+    });
+    await expect(uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov')).resolves.toEqual({
+      key: 'chat/me/poster.jpg',
+    });
+    expect(player.listenerCount()).toBe(0);
+  });
+
+  it('uses the loaded duration when the caller does not know it', async () => {
+    const player = mockPlayer([{ width: 512, height: 288 }], { duration: 30 });
+    await expect(captureVideoPosterFrame('https://media.example/v.mp4', undefined)).resolves.toEqual({
+      uri: 'file:///cache/poster.jpg',
+    });
+    expect(player.generateThumbnailsAsync).toHaveBeenCalledWith(0.5, { maxWidth: 512 });
+  });
+
+  it('gives up and reports when the video fails to load', async () => {
+    const player = mockPlayer([{ width: 512, height: 288 }]);
+    player.replaceAsync.mockImplementationOnce(() => {
+      void Promise.resolve().then(() => player.emit({ status: 'error', error: { message: 'cannot open' } }));
+      return Promise.resolve();
+    });
+    await expect(uploadChatVideoPoster('file:///picked/odd.mkv', 10, 'odd.mkv')).resolves.toBeNull();
+    expect(player.generateThumbnailsAsync).not.toHaveBeenCalled();
+    expect(player.release).toHaveBeenCalled();
+    expect(reportHandledFailure).toHaveBeenCalledWith(
+      'chatVideoPoster',
+      'captureFrame',
+      expect.objectContaining({ message: 'cannot open' }),
+    );
+  });
+
+  it('does not hold up the send when the video never finishes loading', async () => {
+    jest.useFakeTimers();
+    try {
+      const player = mockPlayer([{ width: 512, height: 288 }]);
+      player.replaceAsync.mockImplementationOnce(() => Promise.resolve());
+      const uploading = uploadChatVideoPoster('file:///picked/stuck.mov', 42, 'stuck.mov');
+      await jest.advanceTimersByTimeAsync(10_000);
+      await expect(uploading).resolves.toBeNull();
+      expect(player.generateThumbnailsAsync).not.toHaveBeenCalled();
+      expect(player.release).toHaveBeenCalled();
+      expect(player.listenerCount()).toBe(0);
+      expect(mockPresign).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('tags a posts poster only when its caller supplies a moment purpose', async () => {
