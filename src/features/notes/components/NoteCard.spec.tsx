@@ -152,3 +152,16 @@ test.each(['WORKING', 'CLOSED', null] as const)('a deleted source replaces the c
   expect(screen.queryByText('notes.list.statusOffShelf')).toBeNull();
   expect(screen.getByText(note.title)).toBeTruthy();
 });
+
+test('showCreatedAt puts the added time on the card instead of the last edit', () => {
+  const textOf = (node: Node): string =>
+    (node.children as (string | Node)[]).map((child) => (typeof child === 'string' ? child : textOf(child))).join('');
+  const edited = { ...note, createdAt: '2026-11-01T02:00:00Z', updatedAt: '2026-11-18T10:01:00Z' };
+
+  const added = render(<NoteCard note={edited} onPress={jest.fn()} showCreatedAt />);
+  const addedMeta = textOf(screen.getByTestId('note-card-meta-note-1'));
+  added.unmount();
+  // 对照：一张最后编辑时间就是 11-01 的卡片，元信息应该一模一样。
+  render(<NoteCard note={{ ...note, updatedAt: '2026-11-01T02:00:00Z' }} onPress={jest.fn()} />);
+  expect(addedMeta).toBe(textOf(screen.getByTestId('note-card-meta-note-1')));
+});

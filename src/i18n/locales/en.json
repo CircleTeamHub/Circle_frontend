@@ -3404,7 +3404,18 @@
         }
       }
     },
-    "unlistedDaysLeft": "Deleted in {{count}} days"
+    "unlistedDaysLeft": "Deleted in {{count}} days",
+    "sort": {
+      "label": "Sort by",
+      "edited": "Recently edited",
+      "added": "Recently added",
+      "manual": "Manual",
+      "adjust": "Reorder",
+      "adjustHint": "Drag the handle on the left to move a note, or tap the arrow to move it to the top",
+      "dragHandle": "Drag to reorder",
+      "moveToFront": "Move \"{{title}}\" to the top",
+      "done": "Done"
+    }
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",

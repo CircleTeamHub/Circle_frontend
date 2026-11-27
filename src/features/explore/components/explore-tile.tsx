@@ -49,7 +49,7 @@ const s = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  // 和 Badge 同色，只是不带数字。
+  // 和磁贴上的数字同色（提醒红），只是不带数字。
   dot: {
     width: 10,
     height: 10,
@@ -151,11 +151,16 @@ export function ExploreTile({
           >
             {title}
           </Text>
-          <Badge count={badgeCount} />
+          {/* 磁贴底色是紫蓝渐变，主题紫的徽标贴上去看不见，所以用 tab 栏同款提醒红。 */}
+          <Badge
+            count={badgeCount}
+            color={colors.error}
+            testID={testID ? `${testID}-badge` : undefined}
+          />
           {badgeCount <= 0 && showDot ? (
             <View
               testID={testID ? `${testID}-update-dot` : undefined}
-              style={[s.dot, { backgroundColor: colors.primary }]}
+              style={[s.dot, { backgroundColor: colors.error }]}
             />
           ) : null}
         </View>

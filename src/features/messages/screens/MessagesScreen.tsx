@@ -54,7 +54,6 @@ import {
   Animated,
   BackHandler,
   Easing,
-  FlatList,
   ListRenderItemInfo,
   Modal,
   PanResponder,
@@ -65,6 +64,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CollapsibleListHeader } from '@/components/ui/collapsible-list-header';
+import { useCollapsibleHeader } from '@/hooks/use-collapsible-header';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
@@ -129,7 +130,13 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
   },
-  // 列表顶部 header 区域（标题行 + 筛选 Tab）
+  listViewport: { flex: 1, overflow: 'hidden' },
+  // 可收起头部的每一段：和列表同样的水平内边距，底色由页面背景补上。
+  collapsibleSection: { paddingHorizontal: Spacing.lg },
+  // 标题行这一段连同它下面的间距一起收走，筛选栏收起后离顶边留 8。
+  collapsibleTop: { paddingTop: Spacing.md, paddingBottom: Spacing.md },
+  collapsiblePinned: { gap: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.sm },
+  // 多选模式的头部区域（多选标题行 + 筛选 Tab），固定在列表上方
   headerSection: {
     gap: Spacing.lg,
     paddingTop: Spacing.md,
@@ -815,6 +822,7 @@ export default function MessagesScreen() {
   const [showAllPinned, setShowAllPinned] = useState(false);
   const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string> | null>(null);
   const selecting = selectedConversationIds !== null;
+  const collapsibleHeader = useCollapsibleHeader(!selecting);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const batchDeleteInFlightRef = useRef(false);
   const pinnedFoldCount = useAppSettingsStore((state) => state.pinnedFoldCount);
@@ -1578,10 +1586,9 @@ export default function MessagesScreen() {
   const phoneHeader = Platform.OS === 'web' && !isSplitLayout;
   const headerButtonStyle = phoneHeader ? s.phoneActionButton : s.actionButton;
 
-  // 列表 Header：标题行（含操作按钮）+ 筛选 Tab 栏
-  const ListHeader = useMemo(() => (
-    <View style={[s.headerSection, selecting && s.selectionHeaderSection, { backgroundColor: colors.background }]}>
-      {selecting ? <View style={s.selectionTopRow}>
+  // 头部第一行：平时是标题 + 操作按钮（往下读时收起），多选时换成取消 / 已选数 / 全选。
+  const headerTop = useMemo(() => (
+    selecting ? <View style={s.selectionTopRow}>
         <Pressable
           style={[s.selectionHeaderAction, batchDeleting && s.selectionActionDisabled]}
           accessibilityRole="button"
@@ -1644,7 +1651,38 @@ export default function MessagesScreen() {
             </Animated.View>
           </Pressable>
         </View>
-      </View>}
+      </View>
+  ), [
+    allSelected,
+    batchDeleting,
+    circleBellUnread,
+    colors,
+    d,
+    handleOpenCircleNotifications,
+    handleOpenNotices,
+    handleOpenFind,
+    handleOpenMenu,
+    headerButtonStyle,
+    phoneHeader,
+    isSplitLayout,
+    listPaneWidth,
+    measureMenuAnchor,
+    menuVisible,
+    handleStartSelection,
+    handleExitSelection,
+    handleToggleAll,
+    selectedConversations.length,
+    selecting,
+    quickAddExpanded,
+    quickAddProgress,
+    resolvedMode,
+    visibleConversations.length,
+    t,
+  ]);
+
+  // 筛选 Tab 栏 + 连接 / 添加到桌面横幅：头部收起后仍留在顶上。
+  const headerFilters = useMemo(() => (
+    <>
       <View style={s.filterRow}>
         <View style={s.filterTabsSlot}>
           <FilterTabs
@@ -1667,69 +1705,74 @@ export default function MessagesScreen() {
       </View>
       <ChatConnectionBanner />
       <AddToHomeScreenBanner />
-    </View>
+    </>
   ), [
     activeTab,
-    allSelected,
-    batchDeleting,
-    circleBellUnread,
     colors,
-    d,
     filterItems,
     handleFilterPress,
-    handleOpenCircleNotifications,
-    handleOpenNotices,
-    handleOpenFind,
     handleOpenGroups,
-    handleOpenMenu,
-    headerButtonStyle,
-    phoneHeader,
-    isSplitLayout,
-    listPaneWidth,
-    measureMenuAnchor,
-    menuVisible,
-    handleStartSelection,
-    handleExitSelection,
-    handleToggleAll,
-    selectedConversations.length,
     selecting,
-    quickAddExpanded,
-    quickAddProgress,
-    resolvedMode,
-    visibleConversations.length,
     t,
   ]);
+
+  const headerSectionStyle = useMemo(
+    () => [s.collapsibleSection, { backgroundColor: colors.background }],
+    [colors.background],
+  );
 
   const listPane = (
     <View
       testID={E2E_TEST_IDS.messagesScreen}
       style={[d.container, { paddingTop: insets.top }]}
     >
-      {selecting ? <View style={{ paddingHorizontal: Spacing.lg }}>{ListHeader}</View> : null}
-      <FlatList
-        testID={E2E_TEST_IDS.messagesList}
-        data={displayedConversations}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        ListHeaderComponent={selecting ? null : ListHeader}
-        ListEmptyComponent={
-          !conversationsSnapshotLoaded && !cachedListKnown && !connectionError && conversations.length === 0 ? (
-            <ActivityIndicator testID="conversations-loading" accessibilityLabel={t('common.loading')} color={colors.primary} />
-          ) : <Text style={d.emptyText}>
-            {connectionError
-              ? t('messages.loadFailed')
-              : t('messages.noConversations')}
-          </Text>
-        }
-        contentContainerStyle={[s.listContent, selecting && { paddingBottom: Spacing.md }]}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={handleRefreshConversations}
-        // 默认窗口是 21 屏,100 个会话基本全部挂着;收窄到和笔记/聊天列表同一档。
-        initialNumToRender={12}
-        maxToRenderPerBatch={10}
-        windowSize={11}
-      />
+      {selecting ? <View style={{ paddingHorizontal: Spacing.lg }}>
+        <View style={[s.headerSection, s.selectionHeaderSection, { backgroundColor: colors.background }]}>
+          {headerTop}
+          {headerFilters}
+        </View>
+      </View> : null}
+      {/* 列表铺满安全区以下，头部浮在上面：往下读收起标题行、筛选栏顶到最上；往回翻立刻放出来。
+          overflow:hidden 把收起的标题行裁在安全区之下。 */}
+      <View style={s.listViewport}>
+        {selecting ? null : (
+          <CollapsibleListHeader
+            controller={collapsibleHeader}
+            top={<View style={s.collapsibleTop}>{headerTop}</View>}
+            pinned={<View style={s.collapsiblePinned}>{headerFilters}</View>}
+            sectionStyle={headerSectionStyle}
+          />
+        )}
+        <Animated.FlatList
+          testID={E2E_TEST_IDS.messagesList}
+          data={displayedConversations}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          onScroll={collapsibleHeader.onScroll}
+          scrollEventThrottle={16}
+          progressViewOffset={selecting ? undefined : collapsibleHeader.headerHeight}
+          ListEmptyComponent={
+            !conversationsSnapshotLoaded && !cachedListKnown && !connectionError && conversations.length === 0 ? (
+              <ActivityIndicator testID="conversations-loading" accessibilityLabel={t('common.loading')} color={colors.primary} />
+            ) : <Text style={d.emptyText}>
+              {connectionError
+                ? t('messages.loadFailed')
+                : t('messages.noConversations')}
+            </Text>
+          }
+          contentContainerStyle={[
+            s.listContent,
+            selecting ? { paddingBottom: Spacing.md } : { paddingTop: collapsibleHeader.headerHeight },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={handleRefreshConversations}
+          // 默认窗口是 21 屏,100 个会话基本全部挂着;收窄到和笔记/聊天列表同一档。
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+        />
+      </View>
 
       {selecting ? <View style={[s.selectionFooter, {
         backgroundColor: colors.background,

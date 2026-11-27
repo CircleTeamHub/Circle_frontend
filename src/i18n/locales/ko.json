@@ -1674,7 +1674,18 @@
         }
       }
     },
-    "unlistedDaysLeft": "{{count}}일 후 자동 삭제"
+    "unlistedDaysLeft": "{{count}}일 후 자동 삭제",
+    "sort": {
+      "label": "정렬 방식",
+      "edited": "최근 편집",
+      "added": "최근 추가",
+      "manual": "직접 정렬",
+      "adjust": "순서 조정",
+      "adjustHint": "왼쪽 핸들을 끌어 위치를 바꾸고, 오른쪽 화살표를 누르면 맨 위로 이동합니다",
+      "dragHandle": "끌어서 순서 변경",
+      "moveToFront": "「{{title}}」을(를) 맨 위로 이동",
+      "done": "완료"
+    }
   },
   "tempChats": {
     "title": "좌석",

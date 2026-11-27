@@ -4,6 +4,9 @@ import { useTheme } from '@/theme';
 
 interface BadgeProps {
   count: number;
+  /** 底色；不传用主题紫。贴在彩色底上（探索磁贴）时传提醒红，免得和底色糊成一片。 */
+  color?: string;
+  testID?: string;
 }
 
 const s = StyleSheet.create({
@@ -21,19 +24,19 @@ const s = StyleSheet.create({
   },
 });
 
-export const Badge: React.FC<BadgeProps> = ({ count }) => {
+export const Badge: React.FC<BadgeProps> = ({ count, color, testID }) => {
   const { colors } = useTheme();
 
   const d = useMemo(
     () => ({
       badge: {
-        backgroundColor: colors.primary,
+        backgroundColor: color ?? colors.primary,
       },
       text: {
         color: colors.white,
       },
     }),
-    [colors],
+    [color, colors],
   );
 
   if (count <= 0) return null;
@@ -42,7 +45,7 @@ export const Badge: React.FC<BadgeProps> = ({ count }) => {
   const display = count > 99 ? '99+' : String(count);
 
   return (
-    <View style={[s.badge, d.badge]}>
+    <View testID={testID} style={[s.badge, d.badge]}>
       <Text style={[s.text, d.text]}>{display}</Text>
     </View>
   );
