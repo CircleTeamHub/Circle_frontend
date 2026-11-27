@@ -2,10 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { PNG } = require('pngjs');
 
 const read = (file) => fs.readFileSync(path.join(process.cwd(), file), 'utf8');
 const token = (colors, theme, name) =>
   new RegExp(`export const ${theme}[\\s\\S]*?\\n  ${name}: '(#[0-9A-Fa-f]{6})'`).exec(colors)?.[1];
+const themeBackgrounds = () => {
+  const colors = read('src/theme/colors.ts');
+  return { light: token(colors, 'lightColors', 'background'), dark: token(colors, 'darkColors', 'background') };
+};
 
 test('the shell paints a splash before the bundle arrives', () => {
   const shell = read('public/index.html');
@@ -21,18 +26,52 @@ test('the shell paints a splash before the bundle arrives', () => {
   assert.ok(fs.existsSync(path.join(process.cwd(), 'public', icon[1])), `${icon[1]} 不存在`);
 });
 
-test('the splash matches the app background in both color schemes', () => {
+test('the page and the splash follow the app background in both color schemes', () => {
   const shell = read('public/index.html');
-  const colors = read('src/theme/colors.ts');
-  const light = token(colors, 'lightColors', 'background');
-  const dark = token(colors, 'darkColors', 'background');
-  const primary = /const PRIMARY = '(#[0-9A-Fa-f]{6})'/.exec(colors)?.[1];
+  const { light, dark } = themeBackgrounds();
+  const primary = /const PRIMARY = '(#[0-9A-Fa-f]{6})'/.exec(read('src/theme/colors.ts'))?.[1];
   assert.ok(light && dark && primary, 'colors.ts 里找不到 background / PRIMARY');
-  // 交接给 App 时底色不跳：浅色 #F8F9FA，深色纯黑；转圈与 App 加载态同色。
-  assert.match(shell, new RegExp(`#boot-splash \\{[^}]*background-color: ${light};`, 'i'));
+  // 页面底色决定 iOS 状态栏和 Safari 工具栏的颜色：留白的话深色模式下顶上一条是白的。
+  assert.match(shell, new RegExp(`html,\\s*body,\\s*#boot-splash \\{\\s*background-color: ${light};`, 'i'));
   assert.match(
     shell,
-    new RegExp(`prefers-color-scheme: dark\\) \\{\\s*#boot-splash \\{\\s*background-color: ${dark};`, 'i'),
+    new RegExp(`prefers-color-scheme: dark\\) \\{\\s*html,\\s*body,\\s*#boot-splash \\{\\s*background-color: ${dark};`, 'i'),
   );
   assert.match(shell, new RegExp(`\\.boot-spinner \\{[^}]*border-top-color: ${primary};`, 'i'));
+});
+
+test('home-screen metadata is in the static shell, not injected after the bundle runs', () => {
+  const shell = read('public/index.html');
+  // 页面停在恢复页、或主包还没跑完时添加到主屏幕，JS 注入的 manifest / 图标还不在，
+  // 桌面图标会退成一个字母。
+  assert.match(shell, /<link rel="manifest" href="\/manifest\.webmanifest" \/>/);
+  assert.match(shell, /<link rel="apple-touch-icon" href="\/icons\/windnote-192\.png" \/>/);
+  // 不写这个，iOS 添加到主屏幕时不会去取启动图（iOS 27.2 模拟器实测）。
+  assert.match(shell, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
+  assert.match(shell, /<meta name="mobile-web-app-capable" content="yes" \/>/);
+  const title = read('src/components/app/web-document-title.tsx');
+  assert.doesNotMatch(title, /rel="manifest"|apple-touch-icon/, '外壳已经写了，JS 再注入一份会重复');
+});
+
+test('every startup image matches its device and theme', () => {
+  const shell = read('public/index.html');
+  const backgrounds = themeBackgrounds();
+  const links = [...shell.matchAll(/<link rel="apple-touch-startup-image" media="([^"]+)" href="([^"]+)" \/>/g)];
+  assert.ok(links.length >= 20, `启动图太少：${links.length}`);
+  const seen = new Map();
+  for (const [, media, href] of links) {
+    const width = Number(/device-width: (\d+)px/.exec(media)?.[1]);
+    const height = Number(/device-height: (\d+)px/.exec(media)?.[1]);
+    const scale = Number(/-webkit-device-pixel-ratio: (\d+)/.exec(media)?.[1]);
+    const theme = /prefers-color-scheme: (light|dark)/.exec(media)?.[1];
+    assert.ok(width && height && scale && theme, `媒体查询不完整：${media}`);
+    // iOS 只认像素尺寸完全一致的启动图，差一个像素就退回纯色。
+    const png = PNG.sync.read(fs.readFileSync(path.join(process.cwd(), 'public', href)));
+    assert.equal(`${png.width}x${png.height}`, `${width * scale}x${height * scale}`, href);
+    const corner = `#${[0, 1, 2].map(c => png.data[c].toString(16).padStart(2, '0')).join('')}`;
+    assert.equal(corner.toUpperCase(), backgrounds[theme].toUpperCase(), `${href} 的底色和主题不一致`);
+    const key = `${width}x${height}@${scale}`;
+    seen.set(key, [...(seen.get(key) ?? []), theme]);
+  }
+  for (const [key, themes] of seen) assert.deepEqual(themes.sort(), ['dark', 'light'], `${key} 缺浅色或深色`);
 });

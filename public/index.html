@@ -18,6 +18,45 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no"
     />
     <title>%WEB_TITLE%</title>
+    <!--
+      添加到主屏幕用的信息直接写在外壳里：要是等主包跑完再由 JS 注入，页面停在恢复页
+      或还没加载完时添加，桌面图标会退成一个字母。
+      apple-mobile-web-app-capable 不能省：没有它 iOS 添加时不会去取下面的启动图
+      （iOS 27.2 模拟器实测）；mobile-web-app-capable 是它的新名字，Chrome 只认这个。
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/windnote-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!--
+      从桌面打开、页面还没下载到之前，iOS 只能画启动图，没有就是整屏纯色（深色模式全黑）。
+      每种屏幕、浅色深色各一张，和下面的 #boot-splash 同底色同位置。
+      由 scripts/generate-web-startup-images.mjs 生成，别手改。
+    -->
+    <!-- web-startup-images:start -->
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-375x667@2x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-375x667@2x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-375x812@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-375x812@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-414x896@2x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-414x896@2x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-414x896@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-414x896@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-390x844@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-390x844@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-428x926@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-428x926@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-393x852@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-393x852@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-430x932@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-430x932@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-402x874@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-402x874@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-440x956@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-440x956@3x-dark.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="/startup/iphone-420x912@3x-light.png" />
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="/startup/iphone-420x912@3x-dark.png" />
+    <!-- web-startup-images:end -->
     <style id="expo-reset">
       /* react-native-web 推荐的根元素重置：全高、根节点 flex。 */
       html,
@@ -63,13 +102,30 @@
         outline-offset: 1px;
       }
 
+      /* 页面底色跟主题：iOS 的状态栏和 Safari 工具栏按页面底色取色，留白的话深色模式下
+         顶上一条是白的。这里只能按系统深浅色给初值，App 里手动选的主题由
+         src/theme/provider.tsx 挂载后改写。取 src/theme/colors.ts 的 background。 */
+      html,
+      body,
+      #boot-splash {
+        background-color: #F8F9FA;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body,
+        #boot-splash {
+          background-color: #000000;
+        }
+      }
+
       /* 启动画面：主包下载、执行完之前唯一能画出来的东西。
          添加到主屏幕的网页 App 有自己独立的数据区，首次打开要重新下载
          约 3MB（压缩后）的主包；WebKit 在脚本还在下载、页面又「看起来是空的」时
          不提交首帧，深色模式下整屏是黑的。图片要大于 32×32 才算非空。
          它放在 #root 里，React 首次提交时会清空 #root，不用手动移除。
          主包下载失败 / 一分钟没出页面由 scripts/web-startup.cjs 的诊断面板接手。
-         底色取 src/theme/colors.ts 的浅色 / 深色 background，转圈取 primary。 */
+         改了布局（图标大小、间距）要重新生成启动图，它们按同一个位置画图标。
+         转圈取 src/theme/colors.ts 的 primary。 */
       #boot-splash {
         position: fixed;
         inset: 0;
@@ -78,7 +134,6 @@
         align-items: center;
         justify-content: center;
         gap: 24px;
-        background-color: #F8F9FA;
       }
       /* 图标是不透明的方块，桌面上的圆角是 iOS 自己加的遮罩；这里照着切，
          看起来就是刚点的那个桌面图标。 */
@@ -99,11 +154,6 @@
       @keyframes boot-spin {
         to {
           transform: rotate(360deg);
-        }
-      }
-      @media (prefers-color-scheme: dark) {
-        #boot-splash {
-          background-color: #000000;
         }
       }
     </style>

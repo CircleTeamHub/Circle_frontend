@@ -1,5 +1,5 @@
 import { AppState, Platform, Text } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { SessionBootstrap } from './session-bootstrap';
 import { fetchCurrentUser, fetchCurrentUserWithToken } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
@@ -58,6 +58,14 @@ jest.mock('@/realtime/client', () => ({
   disconnectRealtime: jest.fn(),
   recoverTabBadgeSnapshot: jest.fn(async () => undefined),
 }));
+// 原生端的 WebScreenReady 只是透传；换成带标记的外壳，才能看出恢复页有没有被它包住。
+jest.mock('@/observability/web-screen-ready', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({ children }: { children: unknown }) => <View testID="web-screen-ready">{children}</View>,
+  };
+});
 const mockLoadGroups = jest.fn(async () => undefined);
 jest.mock('@/features/messages/store/use-message-groups-store', () => ({
   useMessageGroupsStore: {
@@ -464,6 +472,18 @@ describe('web reload', () => {
     expect(restore).toHaveBeenCalledTimes(2);
     expect(restore.mock.calls[0][0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(restore.mock.calls[1][0]).toBe(restore.mock.calls[0][0]);
+  });
+
+  test('the unreachable-server page counts as a rendered startup page', async () => {
+    // 网页启动探针（scripts/web-startup.cjs）只在页面真正画出来后才收手；恢复页不算的话，
+    // 网络不好停在这页一分钟，就会再叠一层「页面加载未完成」面板并误报启动超时。
+    jest.spyOn(apiClient, 'restoreWebSessionAccessToken')
+      .mockRejectedValue(new ApiError('timeout', { status: 0, failureKind: 'timeout' }));
+
+    render(<SessionBootstrap><Text>App route</Text></SessionBootstrap>);
+
+    const page = await screen.findByTestId('web-screen-ready', {}, { timeout: 3_000 });
+    expect(within(page).getByRole('button', { name: '重试' })).toBeOnTheScreen();
   });
 
   test('without a usable cookie it falls back to the login page', async () => {
