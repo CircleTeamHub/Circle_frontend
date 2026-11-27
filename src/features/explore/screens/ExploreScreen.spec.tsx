@@ -242,4 +242,19 @@ describe('ExploreScreen', () => {
     view.rerender(<ExploreScreen />);
     expect(assistant()).not.toHaveTextContent(/2/);
   });
+
+  // 磁贴底色是紫蓝渐变，主题紫的徽标贴上去几乎看不见：数字和小点都用 tab 栏同款提醒红。
+  it('paints tile badges and the update dot in the alert red, not the brand purple', () => {
+    mockMomentsHasUpdate = true;
+    mockAssistantUnread = 4;
+    render(<ExploreScreen />);
+
+    const { error } = jest.requireActual('@/theme/colors').lightColors;
+    expect(screen.getByTestId(`${E2E_TEST_IDS.exploreAssistantEntry}-badge`)).toHaveStyle({
+      backgroundColor: error,
+    });
+    expect(screen.getByTestId(`${E2E_TEST_IDS.exploreMomentsEntry}-update-dot`)).toHaveStyle({
+      backgroundColor: error,
+    });
+  });
 });
