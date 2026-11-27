@@ -590,9 +590,8 @@ function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') 
   if (kind === 'image' || kind === 'video') {
     const addButtons = screen.getAllByRole('button', { name: `notes.edit.add${kind === 'image' ? 'Image' : 'Video'}` });
     fireEvent.press(addButtons[addButtons.length - 1]);
-  } else if (kind === 'location') {
-    fireEvent.press(locationAction());
   }
+  // 位置：工具栏本身就会打开选择页。
 }
 
 test('a new note stays blank until the title toolbar action is pressed', () => {
@@ -769,7 +768,9 @@ test('only adds singleton composer blocks once', async () => {
 
   pressComposer('location');
   await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+  // 第二次点不再加区块，但要重新打开位置选择页，而不是没反应。
   pressComposer('location');
+  expect(mockRouter.push).toHaveBeenCalledTimes(2);
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
   // The toolbar label and the single sheet row are the only two occurrences.
   expect(screen.getAllByText('notes.edit.composer.location')).toHaveLength(2);
@@ -2741,7 +2742,6 @@ test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the 
   const rendered = render(<EditNoteScreen />);
   const open = () => {
     fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
-    fireEvent.press(screen.getByText(kind === 'contact' ? 'notes.edit.addContact' : 'notes.edit.addGroup'));
   };
   await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
   open();
@@ -2777,9 +2777,10 @@ test('a legacy note with several contact cards opens the single-select picker wi
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    // 名片已经在了，工具栏的「名片」仍要直接打开选择器（以前这里没反应）。
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.contact' }));
-    fireEvent.press(screen.getByText('notes.edit.addContact'));
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Two' })).toBeTruthy());
+    expect(screen.getAllByText('notes.edit.addContact')).toHaveLength(1);
     // 旧数据两张名片都在，但单选器里只亮第一张。
     expect(screen.getByRole('radio', { name: 'One' }).props.accessibilityState?.checked).toBe(true);
     expect(screen.getByRole('radio', { name: 'Two' }).props.accessibilityState?.checked).toBe(false);

@@ -1,5 +1,6 @@
 import { MediaImage } from '@/components/ui/media-image';
 import { NoteVideoViewer } from './NoteVideoViewer';
+import { VideoDraftPreview } from './VideoDraftPreview';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -117,7 +118,12 @@ function VideoBlock({ url, posterUrl, caption, captionColor, aspectRatio, backgr
         <View style={[s.media, s.videoPlaceholder, { aspectRatio, backgroundColor }]}>
           {posterUrl ? (
             <MediaImage source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit="cover" onError={onMediaError} />
-          ) : null}
+          ) : (
+            // 没有封面（编辑器预览里刚选的本地视频、旧笔记）时截首帧，否则整块纯黑。
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <VideoDraftPreview uri={url} />
+            </View>
+          )}
           <View style={s.videoPlayButton}>
             <Text style={s.videoPlayGlyph}>▶</Text>
           </View>

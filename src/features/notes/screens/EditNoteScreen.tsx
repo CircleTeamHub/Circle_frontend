@@ -3959,7 +3959,10 @@ export default function EditNoteScreen() {
                 disabled={isEditingLocked}
                 onPress={() => {
                   addComposerBlock(action.kind);
-                  if (action.kind === 'group') void openCardPicker('group');
+                  // 位置、名片、群名片只能有一块：点工具栏直接打开选择器，
+                  // 已经加过时也能再点进去换一个，而不是没反应。
+                  if (action.kind === 'location') handleOpenLocationPicker();
+                  else if (action.kind === 'contact' || action.kind === 'group') void openCardPicker(action.kind);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={label}
