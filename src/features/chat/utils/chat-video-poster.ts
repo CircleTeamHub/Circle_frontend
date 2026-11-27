@@ -20,11 +20,14 @@ const POSTER_LOAD_TIMEOUT_MS = 8_000;
  * 等视频真正挂到播放器上再截帧。iOS 上 replaceAsync 只等到资源加载完,挂 currentItem 那一步
  * 又被丢回主线程异步做(expo-video VideoPlayer.replaceCurrentItem),promise 先回来;这时截帧
  * 拿到空数组、时长也还是 0,视频就偶尔没封面。readyToPlay 才说明视频已挂上。
- * 与笔记 VideoDraftPreview 的 loadForThumbnail 同一套写法。
+ * 笔记编辑页的 VideoDraftPreview 截预览图也走这里。
  */
-function loadForThumbnail(player: VideoPlayer, uri: string): Promise<void> {
+export function loadVideoForThumbnail(player: VideoPlayer, uri: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    let settled = false;
     const finish = (error?: unknown) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       subscription.remove();
       if (error === undefined) resolve();
@@ -40,6 +43,8 @@ function loadForThumbnail(player: VideoPlayer, uri: string): Promise<void> {
     });
     player.replaceAsync(uri).then(
       () => {
+        // 超时后调用方已释放播放器;这时再读 status,iOS 会抛 NativeSharedObjectNotFoundException。
+        if (settled) return;
         // Android(和偶尔够快的 iOS)回来时已经 readyToPlay,不会再发一次事件。
         if (player.status === 'readyToPlay') finish();
       },
@@ -62,7 +67,7 @@ export async function captureVideoPosterFrame(
   try {
     // createVideoPlayer(uri) 也是在后台任务里挂视频,同样会截到空数组,所以先建空播放器再等加载。
     player = createVideoPlayer(null);
-    await loadForThumbnail(player, uri);
+    await loadVideoForThumbnail(player, uri);
     // 调用方不知道时长(补截老消息的封面)时用加载后读到的时长,不然一律截第一帧、常是黑的。
     const duration = durationSeconds ?? player.duration;
     const at = duration > 1 ? POSTER_FRAME_SECONDS : 0;

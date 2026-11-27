@@ -186,6 +186,38 @@ describe('uploadChatVideoPoster', () => {
     }
   });
 
+  it('leaves the released player alone when the load finishes after the timeout', async () => {
+    // 慢网下补截老消息的封面：超时后播放器已经释放，replaceAsync 才回来。这时再读 status，
+    // iOS 会抛 NativeSharedObjectNotFoundException，成了一条没人接的 rejection。
+    jest.useFakeTimers();
+    try {
+      const player = mockPlayer([{ width: 512, height: 288 }]);
+      let finishLoading!: () => void;
+      player.replaceAsync.mockImplementationOnce(
+        () => new Promise<void>((resolve) => { finishLoading = resolve; }),
+      );
+      let released = false;
+      let statusReadsAfterRelease = 0;
+      player.release.mockImplementation(() => { released = true; });
+      Object.defineProperty(player, 'status', {
+        get: () => {
+          if (released) statusReadsAfterRelease += 1;
+          return 'idle';
+        },
+      });
+      const capturing = captureVideoPosterFrame('https://media.example/old.mp4', undefined);
+      await jest.advanceTimersByTimeAsync(10_000);
+      await expect(capturing).resolves.toBeNull();
+      expect(released).toBe(true);
+
+      finishLoading();
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      expect(statusReadsAfterRelease).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('tags a posts poster only when its caller supplies a moment purpose', async () => {
     mockPlayer([{ width: 512, height: 288 }]);
 
