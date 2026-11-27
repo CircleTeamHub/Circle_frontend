@@ -404,6 +404,7 @@ const mockGeneratedVideoThumbnail = { nativeRefType: 'image', release: mockVideo
 const mockVideoPlayerRelease = jest.fn();
 const mockGenerateThumbnails = jest.fn();
 const mockReplaceVideoSource = jest.fn();
+type MockStatusListener = (payload: { status: string }) => void;
 const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockRouteDraftId: string | undefined;
@@ -489,15 +490,30 @@ jest.mock('expo-image', () => {
 
 jest.mock('expo-video', () => {
   return {
-    // 照 iOS 的行为：源在后台挂上，挂上之前截帧只会得到空数组。
+    // 照 iOS 的行为：replaceAsync 先返回，视频过几个微任务才挂到播放器上并发出
+    // readyToPlay；挂上之前截帧只会得到空数组。
     createVideoPlayer: () => {
       let loaded = false;
-      return {
+      const listeners = new Set<MockStatusListener>();
+      const player = {
         duration: 0,
-        replaceAsync: async (uri: unknown) => { mockReplaceVideoSource(uri); loaded = true; },
+        status: 'idle',
+        addListener: (_event: string, listener: MockStatusListener) => {
+          listeners.add(listener);
+          return { remove: () => { listeners.delete(listener); } };
+        },
+        replaceAsync: async (uri: unknown) => {
+          mockReplaceVideoSource(uri);
+          void Promise.resolve().then(() => undefined).then(() => undefined).then(() => {
+            loaded = true;
+            player.status = 'readyToPlay';
+            listeners.forEach((listener) => listener({ status: 'readyToPlay' }));
+          });
+        },
         generateThumbnailsAsync: (...args: unknown[]) => (loaded ? mockGenerateThumbnails(...args) : Promise.resolve([])),
         release: mockVideoPlayerRelease,
       };
+      return player;
     },
   };
 });
