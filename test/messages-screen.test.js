@@ -510,7 +510,7 @@ test('the conversation FlatList keeps a bounded render window', () => {
   const file = ts.createSourceFile('MessagesScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let props;
   function visit(node) {
-    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(file) === 'FlatList') {
+    if (ts.isJsxSelfClosingElement(node) && ['FlatList', 'Animated.FlatList'].includes(node.tagName.getText(file))) {
       props = node.attributes.getText(file);
     }
     ts.forEachChild(node, visit);

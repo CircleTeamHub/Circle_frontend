@@ -1,18 +1,20 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, FlatList } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import NotesScreen from './NotesScreen';
 import NoteManagementScreen from './NoteManagementScreen';
 import { fetchNoteDraft, fetchNotes, fetchNoteGroups, getCachedNotes } from '@/services/api/notes';
 import { publishInterruptedNotes } from '@/features/notes/utils/interrupted-note-recovery';
 import type { NoteSummary } from '@/features/notes/types';
+import { useNotesSortStore } from '@/features/notes/store/use-notes-sort-store';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), setParams: jest.fn() };
 const mockTranslate = (key: string) => key;
 const mockOrder: string[] = [];
+const mockParams: { conversationID: string; highlightNoteId?: string } = { conversationID: 'managed-room' };
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
-  return { useRouter: () => mockRouter, useLocalSearchParams: () => ({ conversationID: 'managed-room' }), useSegments: () => ['(tabs)', 'profile'],
+  return { useRouter: () => mockRouter, useLocalSearchParams: () => mockParams, useSegments: () => ['(tabs)', 'profile'],
     useFocusEffect: (effect: () => void | (() => void)) => ReactModule.useEffect(effect, [effect]) };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
@@ -27,7 +29,8 @@ jest.mock('@/stores/authStore', () => {
   return { useAuthStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state }) };
 });
 jest.mock('@/features/notes/store/use-notes-tab-order-store', () => ({ useNotesTabOrderStore: (selector: (state: { orderIds: string[] }) => unknown) => selector({ orderIds: mockOrder }) }));
-jest.mock('@/storage', () => ({ storage: { getString: () => undefined } }));
+jest.mock('@/storage', () => ({ storage: { getString: () => undefined },
+  mmkvJsonStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined } }));
 jest.mock('@/features/notes/utils/note-recording-storage', () => ({}));
 jest.mock('@/features/notes/utils/interrupted-note-recovery', () => ({
   publishInterruptedNotes: jest.fn(async () => ({ published: 0, resumeDraft: null })),
@@ -38,9 +41,10 @@ jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.rej
 jest.mock('@/services/api/client', () => ({ ApiError: class ApiError extends Error { status = 0; } }));
 jest.mock('@/features/notes/components/NoteCard', () => {
   const { Pressable, Text, View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { NoteCard: ({ note, onSourcePress, onMorePress }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void; onMorePress?: (note: NoteSummary) => void }) => (
+  return { NoteCard: ({ note, onSourcePress, onMorePress, showCreatedAt }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void; onMorePress?: (note: NoteSummary) => void; showCreatedAt?: boolean }) => (
     <View>
       <Text testID="note-title">{note.title}</Text>
+      <Text testID="note-time-field">{showCreatedAt ? 'created' : 'updated'}</Text>
       <Pressable testID="note-contact" onPress={() => onSourcePress?.(note, 'sender')}><Text>Contact</Text></Pressable>
       <Pressable testID="note-group" onPress={() => onSourcePress?.(note, 'group')}><Text>Group</Text></Pressable>
       <Pressable testID="note-more" onPress={() => onMorePress?.(note)}><Text>More</Text></Pressable>
@@ -276,4 +280,78 @@ test('the header back button is announced to screen readers and goes back', asyn
   render(<NotesScreen />);
   fireEvent.press(await screen.findByRole('button', { name: 'common.back' }));
   expect(mockRouter.back).toHaveBeenCalled();
+});
+
+describe('排序栏', () => {
+  // a 最早添加、最近编辑；c 最晚添加、最早编辑。
+  const sortable = (id: string, created: string, updated: string) => ({
+    id, ownerId: 'owner', title: id.toUpperCase(), contentPreview: '', status: 'ACTIVE', available: true,
+    pinned: false, groups: [], cover: null, imageCount: 0, videoCount: 0, mediaCount: 0,
+    createdAt: `2026-11-${created}T00:00:00Z`, updatedAt: `2026-11-${updated}T00:00:00Z`,
+  }) as unknown as NoteSummary;
+  const titles = () => screen.getAllByTestId('note-title').map((node) => node.props.children);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useNotesSortStore.setState({ byUser: {} });
+    jest.mocked(fetchNoteGroups).mockResolvedValue([]);
+    jest.mocked(fetchNotes).mockResolvedValue([sortable('c', '09', '02'), sortable('a', '01', '20'), sortable('b', '05', '10')]);
+  });
+
+  test('按选中的排序方式重排列表，手动排序可以把一条移到最前', async () => {
+    render(<NotesScreen />);
+    expect(await screen.findAllByTestId('note-title')).toHaveLength(3);
+    expect(titles()).toEqual(['A', 'B', 'C']);
+
+    expect(screen.getAllByTestId('note-time-field')[0].props.children).toBe('updated');
+    fireEvent.press(screen.getByRole('tab', { name: 'notes.sort.added' }));
+    expect(titles()).toEqual(['C', 'B', 'A']);
+    // 按添加时间排，卡片上也显示添加时间。
+    expect(screen.getAllByTestId('note-time-field').map((node) => node.props.children)).toEqual(['created', 'created', 'created']);
+    expect(screen.queryByRole('button', { name: 'notes.sort.adjust' })).toBeNull();
+
+    // 还没手动排过：先按添加时间排，右侧出现「调整顺序」。
+    fireEvent.press(screen.getByRole('tab', { name: 'notes.sort.manual' }));
+    expect(titles()).toEqual(['C', 'B', 'A']);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.sort.adjust' }));
+    // 第一行没有「移到最前」；点最后一行（A）的。
+    const toFront = screen.getAllByRole('button', { name: 'notes.sort.moveToFront' });
+    fireEvent.press(toFront[toFront.length - 1]);
+    expect(titles()).toEqual(['A', 'C', 'B']);
+  });
+
+  test('下次进来默认用上一次选的排序方式', async () => {
+    const first = render(<NotesScreen />);
+    await screen.findAllByTestId('note-title');
+    fireEvent.press(screen.getByRole('tab', { name: 'notes.sort.added' }));
+    first.unmount();
+
+    render(<NotesScreen />);
+    await screen.findAllByTestId('note-title');
+    expect(screen.getByRole('tab', { name: 'notes.sort.added' }).props.accessibilityState).toEqual(
+      expect.objectContaining({ selected: true }),
+    );
+    expect(titles()).toEqual(['C', 'B', 'A']);
+  });
+});
+
+test('「查看」定位把目标笔记放在浮动头部下面，而不是被头部盖住', async () => {
+  jest.clearAllMocks();
+  const scrollToIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => undefined);
+  jest.mocked(fetchNoteGroups).mockResolvedValue([]);
+  jest.mocked(fetchNotes).mockResolvedValue(['one', 'two', 'three'].map((id) => ({
+    id, ownerId: 'owner', title: id, contentPreview: '', status: 'ACTIVE', available: true,
+    pinned: false, groups: [], cover: null, imageCount: 0, videoCount: 0, mediaCount: 0,
+    createdAt: '2026-11-03T00:00:00Z', updatedAt: '2026-11-03T00:00:00Z',
+  }) as unknown as NoteSummary));
+  mockParams.highlightNoteId = 'three';
+  try {
+    render(<NotesScreen />);
+    await waitFor(() => expect(scrollToIndex).toHaveBeenCalled());
+    // 视口从安全区顶边算起：顶到展开头部（jest 里量出来是 0）再加 8 的留白之下。
+    expect(scrollToIndex).toHaveBeenCalledWith(expect.objectContaining({ index: 2, viewPosition: 0, viewOffset: 8 }));
+  } finally {
+    delete mockParams.highlightNoteId;
+    scrollToIndex.mockRestore();
+  }
 });

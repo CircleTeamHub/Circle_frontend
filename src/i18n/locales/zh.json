@@ -3396,7 +3396,18 @@
         }
       }
     },
-    "unlistedDaysLeft": "{{count}} 天后自动删除"
+    "unlistedDaysLeft": "{{count}} 天后自动删除",
+    "sort": {
+      "label": "排序方式",
+      "edited": "最近编辑",
+      "added": "最近添加",
+      "manual": "手动排序",
+      "adjust": "调整顺序",
+      "adjustHint": "按住左侧拖动调整位置，点右侧箭头移到最前",
+      "dragHandle": "拖动调整位置",
+      "moveToFront": "把「{{title}}」移到最前",
+      "done": "完成"
+    }
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",

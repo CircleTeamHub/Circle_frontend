@@ -11,6 +11,7 @@ import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
+  Animated,
   FlatList,
   Platform,
   Pressable,
@@ -22,12 +23,21 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CollapsibleListHeader } from '@/components/ui/collapsible-list-header';
+import { useCollapsibleHeader } from '@/hooks/use-collapsible-header';
 import {
   NoteCard,
   type NoteSourceTarget,
 } from '@/features/notes/components/NoteCard';
 import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
 import { NotesHeaderActions } from '@/features/notes/components/NotesHeaderActions';
+import { NoteSortBar } from '@/features/notes/components/NoteSortBar';
+import { NoteOrderSheet } from '@/features/notes/components/NoteOrderSheet';
+import {
+  selectNotesSortPreference,
+  useNotesSortStore,
+} from '@/features/notes/store/use-notes-sort-store';
+import { reorderManual, sortNotes, type NoteSortMode } from '@/features/notes/utils/note-sort';
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { NoteRemarkSheet } from '@/features/notes/components/NoteRemarkSheet';
 import { NoteGroupPickerSheet } from '@/features/notes/components/NoteGroupPickerSheet';
@@ -120,6 +130,11 @@ function NotesContent() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const currentUserId = useAuthStore((state) => state.user?.id);
+  // 排序方式记在本机、按账号分开：下次进来默认上一次选的；手动顺序是全部笔记的一条顺序。
+  const sortPreference = useNotesSortStore((state) => selectNotesSortPreference(state, currentUserId));
+  const setSortMode = useNotesSortStore((state) => state.setMode);
+  const setManualOrder = useNotesSortStore((state) => state.setManualOrder);
+  const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
   const [cachedNotes] = useState(() => getCachedNotes('ACTIVE'));
@@ -167,6 +182,20 @@ function NotesContent() {
   const handledHighlightRef = useRef<string | null>(null);
   // 多选模式：selectedIds 为唯一事实，Set 只做派生查询
   const [selectionMode, setSelectionMode] = useState(false);
+  const collapsibleHeader = useCollapsibleHeader(!selectionMode);
+  const { scrollToStart } = collapsibleHeader;
+  // 定位滚动在计时器里读头部高度：用 ref 取最新值，不让它进 effect 依赖（一变就重滚、高亮计时重来）。
+  const headerHeightRef = useRef(0);
+  headerHeightRef.current = collapsibleHeader.headerHeight;
+  // 头部浮在列表上：目标行放到展开的头部正下方，头部收不收都看得见。
+  const scrollToHighlighted = useCallback((index: number) => {
+    listRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0,
+      viewOffset: headerHeightRef.current + Spacing.sm,
+    });
+  }, []);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // 备注弹层的目标（单条=[note]，批量=选中集；null = 关闭）
   const [remarkNotes, setRemarkNotes] = useState<NoteSummary[] | null>(null);
@@ -347,8 +376,8 @@ function NotesContent() {
         ].some((text) => text?.toLowerCase().includes(q));
       });
     }
-    return [...result].sort((a, b) => Number(b.pinned) - Number(a.pinned));
-  }, [notes, activeTab, search]);
+    return sortNotes(result, sortPreference.mode, sortPreference.manualOrder);
+  }, [notes, activeTab, search, sortPreference]);
   // 首帧只出页头、分组和搜索框,卡片下一帧再画(见 useDeferredContent):点「笔记」立刻进页。
   // 列表和定位滚动用同一份,下标才对得上。
   const listReady = useDeferredContent();
@@ -384,19 +413,13 @@ function NotesContent() {
     );
     if (index < 0) return;
     // 等列表把新数据渲染上去再滚，否则 scrollToIndex 拿到的是旧行数。
-    const scrollTimer = setTimeout(() => {
-      listRef.current?.scrollToIndex({
-        index,
-        animated: true,
-        viewPosition: 0.3,
-      });
-    }, 120);
+    const scrollTimer = setTimeout(() => scrollToHighlighted(index), 120);
     const clearTimer = setTimeout(() => setHighlightedNoteId(null), 2400);
     return () => {
       clearTimeout(scrollTimer);
       clearTimeout(clearTimer);
     };
-  }, [listNotes, highlightedNoteId]);
+  }, [listNotes, highlightedNoteId, scrollToHighlighted]);
 
   const handleScrollToIndexFailed = useCallback(
     (info: { index: number; averageItemLength: number }) => {
@@ -405,15 +428,29 @@ function NotesContent() {
         offset: info.averageItemLength * info.index,
         animated: false,
       });
-      setTimeout(() => {
-        listRef.current?.scrollToIndex({
-          index: info.index,
-          animated: true,
-          viewPosition: 0.3,
-        });
-      }, 80);
+      setTimeout(() => scrollToHighlighted(info.index), 80);
     },
-    [],
+    [scrollToHighlighted],
+  );
+
+  const handleChangeSortMode = useCallback(
+    (mode: NoteSortMode) => {
+      if (!currentUserId || mode === sortPreference.mode) return;
+      setSortMode(currentUserId, mode);
+      // 换了排序方式从头看起，不停在新顺序的半中间；头部收着就保持收着，只换列表顺序。
+      scrollToStart(listRef.current);
+    },
+    [currentUserId, scrollToStart, setSortMode, sortPreference.mode],
+  );
+  const openOrderSheet = useCallback(() => setOrderSheetOpen(true), []);
+  const closeOrderSheet = useCallback(() => setOrderSheetOpen(false), []);
+  const handleReorderNotes = useCallback(
+    (nextIds: string[]) => {
+      if (!currentUserId) return;
+      // 只重排当前分组（含搜索）占着的那些位置，其余笔记的先后和置顶前的位置都不动。
+      setManualOrder(currentUserId, reorderManual(notes, sortPreference.manualOrder, nextIds));
+    },
+    [currentUserId, notes, setManualOrder, sortPreference.manualOrder],
   );
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -848,7 +885,10 @@ function NotesContent() {
     }),
     [colors],
   );
+  const headerSectionStyle = useMemo(() => [s.headerSection, d.header], [d.header]);
 
+  // 按「最近添加」排时卡片上也显示添加时间，时间和顺序对得上。
+  const showCreatedAt = sortPreference.mode === 'added';
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
       <NoteCard
@@ -860,6 +900,7 @@ function NotesContent() {
         selectionMode={selectionMode}
         selected={selectedSet.has(item.id)}
         highlighted={highlightedNoteId === item.id}
+        showCreatedAt={showCreatedAt}
       />
     ),
     [
@@ -870,6 +911,7 @@ function NotesContent() {
       openMenu,
       selectedSet,
       selectionMode,
+      showCreatedAt,
     ],
   );
 
@@ -878,176 +920,195 @@ function NotesContent() {
       // 底部操作栏是 position:absolute; bottom:0，底部 padding 顶不动绝对定位的子元素：
       // 改成缩容器高度，操作栏跟着容器底边一起抬到键盘上方。
       behavior="height"
-      style={[s.container, d.container]}
+      style={[s.container, d.container, { paddingTop: insets.top }]}
     >
-      <View style={[s.header, d.header, { paddingTop: insets.top + 8 }]}>
-        <View style={s.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </Pressable>
-          <View style={s.headerRight}>
-            {selectionMode ? (
-              <>
-                <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn]}
-                  onPress={handleToggleSelectAll}
-                >
-                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-                    {allVisibleSelected
-                      ? t('notes.selection.clearAll', {
-                          defaultValue: '取消全选',
-                        })
-                      : t('notes.selection.selectAll', { defaultValue: '全选' })}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn]}
-                  onPress={exitSelection}
-                >
-                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-                    {t('common.cancel', { defaultValue: '取消' })}
-                  </Text>
-                </Pressable>
-              </>
-            ) : (
-              <NotesHeaderActions
-                compact={compactActions}
-                onOpenRecycleBin={openRecycleBin}
-                onOpenUnlisted={openUnlisted}
-                onOpenSettings={openSettings}
-              />
-            )}
-          </View>
-        </View>
-
-        {/* 页面标题；下面一行平时是当前分组(含搜索)的笔记数——分组标签上不再挂数字，
-            选择模式下换成已选数量。 */}
-        <Text style={[s.pageTitle, d.headerTitle]}>
-          {t('notes.title', { defaultValue: '我的笔记' })}
-        </Text>
-        {selectionMode ? (
-          <Text style={[s.statsText, d.statsText]}>
-            {t('notes.selection.selectedCount', {
-              count: selectedIds.length,
-              defaultValue: `已选 ${selectedIds.length} 项`,
-            })}
-          </Text>
-        ) : loading || loadError ? null : (
-          <Text style={[s.statsText, d.noteCountText]}>
-            {t('notes.noteCount', {
-              count: filteredNotes.length,
-              defaultValue: `${filteredNotes.length} 条笔记`,
-            })}
-          </Text>
-        )}
-
-        {!selectionMode && resumeDraft ? (
-          <Pressable
-            accessibilityRole="button"
-            style={[s.unlistedBtn, d.unlistedBtn, { alignSelf: 'flex-start' }]}
-            onPress={() => router.push(getNoteEditHref(scope, {
-              draftId: resumeDraft.draftId,
-              draftMode: 'recovery',
-              ...(resumeDraft.noteId ? { id: resumeDraft.noteId } : {}),
-            }))}
-          >
-            <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-              {t('notes.resumeInterrupted', { defaultValue: '继续编辑未保存的笔记' })}
+      {/* 列表铺满安全区以下，头部浮在上面：往下读收起到只剩排序栏，往回翻立刻放出来；
+          overflow:hidden 把收起的部分裁在安全区之下。多选模式头部常驻。 */}
+      <View style={s.listViewport}>
+        <CollapsibleListHeader
+          controller={collapsibleHeader}
+          sectionStyle={headerSectionStyle}
+          pinned={
+            <NoteSortBar
+              mode={sortPreference.mode}
+              onChangeMode={handleChangeSortMode}
+              onAdjust={openOrderSheet}
+            />
+          }
+          top={
+            <View style={[s.headerRow, s.headerTop]}>
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.back')}
+              >
+                <Ionicons name="chevron-back" size={24} color={colors.text} />
+              </Pressable>
+              <View style={s.headerRight}>
+                {selectionMode ? (
+                  <>
+                    <Pressable
+                      style={[s.unlistedBtn, d.unlistedBtn]}
+                      onPress={handleToggleSelectAll}
+                    >
+                      <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                        {allVisibleSelected
+                          ? t('notes.selection.clearAll', {
+                              defaultValue: '取消全选',
+                            })
+                          : t('notes.selection.selectAll', { defaultValue: '全选' })}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[s.unlistedBtn, d.unlistedBtn]}
+                      onPress={exitSelection}
+                    >
+                      <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                        {t('common.cancel', { defaultValue: '取消' })}
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <NotesHeaderActions
+                    compact={compactActions}
+                    onOpenRecycleBin={openRecycleBin}
+                    onOpenUnlisted={openUnlisted}
+                    onOpenSettings={openSettings}
+                  />
+                )}
+              </View>
+            </View>
+          }
+        >
+          <View>
+            {/* 页面标题；下面一行平时是当前分组(含搜索)的笔记数——分组标签上不再挂数字，
+                选择模式下换成已选数量。 */}
+            <Text style={[s.pageTitle, d.headerTitle]}>
+              {t('notes.title', { defaultValue: '我的笔记' })}
             </Text>
-          </Pressable>
-        ) : null}
-
-        <View style={s.tabsRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.tabsScroll}
-            contentContainerStyle={s.tabsContent}
-          >
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <Pressable key={tab.id} style={s.tab} onPress={() => setActiveTab(tab.id)}>
-                  <Text style={[s.tabText, isActive ? d.tabActive : d.tabInactive]}>
-                    {tab.label}
-                  </Text>
-                  {isActive ? <View style={[s.tabLine, d.tabActiveLine]} /> : null}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-          </Pressable>
-        </View>
-
-        <View style={[s.searchWrap, d.searchWrap]}>
-          <Ionicons name="search-outline" size={16} color={d.searchPlaceholder} />
-          <TextInput
-            style={[s.searchInput, d.searchInput]}
-            placeholder={t('notes.searchPlaceholder', {
-              defaultValue: '搜索标题、内容、名片或群名',
-            })}
-            placeholderTextColor={d.searchPlaceholder}
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-      </View>
-
-      <FlatList
-        ref={listRef}
-        data={listNotes}
-        keyExtractor={keyExtractor}
-        renderItem={renderNote}
-        ItemSeparatorComponent={ItemSeparator}
-        // 卡片高度不定（有无封面/备注/来源按钮），定位滚动用 onScrollToIndexFailed
-        // 兜底重试，而不是硬算 getItemLayout。
-        onScrollToIndexFailed={handleScrollToIndexFailed}
-        contentContainerStyle={{
-          paddingHorizontal: Spacing.md,
-          paddingTop: Spacing.sm,
-          paddingBottom: insets.bottom + (selectionMode ? SELECTION_FOOTER_HEIGHT : 96),
-        }}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={11}
-        removeClippedSubviews={Platform.OS === 'android'}
-        {...keyboardDismissOnDragProps}
-        refreshing={refreshing}
-        onRefresh={handleRefreshNotes}
-        ListEmptyComponent={
-          loading || !listReady ? null : loadError ? (
-            <View style={s.emptyWrap}>
-              <Text style={[s.emptyText, d.statsText]}>
-                {t('notes.loadFailed', {
-                  defaultValue: '笔记加载失败，请检查网络后重试',
+            {selectionMode ? (
+              <Text style={[s.statsText, d.statsText]}>
+                {t('notes.selection.selectedCount', {
+                  count: selectedIds.length,
+                  defaultValue: `已选 ${selectedIds.length} 项`,
                 })}
               </Text>
+            ) : loading || loadError ? null : (
+              <Text style={[s.statsText, d.noteCountText]}>
+                {t('notes.noteCount', {
+                  count: filteredNotes.length,
+                  defaultValue: `${filteredNotes.length} 条笔记`,
+                })}
+              </Text>
+            )}
+
+            {!selectionMode && resumeDraft ? (
               <Pressable
-                style={[s.retryBtn, d.newBtn]}
-                onPress={() => void handleRefreshNotes()}
+                accessibilityRole="button"
+                style={[s.unlistedBtn, d.unlistedBtn, { alignSelf: 'flex-start' }]}
+                onPress={() => router.push(getNoteEditHref(scope, {
+                  draftId: resumeDraft.draftId,
+                  draftMode: 'recovery',
+                  ...(resumeDraft.noteId ? { id: resumeDraft.noteId } : {}),
+                }))}
               >
-                <Text style={[s.bottomBtnText, d.newBtnText]}>
-                  {t('common.retry', { defaultValue: '重试' })}
+                <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                  {t('notes.resumeInterrupted', { defaultValue: '继续编辑未保存的笔记' })}
                 </Text>
               </Pressable>
+            ) : null}
+
+            <View style={s.tabsRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.tabsScroll}
+                contentContainerStyle={s.tabsContent}
+              >
+                {tabs.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <Pressable key={tab.id} style={s.tab} onPress={() => setActiveTab(tab.id)}>
+                      <Text style={[s.tabText, isActive ? d.tabActive : d.tabInactive]}>
+                        {tab.label}
+                      </Text>
+                      {isActive ? <View style={[s.tabLine, d.tabActiveLine]} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
+                <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+              </Pressable>
             </View>
-          ) : (
-            <Text style={[s.emptyText, d.statsText]}>
-              {search.trim()
-                ? t('notes.empty.noMatch', { defaultValue: '没有匹配的笔记' })
-                : t('notes.empty.noNotes', { defaultValue: '暂无笔记' })}
-            </Text>
-          )
-        }
-      />
+
+            <View style={[s.searchWrap, d.searchWrap]}>
+              <Ionicons name="search-outline" size={16} color={d.searchPlaceholder} />
+              <TextInput
+                style={[s.searchInput, d.searchInput]}
+                placeholder={t('notes.searchPlaceholder', {
+                  defaultValue: '搜索标题、内容、名片或群名',
+                })}
+                placeholderTextColor={d.searchPlaceholder}
+                value={search}
+                onChangeText={setSearch}
+              />
+            </View>
+          </View>
+        </CollapsibleListHeader>
+        <Animated.FlatList
+          ref={listRef}
+          onScroll={collapsibleHeader.onScroll}
+          scrollEventThrottle={16}
+          progressViewOffset={collapsibleHeader.headerHeight}
+          data={listNotes}
+          keyExtractor={keyExtractor}
+          renderItem={renderNote}
+          ItemSeparatorComponent={ItemSeparator}
+          // 卡片高度不定（有无封面/备注/来源按钮），定位滚动用 onScrollToIndexFailed
+          // 兜底重试，而不是硬算 getItemLayout。
+          onScrollToIndexFailed={handleScrollToIndexFailed}
+          contentContainerStyle={{
+            paddingHorizontal: Spacing.md,
+            paddingTop: collapsibleHeader.headerHeight + Spacing.sm,
+            paddingBottom: insets.bottom + (selectionMode ? SELECTION_FOOTER_HEIGHT : 96),
+          }}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
+          {...keyboardDismissOnDragProps}
+          refreshing={refreshing}
+          onRefresh={handleRefreshNotes}
+          ListEmptyComponent={
+            loading || !listReady ? null : loadError ? (
+              <View style={s.emptyWrap}>
+                <Text style={[s.emptyText, d.statsText]}>
+                  {t('notes.loadFailed', {
+                    defaultValue: '笔记加载失败，请检查网络后重试',
+                  })}
+                </Text>
+                <Pressable
+                  style={[s.retryBtn, d.newBtn]}
+                  onPress={() => void handleRefreshNotes()}
+                >
+                  <Text style={[s.bottomBtnText, d.newBtnText]}>
+                    {t('common.retry', { defaultValue: '重试' })}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={[s.emptyText, d.statsText]}>
+                {search.trim()
+                  ? t('notes.empty.noMatch', { defaultValue: '没有匹配的笔记' })
+                  : t('notes.empty.noNotes', { defaultValue: '暂无笔记' })}
+              </Text>
+            )
+          }
+        />
+      </View>
 
       {selectionMode ? (
         <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
@@ -1140,6 +1201,12 @@ function NotesContent() {
         onGroupCreated={handleGroupCreatedInPicker}
       />
       <ShareNoteSheet request={shareNoteRequest} onClose={closeShareNote} />
+      <NoteOrderSheet
+        visible={orderSheetOpen}
+        notes={filteredNotes}
+        onClose={closeOrderSheet}
+        onReorder={handleReorderNotes}
+      />
     </KeyboardAvoidingContainer>
   );
 }
@@ -1149,7 +1216,10 @@ const SELECTION_FOOTER_HEIGHT = 220;
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  listViewport: { flex: 1, overflow: 'hidden' },
+  // 可收起头部的每一段（返回行 / 标题到搜索框）各自平移，每段都铺页面底色。
+  headerSection: { paddingHorizontal: Spacing.lg },
+  headerTop: { paddingTop: Spacing.sm },
   // minHeight 而不是固定高度：右侧入口带文字，系统大字号下会比 44 略高。
   headerRow: {
     flexDirection: 'row',

@@ -1680,7 +1680,18 @@
         }
       }
     },
-    "unlistedDaysLeft": "Se elimina en {{count}} días"
+    "unlistedDaysLeft": "Se elimina en {{count}} días",
+    "sort": {
+      "label": "Ordenar por",
+      "edited": "Editadas recientemente",
+      "added": "Añadidas recientemente",
+      "manual": "Manual",
+      "adjust": "Reordenar",
+      "adjustHint": "Arrastra el control de la izquierda para mover una nota o toca la flecha para llevarla arriba",
+      "dragHandle": "Arrastra para reordenar",
+      "moveToFront": "Mover «{{title}}» arriba",
+      "done": "Listo"
+    }
   },
   "tempChats": {
     "title": "Puestos",
