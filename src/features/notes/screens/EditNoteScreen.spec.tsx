@@ -892,6 +892,23 @@ test('releases a late native thumbnail when its tile unmounts during generation'
   expect(mockVideoThumbnailRelease).toHaveBeenCalledTimes(1);
 });
 
+// 重开的笔记里视频是远端地址：慢网加载不出来或设备解不开时保留黑色占位，但要上报，线上才看得到。
+test('keeps the placeholder and reports when a video preview cannot load', async () => {
+  mockReplaceVideoSource.mockImplementationOnce(() => {
+    throw new Error('cannot open');
+  });
+  render(<VideoDraftPreview uri="https://cdn.example/broken.mp4" />);
+
+  await waitFor(() =>
+    expect(mockReportHandledFailure).toHaveBeenCalledWith(
+      'noteVideoPreview',
+      'captureFrame',
+      expect.objectContaining({ message: 'cannot open' }),
+    ),
+  );
+  expect(screen.getByTestId('note-media-preview-video-loading')).toBeTruthy();
+});
+
 test('caps a web-overflow photo pick at the 9-photo note limit in picker order and says what was skipped', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockRequestPermission.mockResolvedValue({ granted: true });

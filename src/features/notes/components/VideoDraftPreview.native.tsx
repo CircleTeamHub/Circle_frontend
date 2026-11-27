@@ -1,48 +1,20 @@
 import { Image } from 'expo-image';
-import { createVideoPlayer, type VideoPlayer, type VideoThumbnail } from 'expo-video';
+import { createVideoPlayer, type VideoThumbnail } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { loadVideoForThumbnail } from '@/features/chat/utils/chat-video-poster';
 import { withThumbnailTimeout } from '@/features/notes/utils/thumbnail-timeout';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // A single queue prevents a large selection from keeping many decoders alive at once.
 let thumbnailWork = Promise.resolve();
 
-/**
- * 等视频真正挂到播放器上再截帧。iOS 上 createVideoPlayer(uri) 在后台任务里挂视频，
- * replaceAsync 也只等到资源加载完、挂视频那一步又被丢回主线程异步做，promise 先回来；
- * 这时截帧拿到的是空数组（没有 currentItem），画面就一直是黑块，而且时好时坏。
- * readyToPlay 才说明视频已挂上、时长也读到了。
- */
-function loadForThumbnail(player: VideoPlayer, uri: string) {
-  return new Promise<void>((resolve, reject) => {
-    const subscription = player.addListener('statusChange', ({ status, error }) => {
-      if (status === 'readyToPlay') {
-        subscription.remove();
-        resolve();
-      } else if (status === 'error') {
-        subscription.remove();
-        reject(new Error(error?.message ?? 'video failed to load'));
-      }
-    });
-    player.replaceAsync(uri).then(
-      () => {
-        if (player.status === 'readyToPlay') {
-          subscription.remove();
-          resolve();
-        }
-      },
-      (error: unknown) => {
-        subscription.remove();
-        reject(error);
-      },
-    );
-  });
-}
-
 function generateThumbnail(uri: string) {
   const work = thumbnailWork.then(async () => {
     const player = createVideoPlayer(null);
-    const pending = loadForThumbnail(player, uri)
+    // 等视频真正挂上播放器再截帧（iOS 上 replaceAsync 先于挂视频返回，早截只拿到空数组）；
+    // 加载超时后也不会再碰已释放的播放器。和聊天封面共用一套。
+    const pending = loadVideoForThumbnail(player, uri)
       // 很多视频第一帧是黑的（淡入、相机刚启动），够长就取第 0.5 秒。
       .then(() => player.generateThumbnailsAsync(player.duration > 1 ? 0.5 : 0, { maxWidth: 320 }))
       .then((thumbnails) => thumbnails[0] ?? null);
@@ -92,8 +64,9 @@ export function VideoDraftPreview({ uri }: { uri: string }) {
         setThumbnail(nextThumbnail);
         setThumbnailUri(uri);
       })
-      .catch(() => {
-        // Keep the neutral fallback if the device cannot decode this local video.
+      .catch((error: unknown) => {
+        // 保留黑色占位；重开的笔记里视频是远端地址，慢网加载不出来也走这里，要能在线上看到。
+        reportHandledFailure('noteVideoPreview', 'captureFrame', error);
       });
     return () => {
       cancelled = true;
