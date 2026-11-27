@@ -22,15 +22,18 @@ export function NoteMaterialBadge({ label, showcase = false, overlay = true }: {
   );
 }
 
+// 悬浮在图片/视频左上角的小胶囊：离边 8pt，不再是贴死在角上的大方块。
 const s = StyleSheet.create({
   badge: {
     maxWidth: '75%',
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
-    borderBottomRightRadius: Radius.xs,
-    ...Typography.body,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    ...Typography.small,
+    lineHeight: 16,
     fontWeight: '600',
   },
-  overlay: { position: 'absolute', top: 0, left: 0, zIndex: 1 },
-  inline: { alignSelf: 'flex-start', marginBottom: Spacing.xs, borderRadius: Radius.xs },
+  overlay: { position: 'absolute', top: Spacing.sm, left: Spacing.sm, zIndex: 1 },
+  inline: { alignSelf: 'flex-start', marginBottom: Spacing.xs },
 });
