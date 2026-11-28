@@ -25,6 +25,7 @@ import { retry } from '@/utils/retry';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { createHttpRequestId } from '@/observability/http-diagnostics';
+import WebScreenReady from '@/observability/web-screen-ready';
 import { createBackgroundDisconnect } from '@/components/app/background-disconnect';
 import { Radius, Spacing, useTheme } from '@/theme';
 import i18n from '@/i18n';
@@ -49,28 +50,31 @@ export function WebSessionRecovery({
     ? i18n.t('auth.webSessionReload')
     : i18n.t('common.retry', { defaultValue: '重试' });
 
+  // 恢复页是一张能操作的页面，算启动完成；不然网页启动探针一分钟后会在它上面再叠一层面板。
   return (
-    <View style={[styles.recovery, { backgroundColor: colors.background }]}>
-      <View style={styles.recoveryContent}>
-        <Text accessibilityRole="header" style={[styles.recoveryTitle, { color: colors.text }]}>{title}</Text>
-        <Text accessibilityRole="alert" style={[styles.recoveryMessage, { color: colors.textSecondary }]}>{message}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-          accessibilityState={{ disabled: pending, busy: pending }}
-          disabled={pending}
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.recoveryAction,
-            { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
-            pressed && { opacity: 0.75 },
-          ]}
-        >
-          {pending ? <ActivityIndicator size="small" color={colors.link} /> : null}
-          <Text style={[styles.recoveryActionLabel, { color: colors.link }]}>{actionLabel}</Text>
-        </Pressable>
+    <WebScreenReady>
+      <View style={[styles.recovery, { backgroundColor: colors.background }]}>
+        <View style={styles.recoveryContent}>
+          <Text accessibilityRole="header" style={[styles.recoveryTitle, { color: colors.text }]}>{title}</Text>
+          <Text accessibilityRole="alert" style={[styles.recoveryMessage, { color: colors.textSecondary }]}>{message}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            accessibilityState={{ disabled: pending, busy: pending }}
+            disabled={pending}
+            onPress={onPress}
+            style={({ pressed }) => [
+              styles.recoveryAction,
+              { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+              pressed && { opacity: 0.75 },
+            ]}
+          >
+            {pending ? <ActivityIndicator size="small" color={colors.link} /> : null}
+            <Text style={[styles.recoveryActionLabel, { color: colors.link }]}>{actionLabel}</Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </WebScreenReady>
   );
 }
 

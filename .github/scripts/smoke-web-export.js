@@ -467,7 +467,9 @@ async function checkStalledStartup(cdp, url, pattern, resourceType) {
       localStorage.removeItem('circle-im-web-startup-diagnostics-v1');
       const nativeTimeout = window.setTimeout.bind(window);
       window.setTimeout = (callback, delay, ...args) => nativeTimeout(callback, delay === 60000 ? ${acceleratedTimeout} : delay, ...args);
-      window.fetch = () => Promise.resolve({ok: true});
+      // 明确的 401：没有登录态，App 才会走到被卡住的登录页分包。服务器只是连不上时 App 显示的是
+      // 「登录状态暂时没能恢复」恢复页，那是一张已画出来的页面，启动探针本就该收手。
+      window.fetch = () => Promise.resolve(new Response('{}', { status: 401, headers: { 'Content-Type': 'application/json' } }));
     `,
   });
   await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });

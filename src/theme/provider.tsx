@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useMemo, useState } from 'react';
-import { useColorScheme as useSystemScheme } from 'react-native';
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { Platform, useColorScheme as useSystemScheme } from 'react-native';
 import { storage } from '@/storage';
 import { darkColors, lightColors } from './colors';
 import type { ThemeMode, ResolvedMode, ThemeContextValue } from './types';
@@ -108,6 +108,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   /** 根据最终解析的模式选择对应的颜色方案对象 */
   const colors = resolvedMode === 'dark' ? darkColors : lightColors;
+
+  // 网页：页面底色跟着 App 主题走。iOS 的状态栏和 Safari 工具栏按页面底色取色，
+  // 底色留白的话深色主题下顶上一条是白的。public/index.html 只能按系统深浅色给初值，
+  // 用户在 App 里手动选了深/浅色要靠这里改过来。
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    document.documentElement.style.backgroundColor = colors.background;
+    document.body.style.backgroundColor = colors.background;
+  }, [colors.background]);
 
   /**
    * 组装传递给 Context 消费者的完整主题值。
